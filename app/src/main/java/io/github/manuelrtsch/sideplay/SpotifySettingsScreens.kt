@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sideplay
 
+import android.text.format.Formatter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
@@ -43,6 +45,7 @@ fun SpotifySettingsScreen(
     onAppearance: (() -> Unit)? = null
 ) {
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
+    val context = LocalContext.current
     val back = spotifyBack("Back", onBack).first()
     val normal = withNotice(
         state.notice,
@@ -111,7 +114,7 @@ fun SpotifySettingsScreen(
                 SideplayItem(
                     "Cache",
                     Modifier.listFade(listState, 2),
-                    secondary = "1 GB",
+                    secondary = Formatter.formatShortFileSize(context, state.cacheSizeBytes),
                     secondaryToEnd = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,

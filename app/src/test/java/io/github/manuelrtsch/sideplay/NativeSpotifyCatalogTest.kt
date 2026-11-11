@@ -107,6 +107,64 @@ class NativeSpotifyCatalogTest {
         assertEquals(50L, native.searchLimit)
     }
 
+    @Test fun `malformed library response maps to Unknown`() = runTest {
+        val native = FakeNative().apply { libraryResult = "not json" }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.library(LibraryFilter.LikedSongs, 0, 50) }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.Unknown, (error as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `missing library response maps to Network`() = runTest {
+        val native = FakeNative().apply { libraryResult = null }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.library(LibraryFilter.LikedSongs, 0, 50) }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.Network, (error as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `session error maps to AuthenticationExpired`() = runTest {
+        val native = FakeNative().apply { libraryResult = """{"error":"SESSION expired"}""" }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.library(LibraryFilter.LikedSongs, 0, 50) }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.AuthenticationExpired, (error as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `other catalog error maps to Network`() = runTest {
+        val native = FakeNative().apply { libraryResult = """{"error":"rate limited"}""" }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.library(LibraryFilter.LikedSongs, 0, 50) }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.Network, (error as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `artist albums and top tracks parse native fields`() = runTest {
+        val native = FakeNative().apply {
+            artistResult = """{"id":"a1","name":"Artist","artUrl":"https://example.test/a.jpg"}"""
+            albumsResult = """[{"id":"al1","title":"Album","artist":"Artist","year":2024,"trackCount":3}]"""
+            topTracksResult = """[{"id":"t1","title":"Track","artist":"Artist","durationMs":1234}]"""
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val artist = catalog.artist("a1")
+        assertEquals("Artist", artist?.name)
+        val albums = catalog.albumsBy(artist!!, 0, 5)
+        assertEquals(1, albums.items.size)
+        assertEquals("Album", albums.items.first().title)
+        val tracks = catalog.topTracks(artist, 0, 5)
+        assertEquals(1, tracks.items.size)
+        assertEquals("Track", tracks.items.first().title)
+    }
+
     @Test fun `failed write surfaces a network failure`() = runTest {
         val native = FakeNative().apply { writeOk = false }
         val catalog = NativeSpotifyCatalog(native) {}
@@ -127,13 +185,16 @@ class NativeSpotifyCatalogTest {
         var playlistSaved = "false"
         var playlistId: String? = null
         var playlistSave = false
-        var libraryResult = "[]"
+        var libraryResult: String? = "[]"
         var libraryOffset = -1L
         var libraryLimit = -1L
-        var collectionResult = "{}"
+        var collectionResult: String? = "{}"
         var collectionOffset = -1L
         var collectionLimit = -1L
-        var searchResult = "{}"
+        var artistResult: String? = null
+        var albumsResult: String? = "[]"
+        var topTracksResult: String? = "[]"
+        var searchResult: String? = "{}"
         var searchOffset = -1L
         var searchLimit = -1L
 
@@ -153,20 +214,20 @@ class NativeSpotifyCatalogTest {
         override fun audioFormat(): String? = null
         override fun pollEvent(): String? = null
         override fun drainAudio() = Unit
-        override fun catalogLibrary(filter: String, offset: Long, limit: Long): String {
+        override fun catalogLibrary(filter: String, offset: Long, limit: Long): String? {
             libraryOffset = offset
             libraryLimit = limit
             return libraryResult
         }
-        override fun catalogCollection(kind: String, id: String, offset: Long, limit: Long): String {
+        override fun catalogCollection(kind: String, id: String, offset: Long, limit: Long): String? {
             collectionOffset = offset
             collectionLimit = limit
             return collectionResult
         }
-        override fun catalogArtist(id: String): String? = null
-        override fun catalogAlbumsBy(id: String, offset: Long, limit: Long): String? = null
-        override fun catalogTopTracks(id: String, offset: Long, limit: Long): String? = null
-        override fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String {
+        override fun catalogArtist(id: String): String? = artistResult
+        override fun catalogAlbumsBy(id: String, offset: Long, limit: Long): String? = albumsResult
+        override fun catalogTopTracks(id: String, offset: Long, limit: Long): String? = topTracksResult
+        override fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String? {
             searchOffset = offset
             searchLimit = limit
             return searchResult

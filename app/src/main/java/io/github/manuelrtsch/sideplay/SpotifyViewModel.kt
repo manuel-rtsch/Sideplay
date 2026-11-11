@@ -78,6 +78,7 @@ data class SpotifyUiState(
     val query: String = "",
     val audioQuality: AudioQuality = AudioQuality.High,
     val autoplay: Boolean = true,
+    val cacheSizeBytes: Long = 0L,
     val notice: String? = null,
     val undo: SpotifyUndo? = null
 ) {
@@ -96,7 +97,8 @@ class SpotifyViewModel(
     private val history: SpotifyHistoryRepository = SpotifyHistoryRepository(),
     private val session: SpotifySession? = null,
     private val openBrowser: (suspend (String) -> Unit)? = null,
-    private val clearArtworkCache: () -> Unit = {}
+    private val clearArtworkCache: () -> Unit = {},
+    private val simulatePlayback: Boolean = true
 ) : ViewModel() {
     private val _state = MutableStateFlow(SpotifyUiState(signedIn = session?.signedIn?.value ?: false))
     val state: StateFlow<SpotifyUiState> = _state.asStateFlow()
@@ -142,12 +144,15 @@ class SpotifyViewModel(
             it.playback.onSeek = seekHandler
         }
         restorePlaybackState()
+        refreshCacheSize()
         if (session == null || !session.nativeAvailable) {
-            // Local fixtures and builds without the native library still need a moving progress bar.
-            viewModelScope.launch {
-                while (true) {
-                    delay(1_000L)
-                    tick()
+            if (simulatePlayback) {
+                // Local fixtures and builds without the native library still need a moving progress bar.
+                viewModelScope.launch {
+                    while (true) {
+                        delay(1_000L)
+                        tick()
+                    }
                 }
             }
         } else {
@@ -741,7 +746,12 @@ class SpotifyViewModel(
     fun clearCache() {
         clearArtworkCache()
         session?.clearAudioCache()
+        refreshCacheSize()
         _state.update { it.copy(notice = "Cache cleared") }
+    }
+
+    fun refreshCacheSize() {
+        _state.update { it.copy(cacheSizeBytes = session?.cacheSizeBytes() ?: 0L) }
     }
 
     fun moveToNext(item: SpotifyMediaItem) {
@@ -792,8 +802,10 @@ class SpotifyViewModel(
 
     fun signOut() {
         session?.signOut()
+        if (session == null) clearArtworkCache()
         queue.stop()
         _state.update { SpotifyUiState(signedIn = false, recent = history.items().filterIsInstance<SpotifyTrack>()) }
+        refreshCacheSize()
     }
 
     fun signIn() {
@@ -1079,11 +1091,12 @@ class SpotifyViewModel(
      * librespot is the source of truth while it is playing: its position events keep the seek bar
      * honest through buffering and seeks, and EndOfTrack advances the Sidekit queue exactly once.
      */
-    private fun handlePlaybackEvent(raw: String) {
+    internal fun handlePlaybackEvent(raw: String) {
         val event = runCatching { JSONObject(raw) }.getOrNull() ?: return
         val position = event.optLong("positionMs", _state.value.positionMs)
-        SideplayDebug.log("event type=${event.optString("type")} uri=${event.optString("uri")} positionMs=$position")
-        when (event.optString("type")) {
+        val type = event.opt("type")?.toString().orEmpty()
+        SideplayDebug.log("event type=$type uri=${event.opt("uri")?.toString().orEmpty()} positionMs=$position")
+        when (type) {
             "loading" -> if (matchesCurrent(event)) {
                 anchorPosition(position)
                 session?.playback?.updatePosition(position)
@@ -1160,7 +1173,7 @@ class SpotifyViewModel(
     }
 
     private fun matchesCurrent(event: JSONObject): Boolean {
-        val uri = event.optString("uri").takeIf { it.isNotEmpty() } ?: return true
+        val uri = event.opt("uri")?.toString()?.takeIf { it.isNotEmpty() && it != "null" } ?: return true
         return _state.value.current?.uri?.equals(uri, ignoreCase = true) ?: true
     }
 

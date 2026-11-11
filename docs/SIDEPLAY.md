@@ -2,15 +2,15 @@
 
 **Updated:** 2026-11-11
 **Repository:** `manuel-rtsch/Sideplay` (`main`)
-**Phase:** migrated to the standalone APK; device verification remains
+**Phase:** standalone APK; manual device checks are tracked in `docs/DEVICE-CHECKLIST.md`
 
 Sideplay is a standalone Spotify app for Sidekit-native phones: one account's library, search,
 playback, and queue, drawn with Sidekit's chrome and operated keypad-first on a 480 × 640 phone.
 It is not a Spotify client reproduction and not a web wrapper.
 
 The implementation has moved past the porting/mockup stage. This document is the single source
-of truth for what exists, what must not regress, and what happens next. Older clean-room specs
-and status logs were folded into it; the full pre-consolidation text remains in Git history.
+of truth for what exists and what must not regress. Older clean-room specs and status logs were
+folded into it; the full pre-consolidation text remains in Git history.
 
 ---
 
@@ -109,6 +109,13 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   pressable **See more** row; the next page is fetched only when that row is pressed.
 - `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
   T9 → mini QWERTY switch made while Sideplay was in the background takes effect immediately.
+- Settings shows the actual artwork + audio cache size. Sign-out clears artwork, audio, and
+  credentials; the Settings action clears artwork and audio without touching the account.
+- Focus review: collection rows and Library filter options are focusable, and the first row
+  receives focus after a filter change. Long collections use the same lazy list as the rest of
+  the app.
+- APK-size review: the profile APK is about 12.2 MB, dominated by the two native librespot
+  libraries. No action until the vendored librespot patch can be dropped.
 
 **Verified**
 
@@ -122,7 +129,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   leaves libraries browsable (HTTP catalog) but makes playback fail until the session is rebuilt.
   After the fix, the next play reconnects (`Connecting to AP` / `Authenticated as …`) and loads
   the track instead of reporting every item as unavailable.
-- JVM tests cover catalog page offsets, collection totals, and page boundaries.
+- JVM tests cover catalog page offsets, collection totals, page boundaries, catalog error
+  mapping (auth, network, malformed response), and the playback event state machine, including
+  `stopped`.
 
 ---
 
@@ -140,46 +149,7 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 
 ---
 
-## 4. What's next
-
-Ordered by user-visible impact. Each item names its seam so it does not become another
-cross-cutting refactor.
-
-### P0 — device verification for daily use
-
-- Verify token rotation on a session older than one hour; record the result in the device
-  checklist.
-- Verify library write-back on device: like/unlike, save/remove album and show, follow/unfollow
-  artist, add/remove playlist; confirm in another Spotify client and after restart.
-- Run the existing device checklist for lock screen, notification transport, audio-focus hand-off
-  with local Music, and headphone unplug.
-
-### P1 — parity decisions (settled)
-
-1. **Recently played: local-only.** No first-party endpoint, no Web API quota. The local history
-   is the product feature; cross-device history is a later opt-in, not a merge blocker.
-2. **Queue/shuffle/repeat: Sideplay owns them.** librespot 0.8 has no setters, so mirroring is
-   not possible. `SpotifyQueueRepository` is the single authority; native shuffle/repeat events
-   are adopted when another client changes them. Now Playing follows the queue, and the native
-   player follows the item Sideplay starts.
-3. **Playlist owner names: authenticated identity, no per-owner lookup.** Your playlists show
-   **You**; other users show their Spotify username. This avoids a Web API call per collection.
-4. **Remaining test coverage.**
-   - `NativeSpotifyCatalog` JSON parsing and error mapping (auth, network, malformed response).
-   - `NativeSpotifyCatalog`/`SpotifyViewModel` event state machine, including `stopped`.
-   - Device smoke checklist for sign-in, library filters, search, playback, queue, lock screen,
-     and token expiry.
-   - Acceptance: JVM tests run in CI; device checklist stays manual.
-
-### P2 — polish
-
-- Clear artwork and credential caches on sign-out; expose cache size in Settings.
-- Accessibility/focus review for long playlist/show collections and the Library Options filter.
-- APK-size review once the vendored librespot patch can be dropped.
-
----
-
-## 5. Native build, provenance, and licensing
+## 4. Native build, provenance, and licensing
 
 **Native bridge.** `native/sideplay-spotify` links librespot 0.8.0 and exposes the JNI surface
 declared in `bridge/NativeBridge.kt`.

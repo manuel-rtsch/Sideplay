@@ -295,6 +295,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
             val hostAvailable = remember(context) {
                 SidekitConfigClient.status(context, (context as? Activity)?.intent?.let(SidekitConfigClient::authorityFrom)) == HostStatus.Available
             }
+            LaunchedEffect(Unit) { vm.refreshCacheSize() }
             SpotifySettingsScreen(
                 state,
                 onBack = { nav.popBackStack() },

@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sideplay.data
 
 import android.content.Context
+import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sideplay.AudioQuality
 import io.github.manuelrtsch.sideplay.SideplayDebug
 import io.github.manuelrtsch.sideplay.SpotifyMediaItem
@@ -111,6 +112,7 @@ class SpotifySession(
             NativeBridge.disconnect()
         }
         auth.clear()
+        clearCaches()
         _signedIn.value = false
     }
 
@@ -225,6 +227,20 @@ class SpotifySession(
     fun clearAudioCache() {
         audioCacheDir?.deleteRecursively()
     }
+
+    /** Artwork and audio bytes currently held on disk. */
+    fun cacheSizeBytes(): Long {
+        val artwork = appContext?.let { File(it.cacheDir, "artwork") }
+        return listOfNotNull(artwork, audioCacheDir).sumOf { it.sizeBytes() }
+    }
+
+    /** Sign-out and the Settings action both drop artwork and audio; credentials are separate. */
+    fun clearCaches() {
+        appContext?.let(RemoteArtwork::clear)
+        clearAudioCache()
+    }
+
+    private fun File.sizeBytes(): Long = walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     private companion object {
         /** Slightly longer than the native connect timeout, so its specific error wins. */
