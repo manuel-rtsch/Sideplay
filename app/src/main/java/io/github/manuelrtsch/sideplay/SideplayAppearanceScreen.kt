@@ -8,7 +8,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import hrln.interactive.sidekit.design.action.SideAction
-import hrln.interactive.sidekit.design.components.SidekitItem
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.input.KeypadControl
@@ -76,7 +75,7 @@ private fun AppearanceSettings(
         SidekitList(padding, state = list) {
             caseColourChoices(selected, onColour)
             item {
-                SidekitItem(
+                SideplayItem(
                     "Compact layout",
                     secondary = if (compact) "On" else "Off",
                     showLinkArrow = true,
@@ -84,7 +83,7 @@ private fun AppearanceSettings(
                 )
             }
             item {
-                SidekitItem("Keypad mapping", secondary = "Customise", showLinkArrow = true, onClick = onMapping)
+                SideplayItem("Keypad mapping", secondary = "Customise", showLinkArrow = true, onClick = onMapping)
             }
         }
     }
