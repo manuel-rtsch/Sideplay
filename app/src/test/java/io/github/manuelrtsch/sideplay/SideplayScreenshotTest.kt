@@ -31,6 +31,7 @@ class SideplayScreenshotTest {
         recent = recent,
         libraryItems = runBlocking { MockSpotifyDataSource.library(LibraryFilter.Albums).items },
         searchResults = runBlocking { MockSpotifyDataSource.search("night", SearchScope.entries.toSet()) },
+        searchHasMore = SearchScope.entries.toSet(),
         isPlaying = true,
         positionMs = 68_000L,
         savedTrackIds = setOf(current.id),
@@ -105,8 +106,8 @@ class SideplayScreenshotTest {
             onUndo = {},
             onLoadMoreAlbums = {},
             onLoadMoreTracks = {},
-            albumHasMore = false,
-            trackHasMore = false,
+            albumHasMore = true,
+            trackHasMore = true,
             loadingMore = false,
             onDismissNotice = {}
         )

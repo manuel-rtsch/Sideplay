@@ -223,7 +223,13 @@ class SpotifyViewModel(
         viewModelScope.launch {
             try {
                 val collection = catalog.collection(type, id, 0, SPOTIFY_PAGE_SIZE)
-                val saved = if (collection == null) null else writer?.isSaved(type, id)
+                val saved = if (collection == null) {
+                    null
+                } else {
+                    runCatching { writer?.isSaved(type, id) }
+                        .onFailure { SideplayDebug.log("viewModel.ensureCollection key=$key saved lookup failed", it) }
+                        .getOrNull()
+                }
                 _state.update {
                     val keys = it.savedCollectionKeys.toMutableSet()
                     if (saved != null && key !in savedCollectionTouched) {
@@ -238,6 +244,7 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                SideplayDebug.log("viewModel.ensureCollection key=$key failed", e)
                 _state.update {
                     it.copy(pendingCollections = it.pendingCollections - key, notice = playbackNotice(e))
                 }
@@ -290,7 +297,7 @@ class SpotifyViewModel(
         _state.update { it.copy(artistMorePending = it.artistMorePending + id) }
         viewModelScope.launch {
             try {
-                val page = catalog.albumsBy(artist, snapshot.artistAlbums[id].orEmpty().size, SPOTIFY_PAGE_SIZE)
+                val page = catalog.albumsBy(artist, snapshot.artistAlbums[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
                 _state.update {
                     it.copy(
                         artistAlbums = it.artistAlbums + (id to (it.artistAlbums[id].orEmpty() + page.items).distinctBy { album -> album.id }),
@@ -319,7 +326,7 @@ class SpotifyViewModel(
         _state.update { it.copy(artistMorePending = it.artistMorePending + id) }
         viewModelScope.launch {
             try {
-                val page = catalog.topTracks(artist, snapshot.artistTracks[id].orEmpty().size, SPOTIFY_PAGE_SIZE)
+                val page = catalog.topTracks(artist, snapshot.artistTracks[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
                 _state.update {
                     it.copy(
                         artistTracks = it.artistTracks + (id to (it.artistTracks[id].orEmpty() + page.items).distinctBy { track -> track.id }),
@@ -370,9 +377,11 @@ class SpotifyViewModel(
                     _state.update { it.copy(pendingArtists = it.pendingArtists - id) }
                     return@launch
                 }
-                val albums = catalog.albumsBy(artist, 0, SPOTIFY_PAGE_SIZE)
-                val tracks = catalog.topTracks(artist, 0, SPOTIFY_PAGE_SIZE)
-                val followed = writer?.isArtistFollowed(id)
+                val albums = catalog.albumsBy(artist, 0, SPOTIFY_ARTIST_PAGE_SIZE)
+                val tracks = catalog.topTracks(artist, 0, SPOTIFY_ARTIST_PAGE_SIZE)
+                val followed = runCatching { writer?.isArtistFollowed(id) }
+                    .onFailure { SideplayDebug.log("viewModel.ensureArtist id=$id followed lookup failed", it) }
+                    .getOrNull()
                 _state.update {
                     val ids = it.followedArtistIds.toMutableSet()
                     if (followed != null && id !in followedArtistTouched) {
@@ -391,6 +400,7 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                SideplayDebug.log("viewModel.ensureArtist id=$id failed", e)
                 _state.update {
                     it.copy(pendingArtists = it.pendingArtists - id, notice = playbackNotice(e))
                 }
@@ -993,7 +1003,7 @@ class SpotifyViewModel(
             delay(debounceMs)
             val scopes = _state.value.searchScopes
             val results = try {
-                if (_state.value.signedIn) catalog.search(query, scopes, 0, SPOTIFY_PAGE_SIZE) else SpotifySearchResults()
+                if (_state.value.signedIn) catalog.search(query, scopes, 0, SPOTIFY_SEARCH_PAGE_SIZE) else SpotifySearchResults()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1005,7 +1015,7 @@ class SpotifyViewModel(
                     it.copy(
                         searchResults = results,
                         searchPending = false,
-                        searchHasMore = scopes.filterTo(mutableSetOf()) { scope -> results.sizeFor(scope) >= SPOTIFY_PAGE_SIZE }
+                        searchHasMore = scopes.filterTo(mutableSetOf()) { scope -> results.sizeFor(scope) >= SPOTIFY_SEARCH_PAGE_SIZE }
                     )
                 } else {
                     it
@@ -1022,12 +1032,12 @@ class SpotifyViewModel(
         _state.update { it.copy(searchMorePending = it.searchMorePending + scope) }
         viewModelScope.launch {
             try {
-                val more = catalog.search(query, setOf(scope), offset, SPOTIFY_PAGE_SIZE)
+                val more = catalog.search(query, setOf(scope), offset, SPOTIFY_SEARCH_PAGE_SIZE)
                 _state.update {
                     if (it.query != query) {
                         it.copy(searchMorePending = it.searchMorePending - scope)
                     } else {
-                        val hasMore = if (more.sizeFor(scope) >= SPOTIFY_PAGE_SIZE) {
+                        val hasMore = if (more.sizeFor(scope) >= SPOTIFY_SEARCH_PAGE_SIZE) {
                             it.searchHasMore + scope
                         } else {
                             it.searchHasMore - scope

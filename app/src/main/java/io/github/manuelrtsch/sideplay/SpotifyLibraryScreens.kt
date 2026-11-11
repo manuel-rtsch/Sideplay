@@ -318,7 +318,9 @@ fun ArtistScreen(
                 }
             }
             if (trackHasMore) {
-                item(key = "tracksMore") { PagingFooter(loadingMore, onLoadMoreTracks) }
+                item(key = "tracksMore") {
+                    SeeMoreRow("See more tracks", loadingMore, onLoadMoreTracks)
+                }
             }
             item(key = "albumsLabel") { SectionLabel("Albums") }
             itemsIndexed(albums, key = { index, album -> "$index:${album.id}" }) { index, album ->
@@ -331,7 +333,9 @@ fun ArtistScreen(
                 ) { onAlbum(album) }
             }
             if (albumHasMore) {
-                item(key = "albumsMore") { PagingFooter(loadingMore, onLoadMoreAlbums) }
+                item(key = "albumsMore") {
+                    SeeMoreRow("See more albums", loadingMore, onLoadMoreAlbums)
+                }
             }
         }
     }

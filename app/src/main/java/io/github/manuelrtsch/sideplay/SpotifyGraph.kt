@@ -83,6 +83,21 @@ private val collectionArgs = listOf(
 )
 private val artistArgs = listOf(navArgument("id") { type = NavType.StringType })
 
+private fun NavHostController.openNowPlaying() {
+    if (!popBackStack(NOW_PLAYING, inclusive = false)) {
+        navigate(NOW_PLAYING) { launchSingleTop = true }
+    }
+}
+
+/** A tap on the already-playing item opens Now Playing instead of restarting or toggling it. */
+private fun NavHostController.openTrack(
+    vm: SpotifyViewModel,
+    item: SpotifyMediaItem,
+    play: () -> Unit
+) {
+    if (vm.state.value.current?.id == item.id) openNowPlaying() else play()
+}
+
 /** Registers the Sideplay screens. All screens share one account state holder. */
 fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
     navigation(startDestination = HOME, route = ROOT) {
@@ -99,7 +114,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onSearch = { nav.navigate(SEARCH) },
                 onSettings = { nav.navigate(SETTINGS) },
                 onRefresh = vm::refresh,
-                onPlay = vm::playLibraryTrack,
+                onPlay = { track -> nav.openTrack(vm, track) { vm.playLibraryTrack(track) } },
                 onQueue = { nav.navigate(QUEUE) },
                 onQueueTrack = vm::addToQueue,
                 onDismissNotice = vm::dismissNotice
@@ -113,9 +128,13 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onBack = { nav.popBackStack() },
                 onSearch = { nav.navigate(SEARCH) },
                 onFilter = vm::setFilter,
-                onTrack = {
-                    vm.playItem(it)
-                    nav.navigate(NOW_PLAYING)
+                onTrack = { track ->
+                    if (vm.state.value.current?.id == track.id) {
+                        nav.openNowPlaying()
+                    } else {
+                        vm.playItem(track)
+                        nav.openNowPlaying()
+                    }
                 },
                 onQueue = vm::addToQueue,
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
@@ -142,7 +161,11 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     state,
                     onBack = { nav.popBackStack() },
                     onPlay = { vm.playCollection(collection, 0) },
-                    onItem = { vm.playCollection(collection, it) },
+                    onItem = { index ->
+                        collection.items.getOrNull(index)?.let { item ->
+                            nav.openTrack(vm, item) { vm.playCollection(collection, index) }
+                        }
+                    },
                     onSave = { vm.toggleSaved(collection) },
                     onArtist = {
                         collection.artistId?.let { nav.navigate(artistRoute(it)) } ?: vm.notice("This collection has no artist page")
@@ -176,7 +199,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     state,
                     onBack = { nav.popBackStack() },
                     onPlay = { vm.playArtist(artist) },
-                    onTrack = { vm.play(tracks, tracks.indexOf(it)) },
+                    onTrack = { track -> nav.openTrack(vm, track) { vm.play(tracks, tracks.indexOf(track)) } },
                     onQueue = vm::addToQueue,
                     onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                     onFollow = { vm.toggleFollow(artist) },
@@ -200,7 +223,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onQuery = vm::setQuery,
                 onClear = vm::clearQuery,
                 onToggleScope = vm::toggleScope,
-                onTrack = vm::playItem,
+                onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onQueue = vm::addToQueue,
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
@@ -253,7 +276,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                         nav.navigate(NOW_PLAYING) { launchSingleTop = true }
                     }
                 },
-                onJump = vm::jumpTo,
+                onJump = { id ->
+                    if (state.current?.id == id) nav.openNowPlaying() else vm.jumpTo(id)
+                },
                 onPlayNext = vm::moveToNext,
                 onRemove = vm::removeUpcoming,
                 onRemoveHistory = vm::removeHistory,

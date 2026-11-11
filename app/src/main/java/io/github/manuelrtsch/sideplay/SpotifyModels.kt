@@ -122,6 +122,8 @@ data class SpotifyCollection(
 
 /** How many rows a catalog request asks for. Kept small for the Sidephone's weak CPU. */
 const val SPOTIFY_PAGE_SIZE = 50
+const val SPOTIFY_SEARCH_PAGE_SIZE = 5
+const val SPOTIFY_ARTIST_PAGE_SIZE = 5
 
 /** One page of a catalog list. [total] is null when the endpoint doesn't report it. */
 data class SpotifyPage<T>(

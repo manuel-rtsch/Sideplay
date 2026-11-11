@@ -104,9 +104,11 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   Upcoming and History rows in the queue swipe left to remove; removing queue history also drops
   the item from recently played. Library uses the standard single-line header; Settings has one
   sign-out action in the bar.
-- Catalog lists page in 50-row chunks. Library, collection, artist, and search surfaces load the
-  next page as their footer becomes visible, so a 202-track playlist reaches its last track without
-  composing every row at once.
+- Library and collection lists page in 50-row chunks and load the next page as their footer
+  becomes visible. Search and artist surfaces start with five items per section and show a
+  pressable **See more** row; the next page is fetched only when that row is pressed.
+- `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
+  T9 → mini QWERTY switch made while Sideplay was in the background takes effect immediately.
 
 **Verified**
 

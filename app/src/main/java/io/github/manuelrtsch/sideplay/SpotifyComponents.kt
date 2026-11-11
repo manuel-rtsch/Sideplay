@@ -296,6 +296,16 @@ fun PagingFooter(loading: Boolean, onLoadMore: () -> Unit) {
     EmptyMessage(if (loading) "Loading more…" else "More", hint = null)
 }
 
+/** A shallow terminal row that loads the next page only when the user presses it. */
+@Composable
+fun SeeMoreRow(label: String, loading: Boolean, onClick: () -> Unit) {
+    TerminalRow(
+        label,
+        secondary = if (loading) "Loading…" else null,
+        onClick = if (loading) null else onClick
+    )
+}
+
 fun withNotice(notice: String?, onDismiss: () -> Unit, actions: List<SideAction>): List<SideAction> = if (notice == null) {
     actions
 } else {

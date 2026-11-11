@@ -1220,6 +1220,19 @@ fn parse_contains(bytes: &[u8]) -> Vec<bool> {
                 };
                 found.push(value != 0);
             }
+            // proto3 encodes `repeated bool` packed by default.
+            (1, 2) => {
+                let Some(len) = read_varint(bytes, &mut index) else {
+                    break;
+                };
+                let end = index.saturating_add(len as usize).min(bytes.len());
+                while index < end {
+                    let Some(value) = read_varint(bytes, &mut index) else {
+                        break;
+                    };
+                    found.push(value != 0);
+                }
+            }
             (_, 0) => {
                 let _ = read_varint(bytes, &mut index);
             }
@@ -1256,6 +1269,12 @@ pub async fn collection_contains(
     .await?;
     let found = parse_contains(&bytes);
     if found.len() != uris.len() {
+        log::warn!(
+            "collection contains returned {} results for {} uris ({} bytes)",
+            found.len(),
+            uris.len(),
+            bytes.len()
+        );
         return Err("collection contains returned the wrong number of results".to_string());
     }
     serde_json::to_string(&found).map_err(|e| e.to_string())

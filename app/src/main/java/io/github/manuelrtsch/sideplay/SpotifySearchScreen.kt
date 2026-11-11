@@ -7,10 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.semantics.contentDescription
@@ -29,8 +26,6 @@ import io.github.manuelrtsch.sideplay.ui.SidekitSwipeRow
 import io.github.manuelrtsch.sideplay.ui.SwipeAction
 import io.github.manuelrtsch.sideplay.ui.rememberSwipeRevealGroup
 
-private const val SEARCH_SECTION_PAGE = 10
-
 @Composable
 fun SpotifySearchScreen(
     state: SpotifyUiState,
@@ -47,14 +42,7 @@ fun SpotifySearchScreen(
     onLoadMore: (SearchScope) -> Unit,
     onDismissNotice: () -> Unit
 ) {
-    var expanded by remember(state.query) { mutableStateOf(emptyMap<SearchScope, Int>()) }
     val results = state.searchResults
-    fun visible(scope: SearchScope, total: Int): Int = minOf(expanded[scope] ?: SEARCH_SECTION_PAGE, total)
-    fun showMore(scope: SearchScope, total: Int) {
-        val current = visible(scope, total)
-        expanded = expanded + (scope to (current + SEARCH_SECTION_PAGE))
-        if (current >= total && scope in state.searchHasMore) onLoadMore(scope)
-    }
     val actions = withNotice(
         state.notice,
         onDismissNotice,
@@ -119,8 +107,7 @@ fun SpotifySearchScreen(
                     var slot = 0
                     if (results.tracks.isNotEmpty()) {
                         item(key = "tracksLabel") { SectionLabel("Tracks") }
-                        val shown = results.tracks.take(visible(SearchScope.Tracks, results.tracks.size))
-                        itemsIndexed(shown, key = { _, track -> "t${track.id}" }) { index, track ->
+                        itemsIndexed(results.tracks, key = { _, track -> "t${track.id}" }) { index, track ->
                             SidekitSwipeRow(
                                 key = track.id,
                                 group = swipes,
@@ -136,61 +123,67 @@ fun SpotifySearchScreen(
                                 SpotifyMediaRow(track, Modifier, secondary = track.artist) { onTrack(track) }
                             }
                         }
-                        slot += shown.size
-                        if (shown.size < results.tracks.size || SearchScope.Tracks in state.searchHasMore) {
+                        slot += results.tracks.size
+                        if (SearchScope.Tracks in state.searchHasMore) {
                             item(key = "moreTracks") {
-                                SearchMoreRow(SearchScope.Tracks, "More tracks", state) { showMore(SearchScope.Tracks, results.tracks.size) }
+                                SeeMoreRow("See more tracks", SearchScope.Tracks in state.searchMorePending) {
+                                    onLoadMore(SearchScope.Tracks)
+                                }
                             }
                         }
                     }
                     if (results.artists.isNotEmpty()) {
                         item(key = "artistsLabel") { SectionLabel("Artists") }
-                        val shown = results.artists.take(visible(SearchScope.Artists, results.artists.size))
-                        itemsIndexed(shown, key = { _, artist -> "r${artist.id}" }) { index, artist ->
+                        itemsIndexed(results.artists, key = { _, artist -> "r${artist.id}" }) { index, artist ->
                             SpotifyLibraryRow(artist.artRes, artist.name, "Artist", Modifier.listFade(listState, slot + index), artUrl = artist.artUrl) { onArtist(artist) }
                         }
-                        slot += shown.size
-                        if (shown.size < results.artists.size || SearchScope.Artists in state.searchHasMore) {
+                        slot += results.artists.size
+                        if (SearchScope.Artists in state.searchHasMore) {
                             item(key = "moreArtists") {
-                                SearchMoreRow(SearchScope.Artists, "More artists", state) { showMore(SearchScope.Artists, results.artists.size) }
+                                SeeMoreRow("See more artists", SearchScope.Artists in state.searchMorePending) {
+                                    onLoadMore(SearchScope.Artists)
+                                }
                             }
                         }
                     }
                     if (results.albums.isNotEmpty()) {
                         item(key = "albumsLabel") { SectionLabel("Albums") }
-                        val shown = results.albums.take(visible(SearchScope.Albums, results.albums.size))
-                        itemsIndexed(shown, key = { _, album -> "a${album.id}" }) { index, album ->
+                        itemsIndexed(results.albums, key = { _, album -> "a${album.id}" }) { index, album ->
                             SpotifyLibraryRow(album.artRes, album.title, "${album.artist} · ${album.year}", Modifier.listFade(listState, slot + index), artUrl = album.artUrl) { onAlbum(album) }
                         }
-                        slot += shown.size
-                        if (shown.size < results.albums.size || SearchScope.Albums in state.searchHasMore) {
+                        slot += results.albums.size
+                        if (SearchScope.Albums in state.searchHasMore) {
                             item(key = "moreAlbums") {
-                                SearchMoreRow(SearchScope.Albums, "More albums", state) { showMore(SearchScope.Albums, results.albums.size) }
+                                SeeMoreRow("See more albums", SearchScope.Albums in state.searchMorePending) {
+                                    onLoadMore(SearchScope.Albums)
+                                }
                             }
                         }
                     }
                     if (results.playlists.isNotEmpty()) {
                         item(key = "playlistsLabel") { SectionLabel("Playlists") }
-                        val shown = results.playlists.take(visible(SearchScope.Playlists, results.playlists.size))
-                        itemsIndexed(shown, key = { _, playlist -> "p${playlist.id}" }) { index, playlist ->
+                        itemsIndexed(results.playlists, key = { _, playlist -> "p${playlist.id}" }) { index, playlist ->
                             SpotifyLibraryRow(playlist.artRes, playlist.name, "${playlist.owner} · ${playlist.trackCount} tracks", Modifier.listFade(listState, slot + index), artUrl = playlist.artUrl) { onPlaylist(playlist) }
                         }
-                        slot += shown.size
-                        if (shown.size < results.playlists.size || SearchScope.Playlists in state.searchHasMore) {
+                        slot += results.playlists.size
+                        if (SearchScope.Playlists in state.searchHasMore) {
                             item(key = "morePlaylists") {
-                                SearchMoreRow(SearchScope.Playlists, "More playlists", state) { showMore(SearchScope.Playlists, results.playlists.size) }
+                                SeeMoreRow("See more playlists", SearchScope.Playlists in state.searchMorePending) {
+                                    onLoadMore(SearchScope.Playlists)
+                                }
                             }
                         }
                     }
                     if (results.shows.isNotEmpty()) {
                         item(key = "showsLabel") { SectionLabel("Shows") }
-                        val shown = results.shows.take(visible(SearchScope.Shows, results.shows.size))
-                        itemsIndexed(shown, key = { _, show -> "s${show.id}" }) { index, show ->
+                        itemsIndexed(results.shows, key = { _, show -> "s${show.id}" }) { index, show ->
                             SpotifyLibraryRow(show.artRes, show.name, show.publisher, Modifier.listFade(listState, slot + index), artUrl = show.artUrl) { onShow(show) }
                         }
-                        if (shown.size < results.shows.size || SearchScope.Shows in state.searchHasMore) {
+                        if (SearchScope.Shows in state.searchHasMore) {
                             item(key = "moreShows") {
-                                SearchMoreRow(SearchScope.Shows, "More shows", state) { showMore(SearchScope.Shows, results.shows.size) }
+                                SeeMoreRow("See more shows", SearchScope.Shows in state.searchMorePending) {
+                                    onLoadMore(SearchScope.Shows)
+                                }
                             }
                         }
                     }
@@ -198,19 +191,4 @@ fun SpotifySearchScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SearchMoreRow(
-    scope: SearchScope,
-    label: String,
-    state: SpotifyUiState,
-    onMore: () -> Unit
-) {
-    val loading = scope in state.searchMorePending
-    TerminalRow(
-        label,
-        secondary = if (loading) "Loading…" else null,
-        onClick = if (loading) null else onMore
-    )
 }

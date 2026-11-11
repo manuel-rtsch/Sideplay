@@ -5,13 +5,16 @@ import android.os.Bundle
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
+import hrln.interactive.sidekit.design.input.Keypad
 import hrln.interactive.sidekit.design.input.KeypadPreferences
+import hrln.interactive.sidekit.design.input.T9Mode
 import hrln.interactive.sidekit.sdk.app.SidekitActivity
 import hrln.interactive.sidekit.sdk.config.HostStatus
 import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
 import hrln.interactive.sidekit.sdk.config.SidekitConfigSource
 import hrln.interactive.sidekit.sdk.input.HostKeypadPreferences
 import hrln.interactive.sidekit.sdk.input.SharedPreferencesKeypadPreferences
+import hrln.interactive.sidekit.sdk.input.applyInputMode
 import hrln.interactive.sidekit.sdk.theme.HostSidekitThemeStore
 import hrln.interactive.sidekit.sdk.theme.SharedPreferencesSidekitThemeStore
 import hrln.interactive.sidekit.sdk.theme.SidekitThemeStore
@@ -41,6 +44,20 @@ class SideplayActivity : SidekitActivity() {
 
     override fun onSidekitCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState == null) SideplayLinks.handle(intent)
+    }
+
+    /**
+     * Re-read the host's keypad choice every time Sideplay comes back to the front. The user may
+     * have switched between T9 and mini QWERTY while Sideplay was in the background; without this
+     * the keypad keeps the module and input mode it started with, so QWERTY's T/D/B/J navigation
+     * cross never becomes active.
+     */
+    override fun onSidekitResume(keypad: Keypad) {
+        val config = if (hostAvailable) hostConfig.read() else null
+        keypad.applyInputMode(config?.inputModeOrDefault() ?: T9Mode.MultiTap)
+        val module = config?.keypadModuleOrDefault() ?: keypadPreferences.module()
+        if (module != null) keypad.useModule(module)
+        keypad.useCustomMapping(config?.customModuleOrDefault() ?: keypadPreferences.customModule())
     }
 
     override fun onNewIntent(intent: Intent) {
