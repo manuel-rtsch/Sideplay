@@ -107,6 +107,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Library and collection lists page in 50-row chunks and load the next page as their footer
   becomes visible. Search and artist surfaces start with five items per section and show a
   pressable **See more** row; the next page is fetched only when that row is pressed.
+- First loads of an artist or collection show a centred, rotating vinyl record with the loading
+  label and a "Fetching from Spotify" hint instead of plain text.
 - `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
   T9 → mini QWERTY switch made while Sideplay was in the background takes effect immediately.
 - Settings shows the actual artwork + audio cache size. Sign-out clears artwork, audio, and

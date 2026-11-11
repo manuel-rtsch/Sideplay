@@ -1,6 +1,13 @@
 package io.github.manuelrtsch.sideplay
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode as AnimationRepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -16,6 +23,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,10 +41,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -269,6 +280,72 @@ fun EmptyMessage(title: String, modifier: Modifier = Modifier, hint: String? = n
     ) {
         SidekitText(title, style = SidekitTheme.typography.bodySmall, color = SidekitTheme.colors.surfaceA6)
         if (hint != null) SidekitText(hint, style = SidekitTheme.typography.caption, color = SidekitTheme.colors.surfaceA6)
+    }
+}
+
+/**
+ * A centred vinyl record for the first load of an artist or collection. The record turns while the
+ * catalog request is in flight, so the screen reads as activity rather than a stalled empty state.
+ */
+@Composable
+fun SpotifyLoadingScreen(
+    title: String = "Loading…",
+    hint: String? = "Fetching from Spotify",
+    modifier: Modifier = Modifier
+) {
+    val colors = SidekitTheme.colors
+    val transition = rememberInfiniteTransition(label = "record")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2_400, easing = LinearEasing),
+            repeatMode = AnimationRepeatMode.Restart
+        ),
+        label = "recordAngle"
+    )
+    Column(
+        modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Canvas(
+            Modifier
+                .size(132.dp)
+                .rotate(angle)
+                .semantics { contentDescription = title }
+        ) {
+            val radius = size.minDimension / 2f
+            val centre = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(colors.surfaceA2, radius, centre)
+            drawCircle(colors.surfaceA4, radius, centre, style = Stroke(width = 1.dp.toPx()))
+            for (groove in 1..5) {
+                drawCircle(
+                    colors.surfaceA3,
+                    radius * (0.52f + groove * 0.075f),
+                    centre,
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            }
+            drawCircle(colors.primaryA1, radius * 0.34f, centre)
+            drawCircle(colors.primaryA3, radius * 0.34f, centre, style = Stroke(width = 1.dp.toPx()))
+            drawCircle(colors.surfaceA1, radius * 0.055f, centre)
+            drawArc(
+                color = colors.light.copy(alpha = 0.18f),
+                startAngle = -60f,
+                sweepAngle = 70f,
+                useCenter = false,
+                topLeft = Offset(centre.x - radius * 0.86f, centre.y - radius * 0.86f),
+                size = Size(radius * 1.72f, radius * 1.72f),
+                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        SidekitText(title, style = SidekitTheme.typography.bodySmall, color = colors.light)
+        if (hint != null) {
+            Spacer(Modifier.height(4.dp))
+            SidekitText(hint, style = SidekitTheme.typography.caption, color = colors.surfaceA6)
+        }
     }
 }
 

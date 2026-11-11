@@ -181,6 +181,10 @@ class SideplayScreenshotTest {
         )
     }
 
+    @Test fun loading() = shoot("sideplay_loading") {
+        SpotifyLoadingScreen("Loading artist")
+    }
+
     @Test fun signIn() = shoot("sideplay_sign_in") {
         SpotifySignInScreen(
             SpotifyUiState(signedIn = false),

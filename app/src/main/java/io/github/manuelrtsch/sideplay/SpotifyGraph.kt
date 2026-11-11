@@ -154,7 +154,16 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
             LaunchedEffect(type, id) { type?.let { vm.ensureCollection(it, id) } }
             val collection = type?.let { vm.collection(it, id) }
             if (collection == null) {
-                MissingCollectionScreen(onBack = { nav.popBackStack() }, loading = type?.let { "${it.route}:$id" in state.pendingCollections } == true)
+                MissingCollectionScreen(
+                    onBack = { nav.popBackStack() },
+                    loading = type?.let { "${it.route}:$id" in state.pendingCollections } == true,
+                    loadingTitle = when (type) {
+                        SpotifyCollectionType.Album -> "Loading album"
+                        SpotifyCollectionType.Playlist -> "Loading playlist"
+                        SpotifyCollectionType.Show -> "Loading show"
+                        null -> "Loading…"
+                    }
+                )
             } else {
                 CollectionScreen(
                     collection,
@@ -188,7 +197,11 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
             LaunchedEffect(artistId) { vm.ensureArtist(artistId) }
             val artist = vm.artist(artistId)
             if (artist == null) {
-                MissingCollectionScreen(onBack = { nav.popBackStack() }, loading = artistId in state.pendingArtists)
+                MissingCollectionScreen(
+                    onBack = { nav.popBackStack() },
+                    loading = artistId in state.pendingArtists,
+                    loadingTitle = "Loading artist"
+                )
             } else {
                 val albums = vm.albumsBy(artist)
                 val tracks = vm.topTracks(artist)
@@ -337,13 +350,17 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
 }
 
 @Composable
-private fun MissingCollectionScreen(onBack: () -> Unit, loading: Boolean = false) {
+private fun MissingCollectionScreen(
+    onBack: () -> Unit,
+    loading: Boolean = false,
+    loadingTitle: String = "Loading…"
+) {
     SidekitScaffold(title = "Sideplay", actions = spotifyBack("Back", onBack)) { padding ->
         androidx.compose.foundation.layout.Box(
             androidx.compose.ui.Modifier.padding(padding)
         ) {
             if (loading) {
-                EmptyMessage("Loading…", hint = "Fetching from Spotify")
+                SpotifyLoadingScreen(loadingTitle)
             } else {
                 EmptyMessage("This collection isn't available", hint = "Go back and choose another")
             }
