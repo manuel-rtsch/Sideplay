@@ -18,7 +18,7 @@
         android:theme="@style/Theme.Sideplay">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".SideplayActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection|touchscreen|colorMode|mcc|mnc"
             android:exported="true"
             android:launchMode="singleTask"
@@ -43,5 +43,10 @@
                 android:name="hrln.interactive.sidekit.app.LAUNCH_ROUTE"
                 android:value="home" />
         </activity>
+
+        <service
+            android:name=".playback.SpotifyPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

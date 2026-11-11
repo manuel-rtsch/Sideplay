@@ -4,10 +4,9 @@ Sideplay is a keypad-first Spotify app for Sidekit-native phones. It is built as
 APK on top of the shared `sidekit-design` and `sidekit-sdk` artifacts, and appears in the Sidekit
 launcher through the native app descriptor.
 
-This repository is the new home for Sideplay. The app code is being moved here from the Sidekit
-repository as part of phase 6 of
+This repository is the home of Sideplay. The app was moved here from the Sidekit repository as
+part of phase 6 of
 [`docs/third-party-apps.md`](https://github.com/manuel-rtsch/Sidekit/blob/feat/third-party-apps/docs/third-party-apps.md).
-The current `main` branch is the initial project scaffold.
 
 ## Package
 
@@ -23,8 +22,8 @@ not. The hyphen is omitted.
 
 - JDK 21
 - Android SDK 37
-- Android NDK 27.1.12297006 and a Rust toolchain for the librespot bridge (optional; playback
-  falls back to the HTTP catalog when the native library is absent)
+- Android NDK 27.1.12297006 and a Rust toolchain for the librespot bridge (optional; enable with
+  `-PsideplayNative=true`, otherwise playback falls back to the HTTP catalog)
 
 ## Build
 
@@ -32,6 +31,9 @@ not. The hyphen is omitted.
 ./gradlew :app:assembleDebug
 ./gradlew :app:assembleProfile
 ./gradlew :app:assembleDev
+
+# Include libsideplay_spotify.so (needs Cargo + NDK)
+./gradlew :app:assembleProfile -PsideplayNative=true
 ```
 
 `profile` is an R8 build signed with the local debug key, for judging real-device performance.

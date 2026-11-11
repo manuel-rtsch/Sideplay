@@ -1,0 +1,38 @@
+[package]
+name = "sideplay-spotify"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "sideplay_spotify"
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = "0.21"
+librespot-core = { version = "0.8.0", default-features = false, features = ["rustls-tls-webpki-roots"] }
+librespot-metadata = { version = "0.8.0", default-features = false, features = ["rustls-tls-webpki-roots"] }
+librespot-playback = { version = "0.8.0", default-features = false, features = ["rustls-tls-webpki-roots"] }
+librespot-protocol = "0.8.0"
+protobuf = "3.7"
+protobuf-json-mapping = "3.7"
+bytes = "1"
+futures-util = "0.3"
+http = "1"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.14"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
+
+[patch.crates-io]
+librespot-core = { path = "../vendor/librespot-core" }

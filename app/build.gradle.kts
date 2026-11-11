@@ -24,6 +24,7 @@ fun versionCodeFromGit() = runCatching { gitVersionCode.get() }.getOrDefault(fal
 fun versionNameFromGit() = runCatching { gitVersionName.get() }.getOrDefault(fallbackVersionName)
 
 android {
+    ndkVersion = "27.1.12297006"
     namespace = "io.github.manuelrtsch.sideplay"
     compileSdk {
         version = release(37)
@@ -71,14 +72,78 @@ android {
         compose = true
     }
 
+    packaging {
+        resources.merges += setOf("META-INF/NOTICE.md", "META-INF/LICENSE.md", "META-INF/LICENSE.txt", "META-INF/NOTICE.txt")
+    }
+    sourceSets["main"].jniLibs.directories.add(layout.buildDirectory.dir("generated/spotifyJniLibs").get().asFile.absolutePath)
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+            all {
+                it.systemProperty("roborazzi.test.record", "true")
+            }
         }
     }
 }
 
+// Sideplay's librespot bridge. The generated ABI directory is a normal jniLibs source, so an
+// unsupported ABI simply has no .so and the Kotlin bridge reports it as unavailable.
+val spotifyJniLibs = layout.buildDirectory.dir("generated/spotifyJniLibs")
+// Native playback is opt-in: CI has no Rust toolchain or NDK, and probing Cargo at
+// configuration time would break Gradle's configuration cache. Use
+// `-PsideplayNative=true` after installing both.
+val cargo = listOf(
+    File(System.getProperty("user.home"), ".cargo/bin/cargo"),
+    File("/usr/bin/cargo"),
+    File("/usr/local/bin/cargo")
+).firstOrNull { it.canExecute() }
+val nativeEnabled = providers.gradleProperty("sideplayNative")
+    .map(String::toBoolean)
+    .orElse(providers.environmentVariable("SIDEPLAY_NATIVE").map(String::toBoolean))
+    .getOrElse(false)
+
+// Resolve the NDK only when Cargo is present. CI has no Rust toolchain, and asking Gradle for
+// the NDK directory eagerly would fail configuration even though the task is disabled.
+val ndk = if (!nativeEnabled || cargo == null) {
+    null
+} else {
+    runCatching { androidComponents.sdkComponents.ndkDirectory.get().asFile }.getOrNull()?.takeIf { it.isDirectory }
+}
+
+val buildSpotifyNative = tasks.register<Exec>("buildSpotifyNative") {
+    description = "Build libsideplay_spotify.so for arm64-v8a and x86_64."
+    group = "native"
+    enabled = nativeEnabled && cargo != null && ndk != null
+    when {
+        !nativeEnabled -> logger.lifecycle("Sideplay: native playback is off; pass -PsideplayNative=true to build libsideplay_spotify.so.")
+        cargo == null -> logger.warn("Sideplay: cargo is unavailable; libsideplay_spotify.so will not be packaged.")
+        ndk == null -> logger.warn("Sideplay: the Android NDK is unavailable; libsideplay_spotify.so will not be packaged.")
+    }
+    workingDir = rootProject.file("native/sideplay-spotify")
+    commandLine(
+        cargo?.absolutePath.orEmpty(),
+        "ndk",
+        "-t", "arm64-v8a",
+        "-t", "x86_64",
+        "-o", spotifyJniLibs.get().asFile.absolutePath,
+        "build", "--release"
+    )
+    if (ndk != null) environment("ANDROID_NDK_HOME", ndk.absolutePath)
+    inputs.dir(rootProject.file("native/sideplay-spotify/src"))
+    inputs.files(rootProject.file("native/sideplay-spotify/Cargo.toml"), rootProject.file("native/sideplay-spotify/Cargo.lock"))
+    outputs.dir(spotifyJniLibs)
+}
+
+tasks.matching {
+    it.name.startsWith("merge") && (it.name.endsWith("NativeLibs") || it.name.endsWith("JniLibFolders"))
+}.configureEach {
+    dependsOn(buildSpotifyNative)
+}
+
 dependencies {
+    implementation(libs.sidekit.design)
+    implementation(libs.sidekit.sdk)
     implementation(libs.androidx.core.ktx)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -86,6 +151,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
