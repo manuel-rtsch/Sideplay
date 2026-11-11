@@ -196,19 +196,11 @@ fun CollectionScreen(
     val colors = SidekitTheme.colors
     val saved = "${collection.type.route}:${collection.id}" in state.savedCollectionKeys
     val actions = spotifyBar(state, onDismissNotice, onUndo, spotifyBack("Back", onBack).first())
+    // Save and Artist already have tiles in the header. The options bar is capped at two actions,
+    // so it only carries the less common ones.
     val options = buildList {
-        add(
-            SideAction(
-                "save",
-                if (saved) "Saved" else "Save",
-                if (saved) SidekitIcon.Check else SidekitIcon.Bookmark,
-                tone = if (saved) ActionTone.Secondary else ActionTone.Primary,
-                onClick = onSave
-            )
-        )
-        if (collection.artistId != null) add(SideAction("artist", "Artist", SidekitIcon.Artist, onClick = onArtist))
         collection.items.firstOrNull()?.let { add(SideAction("queue", "Add to queue", SidekitIcon.QueueMusic, onClick = onQueue)) }
-        add(SideAction("nowPlaying", "Go to now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     }
     SidekitScaffold(title = collection.title, actions = actions, options = options) { padding ->
         val listState = rememberLazyListState()
