@@ -53,7 +53,7 @@ class SideplayActivity : SidekitActivity() {
     override fun SidekitContent() {
         val nav = rememberNavController()
         SideplayLinks.Follow(nav)
-        NavHost(navController = nav, startDestination = SIDE_PLAY_START) {
+        NavHost(navController = nav, startDestination = SIDE_PLAY_ROOT) {
             sideplayGraph(nav)
         }
     }

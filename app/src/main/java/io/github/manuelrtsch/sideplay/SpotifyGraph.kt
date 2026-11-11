@@ -29,7 +29,8 @@ import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import io.github.manuelrtsch.sideplay.data.SpotifySessions
 import kotlinx.coroutines.flow.MutableStateFlow
 
-private const val ROOT = "sideplay"
+const val SIDE_PLAY_ROOT = "sideplay"
+private const val ROOT = SIDE_PLAY_ROOT
 const val SIDE_PLAY_START = "sideplay/home"
 private const val HOME = SIDE_PLAY_START
 private val LIBRARY = "$ROOT/library"

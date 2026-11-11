@@ -242,7 +242,7 @@ fun NowPlayingTile(
 fun LibraryTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
     SidekitTile(
         modifier,
-        color = SidekitTheme.colors.emphasisA1,
+        color = SidekitTheme.colors.successA1,
         onClick = onClick,
         onClickLabel = "Library"
     ) {
