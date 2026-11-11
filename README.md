@@ -13,11 +13,11 @@ The current `main` branch is the initial project scaffold.
 
 | Build | Application ID |
 | --- | --- |
-| Release / debug | `io.github.manuel_rtsch.sideplay` |
-| Dev (installs alongside) | `io.github.manuel_rtsch.sideplay.dev` |
+| Release / debug | `io.github.manuelrtsch.sideplay` |
+| Dev (installs alongside) | `io.github.manuelrtsch.sideplay.dev` |
 
-GitHub usernames may contain hyphens, but Android application IDs may not. The hyphen is
-replaced with an underscore.
+GitHub usernames may contain hyphens, but Android application IDs and Kotlin package names may
+not. The hyphen is omitted.
 
 ## Requirements
 
@@ -35,7 +35,7 @@ replaced with an underscore.
 ```
 
 `profile` is an R8 build signed with the local debug key, for judging real-device performance.
-`dev` derives from it and installs as `io.github.manuel_rtsch.sideplay.dev`.
+`dev` derives from it and installs as `io.github.manuelrtsch.sideplay.dev`.
 
 ## Sidekit artifacts
 

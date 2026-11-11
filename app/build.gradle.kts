@@ -24,13 +24,13 @@ fun versionCodeFromGit() = runCatching { gitVersionCode.get() }.getOrDefault(fal
 fun versionNameFromGit() = runCatching { gitVersionName.get() }.getOrDefault(fallbackVersionName)
 
 android {
-    namespace = "io.github.manuel_rtsch.sideplay"
+    namespace = "io.github.manuelrtsch.sideplay"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "io.github.manuel_rtsch.sideplay"
+        applicationId = "io.github.manuelrtsch.sideplay"
         minSdk = 31
         targetSdk = 36
         versionCode = providers.gradleProperty("sideplayVersionCode")

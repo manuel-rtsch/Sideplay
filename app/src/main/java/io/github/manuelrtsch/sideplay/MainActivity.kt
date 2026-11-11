@@ -1,4 +1,4 @@
-package io.github.manuel_rtsch.sideplay
+package io.github.manuelrtsch.sideplay
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
