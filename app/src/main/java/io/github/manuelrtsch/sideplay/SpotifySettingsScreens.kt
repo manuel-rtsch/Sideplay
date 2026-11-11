@@ -46,6 +46,9 @@ fun SpotifySettingsScreen(
 ) {
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
     val context = LocalContext.current
+    val packageInfo = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
+    val versionName = packageInfo.versionName.orEmpty()
+    val versionCode = packageInfo.longVersionCode
     val back = spotifyBack("Back", onBack).first()
     val normal = withNotice(
         state.notice,
@@ -80,7 +83,7 @@ fun SpotifySettingsScreen(
         title = "Settings",
         actions = actions,
         options = listOf(
-            SideAction("about", "About", SidekitIcon.Docs, onClick = { onNotice("Sideplay · a Sidekit sub-app") }),
+            SideAction("about", "About", SidekitIcon.Docs, onClick = { onNotice("Sideplay $versionName · Manuel Rottschäfer · MIT") }),
             SideAction("cache", "Clear cache", SidekitIcon.DeleteForever, onClick = onClearCache)
         )
     ) { padding ->
@@ -151,6 +154,34 @@ fun SpotifySettingsScreen(
                         showLinkArrowWithSecondary = true,
                         onClick = onAppearance
                     )
+                }
+            }
+            item(key = "version") {
+                SidekitCard(Modifier.listFade(listState, 6).fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SidekitText("Version", style = SidekitTheme.typography.headline)
+                        SidekitText("Sideplay $versionName ($versionCode)", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
+                    }
+                }
+            }
+            item(key = "author") {
+                SidekitCard(Modifier.listFade(listState, 7).fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SidekitText("Author", style = SidekitTheme.typography.headline)
+                        SidekitText("Manuel Rottschäfer", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
+                        SidekitText("github.com/manuel-rtsch", style = SidekitTheme.typography.caption, color = SidekitTheme.colors.surfaceA6, maxLines = Int.MAX_VALUE)
+                    }
+                }
+            }
+            item(key = "licenses") {
+                SidekitCard(Modifier.listFade(listState, 8).fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SidekitText("Licenses", style = SidekitTheme.typography.headline)
+                        SidekitText("Sideplay — MIT", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
+                        SidekitText("librespot — MIT", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
+                        SidekitText("AndroidX / Jetpack Compose — Apache 2.0", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
+                        SidekitText("Kotlin — Apache 2.0", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
+                    }
                 }
             }
         }
