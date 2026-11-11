@@ -22,8 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import hrln.interactive.sidekit.design.components.SidekitScaffold
-import hrln.interactive.sidekit.sdk.config.HostStatus
-import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
+import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import io.github.manuelrtsch.sideplay.data.SpotifySessions
@@ -306,7 +305,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
             val state by vm.state.collectAsStateWithLifecycle()
             val context = LocalContext.current
             val hostAvailable = remember(context) {
-                SidekitConfigClient.status(context, (context as? Activity)?.intent?.let(SidekitConfigClient::authorityFrom)) == HostStatus.Available
+                SidekitStores.forHostOrLocal(context, (context as? Activity)?.intent).isHostBacked
             }
             LaunchedEffect(Unit) { vm.refreshCacheSize() }
             SpotifySettingsScreen(

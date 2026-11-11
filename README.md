@@ -73,6 +73,12 @@ Android NDK and a Rust toolchain.
 ./gradlew :app:assembleProfile -PsideplayNative=true
 ```
 
+Until the `1.4.0` Sidekit SDK is published, point the build at a Sidekit checkout:
+
+```sh
+SIDEKIT_PROJECT_DIR=../Sidekit ./gradlew :app:assembleDebug
+```
+
 The `profile` build is signed with the local debug key and is meant for trying Sideplay on a real
 device. The `dev` build installs alongside the normal app as
 `io.github.manuelrtsch.sideplay.dev`.

@@ -57,7 +57,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   Settings, Appearance (only without a Sidekit host), Sign in. Mock data is confined to the
   screenshot-test source set.
 - Shell: `SideplayActivity` reads Sidekit's theme and keypad configuration when a compatible host
-  is installed; otherwise it uses local stores and shows Appearance settings in-app.
+  is installed; otherwise it uses local stores and shows Appearance settings in-app. Host support
+  is best-effort: an absent, older, or unreadable Sidekit falls back to standalone mode instead of
+  blocking startup.
 - Packages: application `io.github.manuelrtsch.sideplay`, native bridge
   `bridge/NativeBridge.kt`, player `playback/SpotifyPlayback.kt`.
 

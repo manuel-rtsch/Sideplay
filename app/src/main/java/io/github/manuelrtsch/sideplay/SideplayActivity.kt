@@ -6,40 +6,22 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import hrln.interactive.sidekit.design.input.Keypad
-import hrln.interactive.sidekit.design.input.KeypadPreferences
 import hrln.interactive.sidekit.design.input.T9Mode
+import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.app.SidekitActivity
-import hrln.interactive.sidekit.sdk.config.HostStatus
 import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
-import hrln.interactive.sidekit.sdk.config.SidekitConfigSource
-import hrln.interactive.sidekit.sdk.input.HostKeypadPreferences
-import hrln.interactive.sidekit.sdk.input.SharedPreferencesKeypadPreferences
 import hrln.interactive.sidekit.sdk.input.applyInputMode
-import hrln.interactive.sidekit.sdk.theme.HostSidekitThemeStore
-import hrln.interactive.sidekit.sdk.theme.SharedPreferencesSidekitThemeStore
-import hrln.interactive.sidekit.sdk.theme.SidekitThemeStore
 
 /**
  * The Sideplay shell. It reads Sidekit's configuration when a compatible host is installed and
  * keeps its own writable theme and keypad stores otherwise.
+ *
+ * Host integration is best-effort: an absent, older, or unreadable Sidekit never blocks startup.
+ * Sideplay then runs standalone with the settings it already had.
  */
 class SideplayActivity : SidekitActivity() {
-    private val hostAuthority by lazy { SidekitConfigClient.authorityFrom(intent) }
-
-    private val hostAvailable by lazy {
-        SidekitConfigClient.status(this, hostAuthority) == HostStatus.Available
-    }
-
-    private val hostConfig: SidekitConfigSource by lazy {
-        SidekitConfigClient.source(this, hostAuthority)
-    }
-
-    override val themeStore: SidekitThemeStore by lazy {
-        if (hostAvailable) HostSidekitThemeStore(hostConfig) else SharedPreferencesSidekitThemeStore(this, LOCAL_SETTINGS)
-    }
-
-    override val keypadPreferences: KeypadPreferences by lazy {
-        if (hostAvailable) HostKeypadPreferences(hostConfig) else SharedPreferencesKeypadPreferences(this, LOCAL_KEYPAD)
+    override val stores: SidekitStores.Stores by lazy {
+        SidekitStores.forHostOrLocal(this, intent, LOCAL_SETTINGS, LOCAL_KEYPAD)
     }
 
     override fun onSidekitCreate(savedInstanceState: Bundle?) {
@@ -53,7 +35,7 @@ class SideplayActivity : SidekitActivity() {
      * cross never becomes active.
      */
     override fun onSidekitResume(keypad: Keypad) {
-        val config = if (hostAvailable) hostConfig.read() else null
+        val config = if (stores.isHostBacked) SidekitConfigClient.read(this, stores.hostAuthority) else null
         keypad.applyInputMode(config?.inputModeOrDefault() ?: T9Mode.MultiTap)
         val module = config?.keypadModuleOrDefault() ?: keypadPreferences.module()
         if (module != null) keypad.useModule(module)
