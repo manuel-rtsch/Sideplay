@@ -1,0 +1,22 @@
+# Gradle
+.gradle
+build/
+.kotlin/
+/local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+/captures
+
+# Android NDK / native build
+.externalNativeBuild
+.cxx
+
+# Signing
+keystore.properties
+*.jks
+*.keystore
+
+# macOS
+.DS_Store
