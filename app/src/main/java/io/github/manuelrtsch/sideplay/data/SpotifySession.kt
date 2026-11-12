@@ -209,7 +209,7 @@ class SpotifySession(
     }
 
     private fun startFromTransport(item: SpotifyMediaItem) {
-        if (item is SpotifyTrack) history.record(item, System.currentTimeMillis())
+        history.record(item, System.currentTimeMillis())
         playback.setNowPlaying(item, 0L)
         val uri = item.uri ?: return
         playbackScope.launch {

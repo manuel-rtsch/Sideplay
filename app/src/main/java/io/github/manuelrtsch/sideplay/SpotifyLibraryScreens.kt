@@ -39,12 +39,14 @@ fun SideplayHomeScreen(
     onSearch: () -> Unit,
     onSettings: () -> Unit,
     onRefresh: () -> Unit,
-    onPlay: (SpotifyTrack) -> Unit,
+    onPlay: (SpotifyMediaItem) -> Unit,
     onQueue: () -> Unit,
-    onQueueTrack: (SpotifyTrack) -> Unit,
+    onQueueTrack: (SpotifyMediaItem) -> Unit,
+    onHistory: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
-    val recent = state.recent.take(10)
+    val recent = state.recent.take(RECENT_PREVIEW_SIZE)
+    val hasMoreHistory = state.recent.size > RECENT_PREVIEW_SIZE
     val bar = withNotice(
         state.notice,
         onDismissNotice,
@@ -74,20 +76,31 @@ fun SideplayHomeScreen(
             if (recent.isEmpty()) {
                 item(key = "empty") { EmptyMessage("Nothing played yet", hint = "Search to find your first track") }
             } else {
-                itemsIndexed(recent, key = { index, track -> "$index:${track.id}" }) { index, track ->
+                itemsIndexed(recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
                     SidekitSwipeRow(
-                        key = track.id,
+                        key = item.id,
                         group = swipes,
                         modifier = Modifier.listFade(listState, index + 2),
-                        action = queueAction(track, onQueueTrack)
+                        action = queueAction(item, onQueueTrack)
                     ) {
                         SpotifyMediaRow(
-                            track,
+                            item,
                             Modifier,
-                            secondary = track.artist,
-                            onClick = { onPlay(track) }
+                            secondary = item.creator,
+                            onClick = { onPlay(item) }
                         )
                     }
+                }
+            }
+            if (hasMoreHistory) {
+                val moreIndex = recent.size + 2
+                item(key = "moreHistory") {
+                    SeeMoreRow(
+                        "See more history",
+                        loading = false,
+                        onClick = onHistory,
+                        modifier = Modifier.listFade(listState, moreIndex)
+                    )
                 }
             }
         }
@@ -95,7 +108,7 @@ fun SideplayHomeScreen(
 }
 
 @Composable
-private fun <T : SpotifyMediaItem> queueAction(item: T, onQueue: (T) -> Unit) = SwipeAction(
+internal fun <T : SpotifyMediaItem> queueAction(item: T, onQueue: (T) -> Unit) = SwipeAction(
     label = "Add ${item.title} to queue",
     icon = SidekitIcon.QueueMusic,
     color = SidekitTheme.colors.primaryA1,
@@ -135,22 +148,37 @@ fun LibraryScreen(
         val first = remember { FocusRequester() }
         LaunchedEffect(firstFilter) { runCatching { first.requestFocus() } }
         SidekitList(padding, state = listState) {
+            var rowIndex = 0
             if (isEmpty) {
+                val index = rowIndex
                 item(key = "empty") {
                     if (state.librarySectionsLoading) {
-                        EmptyMessage("Loading your library…", hint = "Liked songs, playlists, albums, artists and shows")
+                        EmptyMessage(
+                            "Loading your library…",
+                            Modifier.listFade(listState, index),
+                            hint = "Liked songs, playlists, albums, artists and shows"
+                        )
                     } else {
-                        EmptyMessage("Your library is empty", hint = "Search to find something to save")
+                        EmptyMessage(
+                            "Your library is empty",
+                            Modifier.listFade(listState, index),
+                            hint = "Search to find something to save"
+                        )
                     }
                 }
+                rowIndex += 1
             }
-            var slot = 0
             LibraryFilter.entries.forEach { filter ->
                 val items = sections[filter].orEmpty()
                 if (items.isEmpty()) return@forEach
-                item(key = "label.${filter.name}") { SectionLabel(filter.label) }
+                val labelIndex = rowIndex
+                item(key = "label.${filter.name}") {
+                    SectionLabel(filter.label, Modifier.listFade(listState, labelIndex))
+                }
+                rowIndex += 1
+                val base = rowIndex
                 itemsIndexed(items, key = { index, item -> "${filter.name}:$index:${libraryKey(item)}" }) { index, item ->
-                    val modifier = Modifier.listFade(listState, slot + index)
+                    val modifier = Modifier.listFade(listState, base + index)
                         .then(
                             if (filter == firstFilter && index == 0) Modifier.focusRequester(first) else Modifier
                         )
@@ -166,11 +194,18 @@ fun LibraryScreen(
                         onShow
                     )
                 }
-                slot += items.size
+                rowIndex += items.size
                 if (filter in state.librarySectionHasMore) {
+                    val moreIndex = rowIndex
                     item(key = "more.${filter.name}") {
-                        SeeMoreRow("See more ${filter.label.lowercase()}", false) { onSeeMore(filter) }
+                        SeeMoreRow(
+                            "See more ${filter.label.lowercase()}",
+                            loading = false,
+                            onClick = { onSeeMore(filter) },
+                            modifier = Modifier.listFade(listState, moreIndex)
+                        )
                     }
+                    rowIndex += 1
                 }
             }
         }
@@ -204,23 +239,37 @@ fun LibraryCategoryScreen(
         LaunchedEffect(filter) { runCatching { first.requestFocus() } }
         SidekitList(padding, state = listState) {
             val items = state.libraryItems
+            var rowIndex = 0
             if (items.isEmpty()) {
+                val index = rowIndex
                 item(key = "empty") {
                     if (state.libraryLoading) {
-                        EmptyMessage("Loading ${filter.label.lowercase()}…", hint = null)
+                        EmptyMessage(
+                            "Loading ${filter.label.lowercase()}…",
+                            Modifier.listFade(listState, index),
+                            hint = null
+                        )
                     } else {
-                        EmptyMessage(filter.empty, hint = "Search to find something to save")
+                        EmptyMessage(
+                            filter.empty,
+                            Modifier.listFade(listState, index),
+                            hint = "Search to find something to save"
+                        )
                     }
                 }
+                rowIndex += 1
             }
+            val base = rowIndex
             itemsIndexed(items, key = { index, item -> "$index:${libraryKey(item)}" }) { index, item ->
-                val modifier = Modifier.listFade(listState, index)
+                val modifier = Modifier.listFade(listState, base + index)
                     .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
                 LibraryRow(item, modifier, swipes, onTrack, onQueue, onPlaylist, onAlbum, onArtist, onShow)
             }
+            rowIndex += items.size
             if (state.libraryHasMore) {
+                val moreIndex = rowIndex
                 item(key = "more") {
-                    PagingFooter(state.libraryMorePending, onLoadMore)
+                    PagingFooter(state.libraryMorePending, onLoadMore, Modifier.listFade(listState, moreIndex))
                 }
             }
         }
@@ -299,8 +348,9 @@ fun CollectionScreen(
         val playFocus = remember { FocusRequester() }
         LaunchedEffect(collection.type, collection.id) { runCatching { playFocus.requestFocus() } }
         SidekitList(padding, state = listState) {
+            var rowIndex = 0
             item(key = "tiles") {
-                SidekitItemRow(Modifier.listFade(listState, 0)) {
+                SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
                     ArtworkTile(collection.artRes, "${collection.title} artwork", Modifier.weight(1f), collection.artUrl)
                     PlayTile(onPlay, Modifier.weight(1f).focusRequester(playFocus))
                     SpotifyIconTile(
@@ -314,20 +364,24 @@ fun CollectionScreen(
                     }
                 }
             }
+            rowIndex += 1
+            val metaIndex = rowIndex
             item(key = "meta") {
                 SidekitText(
                     collection.subtitle,
-                    Modifier.padding(start = 18.dp, end = 18.dp),
+                    Modifier.padding(start = 18.dp, end = 18.dp).listFade(listState, metaIndex),
                     style = SidekitTheme.typography.caption,
                     color = colors.surfaceA6,
                     maxLines = 1
                 )
             }
+            rowIndex += 1
+            val base = rowIndex
             itemsIndexed(collection.items, key = { index, item -> "$index:${item.id}" }) { index, item ->
                 SidekitSwipeRow(
                     key = item.id,
                     group = swipes,
-                    modifier = Modifier.listFade(listState, index + 2),
+                    modifier = Modifier.listFade(listState, base + index),
                     action = queueAction(item, onQueueItem)
                 ) {
                     SpotifyMediaRow(
@@ -340,9 +394,11 @@ fun CollectionScreen(
                     )
                 }
             }
+            rowIndex += collection.items.size
             if (collection.hasMore) {
+                val moreIndex = rowIndex
                 item(key = "more") {
-                    PagingFooter(loadingMore, onLoadMore)
+                    PagingFooter(loadingMore, onLoadMore, Modifier.listFade(listState, moreIndex))
                 }
             }
         }
@@ -383,41 +439,68 @@ fun ArtistScreen(
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         SidekitList(padding, state = listState) {
+            var rowIndex = 0
             item(key = "tiles") {
-                SidekitItemRow(Modifier.listFade(listState, 0)) {
+                SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
                     PlayTile(onPlay, Modifier.weight(1f))
                     ArtworkTile(artist.artRes, "${artist.name} artwork", Modifier.weight(1f), artist.artUrl)
                 }
             }
-            item(key = "topLabel") { SectionLabel("Top tracks") }
+            rowIndex += 1
+            val topLabelIndex = rowIndex
+            item(key = "topLabel") {
+                SectionLabel("Top tracks", Modifier.listFade(listState, topLabelIndex))
+            }
+            rowIndex += 1
+            val tracksBase = rowIndex
             itemsIndexed(tracks, key = { index, track -> "$index:${track.id}" }) { index, track ->
                 SidekitSwipeRow(
                     key = track.id,
                     group = swipes,
-                    modifier = Modifier.listFade(listState, index + 2),
+                    modifier = Modifier.listFade(listState, tracksBase + index),
                     action = queueAction(track, onQueue)
                 ) {
                     SpotifyMediaRow(track, Modifier, secondary = track.artist, onClick = { onTrack(track) })
                 }
             }
+            rowIndex += tracks.size
             if (trackHasMore) {
+                val moreIndex = rowIndex
                 item(key = "tracksMore") {
-                    SeeMoreRow("See more tracks", loadingMore, onLoadMoreTracks)
+                    SeeMoreRow(
+                        "See more tracks",
+                        loadingMore,
+                        onLoadMoreTracks,
+                        Modifier.listFade(listState, moreIndex)
+                    )
                 }
+                rowIndex += 1
             }
-            item(key = "albumsLabel") { SectionLabel("Albums") }
+            val albumsLabelIndex = rowIndex
+            item(key = "albumsLabel") {
+                SectionLabel("Albums", Modifier.listFade(listState, albumsLabelIndex))
+            }
+            rowIndex += 1
+            val albumsBase = rowIndex
             itemsIndexed(albums, key = { index, album -> "$index:${album.id}" }) { index, album ->
                 SpotifyLibraryRow(
                     album.artRes,
                     album.title,
                     "${album.year}" + if (album.trackCount > 0) " · ${album.trackCount} tracks" else "",
-                    Modifier.listFade(listState, index + tracks.size + 3),
+                    Modifier.listFade(listState, albumsBase + index),
                     artUrl = album.artUrl
                 ) { onAlbum(album) }
             }
+            rowIndex += albums.size
             if (albumHasMore) {
+                val moreIndex = rowIndex
                 item(key = "albumsMore") {
-                    SeeMoreRow("See more albums", loadingMore, onLoadMoreAlbums)
+                    SeeMoreRow(
+                        "See more albums",
+                        loadingMore,
+                        onLoadMoreAlbums,
+                        Modifier.listFade(listState, moreIndex)
+                    )
                 }
             }
         }

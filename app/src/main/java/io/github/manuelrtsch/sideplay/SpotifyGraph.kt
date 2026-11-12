@@ -32,6 +32,7 @@ const val SIDE_PLAY_ROOT = "sideplay"
 private const val ROOT = SIDE_PLAY_ROOT
 const val SIDE_PLAY_START = "sideplay/home"
 private const val HOME = SIDE_PLAY_START
+private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
 private val LIBRARY_FILTER = "$ROOT/library/{filter}"
 private val COLLECTION = "$ROOT/collection/{type}/{id}"
@@ -116,9 +117,22 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onSearch = { nav.navigate(SEARCH) },
                 onSettings = { nav.navigate(SETTINGS) },
                 onRefresh = vm::refresh,
-                onPlay = { track -> nav.openTrack(vm, track) { vm.playLibraryTrack(track) } },
+                onPlay = { item -> nav.openTrack(vm, item) { vm.playRecent(item) } },
                 onQueue = { nav.navigate(QUEUE) },
                 onQueueTrack = vm::addToQueue,
+                onHistory = { nav.navigate(HISTORY) },
+                onDismissNotice = vm::dismissNotice
+            )
+        }
+        composable(HISTORY) { entry ->
+            val vm = entry.spotifyViewModel(nav)
+            val state by vm.state.collectAsStateWithLifecycle()
+            HistoryScreen(
+                state,
+                onBack = { nav.popBackStack() },
+                onPlay = { item -> nav.openTrack(vm, item) { vm.playRecent(item) } },
+                onQueue = vm::addToQueue,
+                onRemove = vm::removeHistory,
                 onDismissNotice = vm::dismissNotice
             )
         }

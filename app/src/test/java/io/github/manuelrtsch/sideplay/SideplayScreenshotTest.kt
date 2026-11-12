@@ -53,6 +53,19 @@ class SideplayScreenshotTest {
             onPlay = {},
             onQueue = {},
             onQueueTrack = {},
+            onHistory = {},
+            onDismissNotice = {}
+        )
+    }
+
+    @Test fun history() = shoot("sideplay_history") {
+        val episode = MockSpotifyDataSource.shows.first().episodes.first()
+        HistoryScreen(
+            state.copy(recent = listOf(episode) + state.recent),
+            onBack = {},
+            onPlay = {},
+            onQueue = {},
+            onRemove = {},
             onDismissNotice = {}
         )
     }

@@ -128,7 +128,7 @@ fun SpotifySettingsScreen(
                 SideplayItem(
                     "Clear history",
                     Modifier.listFade(listState, 3),
-                    secondary = "${state.history.size} tracks",
+                    secondary = "${state.history.size} items",
                     secondaryToEnd = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,
@@ -156,8 +156,9 @@ fun SpotifySettingsScreen(
                     )
                 }
             }
+            val versionIndex = if (onAppearance != null) 6 else 5
             item(key = "version") {
-                SidekitCard(Modifier.listFade(listState, 6).fillMaxWidth()) {
+                SidekitCard(Modifier.listFade(listState, versionIndex).fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SidekitText("Version", style = SidekitTheme.typography.headline)
                         SidekitText("Sideplay $versionName ($versionCode)", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
@@ -165,7 +166,7 @@ fun SpotifySettingsScreen(
                 }
             }
             item(key = "author") {
-                SidekitCard(Modifier.listFade(listState, 7).fillMaxWidth()) {
+                SidekitCard(Modifier.listFade(listState, versionIndex + 1).fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SidekitText("Author", style = SidekitTheme.typography.headline)
                         SidekitText("Manuel Rottschäfer", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
@@ -174,7 +175,7 @@ fun SpotifySettingsScreen(
                 }
             }
             item(key = "licenses") {
-                SidekitCard(Modifier.listFade(listState, 8).fillMaxWidth()) {
+                SidekitCard(Modifier.listFade(listState, versionIndex + 2).fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SidekitText("Licenses", style = SidekitTheme.typography.headline)
                         SidekitText("Sideplay — MIT", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)

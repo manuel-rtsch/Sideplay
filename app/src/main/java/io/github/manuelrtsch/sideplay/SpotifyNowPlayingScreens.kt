@@ -258,7 +258,10 @@ fun QueueScreen(
                     }
                 }
                 if (state.history.isNotEmpty()) {
-                    item(key = "historyLabel") { SectionLabel("History") }
+                    val historyLabelIndex = state.upcoming.size + 1
+                    item(key = "historyLabel") {
+                        SectionLabel("History", Modifier.listFade(listState, historyLabelIndex))
+                    }
                     itemsIndexed(state.history.take(20), key = { _, item -> "h${item.id}" }) { index, item ->
                         SidekitSwipeRow(
                             key = "h${item.id}",

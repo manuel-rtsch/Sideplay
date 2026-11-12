@@ -127,6 +127,9 @@ const val SPOTIFY_SEARCH_PAGE_SIZE = 5
 
 /** Rows shown per category on the Library overview before "See more". */
 const val LIBRARY_SECTION_SIZE = 5
+
+/** Recently played rows on Home before "See more history". */
+const val RECENT_PREVIEW_SIZE = 5
 const val SPOTIFY_ARTIST_PAGE_SIZE = 5
 
 /** One page of a catalog list. [total] is null when the endpoint doesn't report it. */

@@ -143,6 +143,7 @@ fun SpotifyMediaRow(
     showArt: Boolean = true,
     secondary: String = item.creator,
     trailing: String? = formatDuration(item.durationMs),
+    trailingContent: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val colors = SidekitTheme.colors
@@ -172,7 +173,9 @@ fun SpotifyMediaRow(
                     maxLines = 1
                 )
             }
-            if (trailing != null) {
+            if (trailingContent != null) {
+                trailingContent()
+            } else if (trailing != null) {
                 SidekitText(
                     trailing,
                     style = SidekitTheme.typography.caption,
@@ -355,9 +358,15 @@ fun SpotifyLoadingScreen(
  * The SDK renders the short row, the success fill and the type scale.
  */
 @Composable
-fun TerminalRow(label: String, secondary: String? = null, onClick: (() -> Unit)? = null) {
+fun TerminalRow(
+    label: String,
+    modifier: Modifier = Modifier,
+    secondary: String? = null,
+    onClick: (() -> Unit)? = null
+) {
     SidekitCompactItem(
         title = label,
+        modifier = modifier,
         secondary = secondary,
         colour = ItemColour.Success,
         showLinkArrow = secondary == null && onClick != null,
@@ -371,18 +380,19 @@ fun TerminalRow(label: String, secondary: String? = null, onClick: (() -> Unit)?
  * what the user is actually looking at.
  */
 @Composable
-fun PagingFooter(loading: Boolean, onLoadMore: () -> Unit) {
+fun PagingFooter(loading: Boolean, onLoadMore: () -> Unit, modifier: Modifier = Modifier) {
     LaunchedEffect(loading) {
         if (!loading) onLoadMore()
     }
-    EmptyMessage(if (loading) "Loading more…" else "More", hint = null)
+    EmptyMessage(if (loading) "Loading more…" else "More", modifier, hint = null)
 }
 
 /** A shallow terminal row that loads the next page only when the user presses it. */
 @Composable
-fun SeeMoreRow(label: String, loading: Boolean, onClick: () -> Unit) {
+fun SeeMoreRow(label: String, loading: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     TerminalRow(
         label,
+        modifier = modifier,
         secondary = if (loading) "Loading…" else null,
         onClick = if (loading) null else onClick
     )

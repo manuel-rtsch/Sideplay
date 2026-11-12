@@ -76,6 +76,15 @@ class SpotifyViewModelEventTest {
         assertEquals(items[1].id, vm.state.value.current?.id)
     }
 
+    @Test fun `playing an episode adds it to recently played`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val episode = MockSpotifyDataSource.shows.first().episodes.first()
+
+        vm.playItem(episode)
+
+        assertEquals(episode.id, vm.state.value.recent.firstOrNull()?.id)
+    }
+
     @Test fun `event for another uri does not change the current item`() = runTest(dispatcher) {
         val vm = viewModel()
         val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:ns1")

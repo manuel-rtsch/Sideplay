@@ -46,7 +46,7 @@ data class SpotifyUiState(
     val current: SpotifyMediaItem? = null,
     val upcoming: List<SpotifyMediaItem> = emptyList(),
     val history: List<SpotifyMediaItem> = emptyList(),
-    val recent: List<SpotifyTrack> = emptyList(),
+    val recent: List<SpotifyMediaItem> = emptyList(),
     val libraryItems: List<Any> = emptyList(),
     val librarySections: Map<LibraryFilter, List<Any>> = emptyMap(),
     val librarySectionHasMore: Set<LibraryFilter> = emptySet(),
@@ -195,7 +195,7 @@ class SpotifyViewModel(
                 repeat = restored.repeat,
                 isPlaying = playback.isActive,
                 positionMs = playback.position,
-                recent = history.items().filterIsInstance<SpotifyTrack>()
+                recent = history.items()
             )
         }
     }
@@ -460,10 +460,11 @@ class SpotifyViewModel(
 
     fun playArtist(artist: SpotifyArtist) = play(topTracks(artist), 0)
 
-    fun playLibraryTrack(track: SpotifyTrack) {
+    /** Play a recent item in context, so the rest of the history follows it in the queue. */
+    fun playRecent(item: SpotifyMediaItem) {
         val recent = _state.value.recent
-        val at = recent.indexOfFirst { it.id == track.id }
-        if (at >= 0) play(recent, at) else playItem(track)
+        val at = recent.indexOfFirst { it.id == item.id }
+        if (at >= 0) play(recent, at) else playItem(item)
     }
 
     fun togglePlayPause() {
@@ -846,7 +847,7 @@ class SpotifyViewModel(
         applyQueue(snapshot, syncNowPlaying = false)
         _state.update {
             it.copy(
-                recent = history.items().filterIsInstance<SpotifyTrack>(),
+                recent = history.items(),
                 notice = "${item.title} removed from history"
             )
         }
@@ -882,7 +883,7 @@ class SpotifyViewModel(
         session?.signOut()
         if (session == null) clearArtworkCache()
         queue.stop()
-        _state.update { SpotifyUiState(signedIn = false, recent = history.items().filterIsInstance<SpotifyTrack>()) }
+        _state.update { SpotifyUiState(signedIn = false, recent = history.items()) }
         refreshCacheSize()
     }
 
@@ -914,7 +915,7 @@ class SpotifyViewModel(
         if (!_state.value.signedIn) return
         _state.update {
             // Recently played is local-only: no first-party history endpoint, no Web API quota.
-            it.copy(recent = history.items().filterIsInstance<SpotifyTrack>())
+            it.copy(recent = history.items())
         }
         loadLibrarySections()
     }
@@ -1166,7 +1167,7 @@ class SpotifyViewModel(
     private fun SpotifyUiState.trackById(id: String): SpotifyTrack? = (
         listOfNotNull(current as? SpotifyTrack) +
             upcoming.filterIsInstance<SpotifyTrack>() +
-            recent +
+            recent.filterIsInstance<SpotifyTrack>() +
             libraryItems.filterIsInstance<SpotifyTrack>() +
             collections.values.flatMap { it.items }.filterIsInstance<SpotifyTrack>() +
             librarySections.values.flatten().filterIsInstance<SpotifyTrack>()
@@ -1196,9 +1197,8 @@ class SpotifyViewModel(
     }
 
     private fun recorded(item: SpotifyMediaItem) {
-        if (item !is SpotifyTrack) return
         history.record(item, System.currentTimeMillis())
-        _state.update { it.copy(recent = history.items().filterIsInstance<SpotifyTrack>()) }
+        _state.update { it.copy(recent = history.items()) }
     }
 
     private fun search(debounceMs: Long) {

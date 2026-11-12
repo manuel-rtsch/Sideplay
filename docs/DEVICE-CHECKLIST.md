@@ -54,3 +54,9 @@ driven from `adb`.
 - [ ] **Manual:** playlists inside Spotify folders show the folder path above the owner.
 - [ ] **Manual:** Search opens **Search in** and toggling a category changes results without
       opening Options.
+- [ ] **Manual:** Home shows five recently played items and **See more history** when more exist;
+      History shows the full list, X removes one entry, and left swipe still offers Add to queue.
+- [ ] **Manual:** play a show episode, let it advance from the notification, and confirm it appears
+      in Recently played / History with the show name.
+- [ ] **Manual:** search results and History fade toward the bottom action bar, and the focused row
+      never fades.

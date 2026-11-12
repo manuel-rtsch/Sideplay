@@ -53,9 +53,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   (SpClient/Pathfinder). `SpotifyWebCatalog` remains a fallback when native is unavailable.
 - UI: `SpotifyViewModel` maps catalog responses, queue/history repositories, and native player
   events into one immutable `SpotifyUiState`.
-- Screens: Home, Library overview, Library category, Collection (album/playlist/show), Artist,
-  Search, Search scopes, Now Playing, Queue, Settings, Appearance (only without a Sidekit host),
-  Sign in. Mock data is confined to the screenshot-test source set.
+- Screens: Home, History, Library overview, Library category, Collection (album/playlist/show),
+  Artist, Search, Search scopes, Now Playing, Queue, Settings, Appearance (only without a Sidekit
+  host), Sign in. Mock data is confined to the screenshot-test source set.
 - Shell: `SideplayActivity` reads Sidekit's theme and keypad configuration when a compatible host
   is installed; otherwise it uses local stores and shows Appearance settings in-app. Host support
   is best-effort: an absent, older, or unreadable Sidekit falls back to standalone mode instead of
@@ -77,9 +77,16 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Saved songs, albums, artists and shows are ordered by Spotify's `added_at`, newest first. The
   collection page is read once, filtered by URI prefix, and cached for two minutes; writes
   invalidate that cache.
+- Home previews five recently played items and ends the section with a compact **See more
+  history** row when more exist. History is the full local list: tracks and show episodes are
+  both recorded, including when playback advances from the notification. Each row's duration is
+  replaced by an X that removes that entry; left swipe still offers Add to queue.
 - The Library overview shows five rows per category with a compact **See more** row. Opening a
   category gives the full paged list. Playlists use the rootlist order and show their folder
   path above the owner.
+- Every list row gets Sidekit's `listFade` at its actual LazyColumn index, so labels, See more
+  rows, results, and History all recede correctly toward the action bar without fading the
+  focused row.
 - Playback is process-wide. Queue and local history live on `SpotifySession`; a recreated
   ViewModel adopts the live item, position, and playing state. Starting a new item releases the
   previous `AudioTrack`.
@@ -141,8 +148,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - On `SP01GE260600886` (480 × 640): libraries load real data, search returns Pathfinder tracks,
   playback advances/pauses correctly, show episodes format dates, and artwork no longer crashes.
 - On the `Sidephone_SP-01` emulator (480 × 640, Android 12): Liked songs loads from the complete
-  collection, the Library overview and compact **See more** rows render, and **Search in**
-  changes scopes without opening Options.
+  collection, the Library overview and compact **See more** rows render, **Search in** changes
+  scopes without opening Options, Home previews five recent items with **See more history**, and
+  History removes an entry with the X while search results fade toward the action bar.
 - On `SP01GE260600886`: instrumented tests cover the foreground-service notification and actions,
   media-session metadata/state, media-owner hand-off, and the headphone-unplug pause path.
 - On `SP01GE260600886`: dropping the network long enough to close the librespot access point
