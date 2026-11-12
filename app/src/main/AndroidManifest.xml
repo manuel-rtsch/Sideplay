@@ -10,6 +10,15 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!--
+        The SDK library declares this normal permission so a client installed before Sidekit still
+        has the definition. Sideplay must not redeclare it: Sidekit (or Sidekit dev) already owns
+        it, and Android rejects a second declaration from a differently signed package.
+    -->
+    <permission
+        android:name="hrln.interactive.sidekit.permission.READ_APP_CONFIG"
+        tools:node="remove" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
