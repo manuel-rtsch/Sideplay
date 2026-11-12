@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sideplay
 
 import android.app.Activity
+import android.net.Uri
 import android.content.Intent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -46,8 +47,9 @@ private val SIGN_IN = "$ROOT/sign-in"
 private val APPEARANCE = "$ROOT/appearance"
 
 private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
-private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/$id"
-private fun artistRoute(id: String) = "$ROOT/artist/$id"
+private fun collectionRoute(type: SpotifyCollectionType, id: String) =
+    "$ROOT/collection/${type.route}/${Uri.encode(id)}"
+private fun artistRoute(id: String) = "$ROOT/artist/${Uri.encode(id)}"
 
 /**
  * A tap on the playback notification opens Sideplay at Now Playing instead of the launcher.
@@ -223,7 +225,8 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     },
                     onSave = { vm.toggleSaved(collection) },
                     onArtist = {
-                        collection.artistId?.let { nav.navigate(artistRoute(it)) } ?: vm.notice("This collection has no artist page")
+                        collection.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
+                        ?: vm.notice("This collection has no artist page")
                     },
                     onQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
@@ -320,17 +323,17 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onSave = vm::toggleSaveCurrent,
                 onQueue = { nav.navigate(QUEUE) },
                 onAlbum = {
-                    (state.current as? SpotifyTrack)?.let { track ->
-                        nav.navigate(collectionRoute(SpotifyCollectionType.Album, track.albumId))
+                    (state.current as? SpotifyTrack)?.albumId?.spotifyIdOrNull()?.let { id ->
+                        nav.navigate(collectionRoute(SpotifyCollectionType.Album, id))
                     }
                 },
                 onShow = {
-                    (state.current as? SpotifyEpisode)?.let { episode ->
-                        nav.navigate(collectionRoute(SpotifyCollectionType.Show, episode.showId))
+                    (state.current as? SpotifyEpisode)?.showId?.spotifyIdOrNull()?.let { id ->
+                        nav.navigate(collectionRoute(SpotifyCollectionType.Show, id))
                     }
                 },
                 onArtist = {
-                    state.current?.artistId?.let { nav.navigate(artistRoute(it)) }
+                    state.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
                 },
                 onUndo = vm::undo,
                 onDismissNotice = vm::dismissNotice

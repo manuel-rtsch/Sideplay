@@ -2,6 +2,16 @@ package io.github.manuelrtsch.sideplay
 
 import androidx.annotation.DrawableRes
 
+/**
+ * Spotify ids as they can safely travel through a navigation route.
+ *
+ * org.json's `optString` returns the literal string "null" for a JSON null, and Navigation's
+ * `NavType.StringType` parses the literal "null" back into a real null. A non-nullable route
+ * argument then fails verification while navigating and takes the process down, so ids are
+ * normalised here before they reach a route.
+ */
+internal fun String?.spotifyIdOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
+
 /** A saved album, playlist or show. Collections share one screen, so they share one shape. */
 enum class SpotifyCollectionType(val route: String) {
     Album("album"),

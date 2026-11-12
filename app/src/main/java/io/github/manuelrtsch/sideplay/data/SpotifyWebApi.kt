@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sideplay.data
 
+import io.github.manuelrtsch.sideplay.spotifyIdOrNull
 import io.github.manuelrtsch.sideplay.LibraryFilter
 import io.github.manuelrtsch.sideplay.SPOTIFY_PAGE_SIZE
 import io.github.manuelrtsch.sideplay.SearchScope
@@ -171,7 +172,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
             subtitle = "${album.artist} · ${album.year} · ${album.trackCount} tracks",
             artRes = 0,
             items = tracks,
-            artistId = album.artistId,
+            artistId = album.artistId.spotifyIdOrNull(),
             artUrl = album.artUrl,
             totalItems = album.trackCount,
             hasMore = offset + tracks.size < album.trackCount
@@ -190,7 +191,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
             subtitle = "${playlist.owner} · ${playlist.trackCount} tracks",
             artRes = 0,
             items = tracks,
-            artistId = playlist.ownerId,
+            artistId = playlist.ownerId.spotifyIdOrNull(),
             artUrl = playlist.artUrl,
             totalItems = playlist.trackCount,
             hasMore = offset + tracks.size < playlist.trackCount
@@ -209,7 +210,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         }
         return SpotifyCollection(
             type = SpotifyCollectionType.Show,
-            id = show.id,
+            id = show.id.spotifyIdOrNull().orEmpty(),
             title = show.name,
             subtitle = "${show.publisher} · ${show.episodeCount} episodes",
             artRes = 0,
@@ -221,15 +222,15 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private fun track(json: JSONObject): SpotifyTrack? {
-        val id = json.optString("id").takeIf { it.isNotEmpty() } ?: return null
+        val id = json.optString("id").spotifyIdOrNull() ?: return null
         val album = json.optJSONObject("album")
         val artist = json.optJSONArray("artists")?.optJSONObject(0)
         return SpotifyTrack(
             id = id,
             title = json.optString("name", "Unknown track"),
             artist = artist?.optString("name").orEmpty().ifEmpty { "Unknown artist" },
-            artistId = artist?.optString("id").orEmpty(),
-            albumId = album?.optString("id").orEmpty(),
+            artistId = artist?.optString("id").spotifyIdOrNull().orEmpty(),
+            albumId = album?.optString("id").spotifyIdOrNull().orEmpty(),
             artRes = 0,
             durationMs = json.optLong("duration_ms", 0L),
             explicit = json.optBoolean("explicit", false),
@@ -240,13 +241,13 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private fun episode(json: JSONObject, show: SpotifyShow? = null): SpotifyEpisode? {
-        val id = json.optString("id").takeIf { it.isNotEmpty() } ?: return null
+        val id = json.optString("id").spotifyIdOrNull() ?: return null
         val images = imageUrl(json) ?: show?.artUrl
         return SpotifyEpisode(
             id = id,
             title = json.optString("name", "Unknown episode"),
             show = show?.name ?: json.optString("show").ifEmpty { "Podcast" },
-            showId = show?.id ?: json.optJSONObject("show")?.optString("id").orEmpty(),
+            showId = show?.id ?: json.optJSONObject("show")?.optString("id").spotifyIdOrNull().orEmpty(),
             published = json.optString("release_date").ifEmpty { "Podcast episode" },
             artRes = 0,
             durationMs = json.optLong("duration_ms", 0L),
@@ -257,14 +258,14 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private fun album(json: JSONObject): SpotifyAlbum? {
-        val id = json.optString("id").takeIf { it.isNotEmpty() } ?: return null
+        val id = json.optString("id").spotifyIdOrNull() ?: return null
         val artist = json.optJSONArray("artists")?.optJSONObject(0)
         val tracks = json.optJSONObject("tracks")?.optJSONArray("items").tracks()
         return SpotifyAlbum(
             id = id,
             title = json.optString("name", "Unknown album"),
             artist = artist?.optString("name").orEmpty().ifEmpty { "Unknown artist" },
-            artistId = artist?.optString("id").orEmpty(),
+            artistId = artist?.optString("id").spotifyIdOrNull().orEmpty(),
             year = json.optString("release_date").take(4).toIntOrNull() ?: 0,
             artRes = 0,
             tracks = tracks,
@@ -274,13 +275,13 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private fun playlist(json: JSONObject): SpotifyPlaylist? {
-        val id = json.optString("id").takeIf { it.isNotEmpty() } ?: return null
+        val id = json.optString("id").spotifyIdOrNull() ?: return null
         val owner = json.optJSONObject("owner")
         return SpotifyPlaylist(
             id = id,
             name = json.optString("name", "Unknown playlist"),
             owner = owner?.optString("display_name").orEmpty().ifEmpty { "Spotify" },
-            ownerId = owner?.optString("id"),
+            ownerId = owner?.optString("id").spotifyIdOrNull(),
             artRes = 0,
             tracks = emptyList(),
             artUrl = imageUrl(json),
@@ -289,7 +290,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private fun show(json: JSONObject): SpotifyShow? {
-        val id = json.optString("id").takeIf { it.isNotEmpty() } ?: return null
+        val id = json.optString("id").spotifyIdOrNull() ?: return null
         val artUrl = imageUrl(json)
         val base = SpotifyShow(
             id = id,
@@ -307,7 +308,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private fun artist(json: JSONObject): SpotifyArtist? {
-        val id = json.optString("id").takeIf { it.isNotEmpty() } ?: return null
+        val id = json.optString("id").spotifyIdOrNull() ?: return null
         return SpotifyArtist(
             id = id,
             name = json.optString("name", "Unknown artist"),

@@ -128,7 +128,7 @@ fun SpotifyNowPlayingScreen(
                     if (current.creator.isNotBlank()) {
                         SidekitText(
                             current.creator,
-                            Modifier.fillMaxWidth().clickable(enabled = current.artistId != null, onClickLabel = "Open artist", onClick = onArtist),
+                            Modifier.fillMaxWidth().clickable(enabled = current.artistId.spotifyIdOrNull() != null, onClickLabel = "Open artist", onClick = onArtist),
                             style = SidekitTheme.typography.label,
                             color = SidekitTheme.colors.surfaceA6,
                             textAlign = TextAlign.Center

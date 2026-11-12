@@ -1465,7 +1465,7 @@ class SpotifyViewModel(
     private fun autoplaySimilar(current: SpotifyMediaItem) {
         if (autoplayJob?.isActive == true) return
         val track = current as? SpotifyTrack
-        val artistId = track?.artistId?.takeIf { it.isNotBlank() }
+        val artistId = track?.artistId?.spotifyIdOrNull()
         if (track == null || artistId == null) {
             stopAtQueueEnd()
             return

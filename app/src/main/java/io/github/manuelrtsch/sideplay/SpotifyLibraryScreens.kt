@@ -368,7 +368,7 @@ fun CollectionScreen(
                         onSave,
                         tone = if (saved) SpotifyTileTone.Library else SpotifyTileTone.Neutral
                     )
-                    if (collection.artistId != null) {
+                    if (collection.artistId.spotifyIdOrNull() != null) {
                         SpotifyIconTile(SidekitIcon.Artist, "Artist", onArtist)
                     }
                 }
