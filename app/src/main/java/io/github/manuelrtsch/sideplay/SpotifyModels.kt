@@ -84,7 +84,8 @@ data class SpotifyPlaylist(
     @param:DrawableRes val artRes: Int,
     val tracks: List<SpotifyTrack>,
     val artUrl: String? = null,
-    val trackCount: Int = tracks.size
+    val trackCount: Int = tracks.size,
+    val folder: String? = null
 )
 
 data class SpotifyShow(
@@ -123,6 +124,9 @@ data class SpotifyCollection(
 /** How many rows a catalog request asks for. Kept small for the Sidephone's weak CPU. */
 const val SPOTIFY_PAGE_SIZE = 50
 const val SPOTIFY_SEARCH_PAGE_SIZE = 5
+
+/** Rows shown per category on the Library overview before "See more". */
+const val LIBRARY_SECTION_SIZE = 5
 const val SPOTIFY_ARTIST_PAGE_SIZE = 5
 
 /** One page of a catalog list. [total] is null when the endpoint doesn't report it. */
@@ -154,7 +158,7 @@ enum class LibraryFilter(val label: String, val empty: String) {
     LikedSongs("Liked songs", "No liked songs"),
     Playlists("Playlists", "No saved playlists"),
     Albums("Albums", "No saved albums"),
-    Artists("Artists", "No followed artists"),
+    Artists("Followed artists", "No followed artists"),
     Shows("Shows", "No saved shows")
 }
 
@@ -192,6 +196,12 @@ data class SpotifyQueueItem(
     val item: SpotifyMediaItem,
     val isCurrent: Boolean = false
 )
+
+/** Playlist subtitle, prefixed with its library folder when the rootlist places it in one. */
+fun playlistSubtitle(item: SpotifyPlaylist): String = buildString {
+    item.folder?.takeIf { it.isNotBlank() }?.let { append(it).append(" · ") }
+    append(item.owner).append(" · ").append(item.trackCount).append(" tracks")
+}
 
 /** Spotify metadata dates are ISO calendar dates; show them the way Sidekit shows release dates. */
 fun formatPublishedDate(value: String): String {

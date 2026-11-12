@@ -28,6 +28,7 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sideplay.ui.SidekitSwipeRow
 import io.github.manuelrtsch.sideplay.ui.SwipeAction
+import io.github.manuelrtsch.sideplay.ui.SwipeRevealGroup
 import io.github.manuelrtsch.sideplay.ui.rememberSwipeRevealGroup
 
 @Composable
@@ -102,12 +103,86 @@ private fun <T : SpotifyMediaItem> queueAction(item: T, onQueue: (T) -> Unit) = 
     onClick = { onQueue(item) }
 )
 
+/**
+ * The Library overview: a short preview of every category with a "See more" row, instead of
+ * hiding the categories behind five Options buttons.
+ */
 @Composable
 fun LibraryScreen(
     state: SpotifyUiState,
     onBack: () -> Unit,
     onSearch: () -> Unit,
-    onFilter: (LibraryFilter) -> Unit,
+    onSeeMore: (LibraryFilter) -> Unit,
+    onTrack: (SpotifyTrack) -> Unit,
+    onQueue: (SpotifyTrack) -> Unit,
+    onPlaylist: (SpotifyPlaylist) -> Unit,
+    onAlbum: (SpotifyAlbum) -> Unit,
+    onArtist: (SpotifyArtist) -> Unit,
+    onShow: (SpotifyShow) -> Unit,
+    onDismissNotice: () -> Unit
+) {
+    val actions = withNotice(
+        state.notice,
+        onDismissNotice,
+        listOf(spotifyBack("Sideplay", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
+    )
+    SidekitScaffold(title = "Library", actions = actions) { padding ->
+        val listState = rememberLazyListState()
+        val swipes = rememberSwipeRevealGroup()
+        val sections = state.librarySections
+        val isEmpty = sections.values.all { it.isEmpty() }
+        val firstFilter = LibraryFilter.entries.firstOrNull { sections[it].orEmpty().isNotEmpty() }
+        val first = remember { FocusRequester() }
+        LaunchedEffect(firstFilter) { runCatching { first.requestFocus() } }
+        SidekitList(padding, state = listState) {
+            if (isEmpty) {
+                item(key = "empty") {
+                    if (state.librarySectionsLoading) {
+                        EmptyMessage("Loading your library…", hint = "Liked songs, playlists, albums, artists and shows")
+                    } else {
+                        EmptyMessage("Your library is empty", hint = "Search to find something to save")
+                    }
+                }
+            }
+            var slot = 0
+            LibraryFilter.entries.forEach { filter ->
+                val items = sections[filter].orEmpty()
+                if (items.isEmpty()) return@forEach
+                item(key = "label.${filter.name}") { SectionLabel(filter.label) }
+                itemsIndexed(items, key = { index, item -> "${filter.name}:$index:${libraryKey(item)}" }) { index, item ->
+                    val modifier = Modifier.listFade(listState, slot + index)
+                        .then(
+                            if (filter == firstFilter && index == 0) Modifier.focusRequester(first) else Modifier
+                        )
+                    LibraryRow(
+                        item,
+                        modifier,
+                        swipes,
+                        onTrack,
+                        onQueue,
+                        onPlaylist,
+                        onAlbum,
+                        onArtist,
+                        onShow
+                    )
+                }
+                slot += items.size
+                if (filter in state.librarySectionHasMore) {
+                    item(key = "more.${filter.name}") {
+                        SeeMoreRow("See more ${filter.label.lowercase()}", false) { onSeeMore(filter) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One category of the library, opened by a "See more" row on the overview. */
+@Composable
+fun LibraryCategoryScreen(
+    filter: LibraryFilter,
+    state: SpotifyUiState,
+    onBack: () -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
     onQueue: (SpotifyTrack) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
@@ -120,52 +195,28 @@ fun LibraryScreen(
     val actions = withNotice(
         state.notice,
         onDismissNotice,
-        listOf(spotifyBack("Sideplay", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
+        listOf(spotifyBack("Library", onBack).first())
     )
-    val filters = LibraryFilter.entries.map { filter ->
-        SideAction(
-            "filter.${filter.name}",
-            filter.label,
-            tone = if (filter == state.filter) ActionTone.Primary else ActionTone.Muted,
-            onClick = { onFilter(filter) }
-        )
-    }
-    SidekitScaffold(
-        title = "Library",
-        actions = actions,
-        options = filters
-    ) { padding ->
+    SidekitScaffold(title = filter.label, actions = actions) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         val first = remember { FocusRequester() }
-        LaunchedEffect(state.filter) { runCatching { first.requestFocus() } }
+        LaunchedEffect(filter) { runCatching { first.requestFocus() } }
         SidekitList(padding, state = listState) {
             val items = state.libraryItems
             if (items.isEmpty()) {
-                item(key = "empty") { EmptyMessage(state.filter.empty, hint = "Search to find something to save") }
+                item(key = "empty") {
+                    if (state.libraryLoading) {
+                        EmptyMessage("Loading ${filter.label.lowercase()}…", hint = null)
+                    } else {
+                        EmptyMessage(filter.empty, hint = "Search to find something to save")
+                    }
+                }
             }
             itemsIndexed(items, key = { index, item -> "$index:${libraryKey(item)}" }) { index, item ->
-                val modifier = Modifier.listFade(listState, index).then(if (index == 0) Modifier.focusRequester(first) else Modifier)
-                when (item) {
-                    is SpotifyTrack -> SidekitSwipeRow(
-                        key = item.id,
-                        group = swipes,
-                        modifier = modifier,
-                        action = queueAction(item, onQueue)
-                    ) {
-                        SpotifyMediaRow(item, Modifier, secondary = item.artist, onClick = { onTrack(item) })
-                    }
-
-                    is SpotifyPlaylist -> SpotifyLibraryRow(item.artRes, item.name, "${item.owner} · ${item.trackCount} tracks", modifier, artUrl = item.artUrl) { onPlaylist(item) }
-
-                    is SpotifyAlbum -> SpotifyLibraryRow(item.artRes, item.title, "${item.artist} · ${item.year}", modifier, artUrl = item.artUrl) { onAlbum(item) }
-
-                    is SpotifyArtist -> SpotifyLibraryRow(item.artRes, item.name, "Artist", modifier, artUrl = item.artUrl) { onArtist(item) }
-
-                    is SpotifyShow -> SpotifyLibraryRow(item.artRes, item.name, item.publisher, modifier, artUrl = item.artUrl) { onShow(item) }
-
-                    else -> Unit
-                }
+                val modifier = Modifier.listFade(listState, index)
+                    .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
+                LibraryRow(item, modifier, swipes, onTrack, onQueue, onPlaylist, onAlbum, onArtist, onShow)
             }
             if (state.libraryHasMore) {
                 item(key = "more") {
@@ -173,6 +224,46 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LibraryRow(
+    item: Any,
+    modifier: Modifier,
+    swipes: SwipeRevealGroup,
+    onTrack: (SpotifyTrack) -> Unit,
+    onQueue: (SpotifyTrack) -> Unit,
+    onPlaylist: (SpotifyPlaylist) -> Unit,
+    onAlbum: (SpotifyAlbum) -> Unit,
+    onArtist: (SpotifyArtist) -> Unit,
+    onShow: (SpotifyShow) -> Unit
+) {
+    when (item) {
+        is SpotifyTrack -> SidekitSwipeRow(
+            key = item.id,
+            group = swipes,
+            modifier = modifier,
+            action = queueAction(item, onQueue)
+        ) {
+            SpotifyMediaRow(item, Modifier, secondary = item.artist, onClick = { onTrack(item) })
+        }
+
+        is SpotifyPlaylist -> SpotifyLibraryRow(item.artRes, item.name, playlistSubtitle(item), modifier, artUrl = item.artUrl) { onPlaylist(item) }
+
+        is SpotifyAlbum -> SpotifyLibraryRow(
+            item.artRes,
+            item.title,
+            if (item.year > 0) "${item.artist} · ${item.year}" else item.artist,
+            modifier,
+            artUrl = item.artUrl
+        ) { onAlbum(item) }
+
+        is SpotifyArtist -> SpotifyLibraryRow(item.artRes, item.name, "Artist", modifier, artUrl = item.artUrl) { onArtist(item) }
+
+        is SpotifyShow -> SpotifyLibraryRow(item.artRes, item.name, item.publisher, modifier, artUrl = item.artUrl) { onShow(item) }
+
+        else -> Unit
     }
 }
 

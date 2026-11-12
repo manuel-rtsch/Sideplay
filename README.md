@@ -42,7 +42,7 @@ size, not hand-taken photos.
 
 | Library | Settings | Sign in |
 | --- | --- | --- |
-| ![Library](app/screenshots/sideplay_library_albums.png) | ![Settings](app/screenshots/sideplay_settings.png) | ![Sign in](app/screenshots/sideplay_sign_in.png) |
+| ![Library](app/screenshots/sideplay_library.png) | ![Settings](app/screenshots/sideplay_settings.png) | ![Sign in](app/screenshots/sideplay_sign_in.png) |
 
 ## Getting started
 

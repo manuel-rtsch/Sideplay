@@ -4,7 +4,9 @@
 //! credentials. The first-party endpoints used by the Spotify clients do not share that quota, so
 //! Sideplay reads its library, search, artist and collection data through them instead.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use futures_util::future::join_all;
@@ -30,9 +32,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const PATHFINDER_BASE: &str = "https://api-partner.spotify.com";
 const SEARCH_QUERY_HASH: &str = "d9f785900f0710b31c07818d617f4f7600c1e21217e80f5b043d1e78d74e6026";
-const COLLECTION_PAGE: i32 = 100;
+const COLLECTION_PAGE: i32 = 500;
 const COLLECTION_PAGES: usize = 100;
 const MAX_PAGE: usize = 200;
+/// Library collections are small enough to read in full, but re-reading them on every screen
+/// would be wasteful. Entries expire so changes made on another device still show up.
+const COLLECTION_CACHE_TTL: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +80,8 @@ struct PlaylistJson {
     tracks: Vec<TrackJson>,
     art_url: Option<String>,
     track_count: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    folder: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -269,6 +276,7 @@ fn playlist_json(playlist: &Playlist, tracks: Vec<TrackJson>, current_user: &str
         tracks,
         art_url: playlist_art(playlist),
         track_count: playlist.length.max(0),
+        folder: None,
     }
 }
 
@@ -717,6 +725,7 @@ fn pf_playlist(data: &Value, current_user: &str) -> Option<PlaylistJson> {
             .pointer("/tracks/totalCount")
             .and_then(Value::as_i64)
             .unwrap_or(0) as i32,
+        folder: None,
     })
 }
 
@@ -896,7 +905,7 @@ pub async fn search(
 #[derive(Debug, Clone)]
 struct CollectionItem {
     uri: String,
-    added_at: i32,
+    added_at: i64,
     is_removed: bool,
 }
 
@@ -958,7 +967,7 @@ fn parse_collection_item(bytes: &[u8]) -> CollectionItem {
                 let Some(value) = read_varint(bytes, &mut index) else {
                     break;
                 };
-                item.added_at = value as i32;
+                item.added_at = value as i64;
             }
             (3, 0) => {
                 let Some(value) = read_varint(bytes, &mut index) else {
@@ -985,6 +994,12 @@ fn parse_collection_item(bytes: &[u8]) -> CollectionItem {
         }
     }
     item
+}
+
+/// The official clients list a collection newest first, while the endpoint's own order is
+/// unspecified. `sort_by` is stable, so equal timestamps keep the server's order.
+fn sort_newest_first(items: &mut [CollectionItem]) {
+    items.sort_by(|a, b| b.added_at.cmp(&a.added_at));
 }
 
 fn parse_collection_page(bytes: &[u8]) -> (Vec<CollectionItem>, String) {
@@ -1041,21 +1056,55 @@ fn parse_collection_page(bytes: &[u8]) -> (Vec<CollectionItem>, String) {
     (items, next_page_token)
 }
 
-async fn collection_page(
+struct CachedCollection {
+    fetched_at: Instant,
+    items: Vec<CollectionItem>,
+}
+
+fn collection_cache() -> &'static Mutex<HashMap<(String, String), CachedCollection>> {
+    static CACHE: OnceLock<Mutex<HashMap<(String, String), CachedCollection>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn cached_collection(username: &str, set: &str) -> Option<Vec<CollectionItem>> {
+    let cache = collection_cache().lock().ok()?;
+    let cached = cache.get(&(username.to_string(), set.to_string()))?;
+    (cached.fetched_at.elapsed() < COLLECTION_CACHE_TTL).then(|| cached.items.clone())
+}
+
+fn store_collection(username: &str, set: &str, items: &[CollectionItem]) {
+    if let Ok(mut cache) = collection_cache().lock() {
+        cache.insert(
+            (username.to_string(), set.to_string()),
+            CachedCollection {
+                fetched_at: Instant::now(),
+                items: items.to_vec(),
+            },
+        );
+    }
+}
+
+fn invalidate_collection(username: &str, set: &str) {
+    if let Ok(mut cache) = collection_cache().lock() {
+        cache.remove(&(username.to_string(), set.to_string()));
+    }
+}
+
+/// Reads a whole collection set, drops removed entries and sorts it the way the official
+/// clients do: most recently added first. The endpoint itself returns an unspecified order, so
+/// sorting a single page is not enough; the full set has to be read.
+async fn fetch_collection_items(
     session: &Session,
     token: &str,
+    username: &str,
     set: &str,
-    offset: usize,
-    limit: usize,
 ) -> Result<Vec<CollectionItem>, String> {
-    let username = session.username();
     let mut items = Vec::new();
-    let mut skipped = 0usize;
     let mut page_token = String::new();
     let mut seen = HashSet::new();
     for _ in 0..COLLECTION_PAGES {
         let mut body = Vec::new();
-        put_string(&mut body, 1, &username);
+        put_string(&mut body, 1, username);
         put_string(&mut body, 2, set);
         put_string(&mut body, 3, &page_token);
         put_varint(&mut body, (4 << 3) as u64);
@@ -1072,22 +1121,45 @@ async fn collection_page(
         .map_err(|e| format!("collection {set}: {e}"))?;
         let (page_items, next) = parse_collection_page(&bytes);
         let got = page_items.len();
-        for item in page_items.into_iter().filter(|item| !item.is_removed) {
-            if skipped < offset {
-                skipped += 1;
-                continue;
-            }
-            items.push(item);
-            if items.len() >= limit {
-                return Ok(items);
-            }
-        }
+        items.extend(page_items.into_iter().filter(|item| !item.is_removed));
         if next.is_empty() || got == 0 || !seen.insert(next.clone()) {
             break;
         }
         page_token = next;
     }
+    sort_newest_first(&mut items);
     Ok(items)
+}
+
+async fn collection_items(
+    session: &Session,
+    token: &str,
+    set: &str,
+) -> Result<Vec<CollectionItem>, String> {
+    let username = session.username();
+    if let Some(items) = cached_collection(&username, set) {
+        return Ok(items);
+    }
+    let items = fetch_collection_items(session, token, &username, set).await?;
+    store_collection(&username, set, &items);
+    Ok(items)
+}
+
+async fn collection_page(
+    session: &Session,
+    token: &str,
+    set: &str,
+    prefix: &str,
+    offset: usize,
+    limit: usize,
+) -> Result<Vec<CollectionItem>, String> {
+    let items = collection_items(session, token, set).await?;
+    Ok(items
+        .into_iter()
+        .filter(|item| item.uri.starts_with(prefix))
+        .skip(offset)
+        .take(limit)
+        .collect())
 }
 
 fn collection_uris(items: &[CollectionItem], prefix: &str) -> Vec<SpotifyUri> {
@@ -1107,6 +1179,8 @@ async fn rootlist_playlists(
     let mut seen = 0usize;
     let mut skipped = 0usize;
     let mut playlists = Vec::new();
+    let mut folders: Vec<String> = Vec::new();
+    let mut seen_uris = HashSet::new();
     for _ in 0..COLLECTION_PAGES {
         let user = session.username();
         let endpoint = format!(
@@ -1121,19 +1195,37 @@ async fn rootlist_playlists(
         if items.is_empty() {
             break;
         }
-        if content.contents.pos() as usize != seen {
-            break;
+        if meta.len() != items.len() {
+            // The two slices are parallel. A mismatch means we cannot trust the names, but the
+            // URIs are still usable; keep going rather than returning a silently short list.
+            log::warn!(
+                "rootlist page has {} items but {} meta items",
+                items.len(),
+                meta.len()
+            );
         }
         for (index, item) in items.iter().enumerate() {
             let uri = item.uri();
+            if let Some(folder) = uri.strip_prefix("spotify:start-group:") {
+                folders.push(rootlist_folder_name(folder));
+                continue;
+            }
+            if uri.starts_with("spotify:end-group:") {
+                folders.pop();
+                continue;
+            }
             if !uri.starts_with("spotify:playlist:") {
+                continue;
+            }
+            if !seen_uris.insert(uri.to_string()) {
                 continue;
             }
             let metadata = meta.get(index);
             let attributes = metadata.and_then(|m| m.attributes.as_ref());
             let name = attributes.map(|a| a.name().to_string()).unwrap_or_default();
-            // A few stale rootlist entries carry no name; they cannot be navigated usefully.
             if name.trim().is_empty() {
+                // Unnamed entries are placeholders the service keeps for removed playlists;
+                // skipping them before applying the offset keeps paging consistent.
                 continue;
             }
             if skipped < offset {
@@ -1160,17 +1252,69 @@ async fn rootlist_playlists(
                 tracks: Vec::new(),
                 art_url,
                 track_count: metadata.map(|m| m.length()).unwrap_or(0),
+                folder: (!folders.is_empty()).then(|| folders.join(" / ")),
             });
             if playlists.len() >= limit {
                 return Ok(playlists);
             }
         }
-        seen += items.len();
-        if seen >= content.length().max(0) as usize {
+        let got = items.len();
+        seen += got;
+        if got == 0 || seen >= content.length().max(0) as usize {
             break;
         }
     }
     Ok(playlists)
+}
+
+/// Extracts the display name from a folder marker of the form
+/// `spotify:start-group:<id>:<form-encoded name>`.
+fn rootlist_folder_name(marker: &str) -> String {
+    let rest = marker
+        .split_once(':')
+        .map(|(_, name)| name)
+        .unwrap_or(marker);
+    percent_decode(rest)
+}
+
+fn percent_decode(value: &str) -> String {
+    fn hex(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' if index + 2 < bytes.len() => {
+                match (hex(bytes[index + 1]), hex(bytes[index + 2])) {
+                    (Some(high), Some(low)) => {
+                        decoded.push(high * 16 + low);
+                        index += 3;
+                    }
+                    _ => {
+                        decoded.push(bytes[index]);
+                        index += 1;
+                    }
+                }
+            }
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 fn collection_item_bytes(uri: &str, added_at: i32, removed: bool) -> Vec<u8> {
@@ -1298,6 +1442,7 @@ pub async fn collection_write(
         &body,
     )
     .await?;
+    invalidate_collection(&session.username(), set);
     Ok(())
 }
 
@@ -1397,7 +1542,15 @@ pub async fn library(
     let limit = limit.clamp(1, MAX_PAGE);
     match filter {
         "LikedSongs" => {
-            let items = collection_page(session, token, "collection", offset, limit).await?;
+            let items = collection_page(
+                session,
+                token,
+                "collection",
+                "spotify:track:",
+                offset,
+                limit,
+            )
+            .await?;
             let uris = collection_uris(&items, "spotify:track:");
             let tracks = fetch_tracks(session, token, &uris, uris.len()).await;
             Ok(serde_json::to_string(&tracks).map_err(|e| e.to_string())?)
@@ -1407,19 +1560,34 @@ pub async fn library(
         )
         .map_err(|e| e.to_string())?),
         "Albums" => {
-            let items = collection_page(session, token, "collection", offset, limit).await?;
+            let items = collection_page(
+                session,
+                token,
+                "collection",
+                "spotify:album:",
+                offset,
+                limit,
+            )
+            .await?;
             let uris = collection_uris(&items, "spotify:album:");
             let albums = fetch_albums(session, token, &uris, false).await;
             Ok(serde_json::to_string(&albums).map_err(|e| e.to_string())?)
         }
         "Artists" => {
-            let mut items = collection_page(session, token, "artist", offset, limit).await?;
-            if items.is_empty() {
-                items = collection_page(session, token, "collection", offset, limit)
-                    .await?
-                    .into_iter()
-                    .filter(|item| item.uri.starts_with("spotify:artist:"))
-                    .collect();
+            let mut items =
+                collection_page(session, token, "artist", "spotify:artist:", offset, limit).await?;
+            // Only fall back for the first page. An empty page past the end is not a reason to
+            // switch to the shared collection set.
+            if items.is_empty() && offset == 0 {
+                items = collection_page(
+                    session,
+                    token,
+                    "collection",
+                    "spotify:artist:",
+                    offset,
+                    limit,
+                )
+                .await?;
             }
             let uris = collection_uris(&items, "spotify:artist:");
             let futures = uris.iter().map(|uri| {
@@ -1436,7 +1604,8 @@ pub async fn library(
             Ok(serde_json::to_string(&artists).map_err(|e| e.to_string())?)
         }
         "Shows" => {
-            let items = collection_page(session, token, "show", offset, limit).await?;
+            let items =
+                collection_page(session, token, "show", "spotify:show:", offset, limit).await?;
             let uris = collection_uris(&items, "spotify:show:");
             let futures = uris.iter().map(|uri| {
                 let session = session.clone();
@@ -1520,7 +1689,9 @@ pub async fn collection(
                     .iter()
                     .map(|track| serde_json::to_value(track).unwrap_or(Value::Null))
                     .collect(),
-                artist_id: playlist_json.owner_id.clone(),
+                // A playlist owner is not an artist; the owner belongs in the subtitle, not
+                // behind an Artist tile that cannot resolve.
+                artist_id: None,
                 art_url: playlist_json.art_url.clone(),
                 total_items: total as i32,
                 has_more: offset + playlist_json.tracks.len() < total,
@@ -1675,7 +1846,49 @@ pub async fn top_tracks(
 
 #[cfg(test)]
 mod tests {
-    use super::owner_display;
+    use super::{
+        owner_display, percent_decode, rootlist_folder_name, sort_newest_first, CollectionItem,
+    };
+
+    #[test]
+    fn collection_items_are_newest_first() {
+        let mut items = vec![
+            CollectionItem {
+                uri: "spotify:track:old".into(),
+                added_at: 100,
+                is_removed: false,
+            },
+            CollectionItem {
+                uri: "spotify:track:new".into(),
+                added_at: 300,
+                is_removed: false,
+            },
+            CollectionItem {
+                uri: "spotify:track:middle".into(),
+                added_at: 200,
+                is_removed: false,
+            },
+        ];
+        sort_newest_first(&mut items);
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.uri.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "spotify:track:new",
+                "spotify:track:middle",
+                "spotify:track:old"
+            ]
+        );
+    }
+
+    #[test]
+    fn rootlist_folder_names_are_form_decoded() {
+        assert_eq!(rootlist_folder_name("id:My%20Folder"), "My Folder");
+        assert_eq!(percent_decode("a+b%2Fc"), "a b/c");
+        assert_eq!(percent_decode("100%"), "100%");
+    }
 
     #[test]
     fn owner_display_marks_the_signed_in_user() {

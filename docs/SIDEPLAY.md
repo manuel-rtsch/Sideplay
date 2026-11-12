@@ -1,6 +1,6 @@
 # Sideplay
 
-**Updated:** 2026-11-11
+**Updated:** 2026-11-12
 **Repository:** `manuel-rtsch/Sideplay` (`main`)
 **Phase:** standalone APK; manual device checks are tracked in `docs/DEVICE-CHECKLIST.md`
 
@@ -53,9 +53,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   (SpClient/Pathfinder). `SpotifyWebCatalog` remains a fallback when native is unavailable.
 - UI: `SpotifyViewModel` maps catalog responses, queue/history repositories, and native player
   events into one immutable `SpotifyUiState`.
-- Screens: Home, Library, Collection (album/playlist/show), Artist, Search, Now Playing, Queue,
-  Settings, Appearance (only without a Sidekit host), Sign in. Mock data is confined to the
-  screenshot-test source set.
+- Screens: Home, Library overview, Library category, Collection (album/playlist/show), Artist,
+  Search, Search scopes, Now Playing, Queue, Settings, Appearance (only without a Sidekit host),
+  Sign in. Mock data is confined to the screenshot-test source set.
 - Shell: `SideplayActivity` reads Sidekit's theme and keypad configuration when a compatible host
   is installed; otherwise it uses local stores and shows Appearance settings in-app. Host support
   is best-effort: an absent, older, or unreadable Sidekit falls back to standalone mode instead of
@@ -72,7 +72,14 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   native is absent.
 - Library write-back is optimistic with rollback: like/unlike, save/remove album and show,
   follow/unfollow artist, add/remove playlist. Saves and follows offer Undo for five visible
-  seconds; queue actions are silent.
+  seconds; queue actions are silent. The open Library section is patched in place, so a save or
+  follow appears immediately and rolls back if the write fails.
+- Saved songs, albums, artists and shows are ordered by Spotify's `added_at`, newest first. The
+  collection page is read once, filtered by URI prefix, and cached for two minutes; writes
+  invalidate that cache.
+- The Library overview shows five rows per category with a compact **See more** row. Opening a
+  category gives the full paged list. Playlists use the rootlist order and show their folder
+  path above the owner.
 - Playback is process-wide. Queue and local history live on `SpotifySession`; a recreated
   ViewModel adopts the live item, position, and playing state. Starting a new item releases the
   previous `AudioTrack`.
@@ -106,18 +113,20 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   Upcoming and History rows in the queue swipe left to remove; removing queue history also drops
   the item from recently played. Library uses the standard single-line header; Settings has one
   sign-out action in the bar.
-- Library and collection lists page in 50-row chunks and load the next page as their footer
-  becomes visible. Search and artist surfaces start with five items per section and show a
-  pressable **See more** row; the next page is fetched only when that row is pressed.
+- Library category and collection lists page in 50-row chunks and load the next page as their
+  footer becomes visible. Search and artist surfaces start with five items per section and show
+  a pressable **See more** row; the next page is fetched only when that row is pressed.
+- Search categories live behind the **Search in** row on the Search screen, not in Options.
+  Toggling a category immediately changes the result sections and the empty-state hint.
 - First loads of an artist or collection show a centred, rotating vinyl record with the loading
   label and a "Fetching from Spotify" hint instead of plain text.
 - `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
   T9 → mini QWERTY switch made while Sideplay was in the background takes effect immediately.
 - Settings shows the actual artwork + audio cache size. Sign-out clears artwork, audio, and
   credentials; the Settings action clears artwork and audio without touching the account.
-- Focus review: collection rows and Library filter options are focusable, and the first row
-  receives focus after a filter change. Long collections use the same lazy list as the rest of
-  the app.
+- Focus review: collection rows and Library category rows are focusable, and the first row
+  receives focus after opening a category. Long collections use the same lazy list as the rest
+  of the app.
 - APK-size review: the profile APK is about 12.2 MB, dominated by the two native librespot
   libraries. No action until the vendored librespot patch can be dropped.
 
@@ -127,6 +136,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - APK contains `arm64-v8a` and `x86_64` `libsideplay_spotify.so`.
 - On `SP01GE260600886` (480 × 640): libraries load real data, search returns Pathfinder tracks,
   playback advances/pauses correctly, show episodes format dates, and artwork no longer crashes.
+- On the `Sidephone_SP-01` emulator (480 × 640, Android 12): Liked songs loads from the complete
+  collection, the Library overview and compact **See more** rows render, and **Search in**
+  changes scopes without opening Options.
 - On `SP01GE260600886`: instrumented tests cover the foreground-service notification and actions,
   media-session metadata/state, media-owner hand-off, and the headphone-unplug pause path.
 - On `SP01GE260600886`: dropping the network long enough to close the librespot access point

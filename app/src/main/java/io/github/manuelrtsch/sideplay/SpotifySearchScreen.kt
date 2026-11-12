@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
+import hrln.interactive.sidekit.design.components.SidekitItem
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitTextField
@@ -40,6 +41,7 @@ fun SpotifySearchScreen(
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onLoadMore: (SearchScope) -> Unit,
+    onScopes: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val results = state.searchResults
@@ -51,13 +53,10 @@ fun SpotifySearchScreen(
             if (state.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
         }
     )
-    val scopes = SearchScope.entries.map { scope ->
-        SideAction(
-            "scope.${scope.name}",
-            scope.label,
-            tone = if (scope in state.searchScopes) ActionTone.Primary else ActionTone.Muted,
-            onClick = { onToggleScope(scope) }
-        )
+    val scopeSummary = when (state.searchScopes.size) {
+        SearchScope.entries.size -> "Everything"
+        0 -> "Nothing"
+        else -> SearchScope.entries.filter { it in state.searchScopes }.joinToString(", ") { it.label }
     }
     val focus = remember { FocusRequester() }
     SidekitScaffold(
@@ -80,12 +79,14 @@ fun SpotifySearchScreen(
                 )
             }
         },
-        actions = actions,
-        options = scopes
+        actions = actions
     ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         SidekitList(padding, state = listState) {
+            item(key = "scopes") {
+                TerminalRow("Search in", scopeSummary, onClick = onScopes)
+            }
             when {
                 state.query.isBlank() -> item(key = "idle") {
                     EmptyMessage("Search your library and Spotify", hint = "Tracks, artists, albums, playlists and shows")
@@ -100,7 +101,7 @@ fun SpotifySearchScreen(
                 }
 
                 results.isEmpty -> item(key = "noResults") {
-                    EmptyMessage("No results for \"${state.query.trim()}\"", hint = "Try another spelling or turn on more scopes in Options")
+                    EmptyMessage("No results for \"${state.query.trim()}\"", hint = "Try another spelling or change Search in")
                 }
 
                 else -> {
@@ -163,7 +164,7 @@ fun SpotifySearchScreen(
                     if (results.playlists.isNotEmpty()) {
                         item(key = "playlistsLabel") { SectionLabel("Playlists") }
                         itemsIndexed(results.playlists, key = { _, playlist -> "p${playlist.id}" }) { index, playlist ->
-                            SpotifyLibraryRow(playlist.artRes, playlist.name, "${playlist.owner} · ${playlist.trackCount} tracks", Modifier.listFade(listState, slot + index), artUrl = playlist.artUrl) { onPlaylist(playlist) }
+                            SpotifyLibraryRow(playlist.artRes, playlist.name, playlistSubtitle(playlist), Modifier.listFade(listState, slot + index), artUrl = playlist.artUrl) { onPlaylist(playlist) }
                         }
                         slot += results.playlists.size
                         if (SearchScope.Playlists in state.searchHasMore) {
@@ -187,6 +188,38 @@ fun SpotifySearchScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/** Lets the user choose which search categories are queried without hiding them in Options. */
+@Composable
+fun SearchScopesScreen(
+    state: SpotifyUiState,
+    onBack: () -> Unit,
+    onToggleScope: (SearchScope) -> Unit,
+    onDismissNotice: () -> Unit
+) {
+    val actions = withNotice(
+        state.notice,
+        onDismissNotice,
+        listOf(spotifyBack("Search", onBack).first())
+    )
+    SidekitScaffold(title = "Search in", actions = actions) { padding ->
+        val listState = rememberLazyListState()
+        SidekitList(padding, state = listState) {
+            item(key = "label") { SectionLabel("Categories") }
+            SearchScope.entries.forEach { scope ->
+                item(key = scope.name) {
+                    val included = scope in state.searchScopes
+                    SidekitItem(
+                        scope.label,
+                        secondary = if (included) "On" else "Off",
+                        icon = if (included) SidekitIcon.Check else null,
+                        onClick = { onToggleScope(scope) }
+                    )
                 }
             }
         }

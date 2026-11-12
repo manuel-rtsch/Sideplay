@@ -69,9 +69,10 @@ import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
+import hrln.interactive.sidekit.design.components.ItemColour
+import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitIconItem
-import hrln.interactive.sidekit.design.components.SidekitItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.SidekitTile
@@ -349,13 +350,17 @@ fun SpotifyLoadingScreen(
     }
 }
 
+/**
+ * A compact navigation row for list-level actions such as "See more" and "Search in".
+ * The SDK renders the short row, the success fill and the type scale.
+ */
 @Composable
 fun TerminalRow(label: String, secondary: String? = null, onClick: (() -> Unit)? = null) {
-    SidekitItem(
-        label,
+    SidekitCompactItem(
+        title = label,
         secondary = secondary,
-        showLinkArrow = onClick != null,
-        colour = hrln.interactive.sidekit.design.components.ItemColour.Secondary,
+        colour = ItemColour.Success,
+        showLinkArrow = secondary == null && onClick != null,
         onClick = onClick
     )
 }

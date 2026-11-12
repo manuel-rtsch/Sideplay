@@ -30,6 +30,10 @@ class SideplayScreenshotTest {
         history = recent.drop(3),
         recent = recent,
         libraryItems = runBlocking { MockSpotifyDataSource.library(LibraryFilter.Albums).items },
+        librarySections = runBlocking {
+            LibraryFilter.entries.associateWith { MockSpotifyDataSource.library(it, 0, LIBRARY_SECTION_SIZE).items }
+        },
+        librarySectionHasMore = LibraryFilter.entries.toSet(),
         searchResults = runBlocking { MockSpotifyDataSource.search("night", SearchScope.entries.toSet()) },
         searchHasMore = SearchScope.entries.toSet(),
         isPlaying = true,
@@ -53,12 +57,27 @@ class SideplayScreenshotTest {
         )
     }
 
-    @Test fun library() = shoot("sideplay_library_albums") {
+    @Test fun library() = shoot("sideplay_library") {
         LibraryScreen(
             state,
             onBack = {},
             onSearch = {},
-            onFilter = {},
+            onSeeMore = {},
+            onTrack = {},
+            onQueue = {},
+            onPlaylist = {},
+            onAlbum = {},
+            onArtist = {},
+            onShow = {},
+            onDismissNotice = {}
+        )
+    }
+
+    @Test fun libraryCategory() = shoot("sideplay_library_albums") {
+        LibraryCategoryScreen(
+            LibraryFilter.Albums,
+            state,
+            onBack = {},
             onTrack = {},
             onQueue = {},
             onPlaylist = {},
@@ -127,6 +146,7 @@ class SideplayScreenshotTest {
             onPlaylist = {},
             onShow = {},
             onLoadMore = {},
+            onScopes = {},
             onDismissNotice = {}
         )
     }

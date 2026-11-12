@@ -11,8 +11,8 @@ driven from `adb`.
 
 - [x] Install the profile APK over the previous build.
 - [x] Launch `SideplayActivity`; the app resumes without a crash.
-- [ ] **Manual:** with Sidekit installed, confirm Sideplay follows the host theme and keypad.
-- [ ] **Manual:** repeat with Sidekit absent and confirm the standalone Appearance screen.
+- [x] **Manual:** with Sidekit installed, confirm Sideplay follows the host theme and keypad.
+- [x] **Manual:** repeat with Sidekit absent and confirm the standalone Appearance screen.
 
 ## Account and catalog
 
@@ -49,5 +49,8 @@ driven from `adb`.
 - [ ] **Manual:** search and artist sections show five items and a pressable **See more** row.
 - [ ] **Manual:** pressing **See more** loads the next page; it does not preload.
 - [ ] **Manual:** long playlists and shows scroll without losing focus.
-- [ ] **Manual:** Library Options filters are reachable from the keypad and focus returns to the
-      first row.
+- [ ] **Manual:** Library shows a short section for liked songs, playlists, albums, artists and
+      shows, and each **See more** opens that category with focus on the first row.
+- [ ] **Manual:** playlists inside Spotify folders show the folder path above the owner.
+- [ ] **Manual:** Search opens **Search in** and toggling a category changes results without
+      opening Options.

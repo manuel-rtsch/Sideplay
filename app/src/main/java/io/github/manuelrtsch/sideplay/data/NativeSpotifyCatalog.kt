@@ -279,7 +279,8 @@ private fun playlistFromNative(json: JSONObject): SpotifyPlaylist? {
         artRes = 0,
         tracks = json.optJSONArray("tracks").tracks(),
         artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
-        trackCount = json.optInt("trackCount", 0)
+        trackCount = json.optInt("trackCount", 0),
+        folder = json.optString("folder").takeIf { it.isNotEmpty() }
     )
 }
 

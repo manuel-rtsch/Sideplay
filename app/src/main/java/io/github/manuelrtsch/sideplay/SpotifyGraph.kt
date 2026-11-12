@@ -33,15 +33,18 @@ private const val ROOT = SIDE_PLAY_ROOT
 const val SIDE_PLAY_START = "sideplay/home"
 private const val HOME = SIDE_PLAY_START
 private val LIBRARY = "$ROOT/library"
+private val LIBRARY_FILTER = "$ROOT/library/{filter}"
 private val COLLECTION = "$ROOT/collection/{type}/{id}"
 private val ARTIST = "$ROOT/artist/{id}"
 private val SEARCH = "$ROOT/search"
+private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
 private val SETTINGS = "$ROOT/settings"
 private val SIGN_IN = "$ROOT/sign-in"
 private val APPEARANCE = "$ROOT/appearance"
 
+private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
 private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/$id"
 private fun artistRoute(id: String) = "$ROOT/artist/$id"
 
@@ -126,7 +129,36 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 state,
                 onBack = { nav.popBackStack() },
                 onSearch = { nav.navigate(SEARCH) },
-                onFilter = vm::setFilter,
+                onSeeMore = { nav.navigate(libraryFilterRoute(it)) },
+                onTrack = { track ->
+                    if (vm.state.value.current?.id == track.id) {
+                        nav.openNowPlaying()
+                    } else {
+                        vm.playItem(track)
+                        nav.openNowPlaying()
+                    }
+                },
+                onQueue = vm::addToQueue,
+                onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
+                onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
+                onArtist = { nav.navigate(artistRoute(it.id)) },
+                onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onDismissNotice = vm::dismissNotice
+            )
+        }
+        composable(
+            LIBRARY_FILTER,
+            arguments = listOf(navArgument("filter") { type = NavType.StringType })
+        ) { entry ->
+            val vm = entry.spotifyViewModel(nav)
+            val state by vm.state.collectAsStateWithLifecycle()
+            val filter = LibraryFilter.entries.firstOrNull { it.name == entry.arguments?.getString("filter") }
+                ?: LibraryFilter.LikedSongs
+            LaunchedEffect(filter) { vm.setFilter(filter) }
+            LibraryCategoryScreen(
+                filter,
+                state,
+                onBack = { nav.popBackStack() },
                 onTrack = { track ->
                     if (vm.state.value.current?.id == track.id) {
                         nav.openNowPlaying()
@@ -242,6 +274,17 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onLoadMore = vm::loadMoreSearch,
+                onScopes = { nav.navigate(SEARCH_SCOPES) },
+                onDismissNotice = vm::dismissNotice
+            )
+        }
+        composable(SEARCH_SCOPES) { entry ->
+            val vm = entry.spotifyViewModel(nav)
+            val state by vm.state.collectAsStateWithLifecycle()
+            SearchScopesScreen(
+                state,
+                onBack = { nav.popBackStack() },
+                onToggleScope = vm::toggleScope,
                 onDismissNotice = vm::dismissNotice
             )
         }
