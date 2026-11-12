@@ -402,7 +402,7 @@ private fun MissingCollectionScreen(
             androidx.compose.ui.Modifier.padding(padding)
         ) {
             if (loading) {
-                SpotifyLoadingScreen(loadingTitle)
+                SpotifyLoadingScreen(title = loadingTitle)
             } else {
                 EmptyMessage("This collection isn't available", hint = "Go back and choose another")
             }

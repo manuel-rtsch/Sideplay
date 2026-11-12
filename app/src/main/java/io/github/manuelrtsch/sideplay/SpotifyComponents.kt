@@ -157,7 +157,7 @@ fun SpotifyMediaRow(
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
             if (showArt) {
-                SpotifyCover(item.artRes, Modifier.size(68.dp), artUrl = item.artUrl)
+                SpotifyCover(item.artRes, Modifier.size(68.dp), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl)
             } else if (index != null) {
                 Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
                     SidekitText("${index + 1}", style = SidekitTheme.typography.label, color = colors.surfaceA6)
@@ -290,9 +290,9 @@ fun EmptyMessage(title: String, modifier: Modifier = Modifier, hint: String? = n
  */
 @Composable
 fun SpotifyLoadingScreen(
+    modifier: Modifier = Modifier,
     title: String = "Loading…",
-    hint: String? = "Fetching from Spotify",
-    modifier: Modifier = Modifier
+    hint: String? = "Fetching from Spotify"
 ) {
     val colors = SidekitTheme.colors
     val transition = rememberInfiniteTransition(label = "record")
@@ -547,7 +547,7 @@ fun SpotifyLibraryRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            SpotifyCover(artRes, Modifier.size(68.dp), artUrl = artUrl)
+            SpotifyCover(artRes, Modifier.size(68.dp), shape = SidekitTheme.shapes.artwork, artUrl = artUrl)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
                 SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)

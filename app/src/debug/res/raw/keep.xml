@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mock artwork is referenced by the screenshot-test source set, not by app code. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/cover_*" />

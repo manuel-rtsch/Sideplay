@@ -85,6 +85,13 @@ android {
             }
         }
     }
+
+    lint {
+        // AGP, Kotlin, and the AndroidX libraries are pinned to the Sidekit toolchain. Version
+        // availability is reviewed with that toolchain, not on every Sideplay lint run. targetSdk
+        // stays at 36 until the Sidekit host has been tested against 37.
+        disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable", "OldTargetApi")
+    }
 }
 
 // Sideplay's librespot bridge. The generated ABI directory is a normal jniLibs source, so an

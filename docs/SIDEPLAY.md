@@ -108,7 +108,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Audio quality persists encrypted across process death and maps to 96/160/320 kbps. Playback
   volume is the device output volume; there is no separate attenuation.
 - Artwork is memory-safe on device: 300 px URL preference, `RGB_565` + `inSampleSize`, 1024 px
-  cap, `OutOfMemoryError` treated as a cache miss.
+  cap, `OutOfMemoryError` treated as a cache miss. List thumbnails use Sidekit's 24dp artwork
+  shape, which matches the item's 36:104 corner ratio at 68dp without cropping the cover into a
+  circle.
 - Home's action bar opens the queue; track rows across the app expose Add to queue on left swipe.
   Upcoming and History rows in the queue swipe left to remove; removing queue history also drops
   the item from recently played. Library uses the standard single-line header; Settings has one
@@ -117,7 +119,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   footer becomes visible. Search and artist surfaces start with five items per section and show
   a pressable **See more** row; the next page is fetched only when that row is pressed.
 - Search categories live behind the **Search in** row on the Search screen, not in Options.
-  Toggling a category immediately changes the result sections and the empty-state hint.
+  Toggling a category immediately changes the result sections and the empty-state hint. The
+  selected categories sit at the right edge of that row in the high-contrast item colour.
 - First loads of an artist or collection show a centred, rotating vinyl record with the loading
   label and a "Fetching from Spotify" hint instead of plain text.
 - `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
@@ -132,7 +135,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 
 **Verified**
 
-- `spotlessCheck`, `:app:lintDebug`, `:app:testDebugUnitTest`, `:app:assembleDebug` pass.
+- `spotlessCheck` and lint for debug, dev, profile, and release report no issues;
+  `:app:testDebugUnitTest` and `:app:assembleDebug` pass.
 - APK contains `arm64-v8a` and `x86_64` `libsideplay_spotify.so`.
 - On `SP01GE260600886` (480 × 640): libraries load real data, search returns Pathfinder tracks,
   playback advances/pauses correctly, show episodes format dates, and artwork no longer crashes.

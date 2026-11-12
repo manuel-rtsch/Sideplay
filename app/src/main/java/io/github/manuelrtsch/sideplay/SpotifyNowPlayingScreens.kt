@@ -110,12 +110,10 @@ fun SpotifyNowPlayingScreen(
                         onClick = when (current) {
                             is SpotifyTrack -> onAlbum
                             is SpotifyEpisode -> onShow
-                            else -> null
                         },
                         onClickLabel = when (current) {
                             is SpotifyTrack -> "Open album"
                             is SpotifyEpisode -> "Open show"
-                            else -> null
                         }
                     )
                 }

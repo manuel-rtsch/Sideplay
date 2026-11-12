@@ -100,8 +100,8 @@ private class SwipeMetrics {
 fun SidekitSwipeRow(
     key: Any,
     group: SwipeRevealGroup,
-    onDelete: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onDelete: () -> Unit = {},
     deleteLabel: String = "Delete",
     action: SwipeAction? = null,
     content: @Composable () -> Unit

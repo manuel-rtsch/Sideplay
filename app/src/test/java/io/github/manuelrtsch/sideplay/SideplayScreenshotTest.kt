@@ -1,7 +1,7 @@
 package io.github.manuelrtsch.sideplay
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -202,7 +202,7 @@ class SideplayScreenshotTest {
     }
 
     @Test fun loading() = shoot("sideplay_loading") {
-        SpotifyLoadingScreen("Loading artist")
+        SpotifyLoadingScreen(title = "Loading artist")
     }
 
     @Test fun signIn() = shoot("sideplay_sign_in") {
