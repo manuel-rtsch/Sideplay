@@ -242,9 +242,10 @@ fun QueueScreen(
                         onClick = { onJump(current.id) }
                     )
                 }
-                itemsIndexed(state.upcoming, key = { _, item -> "u${item.id}" }) { index, item ->
+                // The queue may legitimately hold the same track twice, so keys include the index.
+                itemsIndexed(state.upcoming, key = { index, item -> "$index:u${item.id}" }) { index, item ->
                     SidekitSwipeRow(
-                        key = "u${item.id}",
+                        key = "$index:u${item.id}",
                         group = swipes,
                         modifier = Modifier.listFade(listState, index + 1),
                         action = removeAction("Remove ${item.title} from queue") { onRemove(item) }
@@ -262,9 +263,9 @@ fun QueueScreen(
                     item(key = "historyLabel") {
                         SectionLabel("History", Modifier.listFade(listState, historyLabelIndex))
                     }
-                    itemsIndexed(state.history.take(20), key = { _, item -> "h${item.id}" }) { index, item ->
+                    itemsIndexed(state.history.take(20), key = { index, item -> "$index:h${item.id}" }) { index, item ->
                         SidekitSwipeRow(
-                            key = "h${item.id}",
+                            key = "$index:h${item.id}",
                             group = swipes,
                             modifier = Modifier.listFade(listState, index + 2 + state.upcoming.size),
                             action = removeAction("Remove ${item.title} from history") { onRemoveHistory(item) }

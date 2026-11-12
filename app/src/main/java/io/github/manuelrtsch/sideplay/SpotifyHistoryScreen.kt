@@ -48,9 +48,10 @@ fun HistoryScreen(
                     EmptyMessage("Nothing played yet", hint = "Search to find your first track or episode")
                 }
             }
-            itemsIndexed(state.recent, key = { _, item -> item.id }) { index, item ->
+            // A track can be played again, so the id alone repeats; index keeps keys unique.
+            itemsIndexed(state.recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
                 SidekitSwipeRow(
-                    key = item.id,
+                    key = "$index:${item.id}",
                     group = swipes,
                     modifier = Modifier.listFade(listState, index),
                     action = queueAction(item, onQueue)
