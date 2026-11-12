@@ -56,6 +56,11 @@ driven from `adb`.
       opening Options.
 - [ ] **Manual:** Home shows five recently played items and **See more history** when more exist;
       History shows the full list, X removes one entry, and left swipe still offers Add to queue.
+- [ ] **Manual:** on Now Playing, album, playlist, show, and artist screens, confirm the play
+      control and every save/bookmark or follow control use the Library success fill, never the
+      case/primary colour outside the action bar.
+- [ ] **Manual:** confirm save controls show a hollow bookmark when unsaved and a filled bookmark
+      when saved, and that follow/unfollow keeps the same success fill in both states.
 - [ ] **Manual:** play a show episode, let it advance from the notification, and confirm it appears
       in Recently played / History with the show name.
 - [ ] **Manual:** search results and History fade toward the bottom action bar, and the focused row

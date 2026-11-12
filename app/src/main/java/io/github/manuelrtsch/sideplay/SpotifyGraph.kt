@@ -215,6 +215,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     state,
                     onBack = { nav.popBackStack() },
                     onPlay = { vm.playCollection(collection, 0) },
+                    onPlayPause = vm::togglePlayPause,
                     onItem = { index ->
                         collection.items.getOrNull(index)?.let { item ->
                             nav.openTrack(vm, item) { vm.playCollection(collection, index) }
@@ -257,6 +258,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     state,
                     onBack = { nav.popBackStack() },
                     onPlay = { vm.playArtist(artist) },
+                    onPlayPause = vm::togglePlayPause,
                     onTrack = { track -> nav.openTrack(vm, track) { vm.play(tracks, tracks.indexOf(track)) } },
                     onQueue = vm::addToQueue,
                     onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },

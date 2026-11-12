@@ -65,7 +65,7 @@ fun SpotifyNowPlayingScreen(
     val save = (current as? SpotifyTrack)?.let {
         SideAction.square(
             "save",
-            if (state.savedCurrent) SidekitIcon.Bookmark else SidekitIcon.Bookmark,
+            if (state.savedCurrent) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
             if (state.savedCurrent) "Saved" else "Save",
             onSave,
             tone = if (state.savedCurrent) ActionTone.Secondary else ActionTone.Muted,

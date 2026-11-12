@@ -111,8 +111,8 @@ fun SideplayHomeScreen(
 internal fun <T : SpotifyMediaItem> queueAction(item: T, onQueue: (T) -> Unit) = SwipeAction(
     label = "Add ${item.title} to queue",
     icon = SidekitIcon.QueueMusic,
-    color = SidekitTheme.colors.primaryA1,
-    armedColor = SidekitTheme.colors.primaryA2,
+    color = SidekitTheme.colors.successA1,
+    armedColor = SidekitTheme.colors.successA2,
     onClick = { onQueue(item) }
 )
 
@@ -322,6 +322,7 @@ fun CollectionScreen(
     state: SpotifyUiState,
     onBack: () -> Unit,
     onPlay: () -> Unit,
+    onPlayPause: () -> Unit,
     onItem: (Int) -> Unit,
     onSave: () -> Unit,
     onArtist: () -> Unit,
@@ -346,18 +347,26 @@ fun CollectionScreen(
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         val playFocus = remember { FocusRequester() }
+        val playIds = remember(collection.items) { collection.items.mapTo(mutableSetOf()) { it.id } }
         LaunchedEffect(collection.type, collection.id) { runCatching { playFocus.requestFocus() } }
         SidekitList(padding, state = listState) {
             var rowIndex = 0
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
                     ArtworkTile(collection.artRes, "${collection.title} artwork", Modifier.weight(1f), collection.artUrl)
-                    PlayTile(onPlay, Modifier.weight(1f).focusRequester(playFocus))
+                    ContextPlayTile(
+                        playIds,
+                        state.current?.id,
+                        state.isPlaying,
+                        onPlay,
+                        onPlayPause,
+                        Modifier.weight(1f).focusRequester(playFocus)
+                    )
                     SpotifyIconTile(
-                        if (saved) SidekitIcon.Check else SidekitIcon.Bookmark,
+                        if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
                         if (saved) "Saved" else "Save",
                         onSave,
-                        tone = if (saved) SpotifyTileTone.On else SpotifyTileTone.Neutral
+                        tone = if (saved) SpotifyTileTone.Library else SpotifyTileTone.Neutral
                     )
                     if (collection.artistId != null) {
                         SpotifyIconTile(SidekitIcon.Artist, "Artist", onArtist)
@@ -413,6 +422,7 @@ fun ArtistScreen(
     state: SpotifyUiState,
     onBack: () -> Unit,
     onPlay: () -> Unit,
+    onPlayPause: () -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
     onQueue: (SpotifyTrack) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
@@ -432,17 +442,25 @@ fun ArtistScreen(
         title = artist.name,
         actions = actions,
         options = listOf(
-            SideAction("follow", if (followed) "Following" else "Follow", tone = if (followed) ActionTone.Secondary else ActionTone.Primary, onClick = onFollow),
+            SideAction("follow", if (followed) "Following" else "Follow", tone = ActionTone.Secondary, onClick = onFollow),
             SideAction("nowPlaying", "Go to now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)
         )
     ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
+        val playIds = remember(tracks) { tracks.mapTo(mutableSetOf()) { it.id } }
         SidekitList(padding, state = listState) {
             var rowIndex = 0
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
-                    PlayTile(onPlay, Modifier.weight(1f))
+                    ContextPlayTile(
+                        playIds,
+                        state.current?.id,
+                        state.isPlaying,
+                        onPlay,
+                        onPlayPause,
+                        Modifier.weight(1f)
+                    )
                     ArtworkTile(artist.artRes, "${artist.name} artwork", Modifier.weight(1f), artist.artUrl)
                 }
             }

@@ -29,8 +29,10 @@ Spotify.
   Long lists end with a "Load more" row.
 - **Keypad first.** Every interactive row is focusable, has a visible focus ring, and a 48 dp
   minimum target. Do not fade the focused element.
-- **Content never wears the theme colour.** Selection, progress, and saved state use emphasis;
-  the case colour belongs to primary actions.
+- **Content never wears the theme colour.** Play, selection, progress, save/unsave, and
+  follow/unfollow use the Library success fill; the case colour belongs to action-bar actions
+  only. Save controls are always bookmark tiles: hollow (`BookmarkBorder`) when unsaved, filled
+  (`Bookmark`) when saved.
 - **No new dependencies** for images, DI, persistence, or media. Reuse the SDK's
   `RemoteArtwork`, `EncryptedFileStore`, `UndoWindow`, and `NativeLibraries`; keep app-local
   media coordination, plain repositories, and manual wiring.
@@ -73,7 +75,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Library write-back is optimistic with rollback: like/unlike, save/remove album and show,
   follow/unfollow artist, add/remove playlist. Saves and follows offer Undo for five visible
   seconds; queue actions are silent. The open Library section is patched in place, so a save or
-  follow appears immediately and rolls back if the write fails.
+  follow appears immediately and rolls back if the write fails. Save/bookmark and follow states
+  keep the same success fill in both directions, matching the Home Library tile.
 - Saved songs, albums, artists and shows are ordered by Spotify's `added_at`, newest first. The
   collection page is read once, filtered by URI prefix, and cached for two minutes; writes
   invalidate that cache.

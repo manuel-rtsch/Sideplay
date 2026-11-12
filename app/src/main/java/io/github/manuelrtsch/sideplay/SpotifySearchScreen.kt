@@ -156,8 +156,8 @@ fun SpotifySearchScreen(
                                 action = SwipeAction(
                                     label = "Add ${track.title} to queue",
                                     icon = SidekitIcon.QueueMusic,
-                                    color = SidekitTheme.colors.primaryA1,
-                                    armedColor = SidekitTheme.colors.primaryA2,
+                                    color = SidekitTheme.colors.successA1,
+                                    armedColor = SidekitTheme.colors.successA2,
                                     onClick = { onQueue(track) }
                                 )
                             ) {

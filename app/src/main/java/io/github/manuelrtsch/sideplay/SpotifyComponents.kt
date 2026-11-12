@@ -209,6 +209,7 @@ fun RowScope.SpotifyIconTile(
 enum class SpotifyTileTone {
     Neutral,
     Play,
+    Library,
     On,
     Muted
     ;
@@ -216,6 +217,7 @@ enum class SpotifyTileTone {
     fun colour(colors: hrln.interactive.sidekit.design.theme.SidekitColors): Color = when (this) {
         Neutral -> colors.surfaceA3
         Play -> colors.emphasisA1
+        Library -> colors.successA1
         On -> colors.surfaceA5
         Muted -> colors.surfaceA2
     }
@@ -331,8 +333,8 @@ fun SpotifyLoadingScreen(
                     style = Stroke(width = 1.dp.toPx())
                 )
             }
-            drawCircle(colors.primaryA1, radius * 0.34f, centre)
-            drawCircle(colors.primaryA3, radius * 0.34f, centre, style = Stroke(width = 1.dp.toPx()))
+            drawCircle(colors.successA1, radius * 0.34f, centre)
+            drawCircle(colors.successA3, radius * 0.34f, centre, style = Stroke(width = 1.dp.toPx()))
             drawCircle(colors.surfaceA1, radius * 0.055f, centre)
             drawArc(
                 color = colors.light.copy(alpha = 0.18f),
@@ -530,14 +532,53 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
 }
 
 @Composable
-fun PlayTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PlayTile(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     SidekitIconItem(
-        SidekitIcon.PlayArrow,
-        "Play",
+        if (playing) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+        if (playing) "Pause" else "Play",
         modifier,
         color = SidekitTheme.colors.emphasisA1,
         iconSize = SidekitTheme.spacing.tileIconSize,
         onClick = onClick
+    )
+}
+
+/**
+ * A page-local play control. It only becomes a pause button after this page started playback,
+ * and only while the current item still belongs to the page's context, so it can never pause
+ * unrelated content.
+ */
+@Composable
+fun ContextPlayTile(
+    contextIds: Set<String>,
+    currentId: String?,
+    isPlaying: Boolean,
+    onPlay: () -> Unit,
+    onPlayPause: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var startedHere by remember { mutableStateOf(false) }
+    var pendingStart by remember { mutableStateOf(false) }
+    val controlsHere = startedHere && currentId in contextIds
+    LaunchedEffect(currentId) {
+        when {
+            currentId == null -> Unit
+            pendingStart && currentId in contextIds -> pendingStart = false
+            !pendingStart && currentId !in contextIds -> startedHere = false
+        }
+    }
+    PlayTile(
+        playing = controlsHere && isPlaying,
+        onClick = {
+            if (controlsHere) {
+                onPlayPause()
+            } else {
+                pendingStart = true
+                startedHere = true
+                onPlay()
+            }
+        },
+        modifier = modifier
     )
 }
 
