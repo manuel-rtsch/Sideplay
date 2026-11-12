@@ -175,7 +175,12 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
    no shuffle/repeat setters. `SpotifyQueueRepository` is authoritative; native shuffle/repeat
    events are adopted when another client changes them. Queue, queue history, and recently
    played persist; playback does not resume automatically after process death.
-3. **Playlist owner names.** Your own playlists show **You**; other users' playlists show their
+3. **Device builds must include the native bridge.** `libsideplay_spotify.so` is opt-in via
+   `-PsideplayNative=true`. Without it, `SpotifySession` falls back to `SpotifyWebCatalog`, and
+   Spotify now answers those requests with HTTP 429 because the OAuth token uses the desktop
+   client ID. Symptom: sign-in succeeds, but the library and search are empty. The 0.2.4 release
+   asset was rebuilt with the bridge after this was found on the emulator.
+4. **Playlist owner names.** Your own playlists show **You**; other users' playlists show their
    Spotify username. Display-name lookup is not worth a per-owner Web API call.
 
 ---
@@ -187,9 +192,10 @@ declared in `bridge/NativeBridge.kt`.
 
 - Toolchain: Rust stable, `cargo-ndk` 4.1.2, NDK 27.1.12297006, targets
   `aarch64-linux-android` and `x86_64-linux-android`.
-- Gradle builds it with `:app:buildSpotifyNative` as part of `assembleDebug`/`assembleRelease`.
-  If Rust or the NDK is missing, the task is skipped, the APK has no library, and
-  `NativeLibraries.load("sideplay_spotify")` returns false.
+- Gradle builds it with `:app:buildSpotifyNative` when `-PsideplayNative=true` (or
+  `SIDEPLAY_NATIVE=true`) is set. Native playback is deliberately opt-in so CI without Rust can
+  still build. If Rust or the NDK is missing, the task is skipped, the APK has no library, and
+  `NativeLibraries.load("sideplay_spotify")` returns false. Device and release builds must opt in.
 - `Cargo.lock` pins the full graph. `vergen` is held at 9.0.6; do not update it without rebuilding
   the Android targets.
 - Playback temp files use Android `cacheDir` (`NativeBridge.setTmpDir`).

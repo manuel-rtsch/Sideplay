@@ -69,9 +69,14 @@ Android NDK and a Rust toolchain.
 # A faster, non-debuggable build for the phone
 ./gradlew :app:assembleProfile
 
-# Include the native Spotify playback library
+# Include the native Spotify playback library (required for a device/release build)
 ./gradlew :app:assembleProfile -PsideplayNative=true
 ```
+
+The native library is what makes library and search work. Without `-PsideplayNative=true`,
+Sideplay falls back to the public Spotify Web API, which currently rejects Spotify's desktop
+client ID with HTTP 429. The UI then looks empty: no library, no search results. Release and
+device builds must include the native bridge.
 
 Sideplay builds against the published `1.4.1` Sidekit SDK from GitHub Packages. To test
 against a local Sidekit checkout instead, set `SIDEKIT_PROJECT_DIR`:
