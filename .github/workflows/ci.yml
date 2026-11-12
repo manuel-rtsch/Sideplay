@@ -31,17 +31,10 @@ jobs:
       packages: read
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SIDEKIT_PROJECT_DIR: ${{ github.workspace }}/.sidekit
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Check out Sidekit SDK sources
-        uses: actions/checkout@v4
-        with:
-          repository: manuel-rtsch/Sidekit
-          ref: feat/third-party-apps
-          path: .sidekit
       - uses: ./.github/actions/android-setup
       - name: Assemble debug and profile
         run: >
@@ -57,15 +50,8 @@ jobs:
       packages: read
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SIDEKIT_PROJECT_DIR: ${{ github.workspace }}/.sidekit
     steps:
       - uses: actions/checkout@v4
-      - name: Check out Sidekit SDK sources
-        uses: actions/checkout@v4
-        with:
-          repository: manuel-rtsch/Sidekit
-          ref: feat/third-party-apps
-          path: .sidekit
       - uses: ./.github/actions/android-setup
       - uses: actions/cache@v4
         with:
@@ -95,15 +81,8 @@ jobs:
       security-events: write
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SIDEKIT_PROJECT_DIR: ${{ github.workspace }}/.sidekit
     steps:
       - uses: actions/checkout@v4
-      - name: Check out Sidekit SDK sources
-        uses: actions/checkout@v4
-        with:
-          repository: manuel-rtsch/Sidekit
-          ref: feat/third-party-apps
-          path: .sidekit
       - uses: ./.github/actions/android-setup
       - name: Run lint
         run: ./gradlew lintDebug --stacktrace

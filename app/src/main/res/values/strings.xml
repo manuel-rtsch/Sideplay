@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Sideplay</string>
+    <string name="keypad_service_label">Sideplay keypad</string>
+    <string name="keypad_service_description">Turns the Sidephone keypad\'s top-left key into Back system-wide.</string>
+    <string name="keypad_service_summary">Short press Back; hold to open the dialer.</string>
 </resources>

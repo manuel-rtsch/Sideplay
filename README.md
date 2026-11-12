@@ -73,7 +73,8 @@ Android NDK and a Rust toolchain.
 ./gradlew :app:assembleProfile -PsideplayNative=true
 ```
 
-Until the `1.4.0` Sidekit SDK is published, point the build at a Sidekit checkout:
+Sideplay builds against the published `1.4.1` Sidekit SDK from GitHub Packages. To test
+against a local Sidekit checkout instead, set `SIDEKIT_PROJECT_DIR`:
 
 ```sh
 SIDEKIT_PROJECT_DIR=../Sidekit ./gradlew :app:assembleDebug

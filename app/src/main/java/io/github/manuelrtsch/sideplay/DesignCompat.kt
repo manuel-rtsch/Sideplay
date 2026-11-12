@@ -1,13 +1,8 @@
 package io.github.manuelrtsch.sideplay
 
-import androidx.compose.ui.graphics.Color
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.icons.SidekitIcon
-import hrln.interactive.sidekit.design.theme.SidekitColors
-
-/** The emphasis fill for content controls such as play, save, and selection. */
-val SidekitColors.emphasisA1: Color get() = successA1
 
 /** The bar while a delete can still be taken back. */
 fun undoBar(continueWith: SideAction, undo: SideAction? = null): List<SideAction> = if (undo == null) listOf(continueWith) else listOf(continueWith, undo)

@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import hrln.interactive.sidekit.design.input.Keypad
-import hrln.interactive.sidekit.design.input.T9Mode
 import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.app.SidekitActivity
 import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
@@ -36,7 +35,9 @@ class SideplayActivity : SidekitActivity() {
      */
     override fun onSidekitResume(keypad: Keypad) {
         val config = if (stores.isHostBacked) SidekitConfigClient.read(this, stores.hostAuthority) else null
-        keypad.applyInputMode(config?.inputModeOrDefault() ?: T9Mode.MultiTap)
+        // Standalone Sideplay keeps its own input mode; a host build owns it when present.
+        val local = SideplayLocalSettings(this)
+        keypad.applyInputMode(config?.inputModeOrDefault() ?: local.inputMode)
         val module = config?.keypadModuleOrDefault() ?: keypadPreferences.module()
         if (module != null) keypad.useModule(module)
         keypad.useCustomMapping(config?.customModuleOrDefault() ?: keypadPreferences.customModule())
