@@ -106,7 +106,8 @@ private val artworkArgs = listOf(
     }
 )
 
-private fun NavHostController.openNowPlaying() {
+private fun NavHostController.openNowPlaying(vm: SpotifyViewModel) {
+    vm.dismissNowPlayingNotice()
     if (!popBackStack(NOW_PLAYING, inclusive = false)) {
         navigate(NOW_PLAYING) { launchSingleTop = true }
     }
@@ -118,7 +119,7 @@ private fun NavHostController.openTrack(
     item: SpotifyMediaItem,
     play: () -> Unit
 ) {
-    if (vm.state.value.current?.id == item.id) openNowPlaying() else play()
+    if (vm.state.value.current?.id == item.id) openNowPlaying(vm) else play()
 }
 
 /** Registers the Sideplay screens. All screens share one account state holder. */
@@ -132,7 +133,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
             }
             SideplayHomeScreen(
                 state,
-                onNowPlaying = { nav.navigate(NOW_PLAYING) },
+                onNowPlaying = { nav.openNowPlaying(vm) },
                 onLibrary = { nav.navigate(LIBRARY) },
                 onSearch = { nav.navigate(SEARCH) },
                 onSettings = { nav.navigate(SETTINGS) },
@@ -141,7 +142,8 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onQueue = { nav.navigate(QUEUE) },
                 onQueueTrack = vm::addToQueue,
                 onHistory = { nav.navigate(HISTORY) },
-                onDismissNotice = vm::dismissNotice
+                onDismissNotice = vm::dismissNotice,
+                onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
         }
         composable(HISTORY) { entry ->
@@ -153,8 +155,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onPlay = { item -> nav.openTrack(vm, item) { vm.playRecent(item) } },
                 onQueue = vm::addToQueue,
                 onRemove = vm::removeHistory,
-                onNowPlaying = { nav.navigate(NOW_PLAYING) },
-                onDismissNotice = vm::dismissNotice
+                onNowPlaying = { nav.openNowPlaying(vm) },
+                onDismissNotice = vm::dismissNotice,
+                onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
         }
         composable(LIBRARY) { entry ->
@@ -165,21 +168,15 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onBack = { nav.popBackStack() },
                 onSearch = { nav.navigate(SEARCH) },
                 onSeeMore = { nav.navigate(libraryFilterRoute(it)) },
-                onTrack = { track ->
-                    if (vm.state.value.current?.id == track.id) {
-                        nav.openNowPlaying()
-                    } else {
-                        vm.playItem(track)
-                        nav.openNowPlaying()
-                    }
-                },
+                onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onQueue = vm::addToQueue,
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
                 onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
-                onNowPlaying = { nav.navigate(NOW_PLAYING) },
-                onDismissNotice = vm::dismissNotice
+                onNowPlaying = { nav.openNowPlaying(vm) },
+                onDismissNotice = vm::dismissNotice,
+                onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
         }
         composable(
@@ -195,22 +192,16 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 filter,
                 state,
                 onBack = { nav.popBackStack() },
-                onTrack = { track ->
-                    if (vm.state.value.current?.id == track.id) {
-                        nav.openNowPlaying()
-                    } else {
-                        vm.playItem(track)
-                        nav.openNowPlaying()
-                    }
-                },
+                onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onQueue = vm::addToQueue,
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
                 onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onLoadMore = vm::loadMoreLibrary,
-                onNowPlaying = { nav.navigate(NOW_PLAYING) },
-                onDismissNotice = vm::dismissNotice
+                onNowPlaying = { nav.openNowPlaying(vm) },
+                onDismissNotice = vm::dismissNotice,
+                onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
         }
         composable(COLLECTION, arguments = collectionArgs) { entry ->
@@ -250,13 +241,14 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                     },
                     onQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
-                    onNowPlaying = { nav.navigate(NOW_PLAYING) },
+                    onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = {
                         nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
                     },
                     onLoadMore = { type?.let { vm.loadMoreCollection(it, id) } },
                     loadingMore = "${type?.route}:$id" in state.collectionMorePending,
-                    onDismissNotice = vm::dismissNotice
+                    onDismissNotice = vm::dismissNotice,
+                    onDismissNowPlaying = vm::dismissNowPlayingNotice
                 )
             }
         }
@@ -287,7 +279,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                     onQueue = vm::addToQueue,
                     onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                     onFollow = { vm.toggleFollow(artist) },
-                    onNowPlaying = { nav.navigate(NOW_PLAYING) },
+                    onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = {
                         nav.navigate(artworkRoute(artist.artRes, artist.artUrl, artist.name))
                     },
@@ -296,7 +288,8 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                     albumHasMore = state.artistAlbumHasMore[artist.id] == true,
                     trackHasMore = state.artistTrackHasMore[artist.id] == true,
                     loadingMore = artist.id in state.artistMorePending,
-                    onDismissNotice = vm::dismissNotice
+                    onDismissNotice = vm::dismissNotice,
+                    onDismissNowPlaying = vm::dismissNowPlayingNotice
                 )
             }
         }
@@ -317,8 +310,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onLoadMore = vm::loadMoreSearch,
                 onScopes = { nav.navigate(SEARCH_SCOPES) },
-                onNowPlaying = { nav.navigate(NOW_PLAYING) },
-                onDismissNotice = vm::dismissNotice
+                onNowPlaying = { nav.openNowPlaying(vm) },
+                onDismissNotice = vm::dismissNotice,
+                onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
         }
         composable(SEARCH_SCOPES) { entry ->
@@ -328,8 +322,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 state,
                 onBack = { nav.popBackStack() },
                 onToggleScope = vm::toggleScope,
-                onNowPlaying = { nav.navigate(NOW_PLAYING) },
-                onDismissNotice = vm::dismissNotice
+                onNowPlaying = { nav.openNowPlaying(vm) },
+                onDismissNotice = vm::dismissNotice,
+                onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
         }
         composable(ARTWORK, arguments = artworkArgs) { entry ->
@@ -378,13 +373,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
             QueueScreen(
                 state,
                 onBack = { nav.popBackStack() },
-                onNowPlaying = {
-                    if (!nav.popBackStack(NOW_PLAYING, inclusive = false)) {
-                        nav.navigate(NOW_PLAYING) { launchSingleTop = true }
-                    }
-                },
+                onNowPlaying = { nav.openNowPlaying(vm) },
                 onJump = { id ->
-                    if (state.current?.id == id) nav.openNowPlaying() else vm.jumpTo(id)
+                    if (state.current?.id == id) nav.openNowPlaying(vm) else vm.jumpTo(id)
                 },
                 onPlayNext = vm::moveToNext,
                 onRemove = vm::removeUpcoming,
@@ -392,7 +383,8 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onClearUpcoming = vm::clearUpcoming,
                 onRestoreUpcoming = vm::restoreUpcoming,
                 onShuffle = vm::toggleShuffle,
-                onDismissNotice = vm::dismissNotice
+                onDismissNotice = vm::dismissNotice,
+                onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
         }
         composable(SETTINGS) { entry ->

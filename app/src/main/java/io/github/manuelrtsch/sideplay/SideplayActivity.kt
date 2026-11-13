@@ -7,12 +7,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
-import io.github.manuelrtsch.sideplay.data.SpotifySessions
 import hrln.interactive.sidekit.design.input.Keypad
 import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.app.SidekitActivity
 import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
 import hrln.interactive.sidekit.sdk.input.applyInputMode
+import io.github.manuelrtsch.sideplay.data.SpotifySessions
 
 /**
  * The Sideplay shell. It reads Sidekit's configuration when a compatible host is installed and

@@ -34,11 +34,14 @@ fun HistoryScreen(
     onQueue: (SpotifyMediaItem) -> Unit,
     onRemove: (SpotifyMediaItem) -> Unit,
     onNowPlaying: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
-    val actions = withNotice(
-        state.notice,
+    val actions = spotifyActions(
+        state,
         onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
         listOf(spotifyBack("Sideplay", onBack).first())
     )
     SidekitScaffold(

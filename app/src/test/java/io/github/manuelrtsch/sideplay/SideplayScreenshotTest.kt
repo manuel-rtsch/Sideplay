@@ -54,7 +54,25 @@ class SideplayScreenshotTest {
             onQueue = {},
             onQueueTrack = {},
             onHistory = {},
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
+        )
+    }
+
+    @Test fun nowPlayingNotice() = shoot("sideplay_now_playing_notice") {
+        SideplayHomeScreen(
+            state.copy(nowPlayingNotice = current),
+            onNowPlaying = {},
+            onLibrary = {},
+            onSearch = {},
+            onSettings = {},
+            onRefresh = {},
+            onPlay = {},
+            onQueue = {},
+            onQueueTrack = {},
+            onHistory = {},
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 
@@ -67,7 +85,8 @@ class SideplayScreenshotTest {
             onQueue = {},
             onRemove = {},
             onNowPlaying = {},
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 
@@ -84,7 +103,8 @@ class SideplayScreenshotTest {
             onArtist = {},
             onShow = {},
             onNowPlaying = {},
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 
@@ -101,7 +121,8 @@ class SideplayScreenshotTest {
             onShow = {},
             onLoadMore = {},
             onNowPlaying = {},
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 
@@ -121,7 +142,8 @@ class SideplayScreenshotTest {
             onArtwork = {},
             onLoadMore = {},
             loadingMore = false,
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 
@@ -146,7 +168,8 @@ class SideplayScreenshotTest {
             albumHasMore = true,
             trackHasMore = true,
             loadingMore = false,
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 
@@ -166,7 +189,8 @@ class SideplayScreenshotTest {
             onLoadMore = {},
             onScopes = {},
             onNowPlaying = {},
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 
@@ -211,7 +235,8 @@ class SideplayScreenshotTest {
             onClearUpcoming = { emptyList() },
             onRestoreUpcoming = {},
             onShuffle = {},
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
         )
     }
 

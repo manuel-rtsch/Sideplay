@@ -6,7 +6,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -74,6 +76,46 @@ class SpotifyViewModelEventTest {
         vm.handlePlaybackEvent("""{"type":"ended"}""")
 
         assertEquals(items[1].id, vm.state.value.current?.id)
+    }
+
+    @Test fun `starting a new item shows the now-playing notice`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first()
+
+        vm.playItem(track)
+
+        assertEquals(track.id, vm.state.value.nowPlayingNotice?.id)
+    }
+
+    @Test fun `dismissing the now-playing notice clears it`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.playItem(MockSpotifyDataSource.recentlyPlayed.first())
+
+        vm.dismissNowPlayingNotice()
+
+        assertNull(vm.state.value.nowPlayingNotice)
+    }
+
+    @Test fun `resuming the current item does not show the now-playing notice`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first()
+        vm.playItem(track)
+        vm.dismissNowPlayingNotice()
+        vm.togglePlayPause()
+
+        vm.playItem(track)
+
+        assertNull(vm.state.value.nowPlayingNotice)
+    }
+
+    @Test fun `the now-playing notice clears after its timeout`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.playItem(MockSpotifyDataSource.recentlyPlayed.first())
+
+        advanceTimeBy(NOW_PLAYING_NOTICE_MS + 1)
+        runCurrent()
+
+        assertNull(vm.state.value.nowPlayingNotice)
     }
 
     @Test fun `playing an episode adds it to recently played`() = runTest(dispatcher) {

@@ -23,6 +23,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+/** How long the now-playing confirmation owns the action bar before the normal actions return. */
+const val NOW_PLAYING_NOTICE_MS = 4_000L
+
 data class SpotifyUiState(
     val signedIn: Boolean = false,
     val current: SpotifyMediaItem? = null,
@@ -66,7 +69,9 @@ data class SpotifyUiState(
     val gapless: Boolean = true,
     val autoplay: Boolean = true,
     val cacheSizeBytes: Long = 0L,
-    val notice: String? = null
+    val notice: String? = null,
+    /** The item that just started, shown briefly in the action bar as a now-playing confirmation. */
+    val nowPlayingNotice: SpotifyMediaItem? = null
 ) {
     val savedCurrent: Boolean get() = current?.let { it.id in savedTrackIds } ?: false
 }
@@ -91,6 +96,7 @@ class SpotifyViewModel(
 
     private var searchJob: Job? = null
     private var autoplayJob: Job? = null
+    private var nowPlayingNoticeJob: Job? = null
     private val savedTrackTouched = mutableSetOf<String>()
     private val savedCollectionTouched = mutableSetOf<String>()
     private val followedArtistTouched = mutableSetOf<String>()
@@ -195,6 +201,13 @@ class SpotifyViewModel(
     }
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
+
+    /** Dismisses the transient now-playing confirmation and returns the normal action bar. */
+    fun dismissNowPlayingNotice() {
+        nowPlayingNoticeJob?.cancel()
+        nowPlayingNoticeJob = null
+        _state.update { it.copy(nowPlayingNotice = null) }
+    }
 
     fun refresh() = loadAccount()
 
@@ -418,6 +431,7 @@ class SpotifyViewModel(
         recorded(item)
         applyQueue(snapshot, positionMs = 0L, playing = true)
         _state.update { it.copy(notice = null) }
+        showNowPlayingNotice(item)
         startRemote(item, 0L)
     }
 
@@ -804,6 +818,7 @@ class SpotifyViewModel(
         if (snapshot.current !== s.current) {
             snapshot.current?.let(::recorded)
             applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
+            snapshot.current?.takeIf { it.playable }?.let(::showNowPlayingNotice)
             snapshot.current?.let { startRemote(it, 0L) }
         }
     }
@@ -978,7 +993,8 @@ class SpotifyViewModel(
                 artistTracks = emptyMap(),
                 savedTrackIds = emptySet(),
                 savedCollectionKeys = emptySet(),
-                followedArtistIds = emptySet()
+                followedArtistIds = emptySet(),
+                nowPlayingNotice = null
             )
         }
     }
@@ -1127,6 +1143,22 @@ class SpotifyViewModel(
     private fun recorded(item: SpotifyMediaItem) {
         history.record(item, System.currentTimeMillis())
         _state.update { it.copy(recent = history.items()) }
+    }
+
+    /**
+     * Shows the now-playing confirmation for a few seconds. The timer lives here rather than in
+     * the action bar so the state is cleared even if the user navigates to a screen that does not
+     * render the confirmation.
+     */
+    private fun showNowPlayingNotice(item: SpotifyMediaItem) {
+        nowPlayingNoticeJob?.cancel()
+        _state.update { it.copy(nowPlayingNotice = item) }
+        nowPlayingNoticeJob = viewModelScope.launch {
+            delay(NOW_PLAYING_NOTICE_MS)
+            _state.update {
+                if (it.nowPlayingNotice?.id == item.id) it.copy(nowPlayingNotice = null) else it
+            }
+        }
     }
 
     private fun search(debounceMs: Long) {
@@ -1392,6 +1424,10 @@ class SpotifyViewModel(
      */
     private fun autoplaySimilar(current: SpotifyMediaItem) {
         if (autoplayJob?.isActive == true) return
+        if (session?.isOnline == false) {
+            stopAtQueueEnd("No internet connection — autoplay stopped")
+            return
+        }
         val track = current as? SpotifyTrack
         val artistId = track?.artistId?.spotifyIdOrNull()
         if (track == null || artistId == null) {
@@ -1419,13 +1455,20 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (_state.value.current?.id == track.id) stopAtQueueEnd()
+                if (_state.value.current?.id == track.id) {
+                    val reason = when {
+                        session?.isOnline == false -> "No internet connection"
+                        (e as? SpotifyGatewayException)?.failure == SpotifyFailure.Network -> "Couldn't reach Spotify"
+                        else -> playbackNotice(e)
+                    }
+                    stopAtQueueEnd("$reason — autoplay stopped")
+                }
             }
         }
     }
 
-    private fun stopAtQueueEnd() {
-        _state.update { it.copy(isPlaying = false, positionMs = 0L) }
+    private fun stopAtQueueEnd(notice: String? = null) {
+        _state.update { it.copy(isPlaying = false, positionMs = 0L, notice = notice ?: it.notice) }
     }
 
     /** Starts a real Spotify item; local test fixtures have no URI and keep the local simulation. */
@@ -1443,7 +1486,9 @@ class SpotifyViewModel(
                 throw e
             } catch (e: Exception) {
                 SideplayDebug.log("viewModel.startRemote failed", e)
-                _state.update { it.copy(isPlaying = false, notice = playbackNotice(e)) }
+                _state.update {
+                    it.copy(isPlaying = false, notice = playbackNotice(e), nowPlayingNotice = null)
+                }
             }
         }
     }
@@ -1452,7 +1497,7 @@ class SpotifyViewModel(
         SpotifyFailure.Unavailable -> "Spotify playback is unavailable in this build"
         SpotifyFailure.NotConnected -> "Playback is not ready — try again"
         SpotifyFailure.AuthenticationExpired -> "Spotify session expired — sign in again"
-        SpotifyFailure.Network -> "Couldn't reach Spotify"
+        SpotifyFailure.Network -> if (session?.isOnline == false) "No internet connection" else "Couldn't reach Spotify"
         SpotifyFailure.RateLimited -> "Spotify is rate-limiting requests — try again shortly"
         SpotifyFailure.TrackUnavailable -> "This track isn't available"
         SpotifyFailure.Unknown, null -> error.message ?: "Playback failed"

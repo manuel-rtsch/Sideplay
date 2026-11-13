@@ -47,13 +47,16 @@ fun SideplayHomeScreen(
     onQueue: () -> Unit,
     onQueueTrack: (SpotifyMediaItem) -> Unit,
     onHistory: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
     val recent = state.recent.take(RECENT_PREVIEW_SIZE)
     val hasMoreHistory = state.recent.size > RECENT_PREVIEW_SIZE
-    val bar = withNotice(
-        state.notice,
+    val bar = spotifyActions(
+        state,
         onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
         listOf(
             SideAction("queue", "Queue", SidekitIcon.QueueMusic, onClick = onQueue),
             SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch)
@@ -137,11 +140,14 @@ fun LibraryScreen(
     onArtist: (SpotifyArtist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onNowPlaying: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
-    val actions = withNotice(
-        state.notice,
+    val actions = spotifyActions(
+        state,
         onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
         listOf(spotifyBack("Sideplay", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     )
     SidekitScaffold(
@@ -235,11 +241,14 @@ fun LibraryCategoryScreen(
     onShow: (SpotifyShow) -> Unit,
     onLoadMore: () -> Unit,
     onNowPlaying: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
-    val actions = withNotice(
-        state.notice,
+    val actions = spotifyActions(
+        state,
         onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
         listOf(spotifyBack("Library", onBack).first())
     )
     SidekitScaffold(
@@ -346,11 +355,18 @@ fun CollectionScreen(
     onArtwork: () -> Unit,
     onLoadMore: () -> Unit,
     loadingMore: Boolean,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
     val colors = SidekitTheme.colors
     val saved = "${collection.type.route}:${collection.id}" in state.savedCollectionKeys
-    val actions = spotifyBar(state, onDismissNotice, spotifyBack("Back", onBack).first())
+    val actions = spotifyBar(
+        state,
+        onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
+        spotifyBack("Back", onBack).first()
+    )
     // The header keeps the three primary actions: play, artwork and save. The artist lives in the
     // metadata line below it, so collections keep the same play / image / save-or-follow layout
     // without a third Options entry.
@@ -467,10 +483,17 @@ fun ArtistScreen(
     albumHasMore: Boolean,
     trackHasMore: Boolean,
     loadingMore: Boolean,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
     val followed = artist.id in state.followedArtistIds
-    val actions = spotifyBar(state, onDismissNotice, spotifyBack("Back", onBack).first())
+    val actions = spotifyBar(
+        state,
+        onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
+        spotifyBack("Back", onBack).first()
+    )
     SidekitScaffold(
         title = artist.name,
         actions = actions,

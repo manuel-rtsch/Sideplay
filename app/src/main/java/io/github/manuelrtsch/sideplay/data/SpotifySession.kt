@@ -39,6 +39,10 @@ class SpotifySession(
     private val audioCacheDir = appContext?.let { File(it.cacheDir, "spotify-audio") }
     private val settingsStore = appContext?.let { SpotifySettingsStore(it) }
 
+    /** Null in tests and other context-free sessions; those are treated as online. */
+    val network: NetworkMonitor? = appContext?.let(::NetworkMonitor)
+    val isOnline: Boolean get() = network?.isOnline ?: true
+
     // Legacy file names kept so existing dev installs keep their queue and history.
     private val queueStore = appContext?.let { FileSpotifyQueueStore(File(it.filesDir, "sidetracks-queue.bin")) }
     private val historyStore = appContext?.let { FileSpotifyHistoryStore(File(it.filesDir, "sidetracks-history.bin")) }
@@ -48,7 +52,7 @@ class SpotifySession(
     val nativeAvailable: Boolean get() = NativeBridge.isAvailable
 
     private val nativeGateway by lazy {
-        NativeSpotifyGateway(NativeBridge, { _settings.value }, { accessToken() })
+        NativeSpotifyGateway(NativeBridge, { _settings.value }, { isOnline }, { accessToken() })
     }
     val gateway: SpotifyGateway get() = nativeGateway
 
@@ -127,6 +131,7 @@ class SpotifySession(
         val rebuilt = withTimeoutOrNull(CONNECT_TIMEOUT_MS) { nativeGateway.ensureConnected() }
         if (rebuilt == null) {
             SideplayDebug.log("connectForPlayback timed out after ${CONNECT_TIMEOUT_MS}ms")
+            if (!isOnline) throw SpotifyGatewayException(SpotifyFailure.Network, "No internet connection")
             throw SpotifyGatewayException(SpotifyFailure.NotConnected, "Playback connection timed out")
         }
         SideplayDebug.log("connectForPlayback rebuilt=$rebuilt")

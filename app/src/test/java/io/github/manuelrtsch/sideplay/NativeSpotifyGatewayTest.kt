@@ -39,6 +39,76 @@ class NativeSpotifyGatewayTest {
         assertEquals(SpotifyFailure.TrackUnavailable, (failure as SpotifyGatewayException).failure)
     }
 
+    @Test fun `offline connect maps to Network instead of an expired session`() = runTest {
+        val native = FakeNative().apply { connectOk = false }
+        val gateway = NativeSpotifyGateway(
+            native,
+            accessToken = { "token" },
+            networkAvailable = { false }
+        )
+
+        val failure = runCatching { gateway.connect("token") }.exceptionOrNull()
+
+        assertEquals(SpotifyFailure.Network, (failure as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `offline load maps to Network`() = runTest {
+        val native = FakeNative().apply { loadOk = false }
+        val gateway = NativeSpotifyGateway(
+            native,
+            accessToken = { "token" },
+            networkAvailable = { false }
+        )
+
+        val failure = runCatching { gateway.load("spotify:track:a", 0, true) }.exceptionOrNull()
+
+        assertEquals(SpotifyFailure.Network, (failure as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `offline ensureConnected fails before touching the native session`() = runTest {
+        val native = FakeNative()
+        val gateway = NativeSpotifyGateway(
+            native,
+            accessToken = { "token" },
+            networkAvailable = { false }
+        )
+
+        val failure = runCatching { gateway.ensureConnected() }.exceptionOrNull()
+
+        assertEquals(SpotifyFailure.Network, (failure as SpotifyGatewayException).failure)
+        assertEquals(0, native.connects)
+    }
+
+    @Test fun `token refresh failure after the connection drops maps to Network`() = runTest {
+        val native = FakeNative()
+        var online = true
+        val gateway = NativeSpotifyGateway(
+            native,
+            networkAvailable = { online },
+            accessToken = {
+                online = false
+                null
+            }
+        )
+
+        val failure = runCatching { gateway.ensureConnected() }.exceptionOrNull()
+
+        assertEquals(SpotifyFailure.Network, (failure as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `offline ensureSession maps to Network`() = runTest {
+        val native = FakeNative()
+        val gateway = NativeSpotifyGateway(
+            native,
+            accessToken = { "token" },
+            networkAvailable = { false }
+        )
+
+        val failure = runCatching { gateway.ensureSession() }.exceptionOrNull()
+
+        assertEquals(SpotifyFailure.Network, (failure as SpotifyGatewayException).failure)
+    }
+
     @Test fun `ensureConnected uses the stored token`() = runTest {
         val native = FakeNative()
         val gateway = NativeSpotifyGateway(native) { "stored" }
@@ -129,6 +199,7 @@ class NativeSpotifyGatewayTest {
         var playerRecreated = false
         var preloaded: String? = null
         var loadOk = true
+        var connectOk = true
         var setTokenOk = true
         var bitrateKbps: Int? = null
         var normalization = false
@@ -141,7 +212,7 @@ class NativeSpotifyGatewayTest {
         override fun connect(accessToken: String): Boolean {
             connects++
             token = accessToken
-            return isAvailable
+            return connectOk && isAvailable
         }
         override fun setAccessToken(accessToken: String): Boolean {
             if (setTokenOk) token = accessToken

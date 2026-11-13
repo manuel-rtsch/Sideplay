@@ -93,6 +93,16 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Playback is process-wide. Queue and local history live on `SpotifySession`; a recreated
   ViewModel adopts the live item, position, and playing state. Starting a new item releases the
   previous `AudioTrack`.
+- Starting a new item shows a transient now-playing confirmation in the action bar: artwork, an
+  animated playing indicator, the title, and a right arrow to Now Playing. It replaces the normal
+  actions for four seconds, can be dismissed immediately with its X, and never auto-navigates.
+  Selecting the already-playing item still opens Now Playing directly. The timer lives in
+  `SpotifyViewModel`, so the confirmation clears even if the user navigates to a screen that does
+  not render it.
+- Network loss is reported honestly. `NetworkMonitor` tracks the active network, and playback or
+  catalog failures while offline map to **No internet connection** instead of an expired Spotify
+  session. When Autoplay reaches the end of the queue with no connection, it stops instead of
+  retrying and shows **No internet connection — autoplay stopped**.
 - Queue, queue history, shuffle order, repeat mode, and recently played persist across process
   death in atomic binary files (`sidetracks-queue.bin`, `sidetracks-history.bin`; legacy names
   kept so existing dev installs keep their data). Playback
@@ -187,6 +197,11 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
    asset was rebuilt with the bridge after this was found on the emulator.
 4. **Playlist owner names.** Your own playlists show **You**; other users' playlists show their
    Spotify username. Display-name lookup is not worth a per-owner Web API call.
+5. **The Options key does not dismiss the now-playing confirmation.** Sidekit's
+   `ChromeState.toggleOptions()` owns the Options key and opens the screen's options instead. A
+   later improvement is to make Options dismiss an auto-dismiss action before opening options;
+   that belongs in Sidekit and would benefit every app, not just Sideplay. Until then the
+   confirmation is dismissed by its X, by opening Now Playing, or by its four-second timer.
 
 ---
 

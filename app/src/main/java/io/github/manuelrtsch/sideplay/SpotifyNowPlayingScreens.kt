@@ -74,8 +74,11 @@ fun SpotifyNowPlayingScreen(
     val actions = spotifyBar(
         state,
         onDismissNotice,
-        spotifyBack("Back", onBack).first(),
-        listOfNotNull(save)
+        onOpenNowPlaying = {},
+        onDismissNowPlaying = {},
+        continueWith = spotifyBack("Back", onBack).first(),
+        extra = listOfNotNull(save),
+        showNowPlayingNotice = false
     )
     val options = if (current == null) {
         emptyList()
@@ -186,7 +189,8 @@ fun QueueScreen(
     onClearUpcoming: () -> List<SpotifyMediaItem>,
     onRestoreUpcoming: (List<SpotifyMediaItem>) -> Unit,
     onShuffle: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
     var focusedId by remember { mutableStateOf(state.current?.id) }
     var pendingUndo by remember { mutableStateOf<List<SpotifyMediaItem>?>(null) }
@@ -197,9 +201,11 @@ fun QueueScreen(
         }
     }
     val back = spotifyBack("Back", onBack).first()
-    val normal = withNotice(
-        state.notice,
+    val normal = spotifyActions(
+        state,
         onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
         listOf(back, SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     )
     val actions = if (pendingUndo != null) {

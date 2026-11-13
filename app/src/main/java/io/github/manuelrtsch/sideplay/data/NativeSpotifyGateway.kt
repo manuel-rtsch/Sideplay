@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 class NativeSpotifyGateway(
     private val native: SpotifyNative,
     private val settings: () -> SpotifySettings = { SpotifySettings() },
+    private val networkAvailable: () -> Boolean = { true },
     private val accessToken: suspend () -> String?
 ) : SpotifyGateway {
     @Volatile
@@ -60,7 +61,10 @@ class NativeSpotifyGateway(
         val ok = native.load(uri, positionMs, autoplay)
         val elapsedMs = (System.nanoTime() - started) / 1_000_000
         SideplayDebug.log("gateway.load native returned ok=$ok elapsedMs=$elapsedMs")
-        if (!ok) fail(SpotifyFailure.TrackUnavailable, "Track unavailable")
+        if (!ok) {
+            if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
+            fail(SpotifyFailure.TrackUnavailable, "Track unavailable")
+        }
     }
 
     override suspend fun play() = onIo {
@@ -99,7 +103,11 @@ class NativeSpotifyGateway(
      * cheap state update, so the extra round trip on each play is worth the liveness check.
      */
     suspend fun ensureConnected(): Boolean {
-        val token = accessToken() ?: fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
+        if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
+        val token = accessToken() ?: run {
+            if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
+            fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
+        }
         SideplayDebug.log("ensureConnected connected=$connected sessionConnected=$sessionConnected tokenLength=${token.length}")
         if (!connected) {
             SideplayDebug.log("ensureConnected: no player, connecting")
@@ -123,7 +131,11 @@ class NativeSpotifyGateway(
     /** Connects the librespot session without creating an audio player. Used by catalog reads. */
     suspend fun ensureSession() = onIo {
         requireNative()
-        val token = accessToken() ?: fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
+        if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
+        val token = accessToken() ?: run {
+            if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
+            fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
+        }
         if (!sessionConnected) {
             connectSession(token)
         } else if (!native.setAccessToken(token)) {
@@ -139,7 +151,10 @@ class NativeSpotifyGateway(
     private fun connectSession(token: String) {
         if (sessionConnected) return
         SideplayDebug.log("connectSession begin")
-        if (!native.connect(token)) fail(SpotifyFailure.AuthenticationExpired, "Could not connect")
+        if (!native.connect(token)) {
+            if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
+            fail(SpotifyFailure.AuthenticationExpired, "Could not connect")
+        }
         SideplayDebug.log("connectSession connected")
         sessionConnected = true
         sessionToken = token

@@ -43,12 +43,15 @@ fun SpotifySearchScreen(
     onLoadMore: (SearchScope) -> Unit,
     onScopes: () -> Unit,
     onNowPlaying: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
     val results = state.searchResults
-    val actions = withNotice(
-        state.notice,
+    val actions = spotifyActions(
+        state,
         onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
         buildList {
             add(spotifyBack("Back", onBack).first())
             if (state.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
@@ -312,11 +315,14 @@ fun SearchScopesScreen(
     onBack: () -> Unit,
     onToggleScope: (SearchScope) -> Unit,
     onNowPlaying: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
-    val actions = withNotice(
-        state.notice,
+    val actions = spotifyActions(
+        state,
         onDismissNotice,
+        onNowPlaying,
+        onDismissNowPlaying,
         listOf(spotifyBack("Search", onBack).first())
     )
     SidekitScaffold(

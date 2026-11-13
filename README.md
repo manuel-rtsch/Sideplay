@@ -52,8 +52,9 @@ size with the compact layout enabled, not hand-taken photos.
 2. Install the Sideplay APK.
 3. Open Sideplay and sign in with your Spotify account.
 4. Pick something from your library, or press **Search** and start typing on the keypad.
-5. Press **OK** / **Enter** to play. Press it again on the track that is already playing to open
-   Now Playing.
+5. Press **OK** / **Enter** to play. A now-playing confirmation appears in the action bar for a
+   few seconds; press it to open Now Playing, or press its X to dismiss it. Pressing **OK** /
+   **Enter** again on the track that is already playing opens Now Playing directly.
 
 Lists show a few items at a time. When there is more, a **See more** row appears at the bottom;
 press it to load the next page. Nothing extra is downloaded until you ask for it.

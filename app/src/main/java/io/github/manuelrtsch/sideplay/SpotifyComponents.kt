@@ -261,6 +261,94 @@ fun NowPlayingTile(
     }
 }
 
+/**
+ * The transient "now playing" confirmation. It replaces the action bar for a few seconds after a
+ * new item starts, then the normal actions return. Tapping it opens Now Playing; the square X
+ * dismisses it immediately.
+ *
+ * The Options key is deliberately not a dismiss: Sidekit's `ChromeState.toggleOptions()` owns that
+ * key and opens the screen's options instead. A later Sidekit improvement can make Options dismiss
+ * an auto-dismiss action before opening options; see docs/SIDEPLAY.md.
+ */
+fun nowPlayingNoticeActions(
+    item: SpotifyMediaItem,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit
+): List<SideAction> = listOf(
+    SideAction(
+        key = "nowPlayingNotice:${item.id}",
+        label = item.title,
+        icon = SidekitIcon.ArrowRightAlt,
+        iconAtEnd = true,
+        tone = ActionTone.Primary,
+        motion = ActionMotion.Up,
+        contentDescription = "Playing ${item.title}. Open Now Playing",
+        artKey = item.id,
+        art = { NowPlayingNoticeArt(item) },
+        onClick = onOpen
+    ),
+    SideAction.square(
+        key = "nowPlayingNoticeDismiss",
+        icon = SidekitIcon.Close,
+        contentDescription = "Dismiss now playing notice",
+        onClick = onDismiss,
+        tone = ActionTone.Muted,
+        motion = ActionMotion.Up
+    )
+)
+
+@Composable
+private fun NowPlayingNoticeArt(item: SpotifyMediaItem) {
+    Box(Modifier.size(48.dp)) {
+        SpotifyCover(
+            item.artRes,
+            Modifier.fillMaxSize(),
+            shape = SidekitTheme.shapes.artwork,
+            artUrl = item.artUrl
+        )
+        PlayingBars(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(2.dp)
+                .size(20.dp)
+        )
+    }
+}
+
+/** Three small bars over the artwork, so the confirmation reads as playing rather than paused. */
+@Composable
+private fun PlayingBars(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "nowPlayingBars")
+    val bars = listOf(0.45f, 1f, 0.65f).mapIndexed { index, peak ->
+        transition.animateFloat(
+            initialValue = peak * 0.35f,
+            targetValue = peak,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 360 + index * 90, easing = LinearEasing),
+                repeatMode = AnimationRepeatMode.Reverse
+            ),
+            label = "bar$index"
+        )
+    }
+    Canvas(modifier) {
+        drawCircle(Color.Black.copy(alpha = 0.6f), radius = size.minDimension / 2f)
+        val barWidth = size.width * 0.14f
+        val gap = size.width * 0.08f
+        val total = barWidth * 3 + gap * 2
+        val startX = (size.width - total) / 2f
+        val bottom = size.height * 0.72f
+        bars.forEachIndexed { index, bar ->
+            val height = size.height * 0.5f * bar.value
+            drawRoundRect(
+                color = Color.White,
+                topLeft = Offset(startX + index * (barWidth + gap), bottom - height),
+                size = Size(barWidth, height),
+                cornerRadius = CornerRadius(barWidth / 2f)
+            )
+        }
+    }
+}
+
 @Composable
 fun LibraryTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
     SidekitTile(
@@ -427,15 +515,45 @@ fun withNotice(notice: String?, onDismiss: () -> Unit, actions: List<SideAction>
     )
 }
 
+/**
+ * The screen's action bar, with the transient now-playing confirmation taking precedence over the
+ * normal actions. A real notice (an error or confirmation) wins over the now-playing confirmation.
+ */
+fun spotifyActions(
+    state: SpotifyUiState,
+    onDismissNotice: () -> Unit,
+    onOpenNowPlaying: () -> Unit,
+    onDismissNowPlaying: () -> Unit,
+    actions: List<SideAction>,
+    showNowPlayingNotice: Boolean = true
+): List<SideAction> = when {
+    state.notice != null -> withNotice(state.notice, onDismissNotice, actions)
+
+    showNowPlayingNotice && state.nowPlayingNotice != null ->
+        nowPlayingNoticeActions(state.nowPlayingNotice, onOpenNowPlaying, onDismissNowPlaying)
+
+    else -> actions
+}
+
 fun spotifyBack(label: String, onBack: () -> Unit) = listOf(SideAction.back("back", label, onBack))
 
 /** The action bar for screens that can change saved state, plus any important notice. */
 fun spotifyBar(
     state: SpotifyUiState,
     onDismissNotice: () -> Unit,
+    onOpenNowPlaying: () -> Unit,
+    onDismissNowPlaying: () -> Unit,
     continueWith: SideAction,
-    extra: List<SideAction> = emptyList()
-): List<SideAction> = withNotice(state.notice, onDismissNotice, listOf(continueWith) + extra)
+    extra: List<SideAction> = emptyList(),
+    showNowPlayingNotice: Boolean = true
+): List<SideAction> = spotifyActions(
+    state,
+    onDismissNotice,
+    onOpenNowPlaying,
+    onDismissNowPlaying,
+    listOf(continueWith) + extra,
+    showNowPlayingNotice
+)
 
 fun repeatLabel(repeat: RepeatMode) = repeat.label
 
