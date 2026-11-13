@@ -23,3 +23,6 @@ keystore.properties
 
 # Rust
 native/*/target/
+
+# Crash reports from tools/crash-watch.sh
+crash-logs/
