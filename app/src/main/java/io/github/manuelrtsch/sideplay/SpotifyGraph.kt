@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 const val SIDE_PLAY_ROOT = "sideplay"
 private const val ROOT = SIDE_PLAY_ROOT
 const val SIDE_PLAY_START = "sideplay/home"
+const val SIDE_PLAY_SIGN_IN = "sideplay/sign-in"
 private const val HOME = SIDE_PLAY_START
 private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
@@ -43,7 +44,7 @@ private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
 private val SETTINGS = "$ROOT/settings"
 private val AUDIO_QUALITY = "$ROOT/audio-quality"
-private val SIGN_IN = "$ROOT/sign-in"
+private val SIGN_IN = SIDE_PLAY_SIGN_IN
 private val APPEARANCE = "$ROOT/appearance"
 private val ABOUT = "$ROOT/about"
 private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={ratio}"
@@ -121,8 +122,8 @@ private fun NavHostController.openTrack(
 }
 
 /** Registers the Sideplay screens. All screens share one account state holder. */
-fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
-    navigation(startDestination = HOME, route = ROOT) {
+fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: String = HOME) {
+    navigation(startDestination = startDestination, route = ROOT) {
         composable(HOME) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
@@ -434,7 +435,8 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
             SideplayAppearanceScreen(onBack = { nav.popBackStack() })
         }
         composable(ABOUT) {
-            SideplayAboutScreen(onBack = { nav.popBackStack() })
+            val backLabel = if (nav.previousBackStackEntry?.destination?.route == SIGN_IN) "Sign in" else "Settings"
+            SideplayAboutScreen(onBack = { nav.popBackStack() }, backLabel = backLabel)
         }
         composable(SIGN_IN) { entry ->
             val vm = entry.spotifyViewModel(nav)
@@ -449,8 +451,8 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
             }
             SpotifySignInScreen(
                 state,
-                onBack = { (nav.context as? Activity)?.finish() },
-                onLogIn = vm::signIn,
+                onAbout = { nav.navigate(ABOUT) },
+                onSignIn = vm::signIn,
                 onDismissNotice = vm::dismissNotice
             )
         }

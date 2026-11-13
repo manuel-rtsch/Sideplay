@@ -79,6 +79,20 @@ Sideplay falls back to the public Spotify Web API, which currently rejects Spoti
 client ID with HTTP 429. The UI then looks empty: no library, no search results. Release and
 device builds must include the native bridge.
 
+Release builds are signed with the dedicated Sideplay release key. Create a gitignored
+`keystore.properties` at the repository root:
+
+```properties
+storeFile=/home/manuel/.android-keys/sideplay-release.jks
+storePassword=…
+keyAlias=sideplay
+keyPassword=…
+```
+
+Without that file, `assembleRelease` produces an unsigned APK so CI can sign it separately. The
+release certificate digest is listed in Sidekit's `trusted_apps.xml`, which lets Sideplay read the
+host case colour. Never add a debug certificate there.
+
 Sideplay builds against the published `1.4.3` Sidekit SDK from GitHub Pages. To test
 against a local Sidekit checkout instead, set `SIDEKIT_PROJECT_DIR`:
 

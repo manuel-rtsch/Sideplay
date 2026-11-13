@@ -252,8 +252,8 @@ class SideplayScreenshotTest {
     @Test fun signIn() = shoot("sideplay_sign_in") {
         SpotifySignInScreen(
             SpotifyUiState(signedIn = false),
-            onBack = {},
-            onLogIn = {},
+            onAbout = {},
+            onSignIn = {},
             onDismissNotice = {}
         )
     }

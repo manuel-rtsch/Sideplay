@@ -34,7 +34,7 @@ private val licences = listOf(
  * ships. Reached from Settings rather than crowding the settings list itself.
  */
 @Composable
-fun SideplayAboutScreen(onBack: () -> Unit) {
+fun SideplayAboutScreen(onBack: () -> Unit, backLabel: String = "Settings") {
     val context = LocalContext.current
     val packageInfo = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
     val versionName = packageInfo.versionName.orEmpty()
@@ -43,7 +43,7 @@ fun SideplayAboutScreen(onBack: () -> Unit) {
 
     SidekitScaffold(
         title = "About",
-        actions = spotifyBack("Settings", onBack)
+        actions = spotifyBack(backLabel, onBack)
     ) { padding ->
         SidekitList(padding, state = listState) {
             item(key = "version") {

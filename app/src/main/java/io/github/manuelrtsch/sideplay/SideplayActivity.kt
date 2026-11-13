@@ -3,8 +3,11 @@ package io.github.manuelrtsch.sideplay
 import android.content.Intent
 import android.os.Bundle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
+import io.github.manuelrtsch.sideplay.data.SpotifySessions
 import hrln.interactive.sidekit.design.input.Keypad
 import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.app.SidekitActivity
@@ -51,10 +54,16 @@ class SideplayActivity : SidekitActivity() {
 
     @Composable
     override fun SidekitContent() {
+        val context = LocalContext.current
         val nav = rememberNavController()
+        // Pick the first screen before the NavHost composes, so a signed-out launch never draws
+        // Home for a frame and then replaces it with Sign in.
+        val start = remember(context) {
+            if (SpotifySessions.get(context).signedIn.value) SIDE_PLAY_START else SIDE_PLAY_SIGN_IN
+        }
         SideplayLinks.Follow(nav)
         NavHost(navController = nav, startDestination = SIDE_PLAY_ROOT) {
-            sideplayGraph(nav)
+            sideplayGraph(nav, startDestination = start)
         }
     }
 

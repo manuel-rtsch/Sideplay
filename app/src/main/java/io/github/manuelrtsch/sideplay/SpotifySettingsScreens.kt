@@ -221,15 +221,18 @@ fun SpotifyAudioQualityScreen(
 @Composable
 fun SpotifySignInScreen(
     state: SpotifyUiState,
-    onBack: () -> Unit,
-    onLogIn: () -> Unit,
+    onAbout: () -> Unit,
+    onSignIn: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val colors = SidekitTheme.colors
     val actions = withNotice(
         state.notice,
         onDismissNotice,
-        listOf(backToLauncher(onBack), SideAction.forward("login", "Log in", onLogIn))
+        listOf(
+            SideAction("about", "About", tone = ActionTone.Muted, motion = ActionMotion.Up, onClick = onAbout),
+            SideAction.forward("signIn", "Sign in", onSignIn)
+        )
     )
     SidekitScaffold(
         title = "Sign in",
@@ -240,28 +243,24 @@ fun SpotifySignInScreen(
             item(key = "explain") {
                 SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SidekitText("Sideplay plays from your Spotify account.", style = SidekitTheme.typography.bodySmall, maxLines = 2)
                         SidekitText(
-                            "Your password is entered in the browser, never here.",
+                            "Connect Sideplay with your Spotify account",
+                            style = SidekitTheme.typography.bodySmall,
+                            maxLines = Int.MAX_VALUE
+                        )
+                        SidekitText(
+                            "Sideplay never sees your password or sensitive information.",
                             style = SidekitTheme.typography.caption,
                             color = colors.surfaceA6,
-                            maxLines = 2
+                            maxLines = Int.MAX_VALUE
                         )
                     }
                 }
             }
-            item(key = "login") {
-                SideplayItem(
-                    "Log in with Spotify",
-                    Modifier.listFade(listState, 1),
-                    showLinkArrow = true,
-                    onClick = onLogIn
-                )
-            }
             item(key = "status") {
                 SideplayItem(
                     "Status",
-                    Modifier.listFade(listState, 2),
+                    Modifier.listFade(listState, 1),
                     secondary = when {
                         state.authPending -> "Waiting for browser"
                         state.signedIn -> "Connected"
@@ -274,5 +273,3 @@ fun SpotifySignInScreen(
         }
     }
 }
-
-private fun backToLauncher(onBack: () -> Unit) = SideAction.back("back", "Exit", onBack)
