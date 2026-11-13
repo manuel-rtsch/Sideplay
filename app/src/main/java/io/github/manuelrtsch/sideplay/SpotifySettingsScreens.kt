@@ -28,7 +28,7 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
-private enum class SettingsConfirmation { SignOut, ClearHistory }
+private enum class SettingsConfirmation { SignOut, ClearCache, ClearHistory }
 
 @Composable
 fun SpotifySettingsScreen(
@@ -65,9 +65,17 @@ fun SpotifySettingsScreen(
             })
         )
 
+        SettingsConfirmation.ClearCache -> listOf(
+            SideAction.cancel("cancelClearCache", "Cancel") { confirmation = null },
+            SideAction.delete("confirmClearCache", "Clear", onClick = {
+                confirmation = null
+                onClearCache()
+            })
+        )
+
         SettingsConfirmation.ClearHistory -> listOf(
-            SideAction.cancel("cancelClear", "Cancel") { confirmation = null },
-            SideAction.delete("confirmClear", "Clear", onClick = {
+            SideAction.cancel("cancelClearHistory", "Cancel") { confirmation = null },
+            SideAction.delete("confirmClearHistory", "Clear", onClick = {
                 confirmation = null
                 onClearHistory()
             })
@@ -83,15 +91,12 @@ fun SpotifySettingsScreen(
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
         SidekitList(padding, state = listState) {
-            item(key = "quality") {
+            item(key = "account") {
                 SideplayItem(
-                    "Audio quality",
+                    "Account",
                     Modifier.listFade(listState, 0).focusRequester(first),
-                    secondary = state.audioQuality.label,
-                    secondaryToEnd = true,
-                    showLinkArrow = true,
-                    showLinkArrowWithSecondary = true,
-                    onClick = onAudioQuality
+                    secondary = if (state.signedIn) "Signed in" else "Not signed in",
+                    secondaryToEnd = true
                 )
             }
             item(key = "autoplay") {
@@ -105,34 +110,38 @@ fun SpotifySettingsScreen(
                     onClick = onAutoplay
                 )
             }
+            item(key = "quality") {
+                SideplayItem(
+                    "Audio quality",
+                    Modifier.listFade(listState, 2),
+                    secondary = "${state.audioQuality.bitrateKbps} kbps",
+                    secondaryToEnd = true,
+                    secondaryNoEllipsis = true,
+                    showLinkArrow = true,
+                    showLinkArrowWithSecondary = true,
+                    onClick = onAudioQuality
+                )
+            }
             item(key = "cache") {
                 SideplayItem(
-                    "Cache",
-                    Modifier.listFade(listState, 2),
+                    "Clear cache",
+                    Modifier.listFade(listState, 3),
                     secondary = Formatter.formatShortFileSize(context, state.cacheSizeBytes),
                     secondaryToEnd = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,
-                    onClick = onClearCache
+                    onClick = { confirmation = SettingsConfirmation.ClearCache }
                 )
             }
             item(key = "history") {
                 SideplayItem(
                     "Clear history",
-                    Modifier.listFade(listState, 3),
+                    Modifier.listFade(listState, 4),
                     secondary = "${state.history.size} items",
                     secondaryToEnd = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,
                     onClick = { confirmation = SettingsConfirmation.ClearHistory }
-                )
-            }
-            item(key = "account") {
-                SideplayItem(
-                    "Account",
-                    Modifier.listFade(listState, 4),
-                    secondary = if (state.signedIn) "Signed in" else "Not signed in",
-                    secondaryToEnd = true
                 )
             }
             if (onAppearance != null) {
@@ -156,6 +165,46 @@ fun SpotifySettingsScreen(
                     showLinkArrow = true,
                     onClick = onAbout
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun SpotifyAudioQualityScreen(
+    state: SpotifyUiState,
+    onBack: () -> Unit,
+    onSelect: (AudioQuality) -> Unit,
+    onDismissNotice: () -> Unit
+) {
+    val actions = withNotice(
+        state.notice,
+        onDismissNotice,
+        listOf(SideAction.back("back", "Settings", onBack))
+    )
+    SidekitScaffold(
+        title = "Audio quality",
+        actions = actions
+    ) { padding ->
+        val listState = rememberLazyListState()
+        val first = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+        SidekitList(padding, state = listState) {
+            AudioQuality.entries.forEachIndexed { index, quality ->
+                val selected = quality == state.audioQuality
+                item(key = quality.name) {
+                    SideplayItem(
+                        quality.label,
+                        Modifier.listFade(listState, index).then(
+                            if (index == 0) Modifier.focusRequester(first) else Modifier
+                        ),
+                        secondary = "${quality.bitrateKbps} kbps",
+                        secondaryToEnd = true,
+                        secondaryNoEllipsis = true,
+                        colour = if (selected) ItemColour.Secondary else ItemColour.Primary,
+                        onClick = { onSelect(quality) }
+                    )
+                }
             }
         }
     }

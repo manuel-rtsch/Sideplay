@@ -42,6 +42,7 @@ private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
 private val SETTINGS = "$ROOT/settings"
+private val AUDIO_QUALITY = "$ROOT/audio-quality"
 private val SIGN_IN = "$ROOT/sign-in"
 private val APPEARANCE = "$ROOT/appearance"
 private val ABOUT = "$ROOT/about"
@@ -404,7 +405,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
             SpotifySettingsScreen(
                 state,
                 onBack = { nav.popBackStack() },
-                onAudioQuality = vm::cycleAudioQuality,
+                onAudioQuality = { nav.navigate(AUDIO_QUALITY) },
                 onAutoplay = vm::toggleAutoplay,
                 onClearCache = vm::clearCache,
                 onClearHistory = vm::clearHistory,
@@ -415,6 +416,16 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onDismissNotice = vm::dismissNotice,
                 onAppearance = if (hostAvailable) null else ({ nav.navigate(APPEARANCE) }),
                 onAbout = { nav.navigate(ABOUT) }
+            )
+        }
+        composable(AUDIO_QUALITY) { entry ->
+            val vm = entry.spotifyViewModel(nav)
+            val state by vm.state.collectAsStateWithLifecycle()
+            SpotifyAudioQualityScreen(
+                state,
+                onBack = { nav.popBackStack() },
+                onSelect = vm::setAudioQuality,
+                onDismissNotice = vm::dismissNotice
             )
         }
         composable(APPEARANCE) {

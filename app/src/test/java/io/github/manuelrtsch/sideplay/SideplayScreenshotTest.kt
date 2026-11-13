@@ -229,6 +229,15 @@ class SideplayScreenshotTest {
         )
     }
 
+    @Test fun audioQuality() = shoot("sideplay_audio_quality") {
+        SpotifyAudioQualityScreen(
+            state,
+            onBack = {},
+            onSelect = {},
+            onDismissNotice = {}
+        )
+    }
+
     @Test fun about() = shoot("sideplay_about") {
         SideplayAboutScreen(onBack = {})
     }

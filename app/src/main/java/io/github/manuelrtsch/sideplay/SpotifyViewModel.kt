@@ -713,10 +713,10 @@ class SpotifyViewModel(
         search(debounceMs = 0L)
     }
 
-    fun cycleAudioQuality() {
-        val next = _state.value.audioQuality.next()
-        _state.update { it.copy(audioQuality = next) }
-        session?.setAudioQuality(next)
+    fun setAudioQuality(quality: AudioQuality) {
+        if (quality == _state.value.audioQuality) return
+        _state.update { it.copy(audioQuality = quality) }
+        session?.setAudioQuality(quality)
     }
 
     fun toggleAutoplay() {

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ fun SideplayItem(
     modifier: Modifier = Modifier,
     secondary: String? = null,
     secondaryToEnd: Boolean = false,
+    secondaryNoEllipsis: Boolean = false,
     icon: SidekitIcon? = null,
     showLinkArrow: Boolean = false,
     showLinkArrowWithSecondary: Boolean = false,
@@ -52,9 +54,10 @@ fun SideplayItem(
             if (icon != null) SidekitIconImage(icon)
             SidekitText(title, textDecoration = titleDecoration)
             if (secondary != null) {
+                if (secondaryNoEllipsis) Spacer(Modifier.weight(1f))
                 SidekitText(
                     secondary,
-                    Modifier.weight(1f),
+                    if (secondaryNoEllipsis) Modifier else Modifier.weight(1f),
                     color = SidekitTheme.colors.surfaceA6,
                     textAlign = if (secondaryToEnd) TextAlign.End else null
                 )
