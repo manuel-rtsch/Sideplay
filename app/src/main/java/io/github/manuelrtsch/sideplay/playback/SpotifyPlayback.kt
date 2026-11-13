@@ -19,6 +19,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Process-scoped playback owner. The activity and screens may come and go; this object holds the
@@ -75,6 +77,9 @@ class SpotifyPlayback(
 
     private var mediaSession: MediaSession? = null
     private var artJob: Job? = null
+
+    /** Serializes player rebuilds so a rapid pair of setting toggles cannot install an old config last. */
+    private val reconfigureLock = Mutex()
     private var lastSessionUpdate = 0L
     private var noisyRegistered = false
 
@@ -161,8 +166,13 @@ class SpotifyPlayback(
         return if (isPlaying) !lastCommandWasPause else lastCommandWasPause
     }
 
-    suspend fun start(uri: String, positionMs: Long) {
-        SideplayDebug.log("start uri=$uri positionMs=$positionMs audio=${audio != null}")
+    /**
+     * Starts a new item. [keepAudioSink] is set for a gapless automatic transition: librespot has
+     * already pre-buffered the track and its sink is still open, so tearing down the AudioTrack
+     * here would introduce the very gap the setting is meant to remove.
+     */
+    suspend fun start(uri: String, positionMs: Long, keepAudioSink: Boolean = false) {
+        SideplayDebug.log("start uri=$uri positionMs=$positionMs audio=${audio != null} keepAudioSink=$keepAudioSink")
         val generation = ++pauseGeneration
         lastCommandWasPause = false
         lastCommandAt = SystemClock.elapsedRealtime()
@@ -178,15 +188,18 @@ class SpotifyPlayback(
         // Release the previous AudioTrack and drain the native channel before loading the next
         // item. Draining also unblocks a player thread that may still be waiting in
         // PcmSink::write, so the load command can be processed.
-        audio?.stop()
+        val sinkKept = keepAudioSink && audio?.isRunning == true
+        if (!sinkKept) audio?.stop()
         if (generation != pauseGeneration) return
         publish()
         try {
             SideplayDebug.log("start calling gateway.load")
             gateway.load(uri, positionMs, autoplay = true)
             if (generation != pauseGeneration) return
-            SideplayDebug.log("start gateway.load returned; starting audio sink")
-            audio?.start(positionMs)
+            if (!sinkKept) {
+                SideplayDebug.log("start gateway.load returned; starting audio sink")
+                audio?.start(positionMs)
+            }
             SideplayDebug.log("start audio sink started")
         } catch (t: Throwable) {
             SideplayDebug.log("start failed", t)
@@ -277,6 +290,36 @@ class SpotifyPlayback(
     fun requestNext() = (onNext ?: fallbackNext)?.invoke()
 
     fun requestPrevious() = (onPrevious ?: fallbackPrevious)?.invoke()
+
+    /**
+     * Rebuilds the native player after an audio-setting change. The current item is reloaded at
+     * the same position and the pause/play state is preserved.
+     */
+    suspend fun reconfigure() {
+        reconfigureLock.withLock {
+            val item = current
+            val uri = item?.uri
+            val position = positionMs
+            val wasPlaying = playing
+            val generation = ++pauseGeneration
+            SideplayDebug.log("reconfigure uri=$uri positionMs=$position wasPlaying=$wasPlaying")
+            audio?.stop()
+            try {
+                // No native player yet: the next connect picks the new settings up.
+                if (!gateway.recreatePlayer()) return@withLock
+                if (uri != null) gateway.load(uri, position, autoplay = wasPlaying)
+            } catch (t: Throwable) {
+                SideplayDebug.log("reconfigure failed", t)
+                playing = false
+                publish()
+                throw t
+            }
+            if (generation != pauseGeneration) return@withLock
+            playing = wasPlaying
+            if (wasPlaying && uri != null) audio?.start(position)
+            publish()
+        }
+    }
 
     suspend fun stop() {
         playing = false

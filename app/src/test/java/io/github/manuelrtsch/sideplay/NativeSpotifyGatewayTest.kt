@@ -60,6 +60,32 @@ class NativeSpotifyGatewayTest {
         assertEquals(96, native.bitrateKbps)
     }
 
+    @Test fun `player receives persisted audio processing settings`() = runTest {
+        val native = FakeNative()
+        val gateway = NativeSpotifyGateway(
+            native,
+            { SpotifySettings(normalization = true, gapless = false) }
+        ) { "token" }
+
+        gateway.connect("token")
+
+        assertTrue(native.normalization)
+        assertEquals(false, native.gapless)
+    }
+
+    @Test fun `recreate player applies the current settings`() = runTest {
+        val native = FakeNative()
+        var settings = SpotifySettings()
+        val gateway = NativeSpotifyGateway(native, { settings }) { "token" }
+        gateway.connect("token")
+        settings = settings.copy(normalization = true)
+
+        gateway.recreatePlayer()
+
+        assertTrue(native.playerRecreated)
+        assertTrue(native.normalization)
+    }
+
     @Test fun `rotated token is pushed into the live session`() = runTest {
         val native = FakeNative()
         var token = "first"
@@ -100,9 +126,13 @@ class NativeSpotifyGatewayTest {
     private class FakeNative(override val isAvailable: Boolean = true) : SpotifyNative {
         var token: String? = null
         var playerCreated = false
+        var playerRecreated = false
+        var preloaded: String? = null
         var loadOk = true
         var setTokenOk = true
         var bitrateKbps: Int? = null
+        var normalization = false
+        var gapless = true
         var connects = 0
 
         override fun initialize() = isAvailable
@@ -118,9 +148,22 @@ class NativeSpotifyGatewayTest {
             return setTokenOk && isAvailable
         }
         override fun disconnect() = Unit
-        override fun createPlayer(bitrateKbps: Int): Boolean {
+        override fun createPlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean {
             playerCreated = true
             this.bitrateKbps = bitrateKbps
+            this.normalization = normalization
+            this.gapless = gapless
+            return isAvailable
+        }
+        override fun recreatePlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean {
+            playerRecreated = true
+            this.bitrateKbps = bitrateKbps
+            this.normalization = normalization
+            this.gapless = gapless
+            return isAvailable
+        }
+        override fun preload(uri: String): Boolean {
+            preloaded = uri
             return isAvailable
         }
         override fun load(uri: String, positionMs: Long, autoplay: Boolean) = loadOk

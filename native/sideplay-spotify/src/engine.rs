@@ -217,38 +217,69 @@ pub fn disconnect() {
     }
 }
 
-pub fn create_player(bitrate_kbps: u16) -> Result<(), String> {
-    let mut guard = state().lock().map_err(|_| "STATE_LOCK".to_string())?;
-    if guard.player.is_some() {
-        return Ok(());
-    }
-    let session = guard
-        .session
-        .clone()
-        .ok_or_else(|| "SESSION_NOT_CONNECTED".to_string())?;
-
+pub fn create_player(
+    bitrate_kbps: u16,
+    normalisation: bool,
+    gapless: bool,
+    recreate: bool,
+) -> Result<(), String> {
     let _ = audio_rx();
     let tx = AUDIO_TX
         .get()
         .ok_or_else(|| "AUDIO_UNINITIALISED".to_string())?
         .clone();
-    let volume = guard.volume.clone();
-    let bitrate = match bitrate_kbps {
-        0..=96 => Bitrate::Bitrate96,
-        97..=160 => Bitrate::Bitrate160,
-        _ => Bitrate::Bitrate320,
+
+    let old_player = {
+        let mut guard = state().lock().map_err(|_| "STATE_LOCK".to_string())?;
+        if guard.player.is_some() && !recreate {
+            return Ok(());
+        }
+        let session = guard
+            .session
+            .clone()
+            .ok_or_else(|| "SESSION_NOT_CONNECTED".to_string())?;
+        let bitrate = match bitrate_kbps {
+            0..=96 => Bitrate::Bitrate96,
+            97..=160 => Bitrate::Bitrate160,
+            _ => Bitrate::Bitrate320,
+        };
+        let config = PlayerConfig {
+            bitrate,
+            normalisation,
+            gapless,
+            position_update_interval: Some(Duration::from_millis(500)),
+            ..PlayerConfig::default()
+        };
+        let player = Player::new(
+            config,
+            session,
+            Box::new(SharedVolume(guard.volume.clone())),
+            move || Box::new(PcmSink::new(tx)),
+        );
+        let events = player.get_player_event_channel();
+        // Swap under the lock so a concurrent disconnect cannot resurrect a player on a dead
+        // session. `Player::stop` is a queued command that can wait behind decoder work, so the
+        // replaced instance is stopped only after the lock is released.
+        guard.events = Some(events);
+        guard.player.replace(player)
     };
-    let config = PlayerConfig {
-        bitrate,
-        position_update_interval: Some(Duration::from_millis(500)),
-        ..PlayerConfig::default()
-    };
-    let player = Player::new(config, session, Box::new(SharedVolume(volume)), move || {
-        Box::new(PcmSink::new(tx))
-    });
-    guard.events = Some(player.get_player_event_channel());
-    guard.player = Some(player);
-    log::info!("engine.create_player created bitrate={bitrate_kbps}");
+    if let Some(old_player) = old_player {
+        old_player.stop();
+        drop(old_player);
+    }
+    log::info!(
+        "engine.create_player created bitrate={bitrate_kbps} normalisation={normalisation} gapless={gapless} recreate={recreate}"
+    );
+    Ok(())
+}
+
+/// Warms the next track into librespot's loader without changing what is playing.
+pub fn preload(uri: &str) -> Result<(), String> {
+    let uri = SpotifyUri::from_uri(uri).map_err(|e| format!("INVALID_URI: {e}"))?;
+    if !uri.is_playable() {
+        return Err("NOT_PLAYABLE".to_string());
+    }
+    player()?.preload(uri);
     Ok(())
 }
 

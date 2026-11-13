@@ -37,6 +37,22 @@ class NativeSpotifyGateway(
         if (native.isAvailable) native.disconnect()
     }
 
+    override suspend fun recreatePlayer(): Boolean = onIo {
+        requireNative()
+        // No player yet: the next connect creates one with the new settings.
+        if (!connected) return@onIo false
+        val current = settings()
+        if (!native.recreatePlayer(current.bitrateKbps, current.normalization, current.gapless)) {
+            connected = false
+            fail(SpotifyFailure.Unknown, "Could not update the player")
+        }
+        true
+    }
+
+    override suspend fun preload(uri: String) = onIo {
+        if (connected && native.isAvailable) native.preload(uri)
+    }
+
     override suspend fun load(uri: String, positionMs: Long, autoplay: Boolean) = onIo {
         requireNative()
         SideplayDebug.log("gateway.load begin uri=$uri positionMs=$positionMs autoplay=$autoplay")
@@ -131,8 +147,8 @@ class NativeSpotifyGateway(
 
     private fun createPlayer() {
         val current = settings()
-        SideplayDebug.log("createPlayer bitrateKbps=${current.bitrateKbps}")
-        if (!native.createPlayer(current.bitrateKbps)) {
+        SideplayDebug.log("createPlayer bitrateKbps=${current.bitrateKbps} normalization=${current.normalization} gapless=${current.gapless}")
+        if (!native.createPlayer(current.bitrateKbps, current.normalization, current.gapless)) {
             SideplayDebug.log("createPlayer failed")
             native.disconnect()
             sessionConnected = false
@@ -147,9 +163,7 @@ class NativeSpotifyGateway(
         if (!native.isAvailable) fail(SpotifyFailure.Unavailable, "Spotify playback is unavailable in this build")
     }
 
-    private suspend fun onIo(block: suspend () -> Unit) {
-        withContext(Dispatchers.IO) { block() }
-    }
+    private suspend fun <T> onIo(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 
     private fun fail(failure: SpotifyFailure, message: String): Nothing = throw SpotifyGatewayException(failure, message)
 }

@@ -7,6 +7,10 @@ import io.github.manuelrtsch.sideplay.AudioQuality
 /** User preferences that survive process death and apply before the native player is created. */
 data class SpotifySettings(
     val audioQuality: AudioQuality = AudioQuality.High,
+    /** Apply Spotify's per-track loudness data so tracks play back at a similar level. */
+    val normalization: Boolean = false,
+    /** Keep librespot's sink open between tracks so adjacent tracks join without a gap. */
+    val gapless: Boolean = true,
     /** Keep playing similar tracks when the queue runs out. */
     val autoplay: Boolean = true
 ) {
@@ -32,6 +36,8 @@ class SpotifySettingsStore(
             ?: AudioQuality.High
         return SpotifySettings(
             audioQuality = quality,
+            normalization = value.optBoolean(KEY_NORMALIZATION, false),
+            gapless = value.optBoolean(KEY_GAPLESS, true),
             autoplay = value.optBoolean(KEY_AUTOPLAY, true)
         )
     }
@@ -41,12 +47,16 @@ class SpotifySettingsStore(
         settings.write(
             org.json.JSONObject()
                 .put(KEY_QUALITY, value.audioQuality.name)
+                .put(KEY_NORMALIZATION, value.normalization)
+                .put(KEY_GAPLESS, value.gapless)
                 .put(KEY_AUTOPLAY, value.autoplay)
         )
     }
 
     private companion object {
         const val KEY_QUALITY = "audio_quality"
+        const val KEY_NORMALIZATION = "normalization"
+        const val KEY_GAPLESS = "gapless"
         const val KEY_AUTOPLAY = "autoplay"
     }
 }

@@ -77,6 +77,36 @@ class SpotifyPlaybackTest {
         assertTrue(stopped)
     }
 
+    @Test fun `reconfigure rebuilds the player and reloads the current item`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(
+            gateway,
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            MediaSessionRegistry()
+        )
+        playback.setNowPlaying(
+            SpotifyTrack(
+                id = "a",
+                title = "A",
+                artist = "Artist",
+                artistId = "artist",
+                albumId = "album",
+                artRes = 0,
+                durationMs = 180_000L,
+                uri = "spotify:track:a"
+            ),
+            12_000L
+        )
+        playback.start("spotify:track:a", 12_000L)
+
+        playback.reconfigure()
+
+        assertTrue(gateway.recreated)
+        assertEquals("spotify:track:a", gateway.loadedUri)
+        assertEquals(2, gateway.loads)
+        assertTrue(playback.isActive)
+    }
+
     @Test fun `requestNext prefers the attached UI owner`() {
         val playback = SpotifyPlayback(
             FakeGateway(),
@@ -113,13 +143,21 @@ class SpotifyPlaybackTest {
         var autoplay = false
         var paused = false
         var stopped = false
+        var recreated = false
+        var loads = 0
 
         override suspend fun connect(accessToken: String) = Unit
         override suspend fun disconnect() = Unit
+        override suspend fun recreatePlayer(): Boolean {
+            recreated = true
+            return true
+        }
+        override suspend fun preload(uri: String) = Unit
 
         override suspend fun load(uri: String, positionMs: Long, autoplay: Boolean) {
             if (failLoad) throw SpotifyGatewayException(SpotifyFailure.TrackUnavailable, "missing")
             loadedUri = uri
+            loads++
             this.autoplay = autoplay
         }
 

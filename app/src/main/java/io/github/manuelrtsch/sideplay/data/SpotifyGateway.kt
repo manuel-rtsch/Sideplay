@@ -8,6 +8,12 @@ package io.github.manuelrtsch.sideplay.data
 interface SpotifyGateway {
     suspend fun connect(accessToken: String)
     suspend fun disconnect()
+
+    /** Rebuilds the native player from the current settings; false when no player exists yet. */
+    suspend fun recreatePlayer(): Boolean
+
+    /** Best-effort warm-up of the next track so a gapless transition has audio ready. */
+    suspend fun preload(uri: String)
     suspend fun load(uri: String, positionMs: Long, autoplay: Boolean)
     suspend fun play()
     suspend fun pause()

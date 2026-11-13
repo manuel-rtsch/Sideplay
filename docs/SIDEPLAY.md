@@ -115,8 +115,13 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   a shutdown that cannot complete leaks one thread instead of wedging playback. Sign-out stops
   the decoder synchronously, releases the media session, removes the notification, then clears
   credentials.
-- Audio quality persists encrypted across process death and maps to 96/160/320 kbps. Playback
-  volume is the device output volume; there is no separate attenuation.
+- Audio quality, loudness normalization and gapless playback persist encrypted across process
+  death and map to librespot's `PlayerConfig` (96/160/320 kbps, `normalisation`, `gapless`).
+  Changing any of them rebuilds the native player and reloads the current item at its position
+  without changing the pause/play state. The next queue item is preloaded, and an automatic
+  end-of-track transition keeps the `AudioTrack` open when gapless is on, so pre-buffered audio
+  joins without a sink restart. Playback volume is the device output volume; there is no
+  separate attenuation.
 - Artwork is memory-safe on device: 300 px URL preference, `RGB_565` + `inSampleSize`, 1024 px
   cap, `OutOfMemoryError` treated as a cache miss. List thumbnails use Sidekit's 24dp artwork
   shape, which matches the item's 36:104 corner ratio at 68dp without cropping the cover into a

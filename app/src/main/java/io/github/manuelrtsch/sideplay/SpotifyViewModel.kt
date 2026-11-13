@@ -62,6 +62,8 @@ data class SpotifyUiState(
     val searchScopes: Set<SearchScope> = SearchScope.entries.toSet(),
     val query: String = "",
     val audioQuality: AudioQuality = AudioQuality.High,
+    val normalization: Boolean = false,
+    val gapless: Boolean = true,
     val autoplay: Boolean = true,
     val cacheSizeBytes: Long = 0L,
     val notice: String? = null
@@ -116,7 +118,12 @@ class SpotifyViewModel(
             viewModelScope.launch {
                 it.settings.collect { settings ->
                     _state.update { state ->
-                        state.copy(audioQuality = settings.audioQuality, autoplay = settings.autoplay)
+                        state.copy(
+                            audioQuality = settings.audioQuality,
+                            normalization = settings.normalization,
+                            gapless = settings.gapless,
+                            autoplay = settings.autoplay
+                        )
                     }
                 }
             }
@@ -717,6 +724,18 @@ class SpotifyViewModel(
         if (quality == _state.value.audioQuality) return
         _state.update { it.copy(audioQuality = quality) }
         session?.setAudioQuality(quality)
+    }
+
+    fun toggleNormalization() {
+        val enabled = !_state.value.normalization
+        _state.update { it.copy(normalization = enabled) }
+        session?.setNormalization(enabled)
+    }
+
+    fun toggleGapless() {
+        val enabled = !_state.value.gapless
+        _state.update { it.copy(gapless = enabled) }
+        session?.setGapless(enabled)
     }
 
     fun toggleAutoplay() {
@@ -1348,7 +1367,7 @@ class SpotifyViewModel(
             val snapshot = queue.next(auto = true)
             snapshot.current?.let(::recorded)
             applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
-            snapshot.current?.let { startRemote(it, 0L) }
+            snapshot.current?.let { startRemote(it, 0L, gapless = auto && _state.value.gapless) }
             return
         }
         if (!hasNext && !auto) return
@@ -1360,7 +1379,7 @@ class SpotifyViewModel(
         if (snapshot.current !== current) {
             snapshot.current?.let(::recorded)
             applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
-            snapshot.current?.let { startRemote(it, 0L) }
+            snapshot.current?.let { startRemote(it, 0L, gapless = auto && _state.value.gapless) }
         } else {
             _state.update { it.copy(isPlaying = false, positionMs = 0L) }
         }
@@ -1410,15 +1429,15 @@ class SpotifyViewModel(
     }
 
     /** Starts a real Spotify item; local test fixtures have no URI and keep the local simulation. */
-    private fun startRemote(item: SpotifyMediaItem, positionMs: Long) {
+    private fun startRemote(item: SpotifyMediaItem, positionMs: Long, gapless: Boolean = false) {
         val uri = item.uri ?: return
         val session = session ?: return
-        SideplayDebug.log("viewModel.startRemote uri=$uri positionMs=$positionMs")
+        SideplayDebug.log("viewModel.startRemote uri=$uri positionMs=$positionMs gapless=$gapless")
         anchorPosition(positionMs)
         session.playback.setNowPlaying(item, positionMs)
         viewModelScope.launch {
             try {
-                session.play(uri, positionMs)
+                session.play(uri, positionMs, gapless)
                 SideplayDebug.log("viewModel.startRemote returned")
             } catch (e: CancellationException) {
                 throw e

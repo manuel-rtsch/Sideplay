@@ -133,12 +133,23 @@ class SpotifySession(
         return rebuilt
     }
 
-    suspend fun play(uri: String, positionMs: Long = 0L) {
-        SideplayDebug.log("session.play begin uri=$uri positionMs=$positionMs")
+    suspend fun play(uri: String, positionMs: Long = 0L, gapless: Boolean = false) {
+        SideplayDebug.log("session.play begin uri=$uri positionMs=$positionMs gapless=$gapless")
         connectForPlayback()
         SideplayDebug.log("session.play connected; starting playback")
-        withContext(Dispatchers.Main.immediate) { playback.start(uri, positionMs) }
+        val keepAudioSink = gapless && _settings.value.gapless && positionMs == 0L
+        withContext(Dispatchers.Main.immediate) { playback.start(uri, positionMs, keepAudioSink) }
+        preloadNext()
         SideplayDebug.log("session.play returned")
+    }
+
+    /** Warms the next queue item so the automatic transition does not have to fetch it cold. */
+    private fun preloadNext() {
+        val next = queue.snapshot.upcoming.firstOrNull()?.uri ?: return
+        playbackScope.launch {
+            runCatching { nativeGateway.preload(next) }
+                .onFailure { SideplayDebug.log("preload failed", it) }
+        }
     }
 
     suspend fun resume(): Boolean {
@@ -161,13 +172,42 @@ class SpotifySession(
     suspend fun accessToken(): String? = auth.accessToken()
 
     fun setAudioQuality(quality: AudioQuality) {
+        if (quality == _settings.value.audioQuality) return
         _settings.update { it.copy(audioQuality = quality) }
         settingsStore?.write(_settings.value)
+        applyAudioSettings()
+    }
+
+    fun setNormalization(enabled: Boolean) {
+        if (enabled == _settings.value.normalization) return
+        _settings.update { it.copy(normalization = enabled) }
+        settingsStore?.write(_settings.value)
+        applyAudioSettings()
+    }
+
+    fun setGapless(enabled: Boolean) {
+        if (enabled == _settings.value.gapless) return
+        _settings.update { it.copy(gapless = enabled) }
+        settingsStore?.write(_settings.value)
+        applyAudioSettings()
     }
 
     fun setAutoplay(enabled: Boolean) {
         _settings.update { it.copy(autoplay = enabled) }
         settingsStore?.write(_settings.value)
+    }
+
+    /**
+     * Audio settings live in librespot's PlayerConfig, so an existing player must be rebuilt.
+     * Playback keeps its current item, position and pause state; a player that was never created
+     * simply picks the new settings up on the next connect.
+     */
+    private fun applyAudioSettings() {
+        if (!nativeAvailable) return
+        playbackScope.launch {
+            runCatching { playback.reconfigure() }
+                .onFailure { SideplayDebug.log("applyAudioSettings failed", it) }
+        }
     }
 
     fun togglePlayback() {

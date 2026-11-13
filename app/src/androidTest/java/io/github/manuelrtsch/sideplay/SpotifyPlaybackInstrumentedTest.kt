@@ -129,6 +129,8 @@ class SpotifyPlaybackInstrumentedTest {
 
         override suspend fun connect(accessToken: String) = Unit
         override suspend fun disconnect() = Unit
+        override suspend fun recreatePlayer() = true
+        override suspend fun preload(uri: String) = Unit
         override suspend fun load(uri: String, positionMs: Long, autoplay: Boolean) = Unit
         override suspend fun play() = Unit
         override suspend fun pause() {

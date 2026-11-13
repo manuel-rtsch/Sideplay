@@ -12,7 +12,9 @@ interface SpotifyNative {
     fun connect(accessToken: String): Boolean
     fun setAccessToken(accessToken: String): Boolean
     fun disconnect()
-    fun createPlayer(bitrateKbps: Int): Boolean
+    fun createPlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean
+    fun recreatePlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean
+    fun preload(uri: String): Boolean
     fun load(uri: String, positionMs: Long, autoplay: Boolean): Boolean
     fun play(): Boolean
     fun pause(): Boolean

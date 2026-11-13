@@ -35,6 +35,8 @@ fun SpotifySettingsScreen(
     state: SpotifyUiState,
     onBack: () -> Unit,
     onAudioQuality: () -> Unit,
+    onNormalization: () -> Unit,
+    onGapless: () -> Unit,
     onAutoplay: () -> Unit,
     onClearCache: () -> Unit,
     onClearHistory: () -> Unit,
@@ -122,10 +124,28 @@ fun SpotifySettingsScreen(
                     onClick = onAudioQuality
                 )
             }
+            item(key = "normalization") {
+                SideplayItem(
+                    "Normalize volume",
+                    Modifier.listFade(listState, 3),
+                    secondary = if (state.normalization) "On" else "Off",
+                    secondaryToEnd = true,
+                    onClick = onNormalization
+                )
+            }
+            item(key = "gapless") {
+                SideplayItem(
+                    "Gapless playback",
+                    Modifier.listFade(listState, 4),
+                    secondary = if (state.gapless) "On" else "Off",
+                    secondaryToEnd = true,
+                    onClick = onGapless
+                )
+            }
             item(key = "cache") {
                 SideplayItem(
                     "Clear cache",
-                    Modifier.listFade(listState, 3),
+                    Modifier.listFade(listState, 5),
                     secondary = Formatter.formatShortFileSize(context, state.cacheSizeBytes),
                     secondaryToEnd = true,
                     showLinkArrow = true,
@@ -136,7 +156,7 @@ fun SpotifySettingsScreen(
             item(key = "history") {
                 SideplayItem(
                     "Clear history",
-                    Modifier.listFade(listState, 4),
+                    Modifier.listFade(listState, 6),
                     secondary = "${state.history.size} items",
                     secondaryToEnd = true,
                     showLinkArrow = true,
@@ -148,7 +168,7 @@ fun SpotifySettingsScreen(
                 item(key = "appearance") {
                     SideplayItem(
                         "Theme and keypad",
-                        Modifier.listFade(listState, 5),
+                        Modifier.listFade(listState, 7),
                         secondary = "Sideplay",
                         secondaryToEnd = true,
                         showLinkArrow = true,
@@ -157,7 +177,7 @@ fun SpotifySettingsScreen(
                     )
                 }
             }
-            val aboutIndex = if (onAppearance != null) 6 else 5
+            val aboutIndex = if (onAppearance != null) 8 else 7
             item(key = "about") {
                 SideplayItem(
                     "About Sideplay",

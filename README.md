@@ -18,7 +18,8 @@ and keyboard settings, and still works with a touchscreen or a physical keypad.
 - **Listen to your Spotify library** — playlists, albums, artists, shows, and saved tracks.
 - **Search everything** — tracks, artists, albums, playlists, and shows in one place.
 - **Control playback** — play, pause, skip, seek, shuffle, repeat, and change volume with the
-  phone's own volume keys.
+  phone's own volume keys. Normalize loudness across tracks and join sequential tracks without
+  a gap.
 - **Keep a queue** — add tracks, reorder the queue, and see what played before.
 - **Save what you like** — like tracks, save albums and shows, follow artists, and add playlists.
 - **Use the keypad** — T9, mini QWERTY, Sundial, and game controller are all supported. On the

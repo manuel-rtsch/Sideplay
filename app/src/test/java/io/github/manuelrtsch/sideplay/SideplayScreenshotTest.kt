@@ -220,6 +220,8 @@ class SideplayScreenshotTest {
             state,
             onBack = {},
             onAudioQuality = {},
+            onNormalization = {},
+            onGapless = {},
             onAutoplay = {},
             onClearCache = {},
             onClearHistory = {},

@@ -99,11 +99,42 @@ pub extern "system" fn Java_io_github_manuelrtsch_sideplay_bridge_NativeBridge_n
     _env: JNIEnv,
     _this: JObject,
     bitrate_kbps: jlong,
+    normalisation: jboolean,
+    gapless: jboolean,
 ) -> jboolean {
-    if engine::create_player(bitrate_kbps.clamp(0, u16::MAX as i64) as u16).is_ok() {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
+    bool_result(engine::create_player(
+        bitrate_kbps.clamp(0, u16::MAX as i64) as u16,
+        normalisation != JNI_FALSE,
+        gapless != JNI_FALSE,
+        false,
+    ))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_manuelrtsch_sideplay_bridge_NativeBridge_nativeRecreatePlayer(
+    _env: JNIEnv,
+    _this: JObject,
+    bitrate_kbps: jlong,
+    normalisation: jboolean,
+    gapless: jboolean,
+) -> jboolean {
+    bool_result(engine::create_player(
+        bitrate_kbps.clamp(0, u16::MAX as i64) as u16,
+        normalisation != JNI_FALSE,
+        gapless != JNI_FALSE,
+        true,
+    ))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_manuelrtsch_sideplay_bridge_NativeBridge_nativePreload(
+    mut env: JNIEnv,
+    _this: JObject,
+    uri: JString,
+) -> jboolean {
+    match string(&mut env, &uri).map(|uri| engine::preload(&uri)) {
+        Some(Ok(())) => JNI_TRUE,
+        _ => JNI_FALSE,
     }
 }
 
