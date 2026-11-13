@@ -27,16 +27,8 @@ dependencyResolutionManagement {
             }
         }
         maven {
-            name = "SidekitGitHubPackages"
-            url = uri("https://maven.pkg.github.com/manuel-rtsch/Sidekit")
-            credentials {
-                username = providers.gradleProperty("sidekitPackagesUser")
-                    .orElse(providers.environmentVariable("GITHUB_ACTOR"))
-                    .orNull
-                password = providers.gradleProperty("sidekitPackagesToken")
-                    .orElse(providers.environmentVariable("GITHUB_TOKEN"))
-                    .orNull
-            }
+            name = "SidekitPages"
+            url = uri("https://manuel-rtsch.github.io/Sidekit/maven")
             content {
                 includeGroup("hrln.interactive.sidekit")
             }

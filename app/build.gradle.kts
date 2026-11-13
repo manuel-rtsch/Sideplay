@@ -41,6 +41,10 @@ android {
             .getOrElse(versionNameFromGit())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The About screen reports the Sidekit SDK version the app was built against. Kept in
+        // sync with the version catalog so it cannot drift from the actual dependency.
+        buildConfigField("String", "SIDEKIT_VERSION", "\"${libs.versions.sidekit.get()}\"")
     }
 
     buildTypes {
@@ -70,6 +74,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
