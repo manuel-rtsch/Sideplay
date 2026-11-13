@@ -1,8 +1,8 @@
 package io.github.manuelrtsch.sideplay
 
 import android.app.Activity
-import android.net.Uri
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,7 +25,6 @@ import androidx.navigation.navArgument
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
-import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import io.github.manuelrtsch.sideplay.data.SpotifySessions
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -45,11 +44,13 @@ private val QUEUE = "$ROOT/queue"
 private val SETTINGS = "$ROOT/settings"
 private val SIGN_IN = "$ROOT/sign-in"
 private val APPEARANCE = "$ROOT/appearance"
+private val ABOUT = "$ROOT/about"
+private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={ratio}"
 
 private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
-private fun collectionRoute(type: SpotifyCollectionType, id: String) =
-    "$ROOT/collection/${type.route}/${Uri.encode(id)}"
+private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/${Uri.encode(id)}"
 private fun artistRoute(id: String) = "$ROOT/artist/${Uri.encode(id)}"
+private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f) = "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.orEmpty())}&label=${Uri.encode(label)}&ratio=$ratio"
 
 /**
  * A tap on the playback notification opens Sideplay at Now Playing instead of the launcher.
@@ -87,6 +88,21 @@ private val collectionArgs = listOf(
     navArgument("id") { type = NavType.StringType }
 )
 private val artistArgs = listOf(navArgument("id") { type = NavType.StringType })
+private val artworkArgs = listOf(
+    navArgument("artRes") { type = NavType.IntType },
+    navArgument("url") {
+        type = NavType.StringType
+        defaultValue = ""
+    },
+    navArgument("label") {
+        type = NavType.StringType
+        defaultValue = "Artwork"
+    },
+    navArgument("ratio") {
+        type = NavType.FloatType
+        defaultValue = 1f
+    }
+)
 
 private fun NavHostController.openNowPlaying() {
     if (!popBackStack(NOW_PLAYING, inclusive = false)) {
@@ -135,6 +151,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onPlay = { item -> nav.openTrack(vm, item) { vm.playRecent(item) } },
                 onQueue = vm::addToQueue,
                 onRemove = vm::removeHistory,
+                onNowPlaying = { nav.navigate(NOW_PLAYING) },
                 onDismissNotice = vm::dismissNotice
             )
         }
@@ -159,6 +176,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onNowPlaying = { nav.navigate(NOW_PLAYING) },
                 onDismissNotice = vm::dismissNotice
             )
         }
@@ -189,13 +207,13 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onLoadMore = vm::loadMoreLibrary,
+                onNowPlaying = { nav.navigate(NOW_PLAYING) },
                 onDismissNotice = vm::dismissNotice
             )
         }
         composable(COLLECTION, arguments = collectionArgs) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
-            UndoWindowLifecycle(vm.undoWindow, vm::commitUndo)
             val type = SpotifyCollectionType.entries.firstOrNull { it.route == entry.arguments?.getString("type") }
             val id = entry.arguments?.getString("id").orEmpty()
             LaunchedEffect(type, id) { type?.let { vm.ensureCollection(it, id) } }
@@ -226,12 +244,14 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     onSave = { vm.toggleSaved(collection) },
                     onArtist = {
                         collection.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
-                        ?: vm.notice("This collection has no artist page")
+                            ?: vm.notice("This collection has no artist page")
                     },
                     onQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
                     onNowPlaying = { nav.navigate(NOW_PLAYING) },
-                    onUndo = vm::undo,
+                    onArtwork = {
+                        nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
+                    },
                     onLoadMore = { type?.let { vm.loadMoreCollection(it, id) } },
                     loadingMore = "${type?.route}:$id" in state.collectionMorePending,
                     onDismissNotice = vm::dismissNotice
@@ -241,7 +261,6 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
         composable(ARTIST, arguments = artistArgs) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
-            UndoWindowLifecycle(vm.undoWindow, vm::commitUndo)
             val artistId = entry.arguments?.getString("id").orEmpty()
             LaunchedEffect(artistId) { vm.ensureArtist(artistId) }
             val artist = vm.artist(artistId)
@@ -267,7 +286,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                     onFollow = { vm.toggleFollow(artist) },
                     onNowPlaying = { nav.navigate(NOW_PLAYING) },
-                    onUndo = vm::undo,
+                    onArtwork = {
+                        nav.navigate(artworkRoute(artist.artRes, artist.artUrl, artist.name))
+                    },
                     onLoadMoreAlbums = { vm.loadMoreArtistAlbums(artist) },
                     onLoadMoreTracks = { vm.loadMoreArtistTracks(artist) },
                     albumHasMore = state.artistAlbumHasMore[artist.id] == true,
@@ -294,6 +315,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onLoadMore = vm::loadMoreSearch,
                 onScopes = { nav.navigate(SEARCH_SCOPES) },
+                onNowPlaying = { nav.navigate(NOW_PLAYING) },
                 onDismissNotice = vm::dismissNotice
             )
         }
@@ -304,13 +326,23 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 state,
                 onBack = { nav.popBackStack() },
                 onToggleScope = vm::toggleScope,
+                onNowPlaying = { nav.navigate(NOW_PLAYING) },
                 onDismissNotice = vm::dismissNotice
+            )
+        }
+        composable(ARTWORK, arguments = artworkArgs) { entry ->
+            val args = entry.arguments
+            SideplayArtworkScreen(
+                artRes = args?.getInt("artRes") ?: 0,
+                artUrl = args?.getString("url")?.takeIf { it.isNotBlank() },
+                label = args?.getString("label").orEmpty().ifBlank { "Artwork" },
+                onBack = { nav.popBackStack() },
+                aspectRatio = args?.getFloat("ratio") ?: 1f
             )
         }
         composable(NOW_PLAYING) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
-            UndoWindowLifecycle(vm.undoWindow, vm::commitUndo)
             SpotifyNowPlayingScreen(
                 state,
                 onBack = { nav.popBackStack() },
@@ -335,7 +367,6 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                 onArtist = {
                     state.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
                 },
-                onUndo = vm::undo,
                 onDismissNotice = vm::dismissNotice
             )
         }
@@ -381,13 +412,16 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController) {
                     vm.signOut()
                     nav.navigate(SIGN_IN) { launchSingleTop = true }
                 },
-                onNotice = vm::notice,
                 onDismissNotice = vm::dismissNotice,
-                onAppearance = if (hostAvailable) null else ({ nav.navigate(APPEARANCE) })
+                onAppearance = if (hostAvailable) null else ({ nav.navigate(APPEARANCE) }),
+                onAbout = { nav.navigate(ABOUT) }
             )
         }
         composable(APPEARANCE) {
             SideplayAppearanceScreen(onBack = { nav.popBackStack() })
+        }
+        composable(ABOUT) {
+            SideplayAboutScreen(onBack = { nav.popBackStack() })
         }
         composable(SIGN_IN) { entry ->
             val vm = entry.spotifyViewModel(nav)

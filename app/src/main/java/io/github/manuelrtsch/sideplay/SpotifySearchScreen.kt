@@ -42,6 +42,7 @@ fun SpotifySearchScreen(
     onShow: (SpotifyShow) -> Unit,
     onLoadMore: (SearchScope) -> Unit,
     onScopes: () -> Unit,
+    onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val results = state.searchResults
@@ -79,7 +80,8 @@ fun SpotifySearchScreen(
                 )
             }
         },
-        actions = actions
+        actions = actions,
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
@@ -309,6 +311,7 @@ fun SearchScopesScreen(
     state: SpotifyUiState,
     onBack: () -> Unit,
     onToggleScope: (SearchScope) -> Unit,
+    onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val actions = withNotice(
@@ -316,7 +319,11 @@ fun SearchScopesScreen(
         onDismissNotice,
         listOf(spotifyBack("Search", onBack).first())
     )
-    SidekitScaffold(title = "Search in", actions = actions) { padding ->
+    SidekitScaffold(
+        title = "Search in",
+        actions = actions,
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+    ) { padding ->
         val listState = rememberLazyListState()
         SidekitList(padding, state = listState) {
             item(key = "label") {

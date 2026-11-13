@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sideplay
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,12 +13,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
-import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
+import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -132,6 +136,7 @@ fun LibraryScreen(
     onAlbum: (SpotifyAlbum) -> Unit,
     onArtist: (SpotifyArtist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
+    onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val actions = withNotice(
@@ -139,7 +144,11 @@ fun LibraryScreen(
         onDismissNotice,
         listOf(spotifyBack("Sideplay", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     )
-    SidekitScaffold(title = "Library", actions = actions) { padding ->
+    SidekitScaffold(
+        title = "Library",
+        actions = actions,
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+    ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         val sections = state.librarySections
@@ -225,6 +234,7 @@ fun LibraryCategoryScreen(
     onArtist: (SpotifyArtist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onLoadMore: () -> Unit,
+    onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val actions = withNotice(
@@ -232,7 +242,11 @@ fun LibraryCategoryScreen(
         onDismissNotice,
         listOf(spotifyBack("Library", onBack).first())
     )
-    SidekitScaffold(title = filter.label, actions = actions) { padding ->
+    SidekitScaffold(
+        title = filter.label,
+        actions = actions,
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+    ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         val first = remember { FocusRequester() }
@@ -329,20 +343,27 @@ fun CollectionScreen(
     onQueue: () -> Unit,
     onQueueItem: (SpotifyMediaItem) -> Unit,
     onNowPlaying: () -> Unit,
-    onUndo: () -> Unit,
+    onArtwork: () -> Unit,
     onLoadMore: () -> Unit,
     loadingMore: Boolean,
     onDismissNotice: () -> Unit
 ) {
     val colors = SidekitTheme.colors
     val saved = "${collection.type.route}:${collection.id}" in state.savedCollectionKeys
-    val actions = spotifyBar(state, onDismissNotice, onUndo, spotifyBack("Back", onBack).first())
-    // Save and Artist already have tiles in the header. The options bar is capped at two actions,
-    // so it only carries the less common ones.
+    val actions = spotifyBar(state, onDismissNotice, spotifyBack("Back", onBack).first())
+    // The header keeps the three primary actions: play, artwork and save. The artist lives in the
+    // metadata line below it, so collections keep the same play / image / save-or-follow layout
+    // without a third Options entry.
     val options = buildList {
         collection.items.firstOrNull()?.let { add(SideAction("queue", "Add to queue", SidekitIcon.QueueMusic, onClick = onQueue)) }
         add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     }
+    val artist = if (collection.type == SpotifyCollectionType.Album) {
+        collection.artistId.spotifyIdOrNull()?.let { collection.subtitle.substringBefore(" · ").takeIf(String::isNotBlank) }
+    } else {
+        null
+    }
+    val details = artist?.let { collection.subtitle.removePrefix(it).trimStart(' ', '·', ' ') }.orEmpty()
     SidekitScaffold(title = collection.title, actions = actions, options = options) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
@@ -353,7 +374,6 @@ fun CollectionScreen(
             var rowIndex = 0
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
-                    ArtworkTile(collection.artRes, "${collection.title} artwork", Modifier.weight(1f), collection.artUrl)
                     ContextPlayTile(
                         playIds,
                         state.current?.id,
@@ -362,27 +382,40 @@ fun CollectionScreen(
                         onPlayPause,
                         Modifier.weight(1f).focusRequester(playFocus)
                     )
+                    ArtworkTile(
+                        collection.artRes,
+                        "${collection.title} artwork",
+                        Modifier.weight(1f),
+                        collection.artUrl,
+                        onClick = onArtwork
+                    )
                     SpotifyIconTile(
                         if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
                         if (saved) "Saved" else "Save",
                         onSave,
                         tone = if (saved) SpotifyTileTone.Library else SpotifyTileTone.Neutral
                     )
-                    if (collection.artistId.spotifyIdOrNull() != null) {
-                        SpotifyIconTile(SidekitIcon.Artist, "Artist", onArtist)
-                    }
                 }
             }
             rowIndex += 1
             val metaIndex = rowIndex
             item(key = "meta") {
-                SidekitText(
-                    collection.subtitle,
-                    Modifier.padding(start = 18.dp, end = 18.dp).listFade(listState, metaIndex),
-                    style = SidekitTheme.typography.caption,
-                    color = colors.surfaceA6,
-                    maxLines = 1
-                )
+                if (artist != null) {
+                    CollectionArtistLine(
+                        artist,
+                        details,
+                        Modifier.padding(start = 18.dp, end = 18.dp).listFade(listState, metaIndex),
+                        onArtist
+                    )
+                } else {
+                    SidekitText(
+                        collection.subtitle,
+                        Modifier.padding(start = 18.dp, end = 18.dp).listFade(listState, metaIndex),
+                        style = SidekitTheme.typography.bodySmall,
+                        color = colors.surfaceA6,
+                        maxLines = 1
+                    )
+                }
             }
             rowIndex += 1
             val base = rowIndex
@@ -428,7 +461,7 @@ fun ArtistScreen(
     onAlbum: (SpotifyAlbum) -> Unit,
     onFollow: () -> Unit,
     onNowPlaying: () -> Unit,
-    onUndo: () -> Unit,
+    onArtwork: () -> Unit,
     onLoadMoreAlbums: () -> Unit,
     onLoadMoreTracks: () -> Unit,
     albumHasMore: Boolean,
@@ -437,14 +470,11 @@ fun ArtistScreen(
     onDismissNotice: () -> Unit
 ) {
     val followed = artist.id in state.followedArtistIds
-    val actions = spotifyBar(state, onDismissNotice, onUndo, spotifyBack("Back", onBack).first())
+    val actions = spotifyBar(state, onDismissNotice, spotifyBack("Back", onBack).first())
     SidekitScaffold(
         title = artist.name,
         actions = actions,
-        options = listOf(
-            SideAction("follow", if (followed) "Following" else "Follow", tone = ActionTone.Secondary, onClick = onFollow),
-            SideAction("nowPlaying", "Go to now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)
-        )
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
@@ -461,7 +491,19 @@ fun ArtistScreen(
                         onPlayPause,
                         Modifier.weight(1f)
                     )
-                    ArtworkTile(artist.artRes, "${artist.name} artwork", Modifier.weight(1f), artist.artUrl)
+                    ArtworkTile(
+                        artist.artRes,
+                        "${artist.name} artwork",
+                        Modifier.weight(1f),
+                        artist.artUrl,
+                        onClick = onArtwork
+                    )
+                    SpotifyIconTile(
+                        if (followed) SidekitIcon.Artist else SidekitIcon.ArtistBorder,
+                        if (followed) "Following" else "Follow",
+                        onFollow,
+                        tone = if (followed) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                    )
                 }
             }
             rowIndex += 1
@@ -532,4 +574,48 @@ private fun libraryKey(item: Any): String = when (item) {
     is SpotifyArtist -> "r${item.id}"
     is SpotifyShow -> "s${item.id}"
     else -> item.toString()
+}
+
+/**
+ * The album's artist and the rest of its metadata on one line. The whole line opens the artist,
+ * so the link is a full-width D-pad target instead of a tiny text span.
+ */
+@Composable
+private fun CollectionArtistLine(
+    artist: String,
+    details: String,
+    modifier: Modifier,
+    onArtist: () -> Unit
+) {
+    val colors = SidekitTheme.colors
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(SidekitTheme.shapes.control)
+            .clickable(onClickLabel = "Open artist", role = Role.Button, onClick = onArtist)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SidekitText(
+            artist,
+            Modifier.weight(if (details.isBlank()) 1f else 0.42f),
+            style = SidekitTheme.typography.bodySmall,
+            maxLines = 1
+        )
+        if (details.isNotBlank()) {
+            SidekitText(
+                details,
+                Modifier.weight(0.58f),
+                style = SidekitTheme.typography.label,
+                color = colors.surfaceA6,
+                maxLines = 1,
+                textAlign = TextAlign.End
+            )
+        }
+        SidekitIconImage(
+            SidekitIcon.ArrowRightAlt,
+            Modifier.padding(start = 8.dp),
+            size = 18.dp
+        )
+    }
 }

@@ -66,6 +66,7 @@ class SideplayScreenshotTest {
             onPlay = {},
             onQueue = {},
             onRemove = {},
+            onNowPlaying = {},
             onDismissNotice = {}
         )
     }
@@ -82,6 +83,7 @@ class SideplayScreenshotTest {
             onAlbum = {},
             onArtist = {},
             onShow = {},
+            onNowPlaying = {},
             onDismissNotice = {}
         )
     }
@@ -98,6 +100,7 @@ class SideplayScreenshotTest {
             onArtist = {},
             onShow = {},
             onLoadMore = {},
+            onNowPlaying = {},
             onDismissNotice = {}
         )
     }
@@ -115,7 +118,7 @@ class SideplayScreenshotTest {
             onQueue = {},
             onQueueItem = {},
             onNowPlaying = {},
-            onUndo = {},
+            onArtwork = {},
             onLoadMore = {},
             loadingMore = false,
             onDismissNotice = {}
@@ -137,7 +140,7 @@ class SideplayScreenshotTest {
             onAlbum = {},
             onFollow = {},
             onNowPlaying = {},
-            onUndo = {},
+            onArtwork = {},
             onLoadMoreAlbums = {},
             onLoadMoreTracks = {},
             albumHasMore = true,
@@ -162,7 +165,18 @@ class SideplayScreenshotTest {
             onShow = {},
             onLoadMore = {},
             onScopes = {},
+            onNowPlaying = {},
             onDismissNotice = {}
+        )
+    }
+
+    @Test fun artwork() = shoot("sideplay_artwork") {
+        val album = runBlocking { MockSpotifyDataSource.collection(SpotifyCollectionType.Album, "night_signals") }!!
+        SideplayArtworkScreen(
+            artRes = album.artRes,
+            artUrl = null,
+            label = "${album.title} artwork",
+            onBack = {}
         )
     }
 
@@ -181,7 +195,6 @@ class SideplayScreenshotTest {
             onAlbum = {},
             onShow = {},
             onArtist = {},
-            onUndo = {},
             onDismissNotice = {}
         )
     }
@@ -211,9 +224,13 @@ class SideplayScreenshotTest {
             onClearCache = {},
             onClearHistory = {},
             onSignOut = {},
-            onNotice = {},
-            onDismissNotice = {}
+            onDismissNotice = {},
+            onAbout = {}
         )
+    }
+
+    @Test fun about() = shoot("sideplay_about") {
+        SideplayAboutScreen(onBack = {})
     }
 
     @Test fun loading() = shoot("sideplay_loading") {

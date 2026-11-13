@@ -81,6 +81,12 @@ import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtworkImage
 import io.github.manuelrtsch.sideplay.playback.formatDuration
 
+/**
+ * Artwork shown beside text inside a 104 dp list tile. 80 dp leaves a 12 dp margin on every side
+ * and gives the cover a little more presence than the two-line text block next to it.
+ */
+private val ListArtworkSize = 80.dp
+
 /** Square artwork: remote when the catalog has a URL, otherwise a local fixture or icon. */
 @Composable
 fun SpotifyCover(
@@ -158,7 +164,7 @@ fun SpotifyMediaRow(
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
             if (showArt) {
-                SpotifyCover(item.artRes, Modifier.size(68.dp), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl)
+                SpotifyCover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl)
             } else if (index != null) {
                 Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
                     SidekitText("${index + 1}", style = SidekitTheme.typography.label, color = colors.surfaceA6)
@@ -230,18 +236,18 @@ fun NowPlayingTile(
     modifier: Modifier = Modifier
 ) {
     val colors = SidekitTheme.colors
-    SidekitTile(modifier, onClick = onClick, onClickLabel = "Now Playing") {
+    SidekitTile(modifier, onClick = onClick, onClickLabel = "Now playing") {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
             if (current == null) {
-                Box(Modifier.size(72.dp).clip(SidekitTheme.shapes.control).background(colors.surfaceA2), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(ListArtworkSize).clip(SidekitTheme.shapes.artwork).background(colors.surfaceA2), contentAlignment = Alignment.Center) {
                     SidekitIconImage(SidekitIcon.MusicNote2, size = 36.dp)
                 }
             } else {
-                SpotifyCover(current.artRes, Modifier.size(72.dp), artUrl = current.artUrl)
+                SpotifyCover(current.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = current.artUrl)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 SidekitText(
@@ -272,8 +278,14 @@ fun LibraryTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ArtworkTile(@DrawableRes artRes: Int, label: String, modifier: Modifier = Modifier, artUrl: String? = null) {
-    SidekitTile(modifier) {
+fun ArtworkTile(
+    @DrawableRes artRes: Int,
+    label: String,
+    modifier: Modifier = Modifier,
+    artUrl: String? = null,
+    onClick: (() -> Unit)? = null
+) {
+    SidekitTile(modifier, onClick = onClick, onClickLabel = if (onClick != null) "View artwork" else null) {
         SpotifyCover(artRes, Modifier.fillMaxSize(), shape = SidekitTheme.shapes.item, contentDescription = label, artUrl = artUrl)
     }
 }
@@ -417,24 +429,13 @@ fun withNotice(notice: String?, onDismiss: () -> Unit, actions: List<SideAction>
 
 fun spotifyBack(label: String, onBack: () -> Unit) = listOf(SideAction.back("back", label, onBack))
 
-/**
- * The action bar for screens that can change saved state. While an Undo offer is live it takes the
- * right slot; otherwise the bar shows the screen's normal actions and any notice.
- */
+/** The action bar for screens that can change saved state, plus any important notice. */
 fun spotifyBar(
     state: SpotifyUiState,
     onDismissNotice: () -> Unit,
-    onUndo: () -> Unit,
     continueWith: SideAction,
     extra: List<SideAction> = emptyList()
-): List<SideAction> {
-    val undo = state.undo
-    return if (undo != null) {
-        undoBar(continueWith, SideAction.undo(contentDescription = undo.contentDescription, onClick = onUndo))
-    } else {
-        withNotice(state.notice, onDismissNotice, listOf(continueWith) + extra)
-    }
-}
+): List<SideAction> = withNotice(state.notice, onDismissNotice, listOf(continueWith) + extra)
 
 fun repeatLabel(repeat: RepeatMode) = repeat.label
 
@@ -598,7 +599,7 @@ fun SpotifyLibraryRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            SpotifyCover(artRes, Modifier.size(68.dp), shape = SidekitTheme.shapes.artwork, artUrl = artUrl)
+            SpotifyCover(artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = artUrl)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
                 SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)

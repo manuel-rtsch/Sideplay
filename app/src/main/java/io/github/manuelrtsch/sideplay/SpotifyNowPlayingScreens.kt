@@ -57,7 +57,6 @@ fun SpotifyNowPlayingScreen(
     onAlbum: () -> Unit,
     onShow: () -> Unit,
     onArtist: () -> Unit,
-    onUndo: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val current = state.current
@@ -75,7 +74,6 @@ fun SpotifyNowPlayingScreen(
     val actions = spotifyBar(
         state,
         onDismissNotice,
-        onUndo,
         spotifyBack("Back", onBack).first(),
         listOfNotNull(save)
     )

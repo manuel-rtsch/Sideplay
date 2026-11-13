@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import hrln.interactive.sidekit.design.canvas.SidekitCanvas
+import hrln.interactive.sidekit.design.theme.SidekitSpacing
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 /** Preview at the Sidephone's 480 x 640 px panel (mdpi, so 1dp == 1px == 1 Figma px). */
@@ -14,6 +15,6 @@ annotation class SidephonePreview
 @Composable
 fun SidekitPreviewFrame(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalInspectionMode provides true) {
-        SidekitTheme { SidekitCanvas { content() } }
+        SidekitTheme(spacing = SidekitSpacing.Compact) { SidekitCanvas { content() } }
     }
 }

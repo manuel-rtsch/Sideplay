@@ -26,7 +26,6 @@ import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
-import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 private enum class SettingsConfirmation { SignOut, ClearHistory }
@@ -40,15 +39,12 @@ fun SpotifySettingsScreen(
     onClearCache: () -> Unit,
     onClearHistory: () -> Unit,
     onSignOut: () -> Unit,
-    onNotice: (String) -> Unit,
     onDismissNotice: () -> Unit,
-    onAppearance: (() -> Unit)? = null
+    onAppearance: (() -> Unit)? = null,
+    onAbout: () -> Unit = {}
 ) {
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
     val context = LocalContext.current
-    val packageInfo = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
-    val versionName = packageInfo.versionName.orEmpty()
-    val versionCode = packageInfo.longVersionCode
     val back = spotifyBack("Back", onBack).first()
     val normal = withNotice(
         state.notice,
@@ -81,11 +77,7 @@ fun SpotifySettingsScreen(
     }
     SidekitScaffold(
         title = "Settings",
-        actions = actions,
-        options = listOf(
-            SideAction("about", "About", SidekitIcon.Docs, onClick = { onNotice("Sideplay $versionName · Manuel Rottschäfer · MIT") }),
-            SideAction("cache", "Clear cache", SidekitIcon.DeleteForever, onClick = onClearCache)
-        )
+        actions = actions
     ) { padding ->
         val listState = rememberLazyListState()
         val first = remember { FocusRequester() }
@@ -156,34 +148,14 @@ fun SpotifySettingsScreen(
                     )
                 }
             }
-            val versionIndex = if (onAppearance != null) 6 else 5
-            item(key = "version") {
-                SidekitCard(Modifier.listFade(listState, versionIndex).fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SidekitText("Version", style = SidekitTheme.typography.headline)
-                        SidekitText("Sideplay $versionName ($versionCode)", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
-                    }
-                }
-            }
-            item(key = "author") {
-                SidekitCard(Modifier.listFade(listState, versionIndex + 1).fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SidekitText("Author", style = SidekitTheme.typography.headline)
-                        SidekitText("Manuel Rottschäfer", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
-                        SidekitText("github.com/manuel-rtsch", style = SidekitTheme.typography.caption, color = SidekitTheme.colors.surfaceA6, maxLines = Int.MAX_VALUE)
-                    }
-                }
-            }
-            item(key = "licenses") {
-                SidekitCard(Modifier.listFade(listState, versionIndex + 2).fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SidekitText("Licenses", style = SidekitTheme.typography.headline)
-                        SidekitText("Sideplay — MIT", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
-                        SidekitText("librespot — MIT", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
-                        SidekitText("AndroidX / Jetpack Compose — Apache 2.0", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
-                        SidekitText("Kotlin — Apache 2.0", style = SidekitTheme.typography.label, maxLines = Int.MAX_VALUE)
-                    }
-                }
+            val aboutIndex = if (onAppearance != null) 6 else 5
+            item(key = "about") {
+                SideplayItem(
+                    "About Sideplay",
+                    Modifier.listFade(listState, aboutIndex),
+                    showLinkArrow = true,
+                    onClick = onAbout
+                )
             }
         }
     }

@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
@@ -32,6 +33,7 @@ fun HistoryScreen(
     onPlay: (SpotifyMediaItem) -> Unit,
     onQueue: (SpotifyMediaItem) -> Unit,
     onRemove: (SpotifyMediaItem) -> Unit,
+    onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val actions = withNotice(
@@ -39,7 +41,11 @@ fun HistoryScreen(
         onDismissNotice,
         listOf(spotifyBack("Sideplay", onBack).first())
     )
-    SidekitScaffold(title = "History", actions = actions) { padding ->
+    SidekitScaffold(
+        title = "History",
+        actions = actions,
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+    ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         SidekitList(padding, state = listState) {
