@@ -51,12 +51,7 @@ fun SpotifySettingsScreen(
     val normal = withNotice(
         state.notice,
         onDismissNotice,
-        buildList {
-            add(back)
-            if (state.signedIn) {
-                add(SideAction.delete("signOut", "Sign out", onClick = { confirmation = SettingsConfirmation.SignOut }))
-            }
-        }
+        listOf(back, SideAction.forward("about", "About", onClick = onAbout))
     )
     val actions = when (confirmation) {
         SettingsConfirmation.SignOut -> listOf(
@@ -98,30 +93,34 @@ fun SpotifySettingsScreen(
                     "Account",
                     Modifier.listFade(listState, 0).focusRequester(first),
                     secondary = if (state.signedIn) "Signed in" else "Not signed in",
-                    secondaryToEnd = true
-                )
-            }
-            item(key = "autoplay") {
-                SideplayItem(
-                    "Autoplay",
-                    Modifier.listFade(listState, 1),
-                    secondary = if (state.autoplay) "On" else "Off",
                     secondaryToEnd = true,
-                    showLinkArrow = true,
-                    showLinkArrowWithSecondary = true,
-                    onClick = onAutoplay
+                    showLinkArrow = state.signedIn,
+                    showLinkArrowWithSecondary = state.signedIn,
+                    onClick = if (state.signedIn) {
+                        { confirmation = SettingsConfirmation.SignOut }
+                    } else {
+                        null
+                    }
                 )
             }
             item(key = "quality") {
                 SideplayItem(
                     "Audio quality",
-                    Modifier.listFade(listState, 2),
-                    secondary = "${state.audioQuality.bitrateKbps} kbps",
+                    Modifier.listFade(listState, 1),
+                    secondary = state.audioQuality.label,
                     secondaryToEnd = true,
-                    secondaryNoEllipsis = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,
                     onClick = onAudioQuality
+                )
+            }
+            item(key = "autoplay") {
+                SideplayItem(
+                    "Autoplay",
+                    Modifier.listFade(listState, 2),
+                    secondary = if (state.autoplay) "On" else "Off",
+                    secondaryToEnd = true,
+                    onClick = onAutoplay
                 )
             }
             item(key = "normalization") {
@@ -169,22 +168,11 @@ fun SpotifySettingsScreen(
                     SideplayItem(
                         "Theme and keypad",
                         Modifier.listFade(listState, 7),
-                        secondary = "Sideplay",
-                        secondaryToEnd = true,
                         showLinkArrow = true,
                         showLinkArrowWithSecondary = true,
                         onClick = onAppearance
                     )
                 }
-            }
-            val aboutIndex = if (onAppearance != null) 8 else 7
-            item(key = "about") {
-                SideplayItem(
-                    "About Sideplay",
-                    Modifier.listFade(listState, aboutIndex),
-                    showLinkArrow = true,
-                    onClick = onAbout
-                )
             }
         }
     }

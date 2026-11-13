@@ -227,6 +227,7 @@ class SideplayScreenshotTest {
             onClearHistory = {},
             onSignOut = {},
             onDismissNotice = {},
+            onAppearance = {},
             onAbout = {}
         )
     }
