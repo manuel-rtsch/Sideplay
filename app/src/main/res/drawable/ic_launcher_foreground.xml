@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Record body -->
+    <path
+        android:fillColor="#303030"
+        android:pathData="M23.000,54.000 a31.000,31.000 0 1,0 62.000,0 a31.000,31.000 0 1,0 -62.000,0 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#737373"
+        android:strokeWidth="1.0"
+        android:pathData="M23.000,54.000 a31.000,31.000 0 1,0 62.000,0 a31.000,31.000 0 1,0 -62.000,0 Z" />
+
+    <!-- Grooves -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#505050"
+        android:strokeWidth="1.0"
+        android:pathData="M35.400,54.000 a18.600,18.600 0 1,0 37.200,0 a18.600,18.600 0 1,0 -37.200,0 Z M31.060,54.000 a22.940,22.940 0 1,0 45.880,0 a22.940,22.940 0 1,0 -45.880,0 Z M26.720,54.000 a27.280,27.280 0 1,0 54.560,0 a27.280,27.280 0 1,0 -54.560,0 Z" />
+
+    <!-- Centre label -->
+    <path
+        android:fillColor="#2FBE8B"
+        android:pathData="M44.080,54.000 a9.920,9.920 0 1,0 19.840,0 a9.920,9.920 0 1,0 -19.840,0 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#C4F4E2"
+        android:strokeWidth="1.0"
+        android:pathData="M44.080,54.000 a9.920,9.920 0 1,0 19.840,0 a9.920,9.920 0 1,0 -19.840,0 Z" />
+    <path
+        android:fillColor="#121212"
+        android:pathData="M52.295,54.000 a1.705,1.705 0 1,0 3.410,0 a1.705,1.705 0 1,0 -3.410,0 Z" />
+
+    <!-- Specular highlight -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.4"
+        android:strokeAlpha="0.32"
+        android:strokeLineCap="round"
+        android:pathData="M69.292,32.161 A26.660,26.660 0 0,1 80.255,49.371" />
+</vector>
