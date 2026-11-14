@@ -1,6 +1,5 @@
 package io.github.manuelrtsch.sideplay
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.padding
@@ -23,7 +22,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import hrln.interactive.sidekit.design.components.SidekitScaffold
-import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sideplay.data.SpotifySessions
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,13 +30,14 @@ const val SIDE_PLAY_ROOT = "sideplay"
 private const val ROOT = SIDE_PLAY_ROOT
 const val SIDE_PLAY_START = "sideplay/home"
 const val SIDE_PLAY_SIGN_IN = "sideplay/sign-in"
+const val SIDE_PLAY_SEARCH = "sideplay/search"
 private const val HOME = SIDE_PLAY_START
 private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
 private val LIBRARY_FILTER = "$ROOT/library/{filter}"
 private val COLLECTION = "$ROOT/collection/{type}/{id}"
 private val ARTIST = "$ROOT/artist/{id}"
-private val SEARCH = "$ROOT/search"
+private val SEARCH = SIDE_PLAY_SEARCH
 private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
@@ -46,6 +45,7 @@ private val SETTINGS = "$ROOT/settings"
 private val AUDIO_QUALITY = "$ROOT/audio-quality"
 private val SIGN_IN = SIDE_PLAY_SIGN_IN
 private val APPEARANCE = "$ROOT/appearance"
+private val KEYBOARD = "$ROOT/keyboard"
 private val ABOUT = "$ROOT/about"
 private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={ratio}"
 
@@ -391,9 +391,6 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
             val context = LocalContext.current
-            val hostAvailable = remember(context) {
-                SidekitStores.forHostOrLocal(context, (context as? Activity)?.intent).isHostBacked
-            }
             LaunchedEffect(Unit) { vm.refreshCacheSize() }
             SpotifySettingsScreen(
                 state,
@@ -409,7 +406,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                     nav.navigate(SIGN_IN) { launchSingleTop = true }
                 },
                 onDismissNotice = vm::dismissNotice,
-                onAppearance = if (hostAvailable) null else ({ nav.navigate(APPEARANCE) }),
+                // Temporary: keep these reachable even when Sidekit owns the host settings.
+                onAppearance = { nav.navigate(APPEARANCE) },
+                onKeyboard = { nav.navigate(KEYBOARD) },
                 onAbout = { nav.navigate(ABOUT) }
             )
         }
@@ -425,6 +424,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
         }
         composable(APPEARANCE) {
             SideplayAppearanceScreen(onBack = { nav.popBackStack() })
+        }
+        composable(KEYBOARD) {
+            SideplayKeyboardScreen(onBack = { nav.popBackStack() })
         }
         composable(ABOUT) {
             val backLabel = if (nav.previousBackStackEntry?.destination?.route == SIGN_IN) "Sign in" else "Settings"

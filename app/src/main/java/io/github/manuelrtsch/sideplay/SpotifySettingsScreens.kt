@@ -43,6 +43,7 @@ fun SpotifySettingsScreen(
     onSignOut: () -> Unit,
     onDismissNotice: () -> Unit,
     onAppearance: (() -> Unit)? = null,
+    onKeyboard: (() -> Unit)? = null,
     onAbout: () -> Unit = {}
 ) {
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
@@ -166,11 +167,22 @@ fun SpotifySettingsScreen(
             if (onAppearance != null) {
                 item(key = "appearance") {
                     SideplayItem(
-                        "Theme and keypad",
+                        "Appearance",
                         Modifier.listFade(listState, 7),
                         showLinkArrow = true,
                         showLinkArrowWithSecondary = true,
                         onClick = onAppearance
+                    )
+                }
+            }
+            if (onKeyboard != null) {
+                item(key = "keyboard") {
+                    SideplayItem(
+                        "Keyboard",
+                        Modifier.listFade(listState, 8),
+                        showLinkArrow = true,
+                        showLinkArrowWithSecondary = true,
+                        onClick = onKeyboard
                     )
                 }
             }

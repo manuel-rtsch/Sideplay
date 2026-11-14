@@ -27,9 +27,21 @@ internal class SideplayLocalSettings(context: Context) {
         return { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
+    /**
+     * Standalone Sideplay starts in the compact layout. Only writes the default when the choice
+     * has never been saved, so a user who turned compact off keeps that decision.
+     */
+    fun applyStandaloneThemeDefaults() {
+        if (prefs.contains(KEY_COMPACT_LAYOUT)) return
+        prefs.edit().putBoolean(KEY_COMPACT_LAYOUT, true).apply()
+    }
+
     companion object {
         const val FILE = "sideplay_settings"
         const val KEYPAD_FILE = "sideplay_keypad"
         private const val KEY_INPUT_MODE = "input_mode"
+
+        // Must match the key SharedPreferencesSidekitThemeStore reads and writes.
+        private const val KEY_COMPACT_LAYOUT = "compact_layout"
     }
 }

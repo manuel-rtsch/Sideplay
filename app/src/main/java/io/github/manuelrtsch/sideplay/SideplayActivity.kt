@@ -3,6 +3,8 @@ package io.github.manuelrtsch.sideplay
 import android.content.Intent
 import android.os.Bundle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
@@ -22,8 +24,22 @@ import io.github.manuelrtsch.sideplay.data.SpotifySessions
  * Sideplay then runs standalone with the settings it already had.
  */
 class SideplayActivity : SidekitActivity() {
+    private val homeRequests = mutableIntStateOf(0)
+    private val searchRequests = mutableIntStateOf(0)
+
+    override fun onSidekitHome() {
+        homeRequests.intValue++
+    }
+
+    override fun onSidekitSearch() {
+        searchRequests.intValue++
+    }
+
     override val stores: SidekitStores.Stores by lazy {
-        SidekitStores.forHostOrLocal(this, intent, LOCAL_SETTINGS, LOCAL_KEYPAD)
+        val stores = SidekitStores.forHostOrLocal(this, intent, LOCAL_SETTINGS, LOCAL_KEYPAD)
+        // A Sidekit host owns the layout; without one, Sideplay defaults to compact.
+        if (!stores.isHostBacked) SideplayLocalSettings(this).applyStandaloneThemeDefaults()
+        stores
     }
 
     override fun onSidekitCreate(savedInstanceState: Bundle?) {
@@ -62,6 +78,14 @@ class SideplayActivity : SidekitActivity() {
             if (SpotifySessions.get(context).signedIn.value) SIDE_PLAY_START else SIDE_PLAY_SIGN_IN
         }
         SideplayLinks.Follow(nav)
+        val home = homeRequests.intValue
+        LaunchedEffect(home) {
+            if (home > 0) nav.popBackStack(SIDE_PLAY_START, inclusive = false)
+        }
+        val search = searchRequests.intValue
+        LaunchedEffect(search) {
+            if (search > 0) nav.navigate(SIDE_PLAY_SEARCH) { launchSingleTop = true }
+        }
         NavHost(navController = nav, startDestination = SIDE_PLAY_ROOT) {
             sideplayGraph(nav, startDestination = start)
         }
