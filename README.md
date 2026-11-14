@@ -94,12 +94,7 @@ Without that file, `assembleRelease` produces an unsigned APK so CI can sign it 
 release certificate digest is listed in Sidekit's `trusted_apps.xml`, which lets Sideplay read the
 host case colour. Never add a debug certificate there.
 
-Sideplay builds against the published `1.4.3` Sidekit SDK from GitHub Pages. To test
-against a local Sidekit checkout instead, set `SIDEKIT_PROJECT_DIR`:
-
-```sh
-SIDEKIT_PROJECT_DIR=../Sidekit ./gradlew :app:assembleDebug
-```
+Sideplay builds against the published `1.5.0` Sidekit SDK from GitHub Pages.
 
 The `profile` build is signed with the local debug key and is meant for trying Sideplay on a real
 device. The `dev` build installs alongside the normal app as
