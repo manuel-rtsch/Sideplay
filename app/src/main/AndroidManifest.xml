@@ -45,6 +45,15 @@
                 <action android:name="hrln.interactive.sidekit.action.NATIVE_APP" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- The OAuth landing page returns the user to the running app from any browser. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="auth"
+                    android:scheme="sideplay" />
+            </intent-filter>
             <meta-data
                 android:name="hrln.interactive.sidekit.app.ID"
                 android:value="sideplay" />

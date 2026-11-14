@@ -108,22 +108,132 @@ class SpotifyAuth(
         val requestLine = socket.getInputStream().bufferedReader().readLine() ?: return SpotifyPkce.Callback.Ignored
         val target = requestLine.split(' ').getOrNull(1) ?: return SpotifyPkce.Callback.Ignored
         val result = SpotifyPkce.parseCallback(target, expectedState)
-        val message = when (result) {
-            is SpotifyPkce.Callback.Code -> "Signed in to Sideplay. You can close this page."
-            is SpotifyPkce.Callback.Failure -> "Sign-in did not complete. You can close this page."
-            SpotifyPkce.Callback.Ignored -> "Waiting for Spotify…"
+        val (title, hint) = when (result) {
+            is SpotifyPkce.Callback.Code -> "Welcome to Sideplay" to
+                "Signed in successfully.<br>You can now close this page."
+            is SpotifyPkce.Callback.Failure -> "Sign-in did not finish" to "Return to Sideplay and try again."
+            SpotifyPkce.Callback.Ignored -> "Waiting for Spotify…" to "Complete sign-in in the browser."
         }
-        respond(socket, message)
+        respond(socket, title, hint)
         return result
     }
 
-    private fun respond(socket: Socket, message: String) {
+    /**
+     * The browser's landing page after the loopback round trip. It mirrors the app's settled status
+     * screens: the still vinyl record, a body-small title in white, a caption hint, and one full-width
+     * line button. Everything is inline so the single-shot listener only serves this one request.
+     */
+    private fun respond(socket: Socket, title: String, hint: String) {
         val body = """
-            <!doctype html><meta charset="utf-8">
+            <!doctype html>
+            <html lang="en">
+            <head>
+            <meta charset="utf-8">
             <meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>Sideplay</title>
-            <body style="font-family:sans-serif;background:#111;color:#eee;padding:2rem">
-            <p>$message</p>
+            <title>$title · Sideplay</title>
+            <style>
+              :root {
+                color-scheme: dark;
+                --surface-a1: #121212;
+                --surface-a2: #282828;
+                --surface-a3: #3f3f3f;
+                --surface-a4: #575757;
+                --surface-a5: #717171;
+                --surface-a6: #8b8b8b;
+                --success-a1: #22946e;
+                --success-a3: #9ae8ce;
+              }
+              * { box-sizing: border-box; }
+              html {
+                display: flex;
+                height: 100%;
+                margin: 0;
+                background: #000;
+              }
+              body {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: min(100vw, 480px);
+                height: min(100svh, 640px);
+                margin: auto;
+                padding: clamp(12px, 4vh, 24px);
+                overflow-y: auto;
+                background: var(--surface-a1);
+                color: #fff;
+                font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+                -webkit-font-smoothing: antialiased;
+              }
+              main {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                width: 100%;
+                margin: auto;
+                max-width: 360px;
+                text-align: center;
+              }
+              .record { display: block; width: clamp(88px, 22vh, 132px); height: auto; }
+              h1 {
+                margin: clamp(14px, 3.6vh, 26px) 0 0;
+                font-size: clamp(26px, 5vh, 32px);
+                line-height: clamp(32px, 6.1vh, 39px);
+                font-weight: 400;
+                letter-spacing: -0.01em;
+              }
+              p {
+                margin: 4px 0 0;
+                font-size: clamp(22px, 4.4vh, 28px);
+                line-height: clamp(27px, 5.3vh, 34px);
+                color: var(--surface-a6);
+              }
+              .open {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                width: 100%;
+                min-height: clamp(48px, 9.4vh, 60px);
+                margin-top: clamp(16px, 3.8vh, 26px);
+                padding: 10px 16px;
+                border-radius: 36px;
+                background: var(--surface-a3);
+                color: #fff;
+                font-size: clamp(24px, 4.7vh, 30px);
+                line-height: clamp(30px, 5.8vh, 36px);
+                text-decoration: none;
+                transition: background-color 120ms ease;
+              }
+              .open:active { background: var(--surface-a4); }
+              .open:focus-visible { outline: 2px solid var(--success-a3); outline-offset: 3px; }
+              .open svg { flex: none; }
+              @media (prefers-reduced-motion: reduce) { .open { transition: none; } }
+            </style>
+            </head>
+            <body>
+            <main>
+              <svg class="record" viewBox="0 0 132 132" role="img" aria-label="$title">
+                <circle cx="66" cy="66" r="64" fill="#282828" stroke="#575757" stroke-width="1"/>
+                <circle cx="66" cy="66" r="38.1" fill="none" stroke="#3f3f3f" stroke-width="1"/>
+                <circle cx="66" cy="66" r="42.9" fill="none" stroke="#3f3f3f" stroke-width="1"/>
+                <circle cx="66" cy="66" r="47.7" fill="none" stroke="#3f3f3f" stroke-width="1"/>
+                <circle cx="66" cy="66" r="52.5" fill="none" stroke="#3f3f3f" stroke-width="1"/>
+                <circle cx="66" cy="66" r="57.3" fill="none" stroke="#3f3f3f" stroke-width="1"/>
+                <circle cx="66" cy="66" r="21.8" fill="#22946e" stroke="#9ae8ce" stroke-width="1"/>
+                <circle cx="66" cy="66" r="3.5" fill="#121212"/>
+                <path d="M93.5 18.3 A55 55 0 0 1 120.2 75.6" fill="none" stroke="#fff" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <h1>$title</h1>
+              <p>$hint</p>
+              <a class="open" href="sideplay://auth">
+                Open Sideplay
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path d="M3 9h11M10 4l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </a>
+            </main>
+            </body>
+            </html>
         """.trimIndent()
         val bytes = body.toByteArray(Charsets.UTF_8)
         val headers = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n" +

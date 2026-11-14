@@ -68,6 +68,7 @@ class SpotifyAuthTest {
         }
         val auth = SpotifyAuth(store, tokens)
         val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        var landingPage = ""
 
         val result = auth.signIn { url ->
             val params = URI(url).rawQuery.split('&').associate {
@@ -78,12 +79,16 @@ class SpotifyAuthTest {
             val state = requireNotNull(params["state"])
             io.launch {
                 delay(50)
-                URL("$redirect?code=test-code&state=$state").openStream().use { it.readBytes() }
+                URL("$redirect?code=test-code&state=$state").openStream().use {
+                    landingPage = it.readBytes().toString(Charsets.UTF_8)
+                }
             }
         }
 
         assertEquals("fresh-access", result.accessToken)
         assertEquals("fresh-access", store.saved?.accessToken)
+        assertTrue(landingPage.contains("Welcome to Sideplay"))
+        assertTrue(landingPage.contains("sideplay://auth"))
     }
 
     @Test fun `sign out clears credentials`() {
