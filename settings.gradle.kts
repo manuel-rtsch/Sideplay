@@ -38,3 +38,19 @@ dependencyResolutionManagement {
 
 rootProject.name = "Sideplay"
 include(":app")
+
+// During Sidekit development, build against the sibling checkout so changes (such as the restored
+// dictation field) are available without publishing a release. CI and clones without that checkout
+// keep using the published SDK from GitHub Pages. Disable explicitly with -PsideplayLocalSidekit=false.
+val localSidekit = rootDir.parentFile.resolve("Sidekit")
+val useLocalSidekit = providers.gradleProperty("sideplayLocalSidekit")
+    .map(String::toBoolean)
+    .getOrElse(localSidekit.isDirectory)
+if (useLocalSidekit && localSidekit.isDirectory) {
+    includeBuild(localSidekit) {
+        dependencySubstitution {
+            substitute(module("hrln.interactive.sidekit:sidekit-design")).using(project(":sidekit"))
+            substitute(module("hrln.interactive.sidekit:sidekit-sdk")).using(project(":sidekit-sdk"))
+        }
+    }
+}

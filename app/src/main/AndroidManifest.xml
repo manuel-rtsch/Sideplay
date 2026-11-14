@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- SidekitTextField's dictation: asked for only after the user taps the mic. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!--
         The SDK library declares this normal permission so a client installed before Sidekit still
