@@ -27,3 +27,6 @@ native/*/target/
 
 # Local crash reports
 crash-logs/
+
+# Local Maestro screen recordings
+/maestro/recordings/

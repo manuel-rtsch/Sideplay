@@ -1,0 +1,35 @@
+appId: io.github.manuelrtsch.sideplay
+name: Hero - Play, Queue, Search
+---
+# record.sh prepares playback first; do not stop the app or the background song would end.
+- launchApp:
+    stopApp: false
+- assertVisible: "Sideplay"
+
+# 1. Open Now Playing from Home.
+- tapOn: "NOW PLAYING"
+- assertVisible: "Back"
+- tapOn: "Back"
+
+# 2. Show the queue.
+- tapOn: "Queue"
+- assertVisible: "Queue"
+- tapOn: "Sideplay"
+
+# 3. Search with the keypad and play a result.
+- tapOn: "Search"
+- tapOn: "Search Spotify"
+# The keypad starts in 123 mode; switch it to character mode once.
+- runFlow:
+    when:
+      visible: "123"
+    commands:
+      - tapOn: "123"
+- eraseText: 20
+- inputText: "africa"
+# Enter takes the exact suggestion and leaves the keypad open with Done still available.
+- pressKey: Enter
+- waitForAnimationToEnd
+- tapOn: "TOTO"
+# Africa is already current, so this opens Now Playing directly.
+- assertVisible: "Back"

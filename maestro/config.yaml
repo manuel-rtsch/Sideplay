@@ -1,0 +1,8 @@
+# Maestro workspace configuration.
+# Run everything from this folder with: maestro test .
+#
+# flows/record-prepare.yaml is deliberately not listed: record.sh runs it before
+# recording, but it should not clear history during a normal test run.
+flows:
+  - "flows/home-library-home.yaml"
+  - "flows/hero-play-search-queue.yaml"

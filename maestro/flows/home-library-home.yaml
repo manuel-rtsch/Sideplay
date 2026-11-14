@@ -1,0 +1,9 @@
+appId: io.github.manuelrtsch.sideplay
+name: Home -> Library -> Home
+---
+- launchApp
+- assertVisible: "Sideplay"
+- tapOn: "Library"
+- assertVisible: "Library"
+- tapOn: "Sideplay"
+- assertVisible: "Sideplay"

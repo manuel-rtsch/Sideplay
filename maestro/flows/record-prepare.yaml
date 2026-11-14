@@ -1,0 +1,71 @@
+appId: io.github.manuelrtsch.sideplay
+name: Prepare recording
+---
+- launchApp:
+    stopApp: true
+- assertVisible: "Sideplay"
+
+# 1. Clear Recently played through Options -> Settings -> Clear history.
+- pressKey: Remote Menu
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Clear history"
+    direction: DOWN
+- tapOn: "Clear history"
+- tapOn: "Clear"
+- tapOn: "Listening history cleared"
+- waitForAnimationToEnd
+- tapOn: "Back"
+- assertVisible: "Sideplay"
+- assertVisible: "Nothing played yet"
+
+# 2. Start a known track so it plays in the background during the recording.
+- tapOn: "Search"
+- tapOn: "Search Spotify"
+# The keypad starts in 123 mode; switch it to character mode once.
+- runFlow:
+    when:
+      visible: "123"
+    commands:
+      - tapOn: "123"
+- eraseText: 20
+- inputText: "africa"
+# Enter takes the exact suggestion and leaves the keypad open with Done still available.
+- pressKey: Enter
+- waitForAnimationToEnd
+- tapOn: "TOTO"
+# If the track was already current, TOTO opens Now Playing instead of starting it.
+# If it was not current, the now-playing notice appears on the search screen.
+- runFlow:
+    when:
+      visible: "Playing Africa. Open Now Playing"
+    commands:
+      - tapOn: "Playing Africa. Open Now Playing"
+- runFlow:
+    when:
+      visible: "Play"
+    commands:
+      - tapOn: "Play"
+- waitForAnimationToEnd
+# Leave Now Playing, close the keypad, and go back from Search so the recording starts on Home.
+- runFlow:
+    when:
+      visible: "Back"
+    commands:
+      - tapOn: "Back"
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Back"
+    commands:
+      - tapOn: "Back"
+- assertVisible: "Sideplay"
+- assertVisible: "NOW PLAYING"
+- assertVisible: "Africa"
