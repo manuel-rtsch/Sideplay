@@ -200,13 +200,32 @@ fun QueueScreen(
             pendingUndo = null
         }
     }
-    val back = spotifyBack("Back", onBack).first()
+    val focused = (listOfNotNull(state.current) + state.upcoming + state.history).firstOrNull { it.id == focusedId }
+    val focusedUpcoming = focused?.takeIf { it.id != state.current?.id && it.id !in state.history.map { item -> item.id } }
+    val hasUpcoming = state.upcoming.isNotEmpty()
+    val back = spotifyBack("Sideplay", onBack).first()
+    // The bar carries one contextual action: Play next for a focused queue item, otherwise Clear
+    // while there is something to clear. Remove stays on the row's swipe.
+    val contextAction = when {
+        focusedUpcoming != null -> SideAction("playNext", "Play next", SidekitIcon.ArrowUpward, onClick = { onPlayNext(focusedUpcoming) })
+
+        hasUpcoming -> SideAction(
+            "clear",
+            "Clear",
+            SidekitIcon.Close,
+            tone = ActionTone.Destructive,
+            contentDescription = "Clear upcoming",
+            onClick = { pendingUndo = onClearUpcoming() }
+        )
+
+        else -> null
+    }
     val normal = spotifyActions(
         state,
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        listOf(back, SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        listOfNotNull(back, contextAction)
     )
     val actions = if (pendingUndo != null) {
         undoBar(
@@ -219,14 +238,22 @@ fun QueueScreen(
     } else {
         normal
     }
-    val focused = (listOfNotNull(state.current) + state.upcoming + state.history).firstOrNull { it.id == focusedId }
+    // Options is capped at two entries plus the close button: one action, then one icon toggle.
+    // Shuffle reorders the upcoming tail, so it appears only when Clear does.
     val options = buildList {
-        if (focused != null && focused.id != state.current?.id && focused.id !in state.history.map { it.id }) {
-            add(SideAction("playNext", "Play next", SidekitIcon.ArrowUpward, onClick = { onPlayNext(focused) }))
-            add(SideAction("remove", "Remove", SidekitIcon.DeleteForever, tone = ActionTone.Destructive, onClick = { onRemove(focused) }))
+        add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        if (hasUpcoming) {
+            add(
+                SideAction.square(
+                    "shuffle",
+                    SidekitIcon.Shuffle,
+                    if (state.shuffle) "Shuffle on" else "Shuffle off",
+                    onShuffle,
+                    tone = if (state.shuffle) ActionTone.Secondary else ActionTone.Muted,
+                    keepOptionsOpen = true
+                )
+            )
         }
-        add(SideAction("clear", "Clear upcoming", SidekitIcon.DeleteForever, tone = ActionTone.Destructive, onClick = { pendingUndo = onClearUpcoming() }))
-        add(SideAction("shuffle", if (state.shuffle) "Shuffle on" else "Shuffle off", SidekitIcon.Shuffle, onClick = onShuffle))
     }
     SidekitScaffold(title = "Queue", actions = actions, options = options) { padding ->
         val listState = rememberLazyListState()
