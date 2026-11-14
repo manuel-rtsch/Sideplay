@@ -163,6 +163,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
         composable(LIBRARY) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
+            // The startup pre-cache may have run offline. Opening the Library is the natural
+            // moment to refresh it, and it also recovers from a failed first load.
+            LaunchedEffect(Unit) { vm.refreshLibrary() }
             LibraryScreen(
                 state,
                 onBack = { nav.popBackStack() },
@@ -175,6 +178,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onNowPlaying = { nav.openNowPlaying(vm) },
+                onRetry = vm::refreshLibrary,
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
@@ -200,6 +204,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onLoadMore = vm::loadMoreLibrary,
                 onNowPlaying = { nav.openNowPlaying(vm) },
+                onRetry = vm::retryLibrary,
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
@@ -466,7 +471,10 @@ private fun MissingCollectionScreen(
             if (loading) {
                 SpotifyLoadingScreen(title = loadingTitle)
             } else {
-                EmptyMessage("This collection isn't available", hint = "Go back and choose another")
+                SpotifyStatusScreen(
+                    "This collection isn't available",
+                    hint = "Go back and choose another"
+                )
             }
         }
     }

@@ -86,7 +86,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   replaced by an X that removes that entry; left swipe still offers Add to queue.
 - The Library overview shows five rows per category with a compact **See more** row. Opening a
   category gives the full paged list. Playlists use the rootlist order and show their folder
-  path above the owner.
+  path above the owner. Startup pre-caches only six items per category (five shown plus one to
+  detect **See more**), and opening the Library refreshes that overview so a load that started
+  offline recovers without restarting the app.
 - Every list row gets Sidekit's `listFade` at its actual LazyColumn index, so labels, See more
   rows, results, and History all recede correctly toward the action bar without fading the
   focused row.
@@ -102,7 +104,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Network loss is reported honestly. `NetworkMonitor` tracks the active network, and playback or
   catalog failures while offline map to **No internet connection** instead of an expired Spotify
   session. When Autoplay reaches the end of the queue with no connection, it stops instead of
-  retrying and shows **No internet connection — autoplay stopped**.
+  retrying and shows **No internet connection — autoplay stopped**. When the network returns,
+  the ViewModel retries the library overview (and the open category, if one was loaded).
 - Queue, queue history, shuffle order, repeat mode, and recently played persist across process
   death in atomic binary files (`sidetracks-queue.bin`, `sidetracks-history.bin`; legacy names
   kept so existing dev installs keep their data). Playback
@@ -147,7 +150,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   Toggling a category immediately changes the result sections and the empty-state hint. The
   selected categories sit at the right edge of that row in the high-contrast item colour.
 - First loads of an artist or collection show a centred, rotating vinyl record with the loading
-  label and a "Fetching from Spotify" hint instead of plain text.
+  label and a "Fetching from Spotify" hint instead of plain text. Empty and failed library loads
+  use the same record, held still, with a short explanation and a **Try again** action for errors.
 - `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
   T9 → mini QWERTY switch made while Sideplay was in the background takes effect immediately.
 - Settings shows the actual artwork + audio cache size. Sign-out clears artwork, audio, and

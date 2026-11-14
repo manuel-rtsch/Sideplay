@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,6 +76,7 @@ import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitIconItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
+import hrln.interactive.sidekit.design.components.SidekitLineButton
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.SidekitTile
 import hrln.interactive.sidekit.design.icons.SidekitIcon
@@ -86,6 +89,12 @@ import io.github.manuelrtsch.sideplay.playback.formatDuration
  * and gives the cover a little more presence than the two-line text block next to it.
  */
 private val ListArtworkSize = 80.dp
+
+/**
+ * Fixed slot for a track's position in a collection. Wide enough for three digits at the label
+ * type size, so row 100+ does not ellipsize while every row keeps the same text alignment.
+ */
+private val TrackNumberWidth = 56.dp
 
 /** Square artwork: remote when the catalog has a URL, otherwise a local fixture or icon. */
 @Composable
@@ -166,7 +175,7 @@ fun SpotifyMediaRow(
             if (showArt) {
                 SpotifyCover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl)
             } else if (index != null) {
-                Box(Modifier.size(30.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(TrackNumberWidth), contentAlignment = Alignment.Center) {
                     SidekitText("${index + 1}", style = SidekitTheme.typography.label, color = colors.surfaceA6)
                 }
             }
@@ -390,6 +399,41 @@ fun EmptyMessage(title: String, modifier: Modifier = Modifier, hint: String? = n
 }
 
 /**
+ * The vinyl record used by the loading and status screens. It is drawn once and can be rotated by
+ * the caller: spinning means work is in flight, still means the screen has settled on a state.
+ */
+@Composable
+private fun VinylRecord(angle: Float, modifier: Modifier = Modifier) {
+    val colors = SidekitTheme.colors
+    Canvas(modifier.rotate(angle)) {
+        val radius = size.minDimension / 2f
+        val centre = Offset(size.width / 2f, size.height / 2f)
+        drawCircle(colors.surfaceA2, radius, centre)
+        drawCircle(colors.surfaceA4, radius, centre, style = Stroke(width = 1.dp.toPx()))
+        for (groove in 1..5) {
+            drawCircle(
+                colors.surfaceA3,
+                radius * (0.52f + groove * 0.075f),
+                centre,
+                style = Stroke(width = 1.dp.toPx())
+            )
+        }
+        drawCircle(colors.successA1, radius * 0.34f, centre)
+        drawCircle(colors.successA3, radius * 0.34f, centre, style = Stroke(width = 1.dp.toPx()))
+        drawCircle(colors.surfaceA1, radius * 0.055f, centre)
+        drawArc(
+            color = colors.light.copy(alpha = 0.18f),
+            startAngle = -60f,
+            sweepAngle = 70f,
+            useCenter = false,
+            topLeft = Offset(centre.x - radius * 0.86f, centre.y - radius * 0.86f),
+            size = Size(radius * 1.72f, radius * 1.72f),
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+        )
+    }
+}
+
+/**
  * A centred vinyl record for the first load of an artist or collection. The record turns while the
  * catalog request is in flight, so the screen reads as activity rather than a stalled empty state.
  */
@@ -415,42 +459,70 @@ fun SpotifyLoadingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Canvas(
+        VinylRecord(
+            angle,
             Modifier
                 .size(132.dp)
-                .rotate(angle)
                 .semantics { contentDescription = title }
-        ) {
-            val radius = size.minDimension / 2f
-            val centre = Offset(size.width / 2f, size.height / 2f)
-            drawCircle(colors.surfaceA2, radius, centre)
-            drawCircle(colors.surfaceA4, radius, centre, style = Stroke(width = 1.dp.toPx()))
-            for (groove in 1..5) {
-                drawCircle(
-                    colors.surfaceA3,
-                    radius * (0.52f + groove * 0.075f),
-                    centre,
-                    style = Stroke(width = 1.dp.toPx())
-                )
-            }
-            drawCircle(colors.successA1, radius * 0.34f, centre)
-            drawCircle(colors.successA3, radius * 0.34f, centre, style = Stroke(width = 1.dp.toPx()))
-            drawCircle(colors.surfaceA1, radius * 0.055f, centre)
-            drawArc(
-                color = colors.light.copy(alpha = 0.18f),
-                startAngle = -60f,
-                sweepAngle = 70f,
-                useCenter = false,
-                topLeft = Offset(centre.x - radius * 0.86f, centre.y - radius * 0.86f),
-                size = Size(radius * 1.72f, radius * 1.72f),
-                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-            )
-        }
+        )
         Spacer(Modifier.height(20.dp))
         SidekitText(title, style = SidekitTheme.typography.bodySmall, color = colors.light)
         if (hint != null) {
             Spacer(Modifier.height(4.dp))
             SidekitText(hint, style = SidekitTheme.typography.caption, color = colors.surfaceA6)
+        }
+    }
+}
+
+/**
+ * The settled counterpart to [SpotifyLoadingScreen]: the same record, but still, with an optional
+ * retry action. Used for empty and failed library loads so those states look intentional instead
+ * of like a blank list.
+ */
+@Composable
+fun SpotifyStatusScreen(
+    title: String,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    val colors = SidekitTheme.colors
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        VinylRecord(
+            0f,
+            Modifier
+                .size(132.dp)
+                .semantics { contentDescription = title }
+        )
+        Spacer(Modifier.height(20.dp))
+        SidekitText(
+            title,
+            style = SidekitTheme.typography.bodySmall,
+            color = colors.light,
+            textAlign = TextAlign.Center
+        )
+        if (hint != null) {
+            Spacer(Modifier.height(4.dp))
+            SidekitText(
+                hint,
+                style = SidekitTheme.typography.caption,
+                color = colors.surfaceA6,
+                textAlign = TextAlign.Center
+            )
+        }
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.height(20.dp))
+            SidekitLineButton(
+                actionLabel,
+                onAction,
+                Modifier.widthIn(max = 240.dp),
+                icon = SidekitIcon.Undo
+            )
         }
     }
 }

@@ -1,8 +1,10 @@
 package io.github.manuelrtsch.sideplay
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -140,6 +142,7 @@ fun LibraryScreen(
     onArtist: (SpotifyArtist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onNowPlaying: () -> Unit,
+    onRetry: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
@@ -162,24 +165,35 @@ fun LibraryScreen(
         val firstFilter = LibraryFilter.entries.firstOrNull { sections[it].orEmpty().isNotEmpty() }
         val first = remember { FocusRequester() }
         LaunchedEffect(firstFilter) { runCatching { first.requestFocus() } }
+        if (isEmpty && state.librarySectionsLoading) {
+            SpotifyLoadingScreen(
+                Modifier.padding(padding),
+                title = "Loading your library…",
+                hint = "Liked songs, playlists, albums, artists and shows"
+            )
+            return@SidekitScaffold
+        }
+        if (isEmpty && state.librarySectionsError != null) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                SpotifyStatusScreen(
+                    "Couldn't load your library",
+                    hint = state.librarySectionsError,
+                    actionLabel = "Try again",
+                    onAction = onRetry
+                )
+            }
+            return@SidekitScaffold
+        }
         SidekitList(padding, state = listState) {
             var rowIndex = 0
             if (isEmpty) {
                 val index = rowIndex
                 item(key = "empty") {
-                    if (state.librarySectionsLoading) {
-                        EmptyMessage(
-                            "Loading your library…",
-                            Modifier.listFade(listState, index),
-                            hint = "Liked songs, playlists, albums, artists and shows"
-                        )
-                    } else {
-                        EmptyMessage(
-                            "Your library is empty",
-                            Modifier.listFade(listState, index),
-                            hint = "Search to find something to save"
-                        )
-                    }
+                    SpotifyStatusScreen(
+                        "Your library is empty",
+                        Modifier.listFade(listState, index),
+                        hint = "Search to find something to save"
+                    )
                 }
                 rowIndex += 1
             }
@@ -241,6 +255,7 @@ fun LibraryCategoryScreen(
     onShow: (SpotifyShow) -> Unit,
     onLoadMore: () -> Unit,
     onNowPlaying: () -> Unit,
+    onRetry: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
@@ -260,25 +275,36 @@ fun LibraryCategoryScreen(
         val swipes = rememberSwipeRevealGroup()
         val first = remember { FocusRequester() }
         LaunchedEffect(filter) { runCatching { first.requestFocus() } }
+        val items = state.libraryItems
+        if (items.isEmpty() && state.libraryLoading) {
+            SpotifyLoadingScreen(
+                Modifier.padding(padding),
+                title = "Loading ${filter.label.lowercase()}…",
+                hint = null
+            )
+            return@SidekitScaffold
+        }
+        if (items.isEmpty() && state.libraryError != null) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                SpotifyStatusScreen(
+                    "Couldn't load ${filter.label.lowercase()}",
+                    hint = state.libraryError,
+                    actionLabel = "Try again",
+                    onAction = onRetry
+                )
+            }
+            return@SidekitScaffold
+        }
         SidekitList(padding, state = listState) {
-            val items = state.libraryItems
             var rowIndex = 0
             if (items.isEmpty()) {
                 val index = rowIndex
                 item(key = "empty") {
-                    if (state.libraryLoading) {
-                        EmptyMessage(
-                            "Loading ${filter.label.lowercase()}…",
-                            Modifier.listFade(listState, index),
-                            hint = null
-                        )
-                    } else {
-                        EmptyMessage(
-                            filter.empty,
-                            Modifier.listFade(listState, index),
-                            hint = "Search to find something to save"
-                        )
-                    }
+                    SpotifyStatusScreen(
+                        filter.empty,
+                        Modifier.listFade(listState, index),
+                        hint = "Search to find something to save"
+                    )
                 }
                 rowIndex += 1
             }

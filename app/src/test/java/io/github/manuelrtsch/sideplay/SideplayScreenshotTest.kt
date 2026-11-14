@@ -103,6 +103,7 @@ class SideplayScreenshotTest {
             onArtist = {},
             onShow = {},
             onNowPlaying = {},
+            onRetry = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}
         )
@@ -121,6 +122,7 @@ class SideplayScreenshotTest {
             onShow = {},
             onLoadMore = {},
             onNowPlaying = {},
+            onRetry = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}
         )

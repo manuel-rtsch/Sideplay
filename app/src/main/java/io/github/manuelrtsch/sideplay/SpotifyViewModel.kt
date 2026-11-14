@@ -40,6 +40,10 @@ data class SpotifyUiState(
     val authPending: Boolean = false,
     val libraryLoading: Boolean = false,
     val librarySectionsLoading: Boolean = false,
+    /** Set when the overview could not load at all, so the Library screen can offer a retry. */
+    val librarySectionsError: String? = null,
+    /** Set when the open category could not load and has no items to show. */
+    val libraryError: String? = null,
     val libraryHasMore: Boolean = false,
     val libraryMorePending: Boolean = false,
     val searchHasMore: Set<SearchScope> = emptySet(),
@@ -97,6 +101,9 @@ class SpotifyViewModel(
     private var searchJob: Job? = null
     private var autoplayJob: Job? = null
     private var nowPlayingNoticeJob: Job? = null
+    private var librarySectionsJob: Job? = null
+    private var libraryJob: Job? = null
+    private var libraryCategoryLoaded = false
     private val savedTrackTouched = mutableSetOf<String>()
     private val savedCollectionTouched = mutableSetOf<String>()
     private val followedArtistTouched = mutableSetOf<String>()
@@ -136,6 +143,20 @@ class SpotifyViewModel(
             it.playback.onNext = nextHandler
             it.playback.onPrevious = previousHandler
             it.playback.onSeek = seekHandler
+            // Starting offline leaves the library empty. Retry as soon as a network appears, so
+            // the user does not have to restart the app or hunt for a refresh action.
+            it.network?.let { network ->
+                viewModelScope.launch {
+                    var wasOnline = network.online.value
+                    network.online.collect { online ->
+                        if (online && !wasOnline && _state.value.signedIn) {
+                            loadAccount()
+                            if (libraryCategoryLoaded) loadLibrary(_state.value.filter)
+                        }
+                        wasOnline = online
+                    }
+                }
+            }
         }
         restorePlaybackState()
         refreshCacheSize()
@@ -210,6 +231,18 @@ class SpotifyViewModel(
     }
 
     fun refresh() = loadAccount()
+
+    /** Reloads the Library overview. Called whenever the Library screen is opened. */
+    fun refreshLibrary() {
+        if (!_state.value.signedIn) return
+        loadLibrarySections()
+    }
+
+    /** Retries the open library category after a failed load. */
+    fun retryLibrary() {
+        if (!_state.value.signedIn) return
+        loadLibrary(_state.value.filter)
+    }
 
     fun notice(text: String) = _state.update { it.copy(notice = text) }
 
@@ -871,8 +904,9 @@ class SpotifyViewModel(
      */
     private fun loadLibrarySections() {
         if (!_state.value.signedIn) return
-        _state.update { it.copy(librarySectionsLoading = true) }
-        viewModelScope.launch {
+        librarySectionsJob?.cancel()
+        _state.update { it.copy(librarySectionsLoading = true, librarySectionsError = null) }
+        librarySectionsJob = viewModelScope.launch {
             try {
                 val sections = LinkedHashMap<LibraryFilter, List<Any>>()
                 val hasMore = mutableSetOf<LibraryFilter>()
@@ -890,11 +924,14 @@ class SpotifyViewModel(
                     }
                 }
                 _state.update { current ->
+                    val allFailed = sections.isEmpty()
                     var next = current.copy(
                         librarySections = sections,
                         librarySectionHasMore = hasMore,
                         librarySectionsLoading = false,
-                        notice = notice ?: current.notice
+                        librarySectionsError = if (allFailed) notice else null,
+                        // A full failure is shown as an error page, not as a transient notice.
+                        notice = if (allFailed) current.notice else notice ?: current.notice
                     )
                     for ((filter, items) in sections) {
                         next = next.withSectionSaved(filter, items)
@@ -904,15 +941,22 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(librarySectionsLoading = false, notice = playbackNotice(e)) }
+                _state.update {
+                    it.copy(
+                        librarySectionsLoading = false,
+                        librarySectionsError = playbackNotice(e)
+                    )
+                }
             }
         }
     }
 
     private fun loadLibrary(filter: LibraryFilter) {
         if (!_state.value.signedIn) return
-        _state.update { it.copy(libraryLoading = true, libraryMorePending = false) }
-        viewModelScope.launch {
+        libraryCategoryLoaded = true
+        libraryJob?.cancel()
+        _state.update { it.copy(libraryLoading = true, libraryMorePending = false, libraryError = null) }
+        libraryJob = viewModelScope.launch {
             try {
                 val page = catalog.library(filter, 0, SPOTIFY_PAGE_SIZE)
                 _state.update {
@@ -920,7 +964,8 @@ class SpotifyViewModel(
                         it.withLibrarySaved(filter, page.items).copy(
                             libraryItems = page.items,
                             libraryHasMore = page.hasMore,
-                            libraryLoading = false
+                            libraryLoading = false,
+                            libraryError = null
                         )
                     } else {
                         it
@@ -929,7 +974,15 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(libraryLoading = false, notice = playbackNotice(e)) }
+                _state.update {
+                    val message = playbackNotice(e)
+                    val empty = it.libraryItems.isEmpty()
+                    it.copy(
+                        libraryLoading = false,
+                        libraryError = if (empty) message else null,
+                        notice = if (empty) it.notice else message
+                    )
+                }
             }
         }
     }
@@ -968,6 +1021,9 @@ class SpotifyViewModel(
     private fun clearAccount() {
         queue.stop()
         history.clear()
+        librarySectionsJob?.cancel()
+        libraryJob?.cancel()
+        libraryCategoryLoaded = false
         savedTrackTouched.clear()
         savedCollectionTouched.clear()
         followedArtistTouched.clear()
@@ -978,6 +1034,8 @@ class SpotifyViewModel(
                 librarySections = emptyMap(),
                 librarySectionHasMore = emptySet(),
                 librarySectionsLoading = false,
+                librarySectionsError = null,
+                libraryError = null,
                 libraryHasMore = false,
                 libraryMorePending = false,
                 searchResults = SpotifySearchResults(),
