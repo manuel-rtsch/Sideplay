@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -37,7 +38,6 @@ class SideplayScreenshotTest {
         searchResults = runBlocking { MockSpotifyDataSource.search("night", SearchScope.entries.toSet()) },
         searchHasMore = SearchScope.entries.toSet(),
         isPlaying = true,
-        positionMs = 68_000L,
         savedTrackIds = setOf(current.id),
         filter = LibraryFilter.Albums
     )
@@ -208,6 +208,7 @@ class SideplayScreenshotTest {
     @Test fun nowPlaying() = shoot("sideplay_now_playing") {
         SpotifyNowPlayingScreen(
             state,
+            playbackPositionMs = MutableStateFlow(68_000L),
             onBack = {},
             onPlayPause = {},
             onPrevious = {},

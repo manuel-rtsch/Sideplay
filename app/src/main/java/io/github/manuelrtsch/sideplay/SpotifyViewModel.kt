@@ -59,7 +59,6 @@ data class SpotifyUiState(
     val artistTrackHasMore: Map<String, Boolean> = emptyMap(),
     val artistMorePending: Set<String> = emptySet(),
     val isPlaying: Boolean = false,
-    val positionMs: Long = 0L,
     val shuffle: Boolean = false,
     val repeat: RepeatMode = RepeatMode.Off,
     val savedTrackIds: Set<String> = emptySet(),
@@ -103,6 +102,14 @@ class SpotifyViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(SpotifyUiState(signedIn = session?.signedIn?.value ?: false))
     val state: StateFlow<SpotifyUiState> = _state.asStateFlow()
+
+    /**
+     * Playback position for the seek bar. Kept on its own flow so the 100 ms position tick does
+     * not mutate the monolithic [state] (which would invalidate and recompose every screen that
+     * collects it). Only the Now Playing seek bar subscribes to this.
+     */
+    private val _positionMs = MutableStateFlow(0L)
+    val playbackPositionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
     private var searchJob: Job? = null
     private var autoplayJob: Job? = null
@@ -170,23 +177,26 @@ class SpotifyViewModel(
             if (simulatePlayback) {
                 // Local fixtures and builds without the native library still need a moving progress bar.
                 viewModelScope.launch {
+                    // Back off when nothing is playing so the loop does not keep waking the main thread.
                     while (true) {
-                        delay(1_000L)
+                        delay(if (_state.value.isPlaying) 1_000L else 2_000L)
                         tick()
                     }
                 }
             }
         } else {
             viewModelScope.launch {
+                // Native events only matter while something is playing. Poll tight when active, back
+                // off to a slow heartbeat when idle so this does not run forever on the main path.
                 while (true) {
-                    delay(300L)
+                    delay(if (_state.value.isPlaying) 300L else 3_000L)
                     val raw = withContext(Dispatchers.IO) { session.pollPlaybackEvent() } ?: continue
                     handlePlaybackEvent(raw)
                 }
             }
             viewModelScope.launch {
                 while (true) {
-                    delay(100L)
+                    delay(if (_state.value.isPlaying) 100L else 2_000L)
                     updatePositionTick()
                 }
             }
@@ -204,6 +214,7 @@ class SpotifyViewModel(
         }
         val restored = queue.snapshot
         anchorPosition(playback.position)
+        _positionMs.value = playback.position
         _state.update {
             it.copy(
                 current = current,
@@ -212,7 +223,6 @@ class SpotifyViewModel(
                 shuffle = restored.shuffle,
                 repeat = restored.repeat,
                 isPlaying = playback.isActive,
-                positionMs = playback.position,
                 recent = history.items()
             )
         }
@@ -530,7 +540,7 @@ class SpotifyViewModel(
         val s = _state.value
         val item = s.current ?: return
         val play = !s.isPlaying
-        anchorPosition(s.positionMs)
+        anchorPosition(_positionMs.value)
         _state.update { it.copy(isPlaying = play) }
         if (item.uri == null || session == null) return
         viewModelScope.launch {
@@ -547,7 +557,7 @@ class SpotifyViewModel(
                 } else {
                     session.pause()
                 }
-                session.playback.updateState(play, if (play) _state.value.positionMs else s.positionMs)
+                session.playback.updateState(play, _positionMs.value)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -569,8 +579,8 @@ class SpotifyViewModel(
     fun previous() {
         val s = _state.value
         if (s.current == null) return
-        if (s.positionMs > 3_000L) {
-            _state.update { it.copy(positionMs = 0L) }
+        if (_positionMs.value > 3_000L) {
+            _positionMs.value = 0L
             s.current?.uri?.let { uri ->
                 session?.let { session ->
                     viewModelScope.launch { runCatching { session.seek(0L) } }
@@ -578,13 +588,13 @@ class SpotifyViewModel(
             }
             return
         }
-        val snapshot = queue.previous(s.positionMs)
+        val snapshot = queue.previous(_positionMs.value)
         if (snapshot.current !== s.current) {
             snapshot.current?.let(::recorded)
             applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
             snapshot.current?.let { startRemote(it, 0L) }
         } else {
-            _state.update { it.copy(positionMs = 0L) }
+            _positionMs.value = 0L
             s.current?.uri?.let { uri ->
                 session?.let { session ->
                     viewModelScope.launch { runCatching { session.seek(0L) } }
@@ -598,7 +608,7 @@ class SpotifyViewModel(
         val target = positionMs.coerceIn(0L, current.durationMs)
         lastSeekAt = SystemClock.elapsedRealtime()
         anchorPosition(target)
-        _state.update { it.copy(positionMs = target) }
+        _positionMs.value = target
         if (current.uri != null && session != null) {
             viewModelScope.launch { runCatching { session.seek(target) } }
         }
@@ -883,7 +893,8 @@ class SpotifyViewModel(
     fun jumpTo(id: String) {
         val s = _state.value
         if (s.current?.id == id) {
-            _state.update { it.copy(positionMs = 0L, isPlaying = true) }
+            _positionMs.value = 0L
+            _state.update { it.copy(isPlaying = true) }
             return
         }
         val snapshot = queue.jumpTo(id)
@@ -1223,7 +1234,10 @@ class SpotifyViewModel(
         playing: Boolean? = null,
         syncNowPlaying: Boolean = true
     ) {
-        if (positionMs != null) anchorPosition(positionMs)
+        if (positionMs != null) {
+            anchorPosition(positionMs)
+            _positionMs.value = positionMs
+        }
         _state.update {
             it.copy(
                 current = snapshot.current,
@@ -1231,12 +1245,11 @@ class SpotifyViewModel(
                 history = snapshot.history,
                 shuffle = snapshot.shuffle,
                 repeat = snapshot.repeat,
-                positionMs = positionMs ?: it.positionMs,
                 isPlaying = playing ?: it.isPlaying
             )
         }
         if (syncNowPlaying) {
-            session?.playback?.setNowPlaying(snapshot.current, positionMs ?: _state.value.positionMs)
+            session?.playback?.setNowPlaying(snapshot.current, positionMs ?: _positionMs.value)
         }
     }
 
@@ -1376,14 +1389,14 @@ class SpotifyViewModel(
      */
     internal fun handlePlaybackEvent(raw: String) {
         val event = runCatching { JSONObject(raw) }.getOrNull() ?: return
-        val position = event.optLong("positionMs", _state.value.positionMs)
+        val position = event.optLong("positionMs", _positionMs.value)
         val type = event.opt("type")?.toString().orEmpty()
         SideplayDebug.log("event type=$type uri=${event.opt("uri")?.toString().orEmpty()} positionMs=$position")
         when (type) {
             "loading" -> if (matchesCurrent(event)) {
                 anchorPosition(position)
                 session?.playback?.updatePosition(position)
-                _state.update { it.copy(positionMs = position) }
+                _positionMs.value = position
             }
 
             "playing" -> if (matchesCurrent(event)) {
@@ -1394,10 +1407,10 @@ class SpotifyViewModel(
                     // Keep the UI clock where it is. librespot's event position is the decoder
                     // position, which is ahead of the speaker by the PCM buffer; adopting it
                     // would make the bar jump forward on resume.
-                    val current = _state.value.positionMs
+                    val current = _positionMs.value
                     anchorPosition(current)
                     playback?.updateState(true, current)
-                    _state.update { it.copy(isPlaying = true, positionMs = current) }
+                    _state.update { it.copy(isPlaying = true) }
                 }
             }
 
@@ -1406,10 +1419,10 @@ class SpotifyViewModel(
                 // Ignore a paused event that belongs to a command the user already superseded
                 // with a resume. Otherwise the UI flickers back to paused after a resume.
                 if (playback?.shouldApplyEvent(false) != false) {
-                    val current = _state.value.positionMs
+                    val current = _positionMs.value
                     anchorPosition(current)
                     playback?.updateState(false, current)
-                    _state.update { it.copy(isPlaying = false, positionMs = current) }
+                    _state.update { it.copy(isPlaying = false) }
                 }
             }
 
@@ -1417,13 +1430,13 @@ class SpotifyViewModel(
                 // The 100 ms ticker owns the seek bar. Only adopt an event position when it is
                 // far enough away to be a real seek from another client, not the decoder's
                 // normal lead over the speaker.
-                val current = _state.value.positionMs
+                val current = _positionMs.value
                 // Ignore the decoder's stale position events while a local seek is settling.
                 val settling = SystemClock.elapsedRealtime() - lastSeekAt < 1_500L
                 if (!settling && abs(position - current) > 2_000L) {
                     anchorPosition(position)
                     session?.playback?.updatePosition(position)
-                    _state.update { it.copy(positionMs = position) }
+                    _positionMs.value = position
                 }
             }
 
@@ -1464,7 +1477,8 @@ class SpotifyViewModel(
         val snapshot = _state.value
         val current = snapshot.current ?: return
         if (snapshot.repeat == RepeatMode.Track) {
-            _state.update { it.copy(positionMs = 0L, isPlaying = true) }
+            _positionMs.value = 0L
+            _state.update { it.copy(isPlaying = true) }
             startRemote(current, 0L)
         } else {
             advance(auto = true, forceContextLoop = snapshot.repeat == RepeatMode.Context)
@@ -1487,9 +1501,9 @@ class SpotifyViewModel(
         val current = s.current ?: return
         val next = positionAnchorMs + (SystemClock.elapsedRealtime() - positionAnchorAt)
         val clamped = next.coerceIn(0L, current.durationMs)
-        if (clamped != s.positionMs) {
+        if (clamped != _positionMs.value) {
             session?.playback?.updatePosition(clamped)
-            _state.update { it.copy(positionMs = clamped) }
+            _positionMs.value = clamped
         }
     }
 
@@ -1497,12 +1511,12 @@ class SpotifyViewModel(
         val s = _state.value
         val current = s.current ?: return
         if (!s.isPlaying) return
-        val nextPosition = s.positionMs + 1_000L
+        val nextPosition = _positionMs.value + 1_000L
         if (nextPosition < current.durationMs) {
-            _state.update { it.copy(positionMs = nextPosition) }
+            _positionMs.value = nextPosition
         } else {
             when (s.repeat) {
-                RepeatMode.Track -> _state.update { it.copy(positionMs = 0L) }
+                RepeatMode.Track -> _positionMs.value = 0L
                 RepeatMode.Context -> advance(auto = true, forceContextLoop = true)
                 RepeatMode.Off -> advance(auto = true, forceContextLoop = false)
             }
@@ -1531,7 +1545,8 @@ class SpotifyViewModel(
             applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
             snapshot.current?.let { startRemote(it, 0L, gapless = auto && _state.value.gapless) }
         } else {
-            _state.update { it.copy(isPlaying = false, positionMs = 0L) }
+            _positionMs.value = 0L
+            _state.update { it.copy(isPlaying = false) }
         }
     }
 
@@ -1586,7 +1601,8 @@ class SpotifyViewModel(
     }
 
     private fun stopAtQueueEnd(notice: String? = null) {
-        _state.update { it.copy(isPlaying = false, positionMs = 0L, notice = notice ?: it.notice) }
+        _positionMs.value = 0L
+        _state.update { it.copy(isPlaying = false, notice = notice ?: it.notice) }
     }
 
     /** Starts a real Spotify item; local test fixtures have no URI and keep the local simulation. */

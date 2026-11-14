@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -71,11 +72,24 @@ import io.github.manuelrtsch.sideplay.ui.rememberQueueReorderState
 import io.github.manuelrtsch.sideplay.ui.rememberSwipeRevealGroup
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+
+/**
+ * The seek bar on its own, so only it recomposes when the playback position ticks. Reading the
+ * position inside this small composable keeps the 10x/s position updates away from the rest of
+ * the Now Playing layout (artwork, transport, action bar).
+ */
+@Composable
+private fun NowPlayingSeek(playbackPositionMs: StateFlow<Long>, durationMs: Long, onSeek: (Long) -> Unit) {
+    val positionMs by playbackPositionMs.collectAsStateWithLifecycle()
+    SpotifySeek(positionMs, durationMs, onSeek)
+}
 
 @Composable
 fun SpotifyNowPlayingScreen(
     state: SpotifyUiState,
+    playbackPositionMs: StateFlow<Long>,
     onBack: () -> Unit,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
@@ -172,7 +186,9 @@ fun SpotifyNowPlayingScreen(
                         )
                     }
                 }
-                SpotifySeek(state.positionMs, current.durationMs, onSeek)
+                // Only the seek bar subscribes to the playback position flow, so the 10x/s
+                // position ticks recompose just this small composable, not the whole screen.
+                NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
                 SidekitItemRow {
                     SpotifyIconTile(
                         SidekitIcon.Shuffle,

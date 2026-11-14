@@ -51,7 +51,9 @@ fun SideplayHomeScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
-    val recent = state.recent.take(RECENT_PREVIEW_SIZE)
+    // The slice is remembered so an unrelated state change (notice, save, etc.) does not give the
+    // recent rows a new list instance and force them to rebuild.
+    val recent = remember(state.recent) { state.recent.take(RECENT_PREVIEW_SIZE) }
     val hasMoreHistory = state.recent.size > RECENT_PREVIEW_SIZE
     val bar = spotifyActions(
         state,

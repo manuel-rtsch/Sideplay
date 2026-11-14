@@ -359,8 +359,11 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
         composable(NOW_PLAYING) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
+            // The position is collected inside the seek composable, so the playback position flow
+            // only recomposes the small seek bar, not the whole Now Playing screen.
             SpotifyNowPlayingScreen(
                 state,
+                vm.playbackPositionMs,
                 onBack = { nav.popBackStack() },
                 onPlayPause = vm::togglePlayPause,
                 onPrevious = vm::previous,
