@@ -12,6 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -65,7 +72,63 @@ fun SpotifySearchScreen(
         0 -> "Nothing"
         else -> SearchScope.entries.filter { it in state.searchScopes }.joinToString(", ") { it.label }
     }
-    val focus = remember { FocusRequester() }
+    val searchFocus = remember { FocusRequester() }
+    val scopesFocus = remember { FocusRequester() }
+    val firstResultFocus = remember { FocusRequester() }
+    val firstResultScope = if (state.query.trim().length < 2 || results.isEmpty) {
+        null
+    } else {
+        when {
+            results.tracks.isNotEmpty() -> SearchScope.Tracks
+            results.artists.isNotEmpty() -> SearchScope.Artists
+            results.albums.isNotEmpty() -> SearchScope.Albums
+            results.playlists.isNotEmpty() -> SearchScope.Playlists
+            results.shows.isNotEmpty() -> SearchScope.Shows
+            else -> null
+        }
+    }
+    val lastResultScope = when {
+        results.shows.isNotEmpty() -> SearchScope.Shows
+        results.playlists.isNotEmpty() -> SearchScope.Playlists
+        results.albums.isNotEmpty() -> SearchScope.Albums
+        results.artists.isNotEmpty() -> SearchScope.Artists
+        results.tracks.isNotEmpty() -> SearchScope.Tracks
+        else -> null
+    }
+    val lastResultIsSeeMore = lastResultScope != null && lastResultScope in state.searchHasMore
+    // Enter in the search field hands the keypad to the results. Up walks back out: first result
+    // to "Search in", then "Search in" to the field, so typing and browsing never fight over keys.
+    // Preview handlers run before the focused row's own D-pad handling, which would otherwise
+    // consume Up and let focus search fall back to the search field.
+    val scopesModifier = Modifier
+        .focusRequester(scopesFocus)
+        .onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+                searchFocus.requestFocus()
+                true
+            } else {
+                false
+            }
+        }
+    val firstResultModifier = Modifier
+        .focusRequester(firstResultFocus)
+        .onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+                scopesFocus.requestFocus()
+                true
+            } else {
+                false
+            }
+        }
+    // The search field sits above the list, so a Down from the last row must not wrap back into
+    // it. Cancel Down there; the field is only reachable by walking Up out of the list.
+    val lastRowModifier = Modifier.focusProperties { down = FocusRequester.Cancel }
+    fun resultModifier(scope: SearchScope, index: Int, lastIndex: Int): Modifier {
+        var modifier: Modifier = Modifier
+        if (firstResultScope == scope && index == 0) modifier = modifier.then(firstResultModifier)
+        if (lastResultScope == scope && !lastResultIsSeeMore && index == lastIndex) modifier = modifier.then(lastRowModifier)
+        return modifier
+    }
     SidekitScaffold(
         title = null,
         header = {
@@ -79,10 +142,11 @@ fun SpotifySearchScreen(
                     Modifier.fillMaxWidth().semantics { contentDescription = "Search Spotify" },
                     textStyle = SidekitTheme.typography.title,
                     placeholder = "Search Spotify",
-                    focusRequester = focus,
+                    focusRequester = searchFocus,
                     focusOnKeypad = true,
                     singleLine = true,
-                    autoFocus = true
+                    autoFocus = true,
+                    onDone = { if (firstResultScope == null) scopesFocus.requestFocus() else firstResultFocus.requestFocus() }
                 )
             }
         },
@@ -108,7 +172,9 @@ fun SpotifySearchScreen(
             item(key = "scopes") {
                 TerminalRow(
                     "Search in",
-                    modifier = Modifier.listFade(listState, scopeIndex),
+                    modifier = Modifier.listFade(listState, scopeIndex)
+                        .then(scopesModifier)
+                        .then(if (lastResultScope == null) lastRowModifier else Modifier),
                     secondary = scopeSummary,
                     onClick = onScopes
                 )
@@ -180,7 +246,11 @@ fun SpotifySearchScreen(
                                     onClick = { onQueue(track) }
                                 )
                             ) {
-                                SpotifyMediaRow(track, Modifier, secondary = track.artist) { onTrack(track) }
+                                SpotifyMediaRow(
+                                    track,
+                                    resultModifier(SearchScope.Tracks, index, results.tracks.lastIndex),
+                                    secondary = track.artist
+                                ) { onTrack(track) }
                             }
                         }
                         rowIndex += results.tracks.size
@@ -192,6 +262,7 @@ fun SpotifySearchScreen(
                                     SearchScope.Tracks in state.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Tracks) },
                                     modifier = Modifier.listFade(listState, moreIndex)
+                                        .then(if (lastResultScope == SearchScope.Tracks && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
                             }
                             rowIndex += 1
@@ -209,7 +280,8 @@ fun SpotifySearchScreen(
                                 artist.artRes,
                                 artist.name,
                                 "Artist",
-                                Modifier.listFade(listState, base + index),
+                                Modifier.listFade(listState, base + index)
+                                    .then(resultModifier(SearchScope.Artists, index, results.artists.lastIndex)),
                                 artUrl = artist.artUrl
                             ) { onArtist(artist) }
                         }
@@ -222,6 +294,7 @@ fun SpotifySearchScreen(
                                     SearchScope.Artists in state.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Artists) },
                                     modifier = Modifier.listFade(listState, moreIndex)
+                                        .then(if (lastResultScope == SearchScope.Artists && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
                             }
                             rowIndex += 1
@@ -239,7 +312,8 @@ fun SpotifySearchScreen(
                                 album.artRes,
                                 album.title,
                                 if (album.year > 0) "${album.artist} · ${album.year}" else album.artist,
-                                Modifier.listFade(listState, base + index),
+                                Modifier.listFade(listState, base + index)
+                                    .then(resultModifier(SearchScope.Albums, index, results.albums.lastIndex)),
                                 artUrl = album.artUrl
                             ) { onAlbum(album) }
                         }
@@ -252,6 +326,7 @@ fun SpotifySearchScreen(
                                     SearchScope.Albums in state.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Albums) },
                                     modifier = Modifier.listFade(listState, moreIndex)
+                                        .then(if (lastResultScope == SearchScope.Albums && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
                             }
                             rowIndex += 1
@@ -269,7 +344,8 @@ fun SpotifySearchScreen(
                                 playlist.artRes,
                                 playlist.name,
                                 playlistSubtitle(playlist),
-                                Modifier.listFade(listState, base + index),
+                                Modifier.listFade(listState, base + index)
+                                    .then(resultModifier(SearchScope.Playlists, index, results.playlists.lastIndex)),
                                 artUrl = playlist.artUrl
                             ) { onPlaylist(playlist) }
                         }
@@ -282,6 +358,7 @@ fun SpotifySearchScreen(
                                     SearchScope.Playlists in state.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Playlists) },
                                     modifier = Modifier.listFade(listState, moreIndex)
+                                        .then(if (lastResultScope == SearchScope.Playlists && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
                             }
                             rowIndex += 1
@@ -299,7 +376,8 @@ fun SpotifySearchScreen(
                                 show.artRes,
                                 show.name,
                                 show.publisher,
-                                Modifier.listFade(listState, base + index),
+                                Modifier.listFade(listState, base + index)
+                                    .then(resultModifier(SearchScope.Shows, index, results.shows.lastIndex)),
                                 artUrl = show.artUrl
                             ) { onShow(show) }
                         }
@@ -312,6 +390,7 @@ fun SpotifySearchScreen(
                                     SearchScope.Shows in state.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Shows) },
                                     modifier = Modifier.listFade(listState, moreIndex)
+                                        .then(if (lastResultScope == SearchScope.Shows && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
                             }
                         }
