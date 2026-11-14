@@ -174,6 +174,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Library category and collection lists page in 50-row chunks and load the next page as their
   footer becomes visible. Search and artist surfaces start with five items per section and show
   a pressable **See more** row; the next page is fetched only when that row is pressed.
+- Album and show collections use a position number in the row's left column; playlist rows use
+  per-track artwork instead, since playlist tracks usually come from different albums.
 - Search categories live behind the **Search in** row on the Search screen, not in Options.
   Toggling a category immediately changes the result sections and the empty-state hint. The
   selected categories sit at the right edge of that row in the high-contrast item colour.

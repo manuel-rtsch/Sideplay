@@ -467,6 +467,9 @@ fun CollectionScreen(
             }
             rowIndex += 1
             val base = rowIndex
+            // Albums and shows share one cover, so a position number is the useful left column.
+            // Playlist tracks have their own artwork, which is more informative than a list index.
+            val showTrackArt = collection.type == SpotifyCollectionType.Playlist
             itemsIndexed(collection.items, key = { index, item -> "$index:${item.id}" }) { index, item ->
                 SidekitSwipeRow(
                     key = item.id,
@@ -477,8 +480,8 @@ fun CollectionScreen(
                     SpotifyMediaRow(
                         item,
                         Modifier,
-                        index = index,
-                        showArt = false,
+                        index = if (showTrackArt) null else index,
+                        showArt = showTrackArt,
                         secondary = if (item is SpotifyEpisode) formatPublishedDate(item.published) else item.creator,
                         onClick = { onItem(index) }
                     )

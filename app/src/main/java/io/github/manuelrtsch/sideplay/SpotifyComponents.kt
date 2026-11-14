@@ -89,10 +89,10 @@ import io.github.manuelrtsch.sideplay.playback.formatDuration
 private val ListArtworkSize = 80.dp
 
 /**
- * Fixed slot for a track's position in a collection. Wide enough for three digits at the label
+ * Fixed slot for a track's position in a collection. Wide enough for three digits at the small
  * type size, so row 100+ does not ellipsize while every row keeps the same text alignment.
  */
-private val TrackNumberWidth = 56.dp
+private val TrackNumberWidth = 44.dp
 
 /** Square artwork: remote when the catalog has a URL, otherwise a local fixture or icon. */
 @Composable
@@ -174,7 +174,7 @@ fun SpotifyMediaRow(
                 SpotifyCover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl)
             } else if (index != null) {
                 Box(Modifier.width(TrackNumberWidth), contentAlignment = Alignment.Center) {
-                    SidekitText("${index + 1}", style = SidekitTheme.typography.label, color = colors.surfaceA6)
+                    SidekitText("${index + 1}", style = SidekitTheme.typography.small, color = colors.surfaceA6)
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
