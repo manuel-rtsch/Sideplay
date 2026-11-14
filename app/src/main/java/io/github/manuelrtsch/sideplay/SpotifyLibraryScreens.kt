@@ -44,7 +44,6 @@ fun SideplayHomeScreen(
     onLibrary: () -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
-    onRefresh: () -> Unit,
     onPlay: (SpotifyMediaItem) -> Unit,
     onQueue: () -> Unit,
     onQueueTrack: (SpotifyMediaItem) -> Unit,
@@ -68,7 +67,7 @@ fun SideplayHomeScreen(
         title = "Sideplay",
         actions = bar,
         options = listOf(
-            SideAction("refresh", "Refresh", SidekitIcon.Undo, onClick = onRefresh),
+            SideAction("history", "History", SidekitIcon.Undo, motion = ActionMotion.Forward, onClick = onHistory),
             SideAction("settings", "Settings", SidekitIcon.Settings, onClick = onSettings)
         )
     ) { padding ->

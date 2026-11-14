@@ -70,7 +70,8 @@ driven from `adb`.
 - [ ] **Manual:** Search opens **Search in** and toggling a category changes results without
       opening Options.
 - [ ] **Manual:** Home shows five recently played items and **See more history** when more exist;
-      History shows the full list, X removes one entry, and left swipe still offers Add to queue.
+      the Options menu's **History** opens the full list, a focused row reveals Add to queue and
+      Remove squares, and left swipe still offers Add to queue.
 - [ ] **Manual:** on Now Playing, album, playlist, show, and artist screens, confirm the play
       control and every save/bookmark or follow control use the Library success fill, never the
       case/primary colour outside the action bar.

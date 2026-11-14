@@ -236,8 +236,6 @@ class SpotifyViewModel(
         _state.update { it.copy(nowPlayingNotice = null) }
     }
 
-    fun refresh() = loadAccount()
-
     /** Reloads the Library overview. Called whenever the Library screen is opened. */
     fun refreshLibrary() {
         if (!_state.value.signedIn) return

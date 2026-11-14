@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -47,8 +45,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -67,6 +63,7 @@ import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sideplay.playback.formatDuration
 import io.github.manuelrtsch.sideplay.ui.QueueIndication
 import io.github.manuelrtsch.sideplay.ui.QueueReorderAutoScroll
+import io.github.manuelrtsch.sideplay.ui.RowActionSquare
 import io.github.manuelrtsch.sideplay.ui.SidekitSwipeRow
 import io.github.manuelrtsch.sideplay.ui.SwipeAction
 import io.github.manuelrtsch.sideplay.ui.queueReorder
@@ -226,7 +223,6 @@ fun QueueScreen(
     onMoveUpcoming: (Int, Int) -> Unit,
     onRemove: (SpotifyMediaItem) -> Int,
     onRestoreRemoved: (Int, SpotifyMediaItem) -> Unit,
-    onRemoveHistory: (SpotifyMediaItem) -> Unit,
     onClearUpcoming: () -> List<SpotifyMediaItem>,
     onRestoreUpcoming: (List<SpotifyMediaItem>) -> Unit,
     onShuffle: () -> Unit,
@@ -292,12 +288,10 @@ fun QueueScreen(
         }
     }
     // The focused row is only interesting when it is an upcoming track: that is what turns the
-    // bar's action into Play next. Look it up directly instead of building a combined list and a
-    // history id list on every recomposition.
-    val historyIds = remember(state.history) { state.history.mapTo(HashSet()) { it.id } }
+    // bar's action into Play next.
     val focusedUpcoming = when {
         focusedId == null || focusedId == state.current?.id -> null
-        else -> state.upcoming.firstOrNull { it.id == focusedId }?.takeIf { it.id !in historyIds }
+        else -> state.upcoming.firstOrNull { it.id == focusedId }
     }
     val hasUpcoming = state.upcoming.isNotEmpty()
     val back = spotifyBack("Sideplay", onBack).first()
@@ -677,27 +671,6 @@ fun QueueScreen(
                         }
                     }
                 }
-                if (state.history.isNotEmpty()) {
-                    val historyLabelIndex = state.upcoming.size + 1 + gap
-                    item(key = "historyLabel") {
-                        SectionLabel("History", Modifier.listFade(listState, historyLabelIndex))
-                    }
-                    itemsIndexed(state.history.take(20), key = { index, item -> "$index:h${item.id}" }) { index, item ->
-                        SidekitSwipeRow(
-                            key = "$index:h${item.id}",
-                            group = swipes,
-                            modifier = Modifier.listFade(listState, index + 2 + state.upcoming.size + gap),
-                            action = removeAction("Remove ${item.title} from history") { onRemoveHistory(item) }
-                        ) {
-                            SpotifyMediaRow(
-                                item,
-                                Modifier.onFocusChanged { if (it.isFocused) takeFocus(item.id, -1) },
-                                secondary = item.creator,
-                                onClick = { onJump(item.id) }
-                            )
-                        }
-                    }
-                }
             }
         }
     }
@@ -759,23 +732,7 @@ private fun GutterSquare(
     modifier: Modifier = Modifier,
     icon: SidekitIcon? = null,
     content: (@Composable () -> Unit)? = null
-) {
-    Box(
-        modifier
-            .size(SidekitTheme.spacing.itemHeight)
-            .clip(SidekitTheme.shapes.item)
-            .background(color)
-            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center
-    ) {
-        if (content != null) {
-            content()
-        } else if (icon != null) {
-            SidekitIconImage(icon, tint = SidekitTheme.colors.light, contentDescription = null)
-        }
-    }
-}
+) = RowActionSquare(color, label, onClick, modifier, icon, content)
 
 /**
  * The rearrange square: up and down arrows stacked, showing only the directions the track can still

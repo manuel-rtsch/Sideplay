@@ -81,9 +81,10 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   collection page is read once, filtered by URI prefix, and cached for two minutes; writes
   invalidate that cache.
 - Home previews five recently played items and ends the section with a compact **See more
-  history** row when more exist. History is the full local list: tracks and show episodes are
-  both recorded, including when playback advances from the notification. Each row's duration is
-  replaced by an X that removes that entry; left swipe still offers Add to queue.
+  history** row when more exist. A **History** option in Home's Options menu opens the same full
+  list directly. History is the full local list: tracks and show episodes are both recorded,
+  including when playback advances from the notification. A focused row opens a gutter with Add to
+  queue and Remove squares; left swipe still offers Add to queue.
 - The Library overview shows five rows per category with a compact **See more** row. Opening a
   category gives the full paged list. Playlists use the rootlist order and show their folder
   path above the owner. Startup pre-caches only six items per category (five shown plus one to
@@ -140,11 +141,10 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   shape, which matches the item's 36:104 corner ratio at 68dp without cropping the cover into a
   circle.
 - Home's action bar opens the queue; track rows across the app expose Add to queue on left swipe.
-  Upcoming and History rows in the queue swipe left to remove; removing queue history also drops
-  the item from recently played. Library uses the standard single-line header; Settings has one
-  sign-out action in the bar.
-- Upcoming tracks reorder by long-press and drag, or from the keypad; the current item and history
-  never move. A focused upcoming row gives up its play time and shows one full-height square on its
+  Upcoming rows in the queue swipe left to remove; the queue shows only the current item and what
+  is next, while the full listening history lives on the History screen. Library uses the standard
+  single-line header; Settings has one sign-out action in the bar.
+- Upcoming tracks reorder by long-press and drag, or from the keypad; the current item never moves. A focused upcoming row gives up its play time and shows one full-height square on its
   right once the focus has settled for a moment, so holding Up/Down through the queue does not
   flash a button on every row it passes, the same footprint as the swipe reveal: a green play button. The gutter opens and closes with a short animation rather than
   snapping, the control sliding in from the right as the row narrows. Pressing the row's body
@@ -206,7 +206,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - On the `Sidephone_SP-01` emulator (480 × 640, Android 12): Liked songs loads from the complete
   collection, the Library overview and compact **See more** rows render, **Search in** changes
   scopes without opening Options, Home previews five recent items with **See more history**, and
-  History removes an entry with the X while search results fade toward the action bar.
+  History reveals Add to queue and Remove squares on focus while search results fade toward the
+  action bar.
 - On `SP01GE260600886`: instrumented tests cover the foreground-service notification and actions,
   media-session metadata/state, media-owner hand-off, and the headphone-unplug pause path.
 - On `SP01GE260600886`: dropping the network long enough to close the librespot access point

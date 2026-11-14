@@ -163,7 +163,7 @@ fun SpotifySettingsScreen(
                 SideplayItem(
                     "Clear history",
                     Modifier.listFade(listState, 6),
-                    secondary = "${state.history.size} items",
+                    secondary = "${state.recent.size} items",
                     secondaryToEnd = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,
