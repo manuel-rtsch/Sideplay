@@ -175,7 +175,36 @@ class SpotifyQueueRepository(
 
     fun addToQueue(items: List<SpotifyMediaItem>): Snapshot = commit(snapshot.copy(upcoming = snapshot.upcoming + items))
 
-    fun removeUpcoming(item: SpotifyMediaItem): Snapshot = commit(snapshot.copy(upcoming = snapshot.upcoming.filterNot { it.id == item.id }))
+    /** Removes an upcoming item and returns where it was, so the caller can offer Undo. */
+    fun removeUpcoming(item: SpotifyMediaItem): Int {
+        val index = snapshot.upcoming.indexOfFirst { it.id == item.id }
+        if (index < 0) return -1
+        commit(snapshot.copy(upcoming = snapshot.upcoming.filterNot { it.id == item.id }))
+        return index
+    }
+
+    /** Puts a removed item back where it was, or as close to it as the tail allows. */
+    fun restoreRemovedUpcoming(index: Int, item: SpotifyMediaItem): Snapshot {
+        val upcoming = snapshot.upcoming.toMutableList()
+        if (upcoming.any { it.id == item.id }) return snapshot
+        upcoming.add(index.coerceIn(0, upcoming.size), item)
+        return commit(snapshot.copy(upcoming = upcoming))
+    }
+
+    /**
+     * Moves an upcoming item from [from] to [to], clamping both to the tail's bounds. Only the tail
+     * moves: the current item and history keep their place. A manual reorder is authoritative, so a
+     * shuffled queue drops its pre-shuffle backup — switching shuffle off afterwards keeps the
+     * order the user just chose instead of bringing the old one back.
+     */
+    fun moveUpcoming(from: Int, to: Int): Snapshot {
+        val upcoming = snapshot.upcoming
+        if (from !in upcoming.indices) return snapshot
+        val target = to.coerceIn(0, upcoming.lastIndex)
+        if (from == target) return snapshot
+        val moved = upcoming.toMutableList().apply { add(target, removeAt(from)) }
+        return commit(snapshot.copy(upcoming = moved, shuffleBackup = null))
+    }
 
     /** Removes every upcoming item and returns them so the caller can offer Undo. */
     fun clearUpcoming(): List<SpotifyMediaItem> {

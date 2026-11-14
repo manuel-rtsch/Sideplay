@@ -83,7 +83,7 @@ class SideplayScreenshotTest {
             onBack = {},
             onPlay = {},
             onQueue = {},
-            onRemove = {},
+            onRemove = { -1 },
             onNowPlaying = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}
@@ -232,10 +232,12 @@ class SideplayScreenshotTest {
             onNowPlaying = {},
             onJump = {},
             onPlayNext = {},
-            onRemove = {},
+            onMoveUpcoming = { _, _ -> },
+            onRemove = { -1 },
             onRemoveHistory = {},
             onClearUpcoming = { emptyList() },
             onRestoreUpcoming = {},
+            onRestoreRemoved = { _, _ -> },
             onShuffle = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}

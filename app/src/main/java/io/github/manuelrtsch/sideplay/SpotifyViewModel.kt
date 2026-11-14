@@ -813,8 +813,19 @@ class SpotifyViewModel(
         applyQueue(queue.playNext(item), syncNowPlaying = false)
     }
 
-    fun removeUpcoming(item: SpotifyMediaItem) {
-        applyQueue(queue.removeUpcoming(item), syncNowPlaying = false)
+    /** Removes an upcoming item and returns where it was, so the caller can offer Undo. */
+    fun removeUpcoming(item: SpotifyMediaItem): Int {
+        if (queue.snapshot.upcoming.none { it.id == item.id }) return -1
+        val index = queue.removeUpcoming(item)
+        applyQueue(queue.snapshot, syncNowPlaying = false)
+        return index
+    }
+
+    fun restoreRemovedUpcoming(index: Int, item: SpotifyMediaItem) = applyQueue(queue.restoreRemovedUpcoming(index, item), syncNowPlaying = false)
+
+    /** Drag-and-drop reorder of the upcoming tail; the current item and history never move. */
+    fun moveUpcoming(from: Int, to: Int) {
+        applyQueue(queue.moveUpcoming(from, to), syncNowPlaying = false)
     }
 
     fun removeHistory(item: SpotifyMediaItem) {

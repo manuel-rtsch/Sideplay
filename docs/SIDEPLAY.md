@@ -143,6 +143,34 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   Upcoming and History rows in the queue swipe left to remove; removing queue history also drops
   the item from recently played. Library uses the standard single-line header; Settings has one
   sign-out action in the bar.
+- Upcoming tracks reorder by long-press and drag, or from the keypad; the current item and history
+  never move. A focused upcoming row gives up its play time and shows one full-height square on its
+  right once the focus has settled for a moment, so holding Up/Down through the queue does not
+  flash a button on every row it passes, the same footprint as the swipe reveal: a green play button. The gutter opens and closes with a short animation rather than
+  snapping, the control sliding in from the right as the row narrows. Pressing the row's body
+  swaps that square for the edit pair, rearrange and remove. The rearrange square stacks the up and
+  down arrows and hides the one it cannot move towards at the ends of the queue; pressing it lifts
+  the row for the keypad, where Up/Down step it, Confirm drops it and closes the edit pair so the
+  row comes back as a play square, Back puts it back where it started,
+  and Left/Right are swallowed so focus cannot strand the lift. A lifted row drops the square and
+  shows the two bare arrows instead, as Arrange apps does. Play next in the bar moves the track to
+  the top of the queue and takes the focus up to the now-playing row; removing a track leaves an
+  Undo in the bar that puts it back at the index it left. A focused row is parked in the list's top band in the same measure pass
+  rather than by Sidekit's animated focus scroll, which a held key outruns: the focus would reach a
+  row the list had not scrolled to yet, the row would be disposed, and the focus would be lost.
+  Rows are keyed by track identity,
+  so a stepped track keeps its node and its focus, and each step scrolls it into view in the same
+  measure pass instead of blinking out of the viewport. The stepped track is parked one place below
+  the top so the track it is about to pass stays visible above it — at the top of the queue that
+  neighbour is the now-playing row — which leaves the track free to be dropped anywhere in the
+  queue. A touch pickup shows the same lifted state
+  with the two arrows in a narrow sliver of the row's right edge. The queue reorders live as the
+  finger crosses each row, so the row's slot travels with it: a row whose slot is left behind
+  scrolls out of the list and is disposed, which is what used to end a long drag after a moment.
+  The auto-scroll still carries the queue past the edges, so the ends of the list stay reachable.
+  A small gap separates the now-playing row from the top of the queue. While shuffle is on, a manual
+  reorder is authoritative: the pre-shuffle backup is dropped, so turning shuffle off keeps the
+  chosen order instead of restoring the old one.
 - Library category and collection lists page in 50-row chunks and load the next page as their
   footer becomes visible. Search and artist surfaces start with five items per section and show
   a pressable **See more** row; the next page is fetched only when that row is pressed.

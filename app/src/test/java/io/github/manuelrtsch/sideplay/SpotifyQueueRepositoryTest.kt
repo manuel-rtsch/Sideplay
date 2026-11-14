@@ -185,6 +185,41 @@ class SpotifyQueueRepositoryTest {
         assertEquals(listOf("b"), queue.snapshot.history.map { it.id })
     }
 
+    @Test fun `moving an upcoming item reorders only the tail`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(tracks, 0)
+
+        queue.moveUpcoming(from = 2, to = 0)
+
+        assertEquals("a", queue.snapshot.current?.id)
+        assertEquals(listOf("d", "b", "c"), queue.snapshot.upcoming.map { it.id })
+        assertTrue(queue.snapshot.history.isEmpty())
+    }
+
+    @Test fun `moving an upcoming item clamps to the tail and ignores a no-op`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(tracks, 0)
+
+        queue.moveUpcoming(from = 0, to = 99)
+        assertEquals(listOf("c", "d", "b"), queue.snapshot.upcoming.map { it.id })
+
+        queue.moveUpcoming(from = 1, to = 1)
+        queue.moveUpcoming(from = 9, to = 0)
+        assertEquals(listOf("c", "d", "b"), queue.snapshot.upcoming.map { it.id })
+    }
+
+    @Test fun `a manual reorder survives switching shuffle off`() {
+        val queue = SpotifyQueueRepository(Random(7))
+        queue.play(tracks, 0)
+        queue.setShuffle(true)
+
+        queue.moveUpcoming(from = 0, to = 2)
+        val arranged = queue.snapshot.upcoming.map { it.id }
+        queue.setShuffle(false)
+
+        assertEquals(arranged, queue.snapshot.upcoming.map { it.id })
+    }
+
     @Test fun `clearing upcoming can be undone`() {
         val queue = SpotifyQueueRepository(Random(1))
         queue.play(tracks, 0)

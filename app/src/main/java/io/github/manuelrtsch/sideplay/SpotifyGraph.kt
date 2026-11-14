@@ -383,7 +383,9 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                     if (state.current?.id == id) nav.openNowPlaying(vm) else vm.jumpTo(id)
                 },
                 onPlayNext = vm::moveToNext,
+                onMoveUpcoming = vm::moveUpcoming,
                 onRemove = vm::removeUpcoming,
+                onRestoreRemoved = vm::restoreRemovedUpcoming,
                 onRemoveHistory = vm::removeHistory,
                 onClearUpcoming = vm::clearUpcoming,
                 onRestoreUpcoming = vm::restoreUpcoming,
