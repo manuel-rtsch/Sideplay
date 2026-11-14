@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -54,6 +56,9 @@ import kotlin.math.min
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** True while a swipe row's action button is visible, so its content can drop trailing metadata. */
+val LocalSwipeActionRevealed = compositionLocalOf { false }
 
 /** The action revealed by a left swipe. Delete is the default; other actions pass their own. */
 data class SwipeAction(
@@ -183,6 +188,7 @@ fun SidekitSwipeRow(
             }
 
             false -> if (!dragging && group.openKey == key) group.closeAll()
+
             null -> Unit
         }
     }
@@ -268,7 +274,9 @@ fun SidekitSwipeRow(
                 )
             }
     ) {
-        Box(Modifier.graphicsLayer { translationX = offset }) { content() }
+        CompositionLocalProvider(LocalSwipeActionRevealed provides isOpen) {
+            Box(Modifier.graphicsLayer { translationX = offset }) { content() }
+        }
         if (isOpen) {
             // While open, a tap on the row closes it rather than opening the item.
             Box(

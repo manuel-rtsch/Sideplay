@@ -81,6 +81,7 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtworkImage
 import io.github.manuelrtsch.sideplay.playback.formatDuration
+import io.github.manuelrtsch.sideplay.ui.LocalSwipeActionRevealed
 
 /**
  * Artwork shown beside text inside a 104 dp list tile. 80 dp leaves a 12 dp margin on every side
@@ -160,6 +161,8 @@ fun SpotifyMediaRow(
     onClick: () -> Unit
 ) {
     val colors = SidekitTheme.colors
+    // A revealed side button is the thing being read: give its row the trailing space back.
+    val actionRevealed = LocalSwipeActionRevealed.current
     SidekitTile(
         modifier = modifier.fillMaxWidth(),
         color = if (item.playable) colors.surfaceA3 else colors.surfaceA2,
@@ -188,7 +191,7 @@ fun SpotifyMediaRow(
             }
             if (trailingContent != null) {
                 trailingContent()
-            } else if (trailing != null) {
+            } else if (trailing != null && !actionRevealed) {
                 SidekitText(
                     trailing,
                     style = SidekitTheme.typography.caption,

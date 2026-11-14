@@ -600,7 +600,8 @@ fun QueueScreen(
                                         }
                                         .then(if (keypadIndex == index) Modifier.focusRequester(rowFocus) else Modifier),
                                     secondary = item.creator,
-                                    trailing = formatDuration(item.durationMs),
+                                    // The side control gets the right edge while it is visible.
+                                    trailing = if (gutter > 0.dp) null else formatDuration(item.durationMs),
                                     // A focused row's body opens the edit squares instead of playing,
                                     // and pressing it again closes them: the play square is how it
                                     // plays, so nothing ever starts a track by accident.
