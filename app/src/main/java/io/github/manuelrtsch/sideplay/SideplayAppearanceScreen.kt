@@ -33,6 +33,7 @@ fun SideplayAppearanceScreen(onBack: () -> Unit) {
                     "Compact layout",
                     secondary = if (theme.compact) "On" else "Off",
                     secondaryToEnd = true,
+                    toggleable = theme.compact,
                     onClick = { store.writeCompact(!theme.compact) }
                 )
             }

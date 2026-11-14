@@ -64,6 +64,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -726,6 +727,7 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                 .semantics {
                     if (seekable) {
                         contentDescription = "Seek"
+                        stateDescription = "${formatDuration(shownPositionMs)} of ${formatDuration(durationMs)}"
                         progressBarRangeInfo = ProgressBarRangeInfo(shownFraction, 0f..1f)
                         setProgress { target ->
                             seekTo(target)

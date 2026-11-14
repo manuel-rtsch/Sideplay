@@ -1,15 +1,21 @@
 package io.github.manuelrtsch.sideplay
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import hrln.interactive.sidekit.design.components.ItemColour
@@ -19,6 +25,7 @@ import hrln.interactive.sidekit.design.components.SidekitTile
 import hrln.interactive.sidekit.design.components.container
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import hrln.interactive.sidekit.design.theme.contentColorFor
 
 /**
  * Sideplay's own copy of the settings row while the published design library lacks the
@@ -36,23 +43,25 @@ fun SideplayItem(
     showLinkArrowWithSecondary: Boolean = false,
     colour: ItemColour = ItemColour.Primary,
     titleDecoration: TextDecoration? = null,
+    /** When set, the row is exposed as a switch/checkbox with this checked state. */
+    toggleable: Boolean? = null,
+    toggleRole: Role = Role.Switch,
+    /** When set, the row is exposed as a radio/selection row with this selected state. */
+    selected: Boolean? = null,
+    selectionRole: Role = Role.RadioButton,
     onClick: (() -> Unit)? = null,
     leading: (@Composable RowScope.() -> Unit)? = null
 ) {
-    SidekitTile(
-        modifier = modifier.fillMaxWidth(),
-        color = colour.container(),
-        onClick = onClick,
-        contentAlignment = Alignment.CenterStart
-    ) {
+    val contentColor = SidekitTheme.colors.contentColorFor(colour.container())
+    val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier.padding(horizontal = SidekitTheme.spacing.itemPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(SidekitTheme.spacing.itemContentGap)
         ) {
             leading?.invoke(this)
-            if (icon != null) SidekitIconImage(icon)
-            SidekitText(title, textDecoration = titleDecoration)
+            if (icon != null) SidekitIconImage(icon, tint = contentColor)
+            SidekitText(title, color = contentColor, textDecoration = titleDecoration)
             if (secondary != null) {
                 if (secondaryNoEllipsis) Spacer(Modifier.weight(1f))
                 SidekitText(
@@ -67,9 +76,35 @@ fun SideplayItem(
                     if (secondary == null) Modifier.weight(1f) else Modifier,
                     contentAlignment = Alignment.CenterEnd
                 ) {
-                    SidekitIconImage(SidekitIcon.ArrowRightAlt)
+                    SidekitIconImage(SidekitIcon.ArrowRightAlt, tint = contentColor)
                 }
             }
         }
+    }
+    when {
+        toggleable != null -> Box(
+            modifier = modifier.fillMaxWidth()
+                .height(SidekitTheme.spacing.itemHeight)
+                .clip(SidekitTheme.shapes.item)
+                .background(colour.container())
+                .toggleable(value = toggleable, role = toggleRole, onValueChange = { onClick?.invoke() }),
+            contentAlignment = Alignment.CenterStart
+        ) { content() }
+
+        selected != null -> Box(
+            modifier = modifier.fillMaxWidth()
+                .height(SidekitTheme.spacing.itemHeight)
+                .clip(SidekitTheme.shapes.item)
+                .background(colour.container())
+                .selectable(selected = selected, role = selectionRole, onClick = { onClick?.invoke() }),
+            contentAlignment = Alignment.CenterStart
+        ) { content() }
+
+        else -> SidekitTile(
+            modifier = modifier.fillMaxWidth(),
+            color = colour.container(),
+            onClick = onClick,
+            contentAlignment = Alignment.CenterStart
+        ) { content() }
     }
 }

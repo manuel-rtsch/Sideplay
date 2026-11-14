@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -303,6 +304,7 @@ fun SidekitSwipeRow(
                             )
                             performAction()
                         }
+                        .semantics { contentDescription = swipeAction.label }
                 )
             }
         }

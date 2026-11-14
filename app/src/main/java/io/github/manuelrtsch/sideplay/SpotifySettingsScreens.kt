@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
@@ -26,6 +28,7 @@ import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
+import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 private enum class SettingsConfirmation { SignOut, ClearCache, ClearHistory }
@@ -121,6 +124,7 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 2),
                     secondary = if (state.autoplay) "On" else "Off",
                     secondaryToEnd = true,
+                    toggleable = state.autoplay,
                     onClick = onAutoplay
                 )
             }
@@ -130,6 +134,7 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 3),
                     secondary = if (state.normalization) "On" else "Off",
                     secondaryToEnd = true,
+                    toggleable = state.normalization,
                     onClick = onNormalization
                 )
             }
@@ -139,6 +144,7 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 4),
                     secondary = if (state.gapless) "On" else "Off",
                     secondaryToEnd = true,
+                    toggleable = state.gapless,
                     onClick = onGapless
                 )
             }
@@ -209,7 +215,7 @@ fun SpotifyAudioQualityScreen(
         val listState = rememberLazyListState()
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-        SidekitList(padding, state = listState) {
+        SidekitList(padding, modifier = Modifier.selectableGroup(), state = listState) {
             AudioQuality.entries.forEachIndexed { index, quality ->
                 val selected = quality == state.audioQuality
                 item(key = quality.name) {
@@ -221,7 +227,10 @@ fun SpotifyAudioQualityScreen(
                         secondary = "${quality.bitrateKbps} kbps",
                         secondaryToEnd = true,
                         secondaryNoEllipsis = true,
+                        icon = if (selected) SidekitIcon.Check else null,
                         colour = if (selected) ItemColour.Secondary else ItemColour.Primary,
+                        selected = selected,
+                        selectionRole = Role.RadioButton,
                         onClick = { onSelect(quality) }
                     )
                 }

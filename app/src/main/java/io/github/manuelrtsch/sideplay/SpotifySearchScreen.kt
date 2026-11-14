@@ -19,13 +19,13 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
-import hrln.interactive.sidekit.design.components.SidekitItem
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitTextField
@@ -431,11 +431,13 @@ fun SearchScopesScreen(
             SearchScope.entries.forEachIndexed { index, scope ->
                 item(key = scope.name) {
                     val included = scope in state.searchScopes
-                    SidekitItem(
+                    SideplayItem(
                         scope.label,
                         modifier = Modifier.listFade(listState, index + 1),
                         secondary = if (included) "On" else "Off",
                         icon = if (included) SidekitIcon.Check else null,
+                        toggleable = included,
+                        toggleRole = Role.Checkbox,
                         onClick = { onToggleScope(scope) }
                     )
                 }
