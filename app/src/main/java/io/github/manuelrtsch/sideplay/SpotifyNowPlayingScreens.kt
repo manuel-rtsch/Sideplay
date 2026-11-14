@@ -532,9 +532,11 @@ fun QueueScreen(
                     val keypadFocused = gutterIndex == index && !pickedUp
                     // Pressing a focused row swaps its play square for the edit squares.
                     val editing = keypadFocused && editingId == item.id
+                    // A lone track has nowhere to move, so the rearrange square is left out entirely.
+                    val canReorder = state.upcoming.size > 1
                     val square = SidekitTheme.spacing.itemHeight
                     val targetGutter = when {
-                        editing -> square * 2 + GutterGap
+                        editing -> if (canReorder) square * 2 + GutterGap else square
                         pickedUp -> LiftedGutter
                         keypadFocused -> square
                         else -> 0.dp
@@ -660,11 +662,13 @@ fun QueueScreen(
                                         }
 
                                         GutterMode.Edit -> Row(horizontalArrangement = Arrangement.spacedBy(GutterGap)) {
-                                            RearrangeSquare(
-                                                up = index > 0,
-                                                down = index < state.upcoming.lastIndex,
-                                                onClick = lift
-                                            )
+                                            if (canReorder) {
+                                                RearrangeSquare(
+                                                    up = index > 0,
+                                                    down = index < state.upcoming.lastIndex,
+                                                    onClick = lift
+                                                )
+                                            }
                                             GutterSquare(
                                                 color = SidekitTheme.colors.dangerA1,
                                                 icon = SidekitIcon.DeleteForever,
