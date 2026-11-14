@@ -7,12 +7,15 @@ import io.github.manuelrtsch.sideplay.auth.SpotifyTokenClient
 import java.net.URI
 import java.net.URL
 import java.net.URLDecoder
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -68,7 +71,10 @@ class SpotifyAuthTest {
         }
         val auth = SpotifyAuth(store, tokens)
         val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        var landingPage = ""
+        // The callback response is read on another thread. Complete this when the page is in
+        // hand, instead of assuming the IO coroutine has already finished by the time signIn
+        // returns; under a full test suite that assumption is a race.
+        val landing = CompletableDeferred<String>()
 
         val result = auth.signIn { url ->
             val params = URI(url).rawQuery.split('&').associate {
@@ -80,15 +86,19 @@ class SpotifyAuthTest {
             io.launch {
                 delay(50)
                 URL("$redirect?code=test-code&state=$state").openStream().use {
-                    landingPage = it.readBytes().toString(Charsets.UTF_8)
+                    landing.complete(it.readBytes().toString(Charsets.UTF_8))
                 }
             }
         }
 
         assertEquals("fresh-access", result.accessToken)
         assertEquals("fresh-access", store.saved?.accessToken)
+        val landingPage = withContext(Dispatchers.IO) { withTimeout(5_000) { landing.await() } }
         assertTrue(landingPage.contains("Welcome to Sideplay"))
         assertTrue(landingPage.contains("sideplay://auth"))
+        // The listener serves one request; make sure the page is not accidentally written twice.
+        assertEquals(1, landingPage.split("<!doctype html>").size - 1)
+        assertEquals(1, landingPage.split("</html>").size - 1)
     }
 
     @Test fun `sign out clears credentials`() {
