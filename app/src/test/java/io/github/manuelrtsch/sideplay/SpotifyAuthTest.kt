@@ -13,16 +13,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class SpotifyAuthTest {
     private val now = 1_000_000L
+
+    // SpotifySession captures Dispatchers.Main.immediate when it is constructed, and
+    // kotlinx-coroutines-test 1.11 reports a missing main dispatcher eagerly instead of
+    // deferring the failure to dispatch time. Install a test dispatcher for every case so the
+    // session can be built outside runTest.
+    @Before fun installMainDispatcher() = Dispatchers.setMain(UnconfinedTestDispatcher())
+
+    @After fun resetMainDispatcher() = Dispatchers.resetMain()
 
     @Test fun `valid token is returned without refreshing`() = runTest {
         val store = MemoryStore(credentials(expiresAt = now + 180_000L))
