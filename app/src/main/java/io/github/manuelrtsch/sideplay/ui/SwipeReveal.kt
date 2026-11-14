@@ -25,6 +25,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -51,6 +52,7 @@ import hrln.interactive.sidekit.design.motion.SidekitMotion
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import kotlin.math.min
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The action revealed by a left swipe. Delete is the default; other actions pass their own. */
@@ -91,6 +93,8 @@ private class SwipeMetrics {
  *   (with a haptic tick); release there to run the action without the extra tap.
  * - Tapping the row while open closes it instead of opening the item.
  * - Opening one row closes any other row in [group].
+ * - With [revealOnFocus], a row focused by the D-pad reveals its action just like a swipe does,
+ *   after a short delay so holding Up/Down through a list does not flash every button.
  *
  * Cost per drag frame: one float state write, a RenderNode translation for the row (no
  * re-record of its contents) and a redraw of the button behind it. Nothing recomposes except
@@ -104,6 +108,7 @@ fun SidekitSwipeRow(
     onDelete: () -> Unit = {},
     deleteLabel: String = "Delete",
     action: SwipeAction? = null,
+    revealOnFocus: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
@@ -130,6 +135,9 @@ fun SidekitSwipeRow(
     var offset by remember { mutableFloatStateOf(0f) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
     var dragging by remember { mutableStateOf(false) }
+    // null until the row has reported focus at least once, so the first composition does not
+    // close a row that a touch swipe opened.
+    var focused by remember { mutableStateOf<Boolean?>(null) }
     val arm = remember { Animatable(0f) }
 
     val isOpen by remember { derivedStateOf { offset < -1f } }
@@ -162,6 +170,22 @@ fun SidekitSwipeRow(
     LaunchedEffect(group, key) {
         snapshotFlow { group.openKey }.collect { open -> if (open != key && !dragging && offset != 0f) settle(0f) }
     }
+    LaunchedEffect(focused) {
+        when (focused) {
+            true -> {
+                // The queue's gutter waits for the focus to settle; a list that is being
+                // scrubbed with Up/Down must not flash a button on every row it passes.
+                delay(FOCUS_REVEAL_DELAY_MS)
+                if (!dragging) {
+                    group.openKey = key
+                    settle(openOffset)
+                }
+            }
+
+            false -> if (!dragging && group.openKey == key) group.closeAll()
+            null -> Unit
+        }
+    }
 
     val dragState = rememberDraggableState { delta ->
         val next = offset + delta
@@ -180,6 +204,13 @@ fun SidekitSwipeRow(
     Box(
         modifier
             .onSizeChanged { metrics.width = it.width }
+            .then(
+                if (revealOnFocus) {
+                    Modifier.onFocusChanged { focusState -> focused = focusState.hasFocus }
+                } else {
+                    Modifier
+                }
+            )
             .drawBehind {
                 val revealed = -offset - gapPx
                 if (revealed <= 0f) return@drawBehind
@@ -272,5 +303,9 @@ fun SidekitSwipeRow(
 
 /** Fraction of the row width past which releasing deletes outright. */
 const val FULL_SWIPE_FRACTION = 0.6f
+
+/** How long a row must hold the focus before its action button appears. */
+private const val FOCUS_REVEAL_DELAY_MS = 250L
+
 private const val RESISTANCE = 0.3f
 private const val FLING_VELOCITY = 900f

@@ -542,7 +542,7 @@ fun QueueScreen(
                     var lastGutterMode by remember { mutableStateOf<GutterMode?>(null) }
                     if (gutterMode != null) lastGutterMode = gutterMode
                     val shownGutter = gutterMode ?: lastGutterMode
-                    val narrowed = targetGutter > 0.dp
+                    val gutterPx = with(density) { gutter.toPx() }
                     CompositionLocalProvider(LocalIndication provides QueueIndication) {
                         Box(
                             Modifier
@@ -573,9 +573,13 @@ fun QueueScreen(
                             SidekitSwipeRow(
                                 key = key,
                                 group = swipes,
-                                // A focused or picked-up row narrows to leave the gutter free on its right.
-                                modifier = if (gutter > 0.dp) Modifier.padding(end = gutter) else Modifier,
-                                action = removeAction("Remove ${item.title} from queue") { removeFromQueue(item) }
+                                // A focused or picked-up row slides left to leave the gutter free on its
+                                // right; its width stays the same, as with a touch swipe.
+                                modifier = Modifier.graphicsLayer { translationX = -gutterPx },
+                                action = removeAction("Remove ${item.title} from queue") { removeFromQueue(item) },
+                                // The gutter already gives a focused queue row its play square; a
+                                // second focus-revealed delete square would crowd the same edge.
+                                revealOnFocus = false
                             ) {
                                 SpotifyMediaRow(
                                     item,
@@ -596,8 +600,7 @@ fun QueueScreen(
                                         }
                                         .then(if (keypadIndex == index) Modifier.focusRequester(rowFocus) else Modifier),
                                     secondary = item.creator,
-                                    // A focused or picked-up row gives its play time up to the gutter.
-                                    trailing = if (narrowed) null else formatDuration(item.durationMs),
+                                    trailing = formatDuration(item.durationMs),
                                     // A focused row's body opens the edit squares instead of playing,
                                     // and pressing it again closes them: the play square is how it
                                     // plays, so nothing ever starts a track by accident.
