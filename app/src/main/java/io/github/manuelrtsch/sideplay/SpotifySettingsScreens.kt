@@ -98,8 +98,6 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 0).focusRequester(first),
                     secondary = if (state.signedIn) "Signed in" else "Not signed in",
                     secondaryToEnd = true,
-                    showLinkArrow = state.signedIn,
-                    showLinkArrowWithSecondary = state.signedIn,
                     onClick = if (state.signedIn) {
                         { confirmation = SettingsConfirmation.SignOut }
                     } else {
@@ -154,8 +152,6 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 5),
                     secondary = Formatter.formatShortFileSize(context, state.cacheSizeBytes),
                     secondaryToEnd = true,
-                    showLinkArrow = true,
-                    showLinkArrowWithSecondary = true,
                     onClick = { confirmation = SettingsConfirmation.ClearCache }
                 )
             }
@@ -163,10 +159,8 @@ fun SpotifySettingsScreen(
                 SideplayItem(
                     "Clear history",
                     Modifier.listFade(listState, 6),
-                    secondary = "${state.recent.size} items",
+                    secondary = state.recent.size.toString(),
                     secondaryToEnd = true,
-                    showLinkArrow = true,
-                    showLinkArrowWithSecondary = true,
                     onClick = { confirmation = SettingsConfirmation.ClearHistory }
                 )
             }

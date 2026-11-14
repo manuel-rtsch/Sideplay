@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode as AnimationRepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,10 +41,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -59,7 +63,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -668,37 +671,105 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
     // seek once, on release: issuing a seek for every drag delta floods the native player and
     // makes the bar take seconds to settle on the final position.
     var dragFraction by remember { mutableStateOf<Float?>(null) }
+    // Clicking or dragging the bar puts it in slide mode: left/right then nudge the track instead
+    // of moving focus. Losing focus leaves the mode.
+    var sliding by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
     val shownFraction = dragFraction ?: fraction
     val shownPositionMs = if (dragFraction != null) (shownFraction * durationMs).toLong() else positionMs
+    // The position flow ticks at 10 Hz. Animating between those samples keeps the fill and knob
+    // moving continuously instead of stepping a couple of pixels at a time. Dragging bypasses
+    // the animation so the bar still follows the finger exactly.
+    val animatedFraction by animateFloatAsState(
+        targetValue = shownFraction,
+        animationSpec = tween(durationMillis = 120, easing = LinearEasing),
+        label = "seekFraction"
+    )
+    val barFraction = if (dragFraction != null) shownFraction else animatedFraction
     val trackColor = SidekitTheme.colors.surfaceA4
     val progressColor = SidekitTheme.colors.light
-    val labelStyle = SidekitTheme.typography.label
+    // The knob turns accent-coloured while the bar owns the keypad, so slide mode is visible.
+    val knobColor = if (sliding) SidekitTheme.colors.emphasisA1 else progressColor
+    // Slide mode gives the bar a taller focus strip and a little side inset. The extra height
+    // comes out of the artwork, which is fine while the user is scrubbing.
+    val blockHeight = if (sliding) 64.dp else 48.dp
+    val stripHeight = if (sliding) 40.dp else 24.dp
+    val barInset = if (sliding) 16.dp else 0.dp
+    // The times sit above a full-width track inside the same touch target. Keeping them out of
+    // the bar's row means the track can span the whole body without making the screen taller and
+    // shrinking the artwork. Tabular digits keep the counting label from jittering.
+    val labelStyle = SidekitTheme.typography.caption
     val timeStyle = remember(labelStyle) { labelStyle.copy(fontFeatureSettings = "tnum") }
-    val widest = remember(durationMs) { formatDuration(durationMs).replace(Regex("\\d"), "0") }
     val interaction = remember { MutableInteractionSource() }
     fun seekTo(target: Float) {
         if (seekable) onSeek((target.coerceIn(0f, 1f) * durationMs).toLong())
     }
-    val step = if (seekable) 5_000f / durationMs else 0f
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(contentAlignment = Alignment.CenterEnd) {
-            SidekitText(widest, Modifier.alpha(0f).clearAndSetSemantics {}, style = timeStyle)
+
+    // Slide mode always steps 10 s. The first key press enters the mode, so the step is computed
+    // here rather than from the `sliding` value captured before the event.
+    fun nudge(direction: Float) {
+        sliding = true
+        if (seekable) seekTo(fraction + direction * (10_000f / durationMs))
+    }
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(blockHeight)
+            .pointerInput(durationMs) {
+                detectTapGestures { offset ->
+                    focusRequester.requestFocus()
+                    sliding = true
+                    seekTo(offset.x / size.width)
+                }
+            }
+            .pointerInput(durationMs) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        focusRequester.requestFocus()
+                        sliding = true
+                        if (seekable) dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        if (seekable) dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        val target = dragFraction
+                        dragFraction = null
+                        if (target != null) seekTo(target)
+                    },
+                    onDragCancel = { dragFraction = null }
+                )
+            }
+    ) {
+        Row(
+            // Lift the labels out of the block's top edge so they sit close to the artist line
+            // while the bar keeps its distance below them.
+            Modifier
+                .fillMaxWidth()
+                .offset(y = if (sliding) (-6).dp else (-2).dp)
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             SidekitText(formatDuration(shownPositionMs), style = timeStyle)
+            SidekitText(formatDuration(durationMs), style = timeStyle)
         }
+        // The focus ring belongs to the bar, not the labels above it. Keeping the focusable node
+        // on this shorter bottom strip makes the ring hug the track and knob.
         Box(
             Modifier
-                .weight(1f)
-                .height(36.dp)
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(stripHeight)
                 .onKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                     when (event.key) {
                         Key.DirectionLeft -> {
-                            seekTo(fraction - step)
+                            nudge(-1f)
                             true
                         }
 
                         Key.DirectionRight -> {
-                            seekTo(fraction + step)
+                            nudge(1f)
                             true
                         }
 
@@ -706,24 +777,9 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                     }
                 }
                 .indication(interaction, LocalIndication.current)
+                .focusRequester(focusRequester)
+                .onFocusChanged { sliding = it.isFocused }
                 .focusable(interactionSource = interaction)
-                .pointerInput(durationMs) { detectTapGestures { offset -> seekTo(offset.x / size.width) } }
-                .pointerInput(durationMs) {
-                    detectHorizontalDragGestures(
-                        onDragStart = { offset ->
-                            if (seekable) dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
-                        },
-                        onHorizontalDrag = { change, _ ->
-                            if (seekable) dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                        },
-                        onDragEnd = {
-                            val target = dragFraction
-                            dragFraction = null
-                            if (target != null) seekTo(target)
-                        },
-                        onDragCancel = { dragFraction = null }
-                    )
-                }
                 .semantics {
                     if (seekable) {
                         contentDescription = "Seek"
@@ -737,16 +793,27 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                 }
                 .drawBehind {
                     val h = 6.dp.toPx()
+                    val knob = 9.dp.toPx()
+                    // The focus ring stays full width; only the track and knob pull in while
+                    // focused so they do not collide with the ring.
+                    val inset = barInset.toPx()
+                    val trackWidth = size.width - inset * 2
+                    // Centre the track and knob in the focus strip so the ring has equal air
+                    // above and below them.
                     val y = (size.height - h) / 2
-                    drawRoundRect(trackColor, Offset(0f, y), Size(size.width, h), CornerRadius(h / 2))
-                    if (shownFraction > 0f) {
-                        val filled = size.width * shownFraction
-                        drawRoundRect(progressColor, Offset(0f, y), Size(filled, h), CornerRadius(h / 2))
-                        drawCircle(progressColor, 9.dp.toPx(), Offset(filled, size.height / 2))
+                    drawRoundRect(trackColor, Offset(inset, y), Size(trackWidth, h), CornerRadius(h / 2))
+                    if (barFraction > 0f) {
+                        val filled = inset + trackWidth * barFraction
+                        drawRoundRect(
+                            progressColor,
+                            Offset(inset, y),
+                            Size(trackWidth * barFraction, h),
+                            CornerRadius(h / 2)
+                        )
+                        drawCircle(knobColor, knob, Offset(filled, y + h / 2))
                     }
                 }
         )
-        SidekitText(formatDuration(durationMs), style = timeStyle)
     }
 }
 

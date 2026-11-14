@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -50,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
@@ -81,9 +81,14 @@ import kotlinx.coroutines.launch
  * the Now Playing layout (artwork, transport, action bar).
  */
 @Composable
-private fun NowPlayingSeek(playbackPositionMs: StateFlow<Long>, durationMs: Long, onSeek: (Long) -> Unit) {
+private fun NowPlayingSeek(
+    playbackPositionMs: StateFlow<Long>,
+    durationMs: Long,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val positionMs by playbackPositionMs.collectAsStateWithLifecycle()
-    SpotifySeek(positionMs, durationMs, onSeek)
+    SpotifySeek(positionMs, durationMs, onSeek, modifier)
 }
 
 @Composable
@@ -188,6 +193,8 @@ fun SpotifyNowPlayingScreen(
                 }
                 // Only the seek bar subscribes to the playback position flow, so the 10x/s
                 // position ticks recompose just this small composable, not the whole screen.
+                // The seek block owns its own height, so the labels can sit close to the artist
+                // line while the bar keeps a little air above the transport row.
                 NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
                 SidekitItemRow {
                     SpotifyIconTile(

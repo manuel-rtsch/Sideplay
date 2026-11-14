@@ -109,9 +109,12 @@ class SpotifyAuth(
         val target = requestLine.split(' ').getOrNull(1) ?: return SpotifyPkce.Callback.Ignored
         val result = SpotifyPkce.parseCallback(target, expectedState)
         val (title, hint) = when (result) {
-            is SpotifyPkce.Callback.Code -> "Welcome to Sideplay" to
-                "Signed in successfully.<br>You can now close this page."
+            is SpotifyPkce.Callback.Code ->
+                "Welcome to Sideplay" to
+                    "Signed in successfully.<br>You can now close this page."
+
             is SpotifyPkce.Callback.Failure -> "Sign-in did not finish" to "Return to Sideplay and try again."
+
             SpotifyPkce.Callback.Ignored -> "Waiting for Spotify…" to "Complete sign-in in the browser."
         }
         respond(socket, title, hint)
