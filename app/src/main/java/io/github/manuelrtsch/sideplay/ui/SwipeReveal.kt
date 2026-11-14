@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -144,6 +145,9 @@ fun SidekitSwipeRow(
     // null until the row has reported focus at least once, so the first composition does not
     // close a row that a touch swipe opened.
     var focused by remember { mutableStateOf<Boolean?>(null) }
+    // The action button is a sibling focus target, not a child of the row's focus target. Track it
+    // separately so moving focus into the button does not look like the row losing focus.
+    var actionFocused by remember { mutableStateOf(false) }
     val arm = remember { Animatable(0f) }
 
     val isOpen by remember { derivedStateOf { offset < -1f } }
@@ -169,16 +173,18 @@ fun SidekitSwipeRow(
     LaunchedEffect(isOpen) {
         if (isOpen) {
             group.openKey = key
-        } else if (group.openKey == key && !dragging) {
-            group.openKey = null
+        } else {
+            // The button is gone, so it cannot still own focus.
+            actionFocused = false
+            if (group.openKey == key && !dragging) group.openKey = null
         }
     }
     LaunchedEffect(group, key) {
         snapshotFlow { group.openKey }.collect { open -> if (open != key && !dragging && offset != 0f) settle(0f) }
     }
-    LaunchedEffect(focused) {
-        when (focused) {
-            true -> {
+    LaunchedEffect(focused, actionFocused) {
+        when {
+            focused == true -> {
                 // The queue's gutter waits for the focus to settle; a list that is being
                 // scrubbed with Up/Down must not flash a button on every row it passes.
                 delay(FOCUS_REVEAL_DELAY_MS)
@@ -188,9 +194,15 @@ fun SidekitSwipeRow(
                 }
             }
 
-            false -> if (!dragging && group.openKey == key) group.closeAll()
+            focused == false && !actionFocused -> {
+                // Focus moving from the row into the action button arrives as two events: the row
+                // goes false and the button goes true. Give the button's event one frame to land
+                // before treating this as the row being left for good.
+                withFrameNanos { }
+                if (!actionFocused && !dragging && group.openKey == key) group.closeAll()
+            }
 
-            null -> Unit
+            else -> Unit
         }
     }
 
@@ -298,7 +310,8 @@ fun SidekitSwipeRow(
                     Modifier
                         .width(spacing.itemHeight)
                         .fillMaxHeight()
-                        .clickable(role = Role.Button, onClickLabel = swipeAction.label, indication = null, interactionSource = null) {
+                        .onFocusChanged { actionFocused = it.isFocused }
+                        .clickable(role = Role.Button, onClickLabel = swipeAction.label) {
                             view.performHapticFeedback(
                                 if (swipeAction.destructive) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.CONTEXT_CLICK
                             )
