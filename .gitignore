@@ -30,3 +30,6 @@ crash-logs/
 
 # Local Maestro screen recordings
 /maestro/recordings/
+
+# Local Reddit announcement draft
+/.reddit-intro.md

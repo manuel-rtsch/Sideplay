@@ -24,19 +24,28 @@ name: Prepare recording
 # 2. Start a known track so it plays in the background during the recording.
 - tapOn: "Search"
 - tapOn: "Search Spotify"
-# The keypad starts in 123 mode; switch it to character mode once.
+# The keypad mode is process-wide. Press a harmless key so the action bar appears,
+# switch out of numeric mode if needed, then enter "toto" as T9 multi-tap digits
+# (t o t o = 8 666 8 666). Avoid adjacent same-key letters: "africa" ends c+a = 2222.
+- inputText: "0"
+- extendedWaitUntil:
+    visible: "Abc|ABC|abc|123"
+    timeout: 10000
 - runFlow:
     when:
       visible: "123"
     commands:
       - tapOn: "123"
-- eraseText: 20
-- inputText: "africa"
+      - extendedWaitUntil:
+          visible: "Abc|ABC|abc"
+          timeout: 5000
+- eraseText: 40
+- inputText: "86668666"
 # Enter takes the exact suggestion and leaves the keypad open with Done still available.
 - pressKey: Enter
 - waitForAnimationToEnd
-- tapOn: "TOTO"
-# If the track was already current, TOTO opens Now Playing instead of starting it.
+- tapOn: "Africa"
+# If the track was already current, Africa opens Now Playing instead of starting it.
 # If it was not current, the now-playing notice appears on the search screen.
 - runFlow:
     when:

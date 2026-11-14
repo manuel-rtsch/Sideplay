@@ -1,0 +1,96 @@
+appId: io.github.manuelrtsch.sideplay
+name: History & Settings
+---
+# Fixture assumptions: signed in and on Home, with enough recent history that
+# Home shows "See more history". No history titles are hardcoded: the focused
+# row's generated Remove label identifies the entry.
+- launchApp
+- assertVisible: "Sideplay"
+
+# 1. Open the full History screen from the Home preview.
+- scrollUntilVisible:
+    element:
+      text: "See more history"
+    direction: DOWN
+- tapOn: "See more history"
+- assertVisible: "History"
+
+# 2. Focus the first row so its gutter opens, then remove that entry. The gutter
+# is focus-revealed; a touch tap on the row would play it instead.
+- pressKey: Remote Dpad Down
+- extendedWaitUntil:
+    visible: "Remove .* from history"
+    timeout: 3000
+- waitForAnimationToEnd
+- copyTextFrom:
+    text: "Remove .* from history"
+- evalScript: ${output.removedHistory = maestro.copiedText}
+- assertTrue: ${output.removedHistory.startsWith("Remove ")}
+- tapOn:
+    text: "Remove .* from history"
+    index: 0
+- assertNotVisible: ${output.removedHistory}
+- assertVisible: "History"
+# Removing shows "<title> removed from history" in the action bar until it is
+# dismissed. Tap the notice, then wait for the normal back action to return.
+- runFlow:
+    when:
+      visible: ".* removed from history"
+    commands:
+      - tapOn: ".* removed from history"
+- extendedWaitUntil:
+    visible: "Sideplay"
+    timeout: 3000
+- tapOn: "Sideplay"
+- assertVisible: "Sideplay"
+
+# 3. Settings, via Options.
+- pressKey: Remote Menu
+- tapOn: "Settings"
+- assertVisible: "Settings"
+
+# 4. Toggle each playback setting once. The initial state is intentionally not
+# hardcoded, so repeated runs flip the value and still pass.
+- tapOn: "Autoplay"
+- assertVisible: "Autoplay"
+- tapOn: "Normalize volume"
+- assertVisible: "Normalize volume"
+- tapOn: "Gapless playback"
+- assertVisible: "Gapless playback"
+
+# 5. Audio quality: assert all choices, select High, then return to Settings.
+- tapOn: "Audio quality"
+- assertVisible: "Normal"
+- assertVisible: "High"
+- assertVisible: "Max"
+- tapOn: "High"
+- assertVisible: "Audio quality"
+- tapOn: "Settings"
+- assertVisible: "Settings"
+
+# 6. Cancel the Clear cache confirmation.
+- scrollUntilVisible:
+    element:
+      text: "Clear cache"
+    direction: DOWN
+- tapOn: "Clear cache"
+- assertVisible: "Cancel"
+- assertVisible: "Clear"
+- tapOn: "Cancel"
+- assertNotVisible: "Clear"
+
+# 7. Cancel the Clear history confirmation. Do not confirm: it destroys the
+# fixture for the rest of the suite.
+- scrollUntilVisible:
+    element:
+      text: "Clear history"
+    direction: DOWN
+- tapOn: "Clear history"
+- assertVisible: "Cancel"
+- assertVisible: "Clear"
+- tapOn: "Cancel"
+- assertNotVisible: "Clear"
+
+# 8. Back to Home.
+- tapOn: "Back"
+- assertVisible: "Sideplay"

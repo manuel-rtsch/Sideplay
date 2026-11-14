@@ -5,20 +5,20 @@
 # flow) and leaves an unplayable file if interrupted. screenrecord is fast and
 # produces a normal MP4.
 #
-# Before recording, `flows/record-prepare.yaml` clears the Recently played history
-# and starts a song so it is already playing in the background. The recording
-# itself starts only once the flow has launched the app, so the MP4 does not begin
-# with Maestro's JVM startup time. Set SIDEPLAY_SKIP_PREPARE=1 to record the flow
-# as-is instead.
+# Before recording, `flows/utility/record-prepare.yaml` clears the Recently played
+# history and starts a song so it is already playing in the background. The
+# recording itself starts only once the flow has launched the app, so the MP4 does
+# not begin with Maestro's JVM startup time. Set SIDEPLAY_SKIP_PREPARE=1 to record
+# the flow as-is instead.
 #
 # Usage: ./record.sh [flow] [output]
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-FLOW="${1:-flows/hero-play-search-queue.yaml}"
+FLOW="${1:-flows/demo/hero-play-search-queue.yaml}"
 OUT="${2:-recordings/hero-play-search-queue.mp4}"
-PREP_FLOW="${SIDEPLAY_PREP_FLOW:-flows/record-prepare.yaml}"
+PREP_FLOW="${SIDEPLAY_PREP_FLOW:-flows/utility/record-prepare.yaml}"
 DEVICE_FILE="/sdcard/maestro-recording.mp4"
 START_MARKER="${SIDEPLAY_RECORD_START_MARKER:-Assert that \"Sideplay\" is visible... COMPLETED}"
 START_TIMEOUT="${SIDEPLAY_RECORD_START_TIMEOUT:-30}"

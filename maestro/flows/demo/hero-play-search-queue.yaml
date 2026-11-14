@@ -16,20 +16,33 @@ name: Hero - Play, Queue, Search
 - assertVisible: "Queue"
 - tapOn: "Sideplay"
 
-# 3. Search with the keypad and play a result.
+# 3. Search with the keypad and reopen the prepared track.
 - tapOn: "Search"
 - tapOn: "Search Spotify"
-# The keypad starts in 123 mode; switch it to character mode once.
+# The keypad mode is process-wide. Probe it, switch out of numeric mode if needed,
+# then enter "toto" as T9 multi-tap digits (8 666 8 666).
+- inputText: "0"
+- extendedWaitUntil:
+    visible: "Abc|ABC|abc|123"
+    timeout: 10000
 - runFlow:
     when:
       visible: "123"
     commands:
       - tapOn: "123"
-- eraseText: 20
-- inputText: "africa"
+      - extendedWaitUntil:
+          visible: "Abc|ABC|abc"
+          timeout: 5000
+- eraseText: 40
+- inputText: "86668666"
 # Enter takes the exact suggestion and leaves the keypad open with Done still available.
 - pressKey: Enter
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
 - waitForAnimationToEnd
-- tapOn: "TOTO"
+- tapOn: "Africa"
 # Africa is already current, so this opens Now Playing directly.
 - assertVisible: "Back"

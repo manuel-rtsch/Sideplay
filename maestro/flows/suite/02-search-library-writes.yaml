@@ -1,0 +1,143 @@
+appId: io.github.manuelrtsch.sideplay
+name: Search & Library Writes
+---
+# Fixture assumptions: signed in and on Home. The pinned query is "Die drei", entered
+# as T9 multi-tap digits (3 444 33 0 3 777 33 444) because Maestro's inputText
+# becomes key events on this keypad. The account must have at least one searchable
+# show for this query; artist and album sections must also be present.
+# No artist, album, show, or episode titles are hardcoded.
+- launchApp
+- assertVisible: "Sideplay"
+
+# 1. Search the pinned query. The keypad's mode is process-wide, so switch it back
+# to multi-tap if a previous run left it in numeric mode.
+- tapOn: "Search"
+- assertVisible: "Search Spotify"
+- tapOn: "Search Spotify"
+# The keypad action bar only appears after the first key press. Press a harmless key,
+# then read its mode. The mode is process-wide and can be numeric from an earlier
+# session; only then is there a "123" button to switch back to multi-tap.
+- inputText: "0"
+- extendedWaitUntil:
+    visible: "Abc|ABC|abc|123"
+    timeout: 10000
+- runFlow:
+    when:
+      visible: "123"
+    commands:
+      - tapOn: "123"
+      - extendedWaitUntil:
+          visible: "Abc|ABC|abc"
+          timeout: 5000
+- eraseText: 40
+- inputText: "3444330377733444"
+- pressKey: Enter
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- waitForAnimationToEnd
+- assertVisible: "TRACKS"
+
+# 2. Open Search in, toggle Artists off and back on, then return.
+- tapOn: "Search in"
+- assertVisible: "Search in"
+- assertVisible: "Categories"
+# Toggle a category that clears the bottom action bar; the last row (Shows) can
+# be overlapped by it on this screen size.
+- tapOn: "Artists"
+- tapOn: "Artists"
+- tapOn: "Search"
+- assertVisible: "Search in"
+
+# 3. Open the first artist result and exercise the follow write in both directions.
+- scrollUntilVisible:
+    element:
+      text: "Artist"
+    direction: DOWN
+- tapOn:
+    text: "Artist"
+    index: 0
+- assertVisible: "TOP TRACKS"
+- runFlow:
+    when:
+      visible: "Following"
+    commands:
+      - tapOn: "Following"
+      - assertVisible: "Follow"
+      - tapOn: "Follow"
+      - assertVisible: "Following"
+- runFlow:
+    when:
+      visible: "Follow"
+    commands:
+      - tapOn: "Follow"
+      - assertVisible: "Following"
+      - tapOn: "Following"
+      - assertVisible: "Follow"
+- tapOn: "Back"
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- assertVisible: "Artist"
+
+# 4. Open an album result and exercise the save write in both directions.
+- scrollUntilVisible:
+    element:
+      text: "ALBUMS"
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    below:
+      text: "ALBUMS"
+- assertVisible: "Sav(e|ed)"
+- runFlow:
+    when:
+      visible: "Saved"
+    commands:
+      - tapOn: "Saved"
+      - assertVisible: "Save"
+      - tapOn: "Save"
+      - assertVisible: "Saved"
+- runFlow:
+    when:
+      visible: "Save"
+    commands:
+      - tapOn: "Save"
+      - assertVisible: "Saved"
+      - tapOn: "Saved"
+      - assertVisible: "Save"
+- tapOn: "Back"
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- assertVisible: "ALBUMS"
+
+# 5. Open the first show result and play its first episode.
+- scrollUntilVisible:
+    element:
+      text: "SHOWS"
+    direction: DOWN
+- tapOn:
+    below:
+      text: "SHOWS"
+- assertVisible: "Sav(e|ed)"
+- assertVisible: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
+- tapOn:
+    text: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
+    index: 0
+# The episode may already be current, which opens Now Playing directly, or it may
+# start playing and leave us on the show page. Options handles the second case.
+- runFlow:
+    when:
+      visible: "Sav(e|ed)"
+    commands:
+      - pressKey: Remote Menu
+      - tapOn: "Now playing"
+- assertVisible: "Previous"
+- assertVisible: "Pause|Play"
