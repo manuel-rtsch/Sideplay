@@ -30,9 +30,9 @@ Spotify.
 - **Keypad first.** Every interactive row is focusable, has a visible focus ring, and a 48 dp
   minimum target. Do not fade the focused element.
 - **Content never wears the theme colour.** Play, selection, progress, save/unsave, and
-  follow/unfollow use the Library success fill; the case colour belongs to action-bar actions
-  only. Save controls are always bookmark tiles: hollow (`BookmarkBorder`) when unsaved, filled
-  (`Bookmark`) when saved.
+  follow/unfollow use the Library success fill; the case colour belongs to action-bar actions and
+  the vinyl status record only. Save controls are always bookmark tiles: hollow (`BookmarkBorder`)
+  when unsaved, filled (`Bookmark`) when saved.
 - **No new dependencies** for images, DI, persistence, or media. Reuse the SDK's
   `RemoteArtwork`, `EncryptedFileStore`, `UndoWindow`, and `NativeLibraries`; keep app-local
   media coordination, plain repositories, and manual wiring.

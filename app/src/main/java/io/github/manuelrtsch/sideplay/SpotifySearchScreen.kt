@@ -185,7 +185,7 @@ fun SpotifySearchScreen(
                     val index = rowIndex
                     item(key = "idle") {
                         EmptyMessage(
-                            "Search your library and Spotify",
+                            "Search Spotify",
                             Modifier.listFade(listState, index),
                             hint = "Tracks, artists, albums and more"
                         )

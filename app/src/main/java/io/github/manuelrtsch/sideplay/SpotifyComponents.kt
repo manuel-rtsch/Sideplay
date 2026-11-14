@@ -262,7 +262,7 @@ fun NowPlayingTile(
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 SidekitText(
-                    if (current == null) "NOTHING PLAYING" else "PLAYING",
+                    if (current == null) "NOTHING PLAYING" else "NOW PLAYING",
                     style = SidekitTheme.typography.small,
                     color = colors.surfaceA6
                 )
@@ -420,8 +420,8 @@ private fun VinylRecord(angle: Float, modifier: Modifier = Modifier) {
                 style = Stroke(width = 1.dp.toPx())
             )
         }
-        drawCircle(colors.successA1, radius * 0.34f, centre)
-        drawCircle(colors.successA3, radius * 0.34f, centre, style = Stroke(width = 1.dp.toPx()))
+        drawCircle(colors.primaryA1, radius * 0.34f, centre)
+        drawCircle(colors.primaryA3, radius * 0.34f, centre, style = Stroke(width = 1.dp.toPx()))
         drawCircle(colors.surfaceA1, radius * 0.055f, centre)
         drawArc(
             color = colors.light.copy(alpha = 0.18f),
