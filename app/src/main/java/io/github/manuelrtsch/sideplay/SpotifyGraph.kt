@@ -217,15 +217,25 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
             LaunchedEffect(type, id) { type?.let { vm.ensureCollection(it, id) } }
             val collection = type?.let { vm.collection(it, id) }
             if (collection == null) {
+                val key = type?.let { "${it.route}:$id" }
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
-                    loading = type?.let { "${it.route}:$id" in state.pendingCollections } == true,
+                    loading = key != null && key in state.pendingCollections,
                     loadingTitle = when (type) {
                         SpotifyCollectionType.Album -> "Loading album"
                         SpotifyCollectionType.Playlist -> "Loading playlist"
                         SpotifyCollectionType.Show -> "Loading show"
                         null -> "Loading…"
-                    }
+                    },
+                    error = key?.let(state.collectionErrors::get),
+                    errorTitle = when (type) {
+                        SpotifyCollectionType.Album -> "Couldn't load this album"
+                        SpotifyCollectionType.Playlist -> "Couldn't load this playlist"
+                        SpotifyCollectionType.Show -> "Couldn't load this show"
+                        null -> "Couldn't load this collection"
+                    },
+                    missingTitle = "This collection isn't available",
+                    onRetry = { if (type != null) vm.retryCollection(type, id) }
                 )
             } else {
                 CollectionScreen(
@@ -267,7 +277,11 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
                     loading = artistId in state.pendingArtists,
-                    loadingTitle = "Loading artist"
+                    loadingTitle = "Loading artist",
+                    error = state.artistErrors[artistId],
+                    errorTitle = "Couldn't load this artist",
+                    missingTitle = "This artist isn't available",
+                    onRetry = { vm.retryArtist(artistId) }
                 )
             } else {
                 val albums = vm.albumsBy(artist)
@@ -314,6 +328,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onLoadMore = vm::loadMoreSearch,
+                onRetry = vm::retrySearch,
                 onScopes = { nav.navigate(SEARCH_SCOPES) },
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onDismissNotice = vm::dismissNotice,
@@ -464,18 +479,29 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
 private fun MissingCollectionScreen(
     onBack: () -> Unit,
     loading: Boolean = false,
-    loadingTitle: String = "Loading…"
+    loadingTitle: String = "Loading…",
+    error: String? = null,
+    errorTitle: String = "Couldn't load this",
+    missingTitle: String = "This collection isn't available",
+    onRetry: (() -> Unit)? = null
 ) {
     SidekitScaffold(title = "Sideplay", actions = spotifyBack("Back", onBack)) { padding ->
         androidx.compose.foundation.layout.Box(
             androidx.compose.ui.Modifier.padding(padding)
         ) {
-            if (loading) {
-                SpotifyLoadingScreen(title = loadingTitle)
-            } else {
-                SpotifyStatusScreen(
-                    "This collection isn't available",
-                    hint = "Go back and choose another"
+            when {
+                loading -> SpotifyLoadingScreen(title = loadingTitle)
+
+                error != null -> SpotifyStatusScreen(
+                    errorTitle,
+                    hint = error,
+                    actionLabel = "Try again",
+                    onAction = onRetry
+                )
+
+                else -> SpotifyStatusScreen(
+                    missingTitle,
+                    hint = "Go back and choose another item"
                 )
             }
         }

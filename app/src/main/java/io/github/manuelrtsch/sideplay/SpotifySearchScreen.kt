@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sideplay
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -8,6 +9,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.semantics.contentDescription
@@ -41,6 +43,7 @@ fun SpotifySearchScreen(
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onLoadMore: (SearchScope) -> Unit,
+    onRetry: () -> Unit,
     onScopes: () -> Unit,
     onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit,
@@ -88,6 +91,17 @@ fun SpotifySearchScreen(
     ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
+        if (state.query.trim().length >= 2 && !state.searchPending && state.searchError != null && results.isEmpty) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                SpotifyStatusScreen(
+                    "Couldn't search Spotify",
+                    hint = state.searchError,
+                    actionLabel = "Try again",
+                    onAction = onRetry
+                )
+            }
+            return@SidekitScaffold
+        }
         SidekitList(padding, state = listState) {
             var rowIndex = 0
             val scopeIndex = rowIndex
@@ -107,7 +121,7 @@ fun SpotifySearchScreen(
                         EmptyMessage(
                             "Search your library and Spotify",
                             Modifier.listFade(listState, index),
-                            hint = "Tracks, artists, albums, playlists and shows"
+                            hint = "Tracks, artists, albums and more"
                         )
                     }
                 }
@@ -140,7 +154,7 @@ fun SpotifySearchScreen(
                         EmptyMessage(
                             "No results for \"${state.query.trim()}\"",
                             Modifier.listFade(listState, index),
-                            hint = "Try another spelling or change Search in"
+                            hint = "Try another spelling or keyword"
                         )
                     }
                 }

@@ -52,11 +52,7 @@ fun HistoryScreen(
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
         SidekitList(padding, state = listState) {
-            if (state.recent.isEmpty()) {
-                item(key = "empty") {
-                    EmptyMessage("Nothing played yet", hint = "Search to find your first track or episode")
-                }
-            }
+            // History is local-only and has no empty state: with no entries the list is simply blank.
             // A track can be played again, so the id alone repeats; index keeps keys unique.
             itemsIndexed(state.recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
                 SidekitSwipeRow(

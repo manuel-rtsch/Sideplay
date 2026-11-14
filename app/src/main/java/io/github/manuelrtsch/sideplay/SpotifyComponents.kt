@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,7 +75,6 @@ import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitIconItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
-import hrln.interactive.sidekit.design.components.SidekitLineButton
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.SidekitTile
 import hrln.interactive.sidekit.design.icons.SidekitIcon
@@ -469,7 +467,12 @@ fun SpotifyLoadingScreen(
         SidekitText(title, style = SidekitTheme.typography.bodySmall, color = colors.light)
         if (hint != null) {
             Spacer(Modifier.height(4.dp))
-            SidekitText(hint, style = SidekitTheme.typography.caption, color = colors.surfaceA6)
+            SidekitText(
+                hint,
+                style = SidekitTheme.typography.caption,
+                color = colors.surfaceA6,
+                maxLines = 1
+            )
         }
     }
 }
@@ -512,17 +515,37 @@ fun SpotifyStatusScreen(
                 hint,
                 style = SidekitTheme.typography.caption,
                 color = colors.surfaceA6,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 1
             )
         }
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(20.dp))
-            SidekitLineButton(
-                actionLabel,
-                onAction,
-                Modifier.widthIn(max = 240.dp),
-                icon = SidekitIcon.Undo
-            )
+            SpotifyCenteredLineButton(actionLabel, onAction)
+        }
+    }
+}
+
+/**
+ * Sidekit's line button is full-width but left-aligns its label. A short fallback action such as
+ * "Try again" reads as stranded in that width, so this keeps the full-width target and centres
+ * the icon and label instead. The SDK has no alignment parameter for its line button.
+ */
+@Composable
+private fun SpotifyCenteredLineButton(label: String, onClick: () -> Unit) {
+    SidekitTile(
+        modifier = Modifier.fillMaxWidth(),
+        color = SidekitTheme.colors.surfaceA3,
+        onClick = onClick,
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = SidekitTheme.spacing.itemPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SidekitTheme.spacing.itemContentGap)
+        ) {
+            SidekitIconImage(SidekitIcon.Undo)
+            SidekitText(label)
         }
     }
 }

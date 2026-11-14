@@ -189,6 +189,7 @@ class SideplayScreenshotTest {
             onPlaylist = {},
             onShow = {},
             onLoadMore = {},
+            onRetry = {},
             onScopes = {},
             onNowPlaying = {},
             onDismissNotice = {},

@@ -83,7 +83,13 @@ fun SideplayHomeScreen(
             }
             item(key = "recentLabel") { SectionLabel("Recently played") }
             if (recent.isEmpty()) {
-                item(key = "empty") { EmptyMessage("Nothing played yet", hint = "Search to find your first track") }
+                item(key = "empty") {
+                    SpotifyStatusScreen(
+                        "Nothing played yet",
+                        Modifier.listFade(listState, 1),
+                        hint = "Search to find your first track"
+                    )
+                }
             } else {
                 itemsIndexed(recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
                     SidekitSwipeRow(
@@ -169,7 +175,7 @@ fun LibraryScreen(
             SpotifyLoadingScreen(
                 Modifier.padding(padding),
                 title = "Loading your library…",
-                hint = "Liked songs, playlists, albums, artists and shows"
+                hint = "Liked songs, playlists and more"
             )
             return@SidekitScaffold
         }

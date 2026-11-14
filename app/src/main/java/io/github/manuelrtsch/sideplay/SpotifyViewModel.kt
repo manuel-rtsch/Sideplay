@@ -44,6 +44,12 @@ data class SpotifyUiState(
     val librarySectionsError: String? = null,
     /** Set when the open category could not load and has no items to show. */
     val libraryError: String? = null,
+    /** Set when a search request failed and there are no results to keep on screen. */
+    val searchError: String? = null,
+    /** Failed collection loads, keyed by "type:id", so the screen can offer a retry. */
+    val collectionErrors: Map<String, String> = emptyMap(),
+    /** Failed artist loads, keyed by artist id, so the screen can offer a retry. */
+    val artistErrors: Map<String, String> = emptyMap(),
     val libraryHasMore: Boolean = false,
     val libraryMorePending: Boolean = false,
     val searchHasMore: Set<SearchScope> = emptySet(),
@@ -277,7 +283,8 @@ class SpotifyViewModel(
                     it.copy(
                         collections = if (collection == null) it.collections else it.collections + (key to collection),
                         savedCollectionKeys = keys,
-                        pendingCollections = it.pendingCollections - key
+                        pendingCollections = it.pendingCollections - key,
+                        collectionErrors = it.collectionErrors - key
                     )
                 }
             } catch (e: CancellationException) {
@@ -285,10 +292,21 @@ class SpotifyViewModel(
             } catch (e: Exception) {
                 SideplayDebug.log("viewModel.ensureCollection key=$key failed", e)
                 _state.update {
-                    it.copy(pendingCollections = it.pendingCollections - key, notice = playbackNotice(e))
+                    it.copy(
+                        pendingCollections = it.pendingCollections - key,
+                        collectionErrors = it.collectionErrors + (key to playbackNotice(e))
+                    )
                 }
             }
         }
+    }
+
+    /** Retries a collection that failed to load, keeping the screen on its fallback until it lands. */
+    fun retryCollection(type: SpotifyCollectionType, id: String) {
+        val key = collectionKey(type, id)
+        if (key in _state.value.pendingCollections) return
+        _state.update { it.copy(collectionErrors = it.collectionErrors - key) }
+        ensureCollection(type, id)
     }
 
     fun loadMoreCollection(type: SpotifyCollectionType, id: String) {
@@ -433,7 +451,8 @@ class SpotifyViewModel(
                         artistAlbumHasMore = it.artistAlbumHasMore + (id to albums.hasMore),
                         artistTrackHasMore = it.artistTrackHasMore + (id to tracks.hasMore),
                         followedArtistIds = ids,
-                        pendingArtists = it.pendingArtists - id
+                        pendingArtists = it.pendingArtists - id,
+                        artistErrors = it.artistErrors - id
                     )
                 }
             } catch (e: CancellationException) {
@@ -441,10 +460,20 @@ class SpotifyViewModel(
             } catch (e: Exception) {
                 SideplayDebug.log("viewModel.ensureArtist id=$id failed", e)
                 _state.update {
-                    it.copy(pendingArtists = it.pendingArtists - id, notice = playbackNotice(e))
+                    it.copy(
+                        pendingArtists = it.pendingArtists - id,
+                        artistErrors = it.artistErrors + (id to playbackNotice(e))
+                    )
                 }
             }
         }
+    }
+
+    /** Retries an artist that failed to load. */
+    fun retryArtist(id: String) {
+        if (id in _state.value.pendingArtists) return
+        _state.update { it.copy(artistErrors = it.artistErrors - id) }
+        ensureArtist(id)
     }
 
     fun play(items: List<SpotifyMediaItem>, index: Int) {
@@ -753,6 +782,7 @@ class SpotifyViewModel(
                 query = "",
                 searchResults = SpotifySearchResults(),
                 searchPending = false,
+                searchError = null,
                 searchHasMore = emptySet(),
                 searchMorePending = emptySet()
             )
@@ -1047,6 +1077,9 @@ class SpotifyViewModel(
                 librarySectionsLoading = false,
                 librarySectionsError = null,
                 libraryError = null,
+                searchError = null,
+                collectionErrors = emptyMap(),
+                artistErrors = emptyMap(),
                 libraryHasMore = false,
                 libraryMorePending = false,
                 searchResults = SpotifySearchResults(),
@@ -1244,23 +1277,36 @@ class SpotifyViewModel(
             }
             return
         }
-        _state.update { it.copy(searchPending = true, searchHasMore = emptySet(), searchMorePending = emptySet()) }
+        _state.update {
+            it.copy(
+                searchPending = true,
+                searchError = null,
+                searchHasMore = emptySet(),
+                searchMorePending = emptySet()
+            )
+        }
         searchJob = viewModelScope.launch {
             delay(debounceMs)
             val scopes = _state.value.searchScopes
+            var failure: String? = null
             val results = try {
                 if (_state.value.signedIn) catalog.search(query, scopes, 0, SPOTIFY_SEARCH_PAGE_SIZE) else SpotifySearchResults()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = playbackNotice(e)) }
+                failure = playbackNotice(e)
                 SpotifySearchResults()
             }
             _state.update {
                 if (it.query == query && it.searchScopes == scopes) {
+                    val empty = results.isEmpty
                     it.copy(
                         searchResults = results,
                         searchPending = false,
+                        searchError = if (empty) failure else null,
+                        // A failed search with old results stays a notice; an empty one becomes
+                        // the screen's fallback so the retry action is visible.
+                        notice = if (empty) it.notice else failure ?: it.notice,
                         searchHasMore = scopes.filterTo(mutableSetOf()) { scope -> results.sizeFor(scope) >= SPOTIFY_SEARCH_PAGE_SIZE }
                     )
                 } else {
@@ -1268,6 +1314,11 @@ class SpotifyViewModel(
                 }
             }
         }
+    }
+
+    /** Retries the current query after a failed search. */
+    fun retrySearch() {
+        search(debounceMs = 0L)
     }
 
     fun loadMoreSearch(scope: SearchScope) {
@@ -1563,13 +1614,20 @@ class SpotifyViewModel(
     }
 
     private fun playbackNotice(error: Exception): String = when ((error as? SpotifyGatewayException)?.failure) {
-        SpotifyFailure.Unavailable -> "Spotify playback is unavailable in this build"
-        SpotifyFailure.NotConnected -> "Playback is not ready — try again"
-        SpotifyFailure.AuthenticationExpired -> "Spotify session expired — sign in again"
+        SpotifyFailure.Unavailable -> "Playback unavailable in this build"
+
+        SpotifyFailure.NotConnected -> "Playback isn't ready — try again"
+
+        SpotifyFailure.AuthenticationExpired -> "Session expired — sign in again"
+
         SpotifyFailure.Network -> if (session?.isOnline == false) "No internet connection" else "Couldn't reach Spotify"
-        SpotifyFailure.RateLimited -> "Spotify is rate-limiting requests — try again shortly"
+
+        SpotifyFailure.RateLimited -> "Spotify is rate-limiting — try again"
+
         SpotifyFailure.TrackUnavailable -> "This track isn't available"
-        SpotifyFailure.Unknown, null -> error.message ?: "Playback failed"
+
+        // Keep the status subtitle to one line; the full exception is already logged by callers.
+        SpotifyFailure.Unknown, null -> "Something went wrong — try again"
     }
 
     private fun collectionKey(type: SpotifyCollectionType, id: String) = "${type.route}:$id"

@@ -178,8 +178,12 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   Toggling a category immediately changes the result sections and the empty-state hint. The
   selected categories sit at the right edge of that row in the high-contrast item colour.
 - First loads of an artist or collection show a centred, rotating vinyl record with the loading
-  label and a "Fetching from Spotify" hint instead of plain text. Empty and failed library loads
-  use the same record, held still, with a short explanation and a **Try again** action for errors.
+  label and a "Fetching from Spotify" hint instead of plain text. Library, Search, artist and
+  collection failures use the same record, held still, with a short explanation and a full-width
+  secondary **Try again** action, centred because Sidekit's line button left-aligns its label.
+  The action bar always keeps **Back**, so a failed connection never traps the user on the
+  fallback screen. Home's empty recently-played list and an empty queue use the same still record
+  without an action; History has no empty state and simply shows nothing when it has no entries.
 - `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
   T9 → mini QWERTY switch made while Sideplay was in the background takes effect immediately.
 - Settings shows the actual artwork + audio cache size. Sign-out clears artwork, audio, and

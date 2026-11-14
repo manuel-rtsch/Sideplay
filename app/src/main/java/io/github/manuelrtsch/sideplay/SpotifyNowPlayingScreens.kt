@@ -485,7 +485,13 @@ fun QueueScreen(
             val current = state.current
             val gap = queueGap
             if (current == null) {
-                item(key = "empty") { EmptyMessage("Nothing queued", hint = "Search to find something to play") }
+                item(key = "empty") {
+                    SpotifyStatusScreen(
+                        "Nothing queued",
+                        Modifier.listFade(listState, 0),
+                        hint = "Search to find something to play"
+                    )
+                }
             } else {
                 item(key = "current") {
                     SpotifyMediaRow(
