@@ -23,38 +23,48 @@ Run a single flow:
 maestro test flows/suite/01-browse-play.yaml
 ```
 
-Run the whole suite in one invocation, with device animations off and a per-flow timing report:
+Run the whole suite with device animations off, a different accent colour before each flow, and a
+per-flow timing report:
 
 ```sh
 ./run-suite.sh
 FLOW_MAX_SECONDS=45 ./run-suite.sh   # fail when a flow exceeds the limit
+SIDEPLAY_ACCENTS="Lime Orange Blue Pink" ./run-suite.sh   # override the rotation
 ```
 
-Artifacts (`commands.json`, logs, screenshots) are kept in `build/maestro-suite/`. Re-run the
-report alone with `./scripts/flow-times.py build/maestro-suite --verbose`.
+The flows run in `config.yaml` order. Suite artifacts (`commands.json`, logs, screenshots) are
+kept in `build/maestro-suite/`; the accent steps and their logs are kept separately in
+`build/maestro-accent/`, so they do not appear in the timing report. Re-run the report alone with
+`./scripts/flow-times.py build/maestro-suite --verbose`.
 
 ## Record a video
 
 The checked-in recordings come from the recording-first variants in `flows/promo/`:
 
-| Recording | Flow | Length |
-| --- | --- | --- |
-| `recordings/01-browse-play.mp4` | `flows/promo/01-browse-play.yaml` | 30.4 s |
-| `recordings/02-search-library-writes.mp4` | `flows/promo/02-search-library-writes.yaml` | 43.3 s |
-| `recordings/03-queue-transport.mp4` | `flows/promo/03-queue-transport.yaml` | 33.0 s |
-| `recordings/04-history-settings.mp4` | `flows/promo/04-history-settings.yaml` | 42.4 s |
+| Recording | Flow | Accent | Length |
+| --- | --- | --- | --- |
+| `recordings/01-browse-play.mp4` | `flows/promo/01-browse-play.yaml` | Lime | 30.4 s |
+| `recordings/02-search-library-writes.mp4` | `flows/promo/02-search-library-writes.yaml` | Orange | 41.8 s |
+| `recordings/03-queue-transport.mp4` | `flows/promo/03-queue-transport.yaml` | Blue | 38.9 s |
+| `recordings/04-history-settings.mp4` | `flows/promo/04-history-settings.yaml` | Pink | 43.9 s |
 
 The promo variants use a warm launch and omit guards and content that can never match or do not fit
 the recording budget. State-dependent guards stay: a track tap that is already current opens Now
 Playing, so the following Options → Now playing step needs the branch.
 
 ```sh
-./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
-./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
-# 03/04 need a few recent plays: seed them, then skip the prep that clears history.
-SIDEPLAY_SKIP_PREPARE=1 ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
-SIDEPLAY_SKIP_PREPARE=1 ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
+SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
+# Keep the history from flow 01 for the later history recording.
+SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
+# Play six distinct tracks from Liked Songs so Home shows "See more history" again.
+SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
+SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
 ```
+
+`SIDEPLAY_ACCENT` runs `flows/utility/set-accent.yaml` before the prep and the recording, so the
+video picks up Sidekit's host-backed case colour. The checked-in set uses Lime, Orange, Blue, and
+Pink in flow order. Assemble the four panels and the combined 16:9 grid with
+`design/promo/build-videos.sh`.
 
 The fixture must already satisfy the suite assumptions. Flow 4 removes a history entry, so reseed
 before recording the suite again or before the next full suite run.
@@ -89,6 +99,23 @@ marker with `SIDEPLAY_RECORD_START_MARKER` (matched as an extended regex).
 
 `maestro record --local` also works, but is currently very slow (several minutes for a
 ~1 minute flow) and leaves an unplayable file if interrupted. Prefer `record.sh`.
+
+## Accent colour between runs
+
+Sideplay is host-backed when Sidekit is installed: it reads the case colour from Sidekit's
+configuration and ignores writes to Sideplay's own local Appearance screen. Change the host
+setting, then restart Sideplay:
+
+```sh
+maestro test flows/utility/set-accent.yaml -e ACCENT=Lime
+maestro test flows/utility/set-accent.yaml -e ACCENT=Orange
+maestro test flows/utility/set-accent.yaml -e ACCENT=Blue
+maestro test flows/utility/set-accent.yaml -e ACCENT=Pink
+```
+
+The utility launches Sidekit, opens **Settings → Case colour** from the launcher's Options menu,
+selects the named swatch, asserts the new Active colour, and relaunches Sideplay. It force-stops
+both apps, so run it between flows rather than inside one.
 
 ## Device fixture
 
@@ -142,6 +169,7 @@ The planned four-flow suite, coverage map, fixture requirements, and implementat
 - `flows/demo/queue-history-management.yaml` — queues two recent tracks, removes and undoes a queue item, toggles Autoplay, and cancels Clear history.
 - `flows/demo/hero-play-search-queue.yaml` — Now Playing, Queue, keypad search, and playback.
 - `flows/utility/record-prepare.yaml` — recording setup only: clear history, then start a song.
+- `flows/utility/set-accent.yaml` — sets Sidekit's host-backed case colour through **Settings → Case colour**, then restarts Sideplay so the theme takes effect. Use `-e ACCENT=<colour>` with `Lime`, `Orange`, `Blue`, `Pink`, `Sage`, or `Lavender`; it starts and ends on Sideplay Home.
 
 ## Promo videos
 

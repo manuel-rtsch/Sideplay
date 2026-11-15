@@ -51,6 +51,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
@@ -228,6 +229,37 @@ fun RowScope.SpotifyIconTile(
         iconSize = SidekitTheme.spacing.tileIconSize,
         onClick = onClick
     )
+}
+
+/**
+ * Repeat is a three-state cycle (off, context, track), so the two on-states need distinct
+ * glyphs: a tone change alone cannot say whether the queue repeats everything or only the
+ * current track. The plain repeat glyph in the passive tone is off, plain repeat is the context,
+ * and repeat-one is the current track.
+ */
+@Composable
+fun RowScope.SpotifyRepeatTile(
+    repeat: RepeatMode,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    weight: Float = 0.85f
+) {
+    val colors = SidekitTheme.colors
+    val active = repeat != RepeatMode.Off
+    val icon = if (repeat == RepeatMode.Track) R.drawable.ic_repeat_one else R.drawable.ic_repeat
+    SidekitTile(
+        modifier = modifier.weight(weight),
+        color = (if (active) SpotifyTileTone.On else SpotifyTileTone.Neutral).colour(colors),
+        onClick = onClick,
+        onClickLabel = repeat.label
+    ) {
+        Image(
+            painter = painterResource(icon),
+            contentDescription = repeat.label,
+            modifier = Modifier.size(SidekitTheme.spacing.tileIconSize),
+            colorFilter = ColorFilter.tint(colors.light)
+        )
+    }
 }
 
 enum class SpotifyTileTone {
@@ -775,10 +807,11 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
     ) {
         Row(
             // Lift the labels out of the block's top edge so they sit close to the artist line
-            // while the bar keeps its distance below them.
+            // while the bar keeps its distance below them. The extra 2 dp keeps the times from
+            // crowding the track; the block height is unchanged, so the artwork does not shrink.
             Modifier
                 .fillMaxWidth()
-                .offset(y = if (sliding) (-6).dp else (-2).dp)
+                .offset(y = if (sliding) (-8).dp else (-4).dp)
                 .padding(horizontal = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {

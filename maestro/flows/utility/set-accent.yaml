@@ -1,0 +1,58 @@
+appId: io.github.manuelrtsch.sideplay
+name: Set accent colour
+---
+# Set the Sidephone accent colour through Sidekit's Settings -> Case colour, then
+# restart Sideplay so it picks up the host-backed theme.
+#
+# Usage:
+#   maestro test flows/utility/set-accent.yaml -e ACCENT=Orange
+#
+# ACCENT is one of the Sidekit case colours: Lime, Orange, Blue, Pink, Sage,
+# Lavender. Sidekit exposes each swatch by its label as the accessibility content
+# description, and its Active line confirms the write.
+#
+# Sideplay is host-backed when Sidekit is installed: it reads the theme from the
+# host and ignores writes to its own local Appearance screen. That is why the
+# setting is changed in Sidekit and Sideplay is relaunched afterwards.
+- assertTrue: ${["Lime", "Orange", "Blue", "Pink", "Sage", "Lavender"].includes(ACCENT)}
+
+# 1. Open Sidekit's Settings. The launcher's Settings entry lives behind Options.
+- launchApp:
+    appId: "hrln.interactive.sidekit"
+    stopApp: true
+- assertVisible: "Sidemessage"
+- pressKey: Remote Menu
+- tapOn:
+    text: "Settings"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Settings"
+
+# 2. Open the Case colour picker. It sits below the first screenful in compact
+# layout, and rises when compact layout is off, so always scroll to it.
+- scrollUntilVisible:
+    element:
+      text: "Case colour"
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Case colour"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Match your Sidephone case"
+
+# The swatches are radio buttons labelled by their case colour.
+- tapOn:
+    text: "${ACCENT}"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Active: ${ACCENT}"
+
+# 3. Leave Sidekit cleanly, then relaunch Sideplay so it re-reads the host theme.
+- pressKey: Back
+- assertVisible: "Settings"
+- pressKey: Back
+- assertVisible: "Sidemessage"
+- launchApp:
+    appId: "io.github.manuelrtsch.sideplay"
+    stopApp: true
+- assertVisible: "Sideplay"

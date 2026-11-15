@@ -229,13 +229,7 @@ fun SpotifyNowPlayingScreen(
                         weight = 1.2f
                     )
                     SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                    SpotifyIconTile(
-                        SidekitIcon.Undo,
-                        state.repeat.label,
-                        onRepeat,
-                        tone = if (state.repeat == RepeatMode.Off) SpotifyTileTone.Neutral else SpotifyTileTone.On,
-                        weight = 0.85f
-                    )
+                    SpotifyRepeatTile(state.repeat, onRepeat)
                 }
             }
         }

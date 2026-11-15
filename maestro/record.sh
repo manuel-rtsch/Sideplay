@@ -11,6 +11,9 @@
 # does not begin with Maestro's JVM startup time. Set SIDEPLAY_SKIP_PREPARE=1 to record
 # the flow as-is instead.
 #
+# Set SIDEPLAY_ACCENT to change Sidekit's host-backed case colour before recording:
+#   SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml
+#
 # Usage: ./record.sh [flow] [output]
 set -euo pipefail
 
@@ -19,6 +22,8 @@ cd "$(dirname "$0")"
 FLOW="${1:-flows/demo/hero-play-search-queue.yaml}"
 OUT="${2:-recordings/hero-play-search-queue.mp4}"
 PREP_FLOW="${SIDEPLAY_PREP_FLOW:-flows/utility/record-prepare.yaml}"
+ACCENT_FLOW="${SIDEPLAY_ACCENT_FLOW:-flows/utility/set-accent.yaml}"
+ACCENT="${SIDEPLAY_ACCENT:-}"
 DEVICE_FILE="/sdcard/maestro-recording.mp4"
 # Start at the end of the flow's launchApp command: it is the first command every
 # flow runs, so the marker cannot drift when the flow's first action or first
@@ -100,6 +105,11 @@ if [[ "${SIDEPLAY_KEEP_ANIMATIONS:-0}" != "1" ]]; then
         "${ADB[@]}" shell settings put global "$key" 0
     done
     ANIMATIONS_DISABLED=1
+fi
+
+if [[ -n "$ACCENT" ]]; then
+    echo "Setting accent colour to $ACCENT..."
+    maestro test --udid "$DEVICE" -e ACCENT="$ACCENT" "$ACCENT_FLOW"
 fi
 
 if [[ "${SIDEPLAY_SKIP_PREPARE:-0}" != "1" ]]; then

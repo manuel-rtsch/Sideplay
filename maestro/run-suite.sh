@@ -1,28 +1,34 @@
 #!/usr/bin/env bash
-# Run the whole Maestro suite in one invocation and report per-flow length.
+# Run the whole Maestro suite, setting a different accent colour before each flow,
+# and report per-flow length.
 #
-# One `maestro test` run instead of four: the driver is installed once (it is also
-# asked not to reinstall at all, since a warm device already has it), and every
-# flow's commands.json lands in one output directory so the timing report sees
-# all four flows.
+# The flows run in config.yaml order. Before each one, set-accent.yaml changes
+# Sidekit's host-backed case colour and restarts Sideplay so the flow records with
+# that accent. The accent steps write to a separate directory, so the timing
+# report only sees the suite flows.
 #
-# System animations are turned off for the run and restored afterwards, matching
-# what record.sh does. Maestro otherwise pays for an animated window on every
-# tap: ~3.3 s per tap instead of ~2.0 s on this device.
+# System animations are turned off for the whole run and restored afterwards,
+# matching what record.sh does. Maestro otherwise pays for an animated window on
+# every tap: ~3.3 s per tap instead of ~2.0 s on this device.
 #
 # Usage:
 #   ./run-suite.sh                       # run + report
 #   FLOW_MAX_SECONDS=45 ./run-suite.sh   # also fail if a flow is longer
 #   MAESTRO_OUT_DIR=/tmp/run ./run-suite.sh
+#   SIDEPLAY_ACCENTS="Lime Orange Blue Pink" ./run-suite.sh
 #
-# Extra arguments are passed to `maestro test`, e.g. `-e FOO=bar` or
-# `--include-tags nightly`.
+# Extra arguments are passed to each `maestro test` flow invocation, e.g.
+# `-e FOO=bar` or `--include-tags nightly`.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 OUT="${MAESTRO_OUT_DIR:-build/maestro-suite}"
+ACCENT_OUT="${MAESTRO_ACCENT_OUT_DIR:-build/maestro-accent}"
 MAX_SECONDS="${FLOW_MAX_SECONDS:-}"
+# The order used when the accent rotation was verified on device.
+read -r -a ACCENTS <<< "${SIDEPLAY_ACCENTS:-Lime Orange Blue Pink}"
+mapfile -t FLOWS < <(sed -n 's/^[[:space:]]*-[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' config.yaml)
 ANIMATION_KEYS=(window_animation_scale transition_animation_scale animator_duration_scale)
 ANIMATION_VALUES=()
 ANIMATIONS_DISABLED=0
@@ -65,17 +71,44 @@ if [[ "${SIDEPLAY_KEEP_ANIMATIONS:-0}" != "1" ]]; then
     ANIMATIONS_DISABLED=1
 fi
 
-rm -rf "$OUT"
-mkdir -p "$OUT"
+if (( ${#FLOWS[@]} == 0 )); then
+    echo "No flows found in config.yaml." >&2
+    exit 1
+fi
+if (( ${#ACCENTS[@]} == 0 )); then
+    echo "SIDEPLAY_ACCENTS is empty." >&2
+    exit 1
+fi
+
+rm -rf "$OUT" "$ACCENT_OUT"
+mkdir -p "$OUT" "$ACCENT_OUT"
 
 echo "Running suite on $DEVICE (artifacts: $OUT)"
 MAESTRO_STATUS=0
-maestro test \
-    --udid "$DEVICE" \
-    --no-reinstall-driver \
-    --test-output-dir "$OUT" \
-    "$@" \
-    . || MAESTRO_STATUS=$?
+for i in "${!FLOWS[@]}"; do
+    FLOW="${FLOWS[$i]}"
+    ACCENT="${ACCENTS[$((i % ${#ACCENTS[@]}))]}"
+    echo
+    echo "[$((i + 1))/${#FLOWS[@]}] Accent: $ACCENT"
+    if ! maestro test \
+        --udid "$DEVICE" \
+        --no-reinstall-driver \
+        --test-output-dir "$ACCENT_OUT/$((i + 1))-$ACCENT" \
+        -e ACCENT="$ACCENT" \
+        flows/utility/set-accent.yaml >"$ACCENT_OUT/$((i + 1))-$ACCENT.log" 2>&1; then
+        echo "Setting accent $ACCENT failed; see $ACCENT_OUT/$((i + 1))-$ACCENT.log" >&2
+        cat "$ACCENT_OUT/$((i + 1))-$ACCENT.log" >&2
+        MAESTRO_STATUS=1
+        break
+    fi
+    echo "[$((i + 1))/${#FLOWS[@]}] Flow: $FLOW"
+    maestro test \
+        --udid "$DEVICE" \
+        --no-reinstall-driver \
+        --test-output-dir "$OUT" \
+        "$@" \
+        "$FLOW" || { MAESTRO_STATUS=$?; break; }
+done
 
 # Always report timings, even when a flow failed: the failed flow's
 # commands.json is exactly what explains how far it got.

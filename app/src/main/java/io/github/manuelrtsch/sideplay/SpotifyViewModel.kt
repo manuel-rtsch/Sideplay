@@ -34,6 +34,13 @@ const val NOW_PLAYING_NOTICE_MS = 4_000L
  */
 private const val POSITION_EVENT_JUMP_MS = 5_000L
 
+/**
+ * Upper bound on how long the seek bar waits for the native player to confirm a new item. The
+ * hold normally ends with the loading/playing event; this only keeps a lost event from freezing
+ * the bar forever.
+ */
+private const val PLAYBACK_START_TIMEOUT_MS = 10_000L
+
 data class SpotifyUiState(
     val signedIn: Boolean = false,
     val current: SpotifyMediaItem? = null,
@@ -147,6 +154,14 @@ class SpotifyViewModel(
     private var positionAnchorMs = 0L
     private var positionAnchorAt = 0L
     private var lastSeekAt = 0L
+
+    /**
+     * Set while a newly started item has not been confirmed by the native player. The ticker
+     * holds the bar at the requested position during that window: otherwise the UI clock runs
+     * through fetch/buffer latency, and the first loading event (position 0) snaps it backwards.
+     */
+    private var awaitingPlaybackStart = false
+    private var awaitingPlaybackStartAt = 0L
 
     init {
         session?.let {
@@ -1421,6 +1436,9 @@ class SpotifyViewModel(
         SideplayDebug.log("event type=$type uri=${event.opt("uri")?.toString().orEmpty()} positionMs=$position")
         when (type) {
             "loading" -> if (matchesCurrent(event)) {
+                // The player has accepted the new item: the hold can end and the clock may run
+                // from the position the player will actually start at.
+                awaitingPlaybackStart = false
                 anchorPosition(position)
                 session?.playback?.updatePosition(position)
                 _playbackPositionMs.value = position
@@ -1431,6 +1449,7 @@ class SpotifyViewModel(
                 // Ignore a playing event that belongs to a command the user already superseded
                 // with a pause. Otherwise rapid taps leave the UI showing play with no sound.
                 if (playback?.shouldApplyEvent(true) != false) {
+                    awaitingPlaybackStart = false
                     // Keep the UI clock where it is. librespot's event position is the decoder
                     // position, which is ahead of the speaker by the PCM buffer; adopting it
                     // would make the bar jump forward on resume.
@@ -1446,6 +1465,7 @@ class SpotifyViewModel(
                 // Ignore a paused event that belongs to a command the user already superseded
                 // with a resume. Otherwise the UI flickers back to paused after a resume.
                 if (playback?.shouldApplyEvent(false) != false) {
+                    awaitingPlaybackStart = false
                     val current = _playbackPositionMs.value
                     anchorPosition(current)
                     playback?.updateState(false, current)
@@ -1485,11 +1505,13 @@ class SpotifyViewModel(
             "stopped" -> if (matchesCurrent(event)) {
                 // Stop from the notification or lock screen: clear both the UI and the queue so
                 // reopening Sideplay cannot restore the track that was stopped.
+                awaitingPlaybackStart = false
                 session?.playback?.updateState(false, 0L)
                 applyQueue(queue.stop(), positionMs = 0L, playing = false)
             }
 
             "unavailable" -> if (matchesCurrent(event)) {
+                awaitingPlaybackStart = false
                 _state.update { it.copy(isPlaying = false, notice = "This track isn't available") }
             }
         }
@@ -1531,6 +1553,10 @@ class SpotifyViewModel(
         val s = _state.value
         if (!s.isPlaying) return
         val current = s.current ?: return
+        if (awaitingPlaybackStart) {
+            if (SystemClock.elapsedRealtime() - awaitingPlaybackStartAt < PLAYBACK_START_TIMEOUT_MS) return
+            awaitingPlaybackStart = false
+        }
         val next = positionAnchorMs + (SystemClock.elapsedRealtime() - positionAnchorAt)
         val clamped = next.coerceIn(0L, current.durationMs)
         if (clamped != _playbackPositionMs.value) {
@@ -1643,6 +1669,8 @@ class SpotifyViewModel(
         val session = session ?: return
         SideplayDebug.log("viewModel.startRemote uri=$uri positionMs=$positionMs gapless=$gapless")
         anchorPosition(positionMs)
+        awaitingPlaybackStart = true
+        awaitingPlaybackStartAt = SystemClock.elapsedRealtime()
         session.playback.setNowPlaying(item, positionMs)
         viewModelScope.launch {
             try {
@@ -1652,6 +1680,7 @@ class SpotifyViewModel(
                 throw e
             } catch (e: Exception) {
                 SideplayDebug.log("viewModel.startRemote failed", e)
+                awaitingPlaybackStart = false
                 _state.update {
                     it.copy(isPlaying = false, notice = playbackNotice(e), nowPlayingNotice = null)
                 }
