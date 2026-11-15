@@ -39,13 +39,13 @@ dependencyResolutionManagement {
 rootProject.name = "Sidetrack"
 include(":app")
 
-// During Sidekit development, build against the sibling checkout so changes (such as the restored
-// dictation field) are available without publishing a release. CI and clones without that checkout
-// keep using the published SDK from GitHub Pages. Disable explicitly with -PsidetrackLocalSidekit=false.
+// Release builds use the published SDK from GitHub Pages. A sibling Sidekit checkout is only a
+// development shortcut and must be requested explicitly with -PsidetrackLocalSidekit=true, so a
+// local checkout can never silently change what a release was built against.
 val localSidekit = rootDir.parentFile.resolve("Sidekit")
 val useLocalSidekit = providers.gradleProperty("sidetrackLocalSidekit")
     .map(String::toBoolean)
-    .getOrElse(localSidekit.isDirectory)
+    .getOrElse(false)
 if (useLocalSidekit && localSidekit.isDirectory) {
     includeBuild(localSidekit) {
         dependencySubstitution {

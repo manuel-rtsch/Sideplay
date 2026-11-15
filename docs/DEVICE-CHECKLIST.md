@@ -4,8 +4,8 @@ Run this on a physical Sidephone before tagging a release. Record the build, dev
 Items marked **manual** need a second Spotify client, a waiting period, or hardware that cannot be
 driven from `adb`.
 
-**Device:** `SP01GE260600886` (480 × 640, Android 12)  
-**Last run:** 2026-11-11, Sidetrack 0.1.1 (`versionCode=8`)
+**Device:** `SP0100260901847` (SP01_FE_US, 480 × 640, Android 12)  
+**Last run:** 2026-11-16, Sidetrack 0.3.1 (`versionCode=89`)
 
 ## Install and shell
 
