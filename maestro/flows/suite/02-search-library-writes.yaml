@@ -1,11 +1,13 @@
 appId: io.github.manuelrtsch.sideplay
 name: Search & Library Writes
 ---
-# Fixture assumptions: signed in and on Home. The pinned query is "Die drei", entered
-# as T9 multi-tap digits (3 444 33 0 3 777 33 444) because Maestro's inputText
+# Fixture assumptions: signed in and on Home. The pinned query is "bowie", entered
+# as T9 multi-tap digits (b 22, o 666, w 9, i 444, e 33) because Maestro's inputText
 # becomes key events on this keypad. The account must have at least one searchable
 # show for this query; artist and album sections must also be present.
 # No artist, album, show, or episode titles are hardcoded.
+# Account mode: any artist, album or show matching the query works; the demo pack
+# ships David Bowie, his two albums and the show "Bowie: A Life".
 - launchApp
 - assertVisible: "Sideplay"
 
@@ -37,7 +39,7 @@ name: Search & Library Writes
           visible: "Abc|ABC|abc"
           timeout: 5000
 - eraseText: 2
-- inputText: "3444330377733444"
+- inputText: "22666944433"
 - pressKey: Enter
 # The in-app keypad stays open after Enter. Rather than paying a ~2.7 s Done tap
 # after every Back, centre each scroll target: the taps then land above the

@@ -1,11 +1,16 @@
 appId: io.github.manuelrtsch.sideplay
 name: Search & Library Writes (promo)
 ---
-# Fixture assumptions: signed in and on Home. The pinned query is "Die drei", entered
-# as T9 multi-tap digits (3 444 33 0 3 777 33 444) because Maestro's inputText
-# becomes key events on this keypad. The account must have at least one searchable
-# show for this query; artist and album sections must also be present.
-# No artist, album, show, or episode titles are hardcoded.
+# Fixture assumptions: signed in and on Home. The pinned query is "bowie", entered
+# differently per device (see step 1): T9 multi-tap digits (b 22, o 666, w 9, i 444,
+# e 33) on the Sidephone keypad, the plain word on a touch-only device. The account
+# must have at least one searchable show for this query; artist and album sections
+# must also be present.
+# The one write in this take is Follow on the artist page. No artist, show, or
+# episode titles are hardcoded.
+# Account mode: any artist or show matching the query works; the demo pack ships
+# David Bowie and the show "Bowie: A Life". Album pages belong to promo 01, which
+# opens one from the Library, so this take never shows an album.
 - launchApp:
     stopApp: false
 - assertVisible: "Sideplay"
@@ -17,9 +22,38 @@ name: Search & Library Writes (promo)
 - tapOn:
     text: "Search Spotify"
     waitToSettleTimeoutMs: 200
-# The prep left the keypad in multi-tap mode, so the mode probe is skipped.
-- inputText: "3444330377733444"
+# The query is entered differently per device. The Sidephone keypad takes the letters
+# as T9 multi-tap digits (b 22, o 666, w 9, i 444, e 33) pressed as key events; a
+# touch-only device (emulator, standalone phone) has a text input with the system IME
+# and needs the plain word. So: enter the digits, and if the IME is still up, replace
+# them with the word. The IME is the only one that exposes a "Space" key.
+#
+# The keypad mode is process-wide, so a run that skipped the prep (the demo build) can
+# find it in numeric mode. The mode button is already on screen, so no probe keystroke is
+# needed: switch to letters first if it shows "123".
+- runFlow:
+    when:
+      visible: "123"
+    commands:
+      - tapOn:
+          text: "123"
+          waitToSettleTimeoutMs: 200
+      - extendedWaitUntil:
+          visible: "Abc|ABC|abc"
+          timeout: 5000
+- inputText: "22666944433"
 - pressKey: Enter
+- runFlow:
+    when:
+      visible: "Space"
+    commands:
+      - eraseText: 20
+      - inputText: "bowie"
+      # Back closes the IME; the results are already there and keep the full height.
+      - pressKey: Back
+      - extendedWaitUntil:
+          visible: "TRACKS"
+          timeout: 10000
 # The in-app keypad stays open after Enter. Rather than paying a ~2.7 s Done tap
 # after every Back, centre each scroll target: the taps then land above the
 # keypad instead of under it.
@@ -30,7 +64,7 @@ name: Search & Library Writes (promo)
     element:
       text: "Artist"
     direction: DOWN
-    speed: 80
+    speed: 40
     visibilityPercentage: 60
     centerElement: true
     waitToSettleTimeoutMs: 200
@@ -47,38 +81,15 @@ name: Search & Library Writes (promo)
     waitToSettleTimeoutMs: 200
 - assertNotVisible: "^${output.followLabel}$"
 # Back returns to the results with the keypad still open; the next scroll
-# centres ALBUMS above it.
+# centres SHOWS above it.
 - pressKey: Back
 
-# 3. Open an album result and flip Save once.
-- scrollUntilVisible:
-    element:
-      text: "ALBUMS"
-    direction: DOWN
-    speed: 80
-    visibilityPercentage: 60
-    centerElement: true
-    waitToSettleTimeoutMs: 200
-- tapOn:
-    below:
-      text: "ALBUMS"
-    waitToSettleTimeoutMs: 200
-- assertVisible: "Sav(e|ed)"
-- copyTextFrom:
-    text: "^(Save|Saved)$"
-- evalScript: ${output.saveLabel = maestro.copiedText}
-- tapOn:
-    text: "^(Save|Saved)$"
-    waitToSettleTimeoutMs: 200
-- assertNotVisible: "^${output.saveLabel}$"
-- pressKey: Back
-
-# 4. Open the first show result and play its first episode.
+# 3. Open the first show result and play its first episode.
 - scrollUntilVisible:
     element:
       text: "SHOWS"
     direction: DOWN
-    speed: 80
+    speed: 40
     visibilityPercentage: 60
     # The first result row is tapped relative to this heading, so the heading
     # must end up above the fold, not merely 60% visible at the bottom edge.
@@ -95,14 +106,12 @@ name: Search & Library Writes (promo)
     index: 0
     waitToSettleTimeoutMs: 200
 # The episode may already be current, which opens Now Playing directly, or it may
-# start playing and leave us on the show page. Options handles the second case.
-- runFlow:
-    when:
-      notVisible: "Previous"
-    commands:
-      - pressKey: Remote Menu
-      - tapOn:
-          text: "Now playing"
-          waitToSettleTimeoutMs: 200
+# start playing and leave us on the show page. Options handles both without a guard:
+# asking for "Now playing" from Now Playing is a no-op, and a guard that waits on a
+# miss costs more than the tap it saves.
+- pressKey: Remote Menu
+- tapOn:
+    text: "Now playing"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Previous"
 - assertVisible: "Pause|Play"

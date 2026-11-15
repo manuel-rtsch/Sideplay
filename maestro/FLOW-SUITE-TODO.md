@@ -30,7 +30,7 @@ four suite flows.
 | `flows/suite/04-history-settings.yaml` | Implemented. History removal and Settings confirmations. |
 | `flows/demo/*.yaml` | Manual demos and older smoke/artist/queue flows. Not in `config.yaml`. |
 | `flows/utility/record-prepare.yaml` | Recording setup only. Not in `config.yaml`. |
-| `recordings/` | One MP4 per suite flow. Regenerate after seeding with `SIDEPLAY_SKIP_PREPARE=1`. |
+| `recordings/` | One MP4 per suite flow. Regenerate from the `demo` build (see `README.md`). |
 
 ### Implemented coverage
 
@@ -107,8 +107,12 @@ The current suite depends on whatever is on the device. Make that explicit.
   - one current track,
   - at least 6 distinct history entries (needed for `See more history`),
   - at least 2 upcoming queue items.
-- [ ] Prefer a fixture flow (`flows/utility/seed-fixture.yaml`) over relying on flow order.
-- [ ] If seeding through Search is too slow, consider a debug-only fixture intent in the app; do not add production behavior for tests.
+- [x] Prefer a fixture flow (`flows/utility/seed-fixture.yaml`) over relying on flow order.
+  No seed flow is needed: the `demo` build writes history and the queue itself at process start
+  (`app/src/demo/.../DemoPack.kt`), and `flows/utility/record-prepare-demo.yaml` is a cold launch.
+- [x] If seeding through Search is too slow, consider a debug-only fixture intent in the app; do not add production behavior for tests.
+  Built as a `demo` build type, not an intent: no production screen or ViewModel changed, and
+  `assembleRelease` contains none of it. See `CONTENT-FIXTURE.md` §9.
 - [x] Document any content-specific fixture choices (query, show name, artist) in the flow header.
 
 Without this fixture, Flows 3 and 4 remain order-dependent and cannot guarantee that `See more history` or a second artist exists.
@@ -336,7 +340,8 @@ Media: whatever the fixture’s history contains; no additional requirement.
 
 ## 9. Implementation order
 
-- [x] Decide/implement the fixture (Section 3). Documented as a manual device fixture for now.
+- [x] Decide/implement the fixture (Section 3). Implemented as the `demo` build type; account
+  mode still uses the manual device fixture.
 - [x] Create `flows/suite/01-browse-play.yaml` from the existing artist flow; add album coverage.
 - [x] Create `flows/suite/02-search-library-writes.yaml`.
 - [x] Create `flows/suite/03-queue-transport.yaml` from the queue half of the demo flow.

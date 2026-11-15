@@ -1,0 +1,53 @@
+appId: io.github.manuelrtsch.sideplay
+name: Set accent colour (standalone)
+---
+# Set Sideplay's own case colour, for a device without the Sidekit host: the
+# emulator, or any Android phone running Sideplay standalone. With a host
+# installed, Sideplay follows Sidekit and this screen is only a local fallback —
+# use flows/utility/set-accent.yaml there instead. record.sh picks the right one by
+# looking for the host package; SIDEPLAY_ACCENT_FLOW overrides the choice.
+#
+# Usage:
+#   maestro test flows/utility/set-accent-standalone.yaml -e ACCENT=Orange
+#
+# ACCENT is a Sidekit case colour. The swatches are radio buttons whose
+# accessibility label is the colour name; "Blue" is the light blue one and the
+# one marked "Original blue" is the un-themed default.
+- assertTrue: ${["Lime", "Orange", "Blue", "Pink", "Sage", "Lavender", "Cloud"].includes(ACCENT)}
+
+# 1. Settings -> Appearance. The row sits below the first screenful and under the
+# floating action bar, so centre it: a tap on a row that is only visible at the
+# bottom edge lands on the bar's Back instead.
+- launchApp:
+    appId: "io.github.manuelrtsch.sideplay"
+    stopApp: true
+- assertVisible: "Sideplay"
+- pressKey: Remote Menu
+- tapOn:
+    text: "Settings"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Settings"
+- scrollUntilVisible:
+    element:
+      text: "Appearance"
+    direction: DOWN
+    speed: 40
+    centerElement: true
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Appearance"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Match your Sidephone case"
+
+# 2. Pick the colour, then leave through Back so the screen stack is clean.
+- tapOn:
+    text: "${ACCENT}"
+    waitToSettleTimeoutMs: 200
+- pressKey: Back
+- assertVisible: "Settings"
+
+# 3. Restart Sideplay so the take opens with the colour already applied.
+- launchApp:
+    appId: "io.github.manuelrtsch.sideplay"
+    stopApp: true
+- assertVisible: "Sideplay"

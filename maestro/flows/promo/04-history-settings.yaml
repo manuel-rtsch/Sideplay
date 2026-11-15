@@ -70,6 +70,10 @@ name: History & Settings (promo)
     text: "Normalize volume"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Normalize volume"
+- tapOn:
+    text: "Gapless playback"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Gapless playback"
 
 # 5. Audio quality: assert all choices, select High, then return to Settings.
 - tapOn:
@@ -85,6 +89,28 @@ name: History & Settings (promo)
 - tapOn:
     text: "Settings"
     waitToSettleTimeoutMs: 200
+- assertVisible: "Settings"
+
+# 5b. Look at the two device screens without writing to either: Appearance would
+# recolour the panel and Keyboard has a mode toggle the search flow depends on.
+- scrollUntilVisible:
+    element:
+      text: "Appearance"
+    direction: DOWN
+    speed: 40
+    visibilityPercentage: 60
+    centerElement: true
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Appearance"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Match your Sidephone case"
+- pressKey: Back
+- tapOn:
+    text: "Keyboard"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Keypad mapping"
+- pressKey: Back
 - assertVisible: "Settings"
 
 # 6. Cancel the Clear cache confirmation.

@@ -22,7 +22,7 @@ cd "$(dirname "$0")"
 FLOW="${1:-flows/demo/hero-play-search-queue.yaml}"
 OUT="${2:-recordings/hero-play-search-queue.mp4}"
 PREP_FLOW="${SIDEPLAY_PREP_FLOW:-flows/utility/record-prepare.yaml}"
-ACCENT_FLOW="${SIDEPLAY_ACCENT_FLOW:-flows/utility/set-accent.yaml}"
+ACCENT_FLOW="${SIDEPLAY_ACCENT_FLOW:-}"
 ACCENT="${SIDEPLAY_ACCENT:-}"
 DEVICE_FILE="/sdcard/maestro-recording.mp4"
 # Start at the end of the flow's launchApp command: it is the first command every
@@ -37,6 +37,9 @@ MAESTRO_LOG=""
 ANIMATION_KEYS=(window_animation_scale transition_animation_scale animator_duration_scale)
 ANIMATION_VALUES=()
 ANIMATIONS_DISABLED=0
+IME_KEY="show_ime_with_hard_keyboard"
+IME_VALUE=""
+IME_HIDDEN=0
 
 export PATH="$PATH:$HOME/.maestro/bin"
 export MAESTRO_CLI_NO_ANALYTICS=1
@@ -53,7 +56,26 @@ fi
 ADB=(adb -s "$DEVICE")
 export MAESTRO_DEVICE_UDID="$DEVICE"
 
+# With the Sidekit host installed, Sideplay follows the host's case colour; without it
+# (the emulator, or any phone running the standalone build) the colour lives in
+# Sideplay's own Appearance screen. Pick the matching flow instead of assuming.
+if [[ -z "$ACCENT_FLOW" ]]; then
+    if "${ADB[@]}" shell 'pm list packages hrln.interactive.sidekit | grep -qx package:hrln.interactive.sidekit' 2>/dev/null; then
+        ACCENT_FLOW="flows/utility/set-accent.yaml"
+    else
+        ACCENT_FLOW="flows/utility/set-accent-standalone.yaml"
+    fi
+fi
+
 restore_animations() {
+    if (( IME_HIDDEN )); then
+        if [[ -z "$IME_VALUE" || "$IME_VALUE" == "null" ]]; then
+            "${ADB[@]}" shell settings delete secure "$IME_KEY" || true
+        else
+            "${ADB[@]}" shell settings put secure "$IME_KEY" "$IME_VALUE" || true
+        fi
+        IME_HIDDEN=0
+    fi
     if (( ANIMATIONS_DISABLED )); then
         for i in "${!ANIMATION_KEYS[@]}"; do
             local value="${ANIMATION_VALUES[$i]}"
@@ -107,12 +129,31 @@ if [[ "${SIDEPLAY_KEEP_ANIMATIONS:-0}" != "1" ]]; then
     ANIMATIONS_DISABLED=1
 fi
 
+# A device that draws its soft keyboard (emulator, or a touch phone) would show that
+# keyboard in the video instead of the app's compact Abc/Done bar, and the query would
+# be typed as text instead of T9 key events. Hiding the IME for the take makes the
+# emulator behave like the sidephone. SIDEPLAY_KEEP_IME=1 leaves it alone.
+if [[ "${SIDEPLAY_KEEP_IME:-0}" != "1" ]]; then
+    IME_VALUE="$("${ADB[@]}" shell settings get secure "$IME_KEY" | tr -d '\r')"
+    "${ADB[@]}" shell settings put secure "$IME_KEY" 0
+    IME_HIDDEN=1
+fi
+
 if [[ -n "$ACCENT" ]]; then
     echo "Setting accent colour to $ACCENT..."
     maestro test --udid "$DEVICE" -e ACCENT="$ACCENT" "$ACCENT_FLOW"
 fi
 
 if [[ "${SIDEPLAY_SKIP_PREPARE:-0}" != "1" ]]; then
+    # The demo build serves a fixed catalog and rewrites its history and queue on every
+    # start, so seeding a track or clearing history would fight it. Pick its prep by the
+    # installed version name unless the caller chose one explicitly.
+    if [[ -z "${SIDEPLAY_PREP_FLOW:-}" ]]; then
+        VERSION_NAME="$("${ADB[@]}" shell dumpsys package io.github.manuelrtsch.sideplay | grep -m1 versionName | cut -d= -f2 | tr -d '\r')"
+        if [[ "$VERSION_NAME" == *-demo ]]; then
+            PREP_FLOW="flows/utility/record-prepare-demo.yaml"
+        fi
+    fi
     echo "Preparing device for recording..."
     maestro test --udid "$DEVICE" "$PREP_FLOW"
 fi

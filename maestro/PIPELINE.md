@@ -197,3 +197,91 @@ does not count.
 
 Recording promos 03 and 04 requires history. The default prep clears it, so seed a few distinct
 plays first and record those two with `SIDEPLAY_SKIP_PREPARE=1`.
+
+## 2026-11-15 — the demo build replaces seeded account state
+
+Recording now runs against the `demo` build (`CONTENT-FIXTURE.md` §9), so the two notes above no
+longer describe the current recipes:
+
+- **03 no longer starts from the prep's current track.** It taps a recent row itself, because a
+  take can begin with an episode current and episodes have no Save/Seek. That is also what makes
+  the promo 03 safe after 02 on the same device.
+- **Promos no longer need seeding.** The demo pack rewrites history (9 entries) and the queue at
+  every process start, and `record-prepare-demo.yaml` is a cold launch. `SIDEPLAY_SKIP_PREPARE=1`
+  must not be used with it.
+- **02 pays for the keypad probe again** (~2 s when the mode is already `Abc`). It was skipped
+  only because the account prep left `Abc` behind; the demo prep does not touch the keypad.
+
+## 2026-11-15 — media suite rebuilt from the real pack
+
+The four takes in `recordings/` were re-recorded against the demo build with the real pack
+(§9 there now lists the songs), which changed two things downstream:
+
+- **Official covers.** The demo pack bundles six album covers in `app/src/demo/res`, so no take
+  shows a generated placeholder for a record. Playlists and shows are still invented and keep the
+  generated art, so a green/teal spiral on an episode is expected, not a regression.
+- **New lengths**: 29.9 s, 37.6 s, 43.4 s, 45.4 s (last presented frame). The fourth take lands
+  0.1 s past `CLIP_SECONDS=45`, which trims part of an already frozen final frame — cosmetic only.
+  `design/promo/build-videos.sh` rebuilt the four 4:9 panels and `sideplay-suite-16x9.mp4`.
+
+## 2026-11-15 — promo 01 rewritten, 01 and 02 split by story
+
+Promo 01 was 29.9 s (a third of its 45 s panel frozen) and repeated promo 02's shape: list row →
+artist page → track → Now Playing. It is now the Library tour — hero, a recent row, liked songs,
+first playlist, first album, first show, back Home, hero again — so it plays longer (~40 s) and
+never touches an artist page or a write action.
+
+- `speed: 40` on the Library section scrolls. At 80 the fling passes a short section label between
+  two hierarchy dumps and `scrollUntilVisible` runs to the end of the list instead.
+- Promo 02 is unchanged: with 01 rewritten it is the only take with search, Follow/Save, artist
+  pages and episodes, and 37.6 s is inside the clip.
+- Timings in this entry come from the emulator (~1.3× faster than the phone; see `README.md`).
+  Promo 02 cannot be measured there at all — the emulator's system IME hides the results.
+
+## 2026-11-15 — takes recorded on the emulator
+
+The sidephone was uninstalled and disconnected, so the four takes were re-recorded on
+`emulator-5554` (480×640, same layout). Two harness changes made that possible:
+
+- `record.sh` hides the soft keyboard for the take (`show_ime_with_hard_keyboard=0`, restored on
+  exit, `SIDEPLAY_KEEP_IME=1` to opt out). Without it the emulator draws Gboard over the search
+  screen and `inputText` types text instead of T9 key events.
+- `record.sh` picks the accent flow by host presence: `set-accent.yaml` with Sidekit installed,
+  the new `set-accent-standalone.yaml` (Settings → Appearance) without it. `SIDEPLAY_ACCENT_FLOW`
+  still overrides.
+- Promo 02's query entry is now device-agnostic: digits first, and if the system IME is still up
+  (a "Space" key in the hierarchy) the digits are replaced by the word and Back closes the IME.
+  Section scrolls dropped to `speed: 40` for the same fling-overshoot reason as promo 01.
+
+Lengths: 32.8 s, 44.1 s, 33.9 s, 31.0 s. The emulator runs ~1.3× faster than the phone, so 03 and
+04 now freeze for 11–15 s at the end of their panels; re-record those two on a phone.
+
+## 2026-11-15 — four takes at four durations, settled at 40 s
+
+`CLIP_SECONDS` dropped from 48 to 45 to **40**, and every take was given enough content to reach
+it instead of leaning on the frozen tail:
+
+| Take | Before | Now | Added |
+| --- | --- | --- | --- |
+| 01 Browse & Play | 32.8 s | 35.4 s | the full Liked songs list behind "See more liked songs", one swipe deeper |
+| 02 Search & Writes | 44.1 s | 38.4 s | *lost* the album beat — 01 already opens an album, and the round trip cost 5 s |
+| 03 Queue & Transport | 33.9 s | 39.3 s | shuffle flip, sleep timer screen behind Options |
+| 04 History & Settings | 31.0 s | 38.8 s | Gapless playback toggle, Appearance and Keyboard screens (viewed, not written) |
+
+Three things worth keeping in mind:
+
+- **02 had to shrink, not grow.** It was the only take over the clip, and its last 4 s held the
+  payoff (the episode's Now Playing). Dropping the album beat took it to 38.4 s and removed the one
+  screen it shared with 01.
+- **Every new scroll in a promo flow uses `speed: 40` with `centerElement`.** Section labels are a
+  single short line between two hierarchy dumps; at 80 the fling passes them and runs to the end.
+- **A seek beat was tried and dropped.** `Seek` is a slider, so Maestro can only swipe it from its
+  centre to the screen edge, which parks the panel at `1:41 / 1:43`. The sleep timer screen replaced
+  it: element-based, deterministic, and it shows a feature the phone form factor is built for.
+
+Panels now pad by 4.6 s, 2.1 s, 1.2 s and 1.7 s; the grid is exactly 40.000 s.
+
+`build-videos.sh` also emits a **1920×1080 master** (`sideplay-suite-1920x1080.mp4`) next to the
+1728×972 grid. Both are exactly 16:9, so the master is one lanczos pass over the finished grid and
+the panel seams do not move; the phone render is native 373×863, so nothing is gained by rendering
+the grid larger than this.

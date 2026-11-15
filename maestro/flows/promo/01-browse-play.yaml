@@ -1,42 +1,51 @@
 appId: io.github.manuelrtsch.sideplay
 name: Browse & Play (promo)
 ---
-# Recording-first variant of flows/suite/01-browse-play.yaml.
+# Recording-first variant of flows/suite/01-browse-play.yaml, but deliberately not the
+# same story: this take is the Library tour — Home, liked songs, a playlist, an album
+# and a show, each opened once, with playback started from three different places and
+# finished on Now Playing. Search results, write actions (Follow/Save), artist pages
+# and episodes belong to promo 02, so the two takes never show the same sequence.
 #
-# The suite keeps the state guards: they make a run robust against whatever a
-# previous flow left on the device. A recording does not need the fixture-dead
-# guards, because flows/utility/record-prepare.yaml reseeds the device and starts
-# a known track (Africa) immediately before this flow runs. Every `runFlow when`
-# guard that can never match here still costs its full visibility timeout (~7 s).
+# Fixture assumptions: signed in, on Home, at least one liked track, one saved
+# playlist, one saved album with tracks, one saved show, and a current track. No
+# titles are hardcoded: durations identify playable rows and section labels anchor
+# the rows below them.
 #
-# Keep the guards that depend on which row the tap landed on. A track tap opens
-# Now Playing directly when that track is already current, and the selected row
-# is not stable (it depends on the scroll position); without the guard the
-# following Options -> "Now playing" tap has nowhere to go. When the guard does
-# match it costs only a hierarchy dump, not the 7 s miss.
-#
-# Same fixture assumptions as the suite flow: signed in, at least two followed
-# artists, the second followed artist has at least three top tracks and at least
-# one album with tracks. No titles are hardcoded.
-#
-# launchApp is warm: the prep just left Sideplay on Home, so there is no splash
-# to record and no reason to restart the process.
+# No state guards: flows/utility/record-prepare-demo.yaml cold-launches the app and
+# the demo pack rewrites history and queue at every process start, so a take always
+# begins on the same Home. A guard that can never match still costs its full
+# visibility timeout (~7 s).
 - launchApp:
     stopApp: false
 - assertVisible: "Sideplay"
+- assertVisible: "NOW PLAYING"
 
-# 1. Open the Library and the second followed artist.
+# 1. The hero tile opens Now Playing. The prep left a track current, so this is a
+# live transport on the first screen of the take.
+- tapOn:
+    text: "NOW PLAYING"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Previous"
+- assertVisible: "Pause|Play"
+- pressKey: Back
+- assertVisible: "Sideplay"
+
+# 2. A recent row is the second way into playback. Nothing else is asserted: the row
+# starts playing, the notice says so, and the take moves on.
+- tapOn:
+    text: "[0-9]+:[0-9]{2}"
+    index: 1
+    waitToSettleTimeoutMs: 200
+
+# 3. Liked songs: play the first one straight from the Library list. This is the
+# third way in — no Now Playing screen involved, only the notice.
 - tapOn:
     text: "Library"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Library"
-# Anchor the scroll to the section heading, not to a label that can be clipped
-# at the bottom edge. The heading is stable; the second "Artist" label below it
-# is the second followed artist.
-#
-# The Library remembers its scroll position between runs, so first reset to the
-# top section, then come down to the artists. Without the reset, a Library left
-# at the artists makes a DOWN-only scroll miss the header.
+# The Library remembers its scroll position between takes, so reset to the top
+# section before walking down it in order.
 - scrollUntilVisible:
     element:
       text: "LIKED SONGS"
@@ -44,76 +53,104 @@ name: Browse & Play (promo)
     speed: 80
     visibilityPercentage: 60
     waitToSettleTimeoutMs: 200
-- scrollUntilVisible:
-    element:
-      text: "FOLLOWED ARTISTS"
-    direction: DOWN
-    speed: 80
-    visibilityPercentage: 60
-    waitToSettleTimeoutMs: 200
-# The heading stops at the bottom of the viewport, where only one artist row is
-# fully visible. Move the section up a fixed amount so the first two "Artist"
-# labels are on screen, then index 1 is reliably the second followed artist.
-- swipe:
-    start: "50%, 55%"
-    end: "50%, 30%"
-    duration: 300
-- tapOn:
-    text: "Artist"
-    index: 1
-    waitToSettleTimeoutMs: 200
-- assertVisible: "TOP TRACKS"
-
-# 2. Play the third top track, then open Now Playing from Options. The prep left
-# Africa current, but the selected row is not guaranteed to be a different track,
-# so keep the guard.
 - tapOn:
     text: "[0-9]+:[0-9]{2}"
-    index: 2
+    index: 0
     waitToSettleTimeoutMs: 200
-- runFlow:
-    when:
-      visible: "TOP TRACKS"
-    commands:
-      - pressKey: Remote Menu
-      - tapOn:
-          text: "Now playing"
-          waitToSettleTimeoutMs: 200
-- assertVisible: "Sav(e|ed)"
-- assertVisible: "Previous"
 
-# 3. Back to the artist, then open its first album.
+# 3b. The "See more" row opens the full Liked songs list — one long screen for the
+# gallery, and the only place in the take that scrolls a list of its own.
+- scrollUntilVisible:
+    element:
+      text: "See more liked songs"
+    direction: DOWN
+    speed: 40
+    visibilityPercentage: 60
+    centerElement: true
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "See more liked songs"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Liked songs"
+- swipe:
+    direction: UP
+    duration: 400
+- assertVisible: "Liked songs"
 - pressKey: Back
-- assertVisible: "TOP TRACKS"
+- assertVisible: "Library"
+
+# 4. Playlists: open the first one and play its second track, then come back. The
+# playlist screen is the one long track list in the take.
+# Speed 40 for every section scroll: at 80 the fling passes a short section label
+# between two hierarchy dumps and the scroll runs to the end of the list instead.
+- scrollUntilVisible:
+    element:
+      text: "PLAYLISTS"
+    direction: DOWN
+    speed: 40
+    visibilityPercentage: 60
+    centerElement: true
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    below:
+      text: "PLAYLISTS"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "[0-9]+:[0-9]{2}"
+- tapOn:
+    text: "[0-9]+:[0-9]{2}"
+    index: 1
+    waitToSettleTimeoutMs: 200
+- pressKey: Back
+- assertVisible: "Library"
+
+# 5. Albums: open the first saved album and play from it. The Save button is left
+# alone — promo 02 owns the write actions.
 - scrollUntilVisible:
     element:
       text: "ALBUMS"
     direction: DOWN
-    speed: 80
+    speed: 40
     visibilityPercentage: 60
+    centerElement: true
     waitToSettleTimeoutMs: 200
 - tapOn:
-    text: "[0-9]{4}( · [0-9]+ tracks)?"
-    index: 0
+    below:
+      text: "ALBUMS"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
-
-# 4. Play the album's first track and open Now Playing.
 - tapOn:
     text: "[0-9]+:[0-9]{2}"
     index: 0
     waitToSettleTimeoutMs: 200
-- runFlow:
-    when:
-      notVisible: "Previous"
-    commands:
-      - pressKey: Remote Menu
-      - tapOn:
-          text: "Now playing"
-          waitToSettleTimeoutMs: 200
-- assertVisible: "Sav(e|ed)"
-- assertVisible: "Previous"
+- pressKey: Back
+- assertVisible: "Library"
 
-# End on Now Playing. The extra play and the walk back through artist, Library,
-# and Home were ~20 s of dead time, and they also forced the fragile "another top
-# track" selection above. The two plays already add history entries.
+# 6. Shows: open the first saved show and look at its episode list. Nothing is
+# played here; the episode beat belongs to promo 02.
+- scrollUntilVisible:
+    element:
+      text: "SHOWS"
+    direction: DOWN
+    speed: 40
+    visibilityPercentage: 60
+    centerElement: true
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    below:
+      text: "SHOWS"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
+- pressKey: Back
+- assertVisible: "Library"
+
+# 7. Home again, and end on Now Playing from the hero — the same screen the take
+# opened with, now showing the album track started in step 5. Closing the arc on the
+# hero avoids a long scroll back up the Library and gives the four-up grid a common
+# final state.
+- pressKey: Back
+- assertVisible: "Sideplay"
+- tapOn:
+    text: "NOW PLAYING"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Previous"
+- assertVisible: "Pause|Play"

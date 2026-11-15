@@ -43,20 +43,89 @@ The checked-in recordings come from the recording-first variants in `flows/promo
 
 | Recording | Flow | Accent | Length |
 | --- | --- | --- | --- |
-| `recordings/01-browse-play.mp4` | `flows/promo/01-browse-play.yaml` | Lime | 30.4 s |
-| `recordings/02-search-library-writes.mp4` | `flows/promo/02-search-library-writes.yaml` | Orange | 41.8 s |
-| `recordings/03-queue-transport.mp4` | `flows/promo/03-queue-transport.yaml` | Blue | 38.9 s |
-| `recordings/04-history-settings.mp4` | `flows/promo/04-history-settings.yaml` | Pink | 43.9 s |
+| `recordings/01-browse-play.mp4` | `flows/promo/01-browse-play.yaml` | Lime | 35.4 s |
+| `recordings/02-search-library-writes.mp4` | `flows/promo/02-search-library-writes.yaml` | Orange | 38.4 s |
+| `recordings/03-queue-transport.mp4` | `flows/promo/03-queue-transport.yaml` | Blue | 39.3 s |
+| `recordings/04-history-settings.mp4` | `flows/promo/04-history-settings.yaml` | Pink | 38.8 s |
 
 The promo variants use a warm launch and omit guards and content that can never match or do not fit
 the recording budget. State-dependent guards stay: a track tap that is already current opens Now
 Playing, so the following Options → Now playing step needs the branch.
 
+The four takes are meant to tell four different stories, not to cover one checklist:
+
+| Take | Story | Owns |
+| --- | --- | --- |
+| 01 Browse & Play | Home hero, a recent row, then the Library tour: liked songs, the full liked list, first playlist, first album, first show, back Home, hero again | Home, the Library categories, album pages, playback started from three places |
+| 02 Search & Library Writes | One query, then the writer's tour: follow the first artist, open the first show, play its first episode | Search, Follow, artist pages, shows, episodes |
+| 03 Queue & Transport | Queue editing plus transport: add, remove and undo, clear and undo, shuffle, repeat, save, sleep timer | Queue, swipe actions, transport, sleep timer |
+| 04 History & Settings | History, playback settings, audio quality, Appearance, Keyboard, Clear cache/history | History, settings, device screens |
+
+Flow 01 no longer opens an artist page or writes anything, so it cannot drift back into being a
+copy of 02. Keep it that way when editing: the artist page, Follow and episodes belong to 02. The
+album page belongs to 01 — 02 used to open one too, which duplicated 01 and pushed the take 3.5 s
+past the clip.
+
+### Working on the emulator
+
+`SIDEPLAY_DEVICE=emulator-5554 ./record.sh …` records against an emulator, which is enough to
+iterate on flows that do not type: the device is 480×640 like the Sidephone, so the layouts match.
+Two caveats:
+
+- **Timing is ~1.3× faster than the phone.** Measured on flows 03 and 04 (suite): 38.0 s and 33.3 s
+  here against 50.2 s and 45.2 s on the device. Budget a phone take at `emulator × 1.3` against the
+  40 s clip — the promo flows are now paced for the emulator, so a phone take of 02 or 03 would
+  overrun it.
+- **Hide the soft keyboard.** `record.sh` sets `show_ime_with_hard_keyboard=0` for the take and
+  restores it afterwards (`SIDEPLAY_KEEP_IME=1` opts out). With the IME hidden the app falls back to
+  its own Abc/Done bar and the T9 digits work exactly as on the sidephone; with it visible the
+  keyboard is drawn in the video and the query is typed as text instead.
+- **The accent comes from Sideplay itself.** The emulator has only the Sidekit SDK sample, not the
+  host, so `record.sh` picks `flows/utility/set-accent-standalone.yaml` (Settings → Appearance)
+  instead of the host flow. It detects this by looking for the host package; `SIDEPLAY_ACCENT_FLOW`
+  overrides the choice.
+- **Takes are shorter than on the phone** (see the ratio above), so a phone re-record would overrun
+  the clip instead of underrunning it. The emulator takes now fill the 40 s panel to within 1–5 s.
+
+### Demo build
+
+The recordings are made against a `demo` build that serves a fixed catalog instead of the
+signed-in account's library, so the videos never show personal data and search results never
+change with Spotify's ranking. The default pack shows real, widely known songs (Bowie, Nina
+Simone, Massive Attack, Fela Kuti, Buena Vista Social Club) with their official covers bundled in
+`app/src/demo/res`; every item plays one stock track, because the videos are muted. Only the catalog is
+fake: playback still uses the signed-in account. `-PdemoPack=fictional` builds the original fully
+invented pack instead. See `CONTENT-FIXTURE.md` for what the pack contains and why.
+
+```sh
+./gradlew :app:assembleDemo
+adb install -r app/build/outputs/apk/demo/app-demo.apk   # replaces the release app
+# Sign in once if the stored credentials are gone; then, per take:
+SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
+SIDEPLAY_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
+SIDEPLAY_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
+SIDEPLAY_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
+```
+
+Every take needs its own cold launch: the demo build rewrites history and the queue at process
+start, which is what makes each video start from the same rows. `record.sh` detects the `-demo`
+version name and runs `flows/utility/record-prepare-demo.yaml` instead of the account prep, so
+never set `SIDEPLAY_SKIP_PREPARE=1` here. That also means flow `02`'s follow/save writes never
+reach the account.
+
+To go back to the real account, reinstall the release APK.
+
+### Account mode
+
+The flows still work against a real account, which is useful when the demo build is not
+installed. Seed the profile first (see `CONTENT-FIXTURE.md` §6), then:
+
 ```sh
 SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
 # Keep the history from flow 01 for the later history recording.
 SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
-# Play six distinct tracks from Liked Songs so Home shows "See more history" again.
+# Seed first: play several distinct tracks so history reaches six entries and a
+# track (not the episode from 02) is current. See CONTENT-FIXTURE.md §6.
 SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
 SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
 ```
@@ -66,8 +135,9 @@ video picks up Sidekit's host-backed case colour. The checked-in set uses Lime, 
 Pink in flow order. Assemble the four panels and the combined 16:9 grid with
 `design/promo/build-videos.sh`.
 
-The fixture must already satisfy the suite assumptions. Flow 4 removes a history entry, so reseed
-before recording the suite again or before the next full suite run.
+In account mode the profile must already satisfy the suite assumptions. Flow 4 removes a history
+entry, so reseed before recording the suite again or before the next full suite run. Neither
+applies to the demo build, which reseeds itself.
 
 `record.sh` turns off the device's window, transition, and animator scales while it records
 (restoring them afterwards). This removes most of Maestro's per-tap settle wait. The recording
@@ -81,10 +151,10 @@ To keep the device's animations on, set `SIDEPLAY_KEEP_ANIMATIONS=1`:
 SIDEPLAY_KEEP_ANIMATIONS=1 ./record.sh flows/promo/01-browse-play.yaml
 ```
 
-For demo and promo flows that should start from a clean history, omit `SIDEPLAY_SKIP_PREPARE`.
-Then `record.sh` runs `flows/utility/record-prepare.yaml`, which launches Sideplay, clears
-**Recently played**, starts **Africa** by TOTO, leaves the keypad in Abc mode, and returns Home
-with the song playing:
+For demo and promo flows that should start from a clean history in account mode, omit
+`SIDEPLAY_SKIP_PREPARE`. Then `record.sh` runs `flows/utility/record-prepare.yaml`, which launches
+Sideplay, clears **Recently played**, starts **Africa** by TOTO, leaves the keypad in Abc mode, and
+returns Home with the song playing:
 
 ```sh
 ./record.sh flows/demo/hero-play-search-queue.yaml
@@ -122,6 +192,10 @@ both apps, so run it between flows rather than inside one.
 The suite assumes a seeded device. The fixture is not created by the test flows, so seed it before
 running the suite and restore it after any flow that removes history or clears the queue.
 
+The full inventory of what the flows consume — counts, ordering, duration and T9 constraints, the
+content that is still hardcoded, the options for a neutral (non-personal) content base and the
+recommended one — is in [`CONTENT-FIXTURE.md`](CONTENT-FIXTURE.md).
+
 Required state, left on **Home**:
 
 - signed in;
@@ -137,8 +211,8 @@ until it is repeatable on-device; the flows must not depend on one another beyon
 fixture.
 
 Known content-specific choices: the Browse flow selects artists, albums and tracks by position,
-subtitle, and duration rather than by title. The Search flow pins the query **Die drei** because a
-show result is required; see **Search input** below.
+subtitle, and duration rather than by title. The Search flow pins the query **bowie** because a
+show result is required; see **Search input** below. Both demo packs satisfy it.
 
 ## Search input
 
@@ -149,9 +223,8 @@ assignment. The T9 engine only multi-taps digits while it is in **Abc** mode, so
 2. switches out of **123** mode if that is the current mode;
 3. erases the probe character (`eraseText: 2`) and enters the query as T9 digit groups.
 
-The pinned Search query is **Die drei**, entered as `3444330377733444`
-(`d i e <space> d r e i`). The show flow uses the first result below the **SHOWS** heading and
-does not assert its title.
+The pinned Search query is **bowie**, entered as `22666944433` (`b 22, o 666, w 9, i 444,
+e 33`). The flow taps the first result below the **SHOWS** heading and does not assert its title.
 
 ## Flows
 

@@ -1,0 +1,12 @@
+appId: io.github.manuelrtsch.sideplay
+name: Prepare recording (demo build)
+---
+# The demo build rewrites Recently played and the queue at every process start, so a
+# cold launch is the entire preparation: no history to clear and no track to start.
+# The catalog is fixed, but playback still goes through the signed-in account, so the
+# device must be signed in once before recording.
+- launchApp:
+    stopApp: true
+- assertVisible: "Sideplay"
+- assertVisible: "NOW PLAYING"
+- assertVisible: "RECENTLY PLAYED"

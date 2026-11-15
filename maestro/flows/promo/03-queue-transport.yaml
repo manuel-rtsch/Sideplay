@@ -1,17 +1,28 @@
 appId: io.github.manuelrtsch.sideplay
 name: Queue & Transport (promo)
 ---
-# Fixture assumptions: signed in and on Home, one current track, at least two
-# recently played rows, and at least two upcoming queue items. No track titles
-# are hardcoded: durations identify rows and the generated Add/Remove labels
-# identify queue actions.
+# Fixture assumptions: signed in and on Home and at least two recently played rows.
+# No track titles are hardcoded: durations identify rows and the generated
+# Add/Remove labels identify queue actions.
 - launchApp:
     stopApp: false
 - assertVisible: "Sideplay"
 - assertVisible: "RECENTLY PLAYED"
 
-# 2. Add a recent track to the queue. The prep clears history and plays Africa,
-# so there is one row and the queue starts with a single upcoming item.
+# 1. Start a track from a recent row. The previous take may leave an episode current
+# with an episode context, and episodes have no Save/Seek. A track tap stays on Home
+# unless that track is already current, in which case it opens Now Playing.
+- tapOn:
+    text: "[0-9]+:[0-9]{2}"
+    index: 1
+    waitToSettleTimeoutMs: 200
+- runFlow:
+    when:
+      visible: "Previous"
+    commands:
+      - pressKey: Back
+
+# 2. Add a recent track to the queue, then open the queue.
 - swipe:
     from:
       text: "[0-9]+:[0-9]{2}"
@@ -84,6 +95,27 @@ name: Queue & Transport (promo)
     waitToSettleTimeoutMs: 200
 - assertVisible: "Previous"
 - assertVisible: "Seek"
+
+# 8b. Shuffle: the tile flips between "Shuffle off" and "Shuffle on", so reading the
+# label first proves the change with a single tap.
+- copyTextFrom:
+    text: "^Shuffle (off|on)$"
+- evalScript: ${output.shuffleLabel = maestro.copiedText}
+- tapOn:
+    text: "^Shuffle (off|on)$"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.shuffleLabel}$"
+
+# 8c. Sleep timer: the last screen behind the transport, reachable from the options
+# bar rather than the transport row. Viewed only — nothing is selected, so no timer
+# survives into the next take.
+- pressKey: Remote Menu
+- tapOn:
+    text: "Sleep timer( on)?"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "30 minutes"
+- pressKey: Back
+- assertVisible: "Previous"
 
 # 9. Cycle repeat once; the label encodes the new state.
 - copyTextFrom:
