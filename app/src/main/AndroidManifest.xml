@@ -25,7 +25,7 @@
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="${appLabel}"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Sideplay">
@@ -54,11 +54,11 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="auth"
-                    android:scheme="sideplay" />
+                    android:scheme="${authScheme}" />
             </intent-filter>
             <meta-data
                 android:name="hrln.interactive.sidekit.app.ID"
-                android:value="sideplay" />
+                android:value="${sidekitAppId}" />
             <meta-data
                 android:name="hrln.interactive.sidekit.app.MIN_SCHEMA"
                 android:value="1" />

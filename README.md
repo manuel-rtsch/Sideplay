@@ -73,7 +73,28 @@ Android NDK and a Rust toolchain.
 
 # Include the native Spotify playback library (required for a device/release build)
 ./gradlew :app:assembleProfile -PsideplayNative=true
+
+# Promo recordings: a fixed, fictional catalog instead of the account's library
+./gradlew :app:assembleDemo
 ```
+
+The `demo` build serves the fixed catalog used for the promo videos and screenshot suite: real,
+widely known songs with generated placeholder covers, and one stock track as the audio for every
+item. It is the only build type with a fake catalog; it is never part of a release, and it uses
+the same application id and signing as release so it can replace the installed app.
+`-PdemoPack=fictional` swaps in the original fully invented pack. See `maestro/CONTENT-FIXTURE.md`.
+
+```sh
+# A demo build that installs next to release instead of replacing it
+./gradlew :app:assembleDemo -PsideplayNative=true -PsideplayStandaloneDemo=true
+```
+
+`-PsideplayStandaloneDemo=true` gives the demo build the application id `…sideplay.demo`, the
+label **Sideplay Demo**, its own Sidekit app id (`sideplay-demo`, so the host shows a second tile
+with its own settings) and its own sign-in link (`sideplay-demo://auth`). It is still signed with
+the release key, so Sidekit trusts it and librespot playback works as usual. Its sandbox, queue,
+history and credentials are separate from the release app. The Maestro flows keep targeting the
+production application id, so leave the flag off when recording or running them.
 
 The native library is what makes library and search work. Without `-PsideplayNative=true`,
 Sideplay falls back to the public Spotify Web API, which currently rejects Spotify's desktop

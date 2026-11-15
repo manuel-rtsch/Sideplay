@@ -3,6 +3,7 @@ package io.github.manuelrtsch.sideplay.data
 import android.content.Context
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sideplay.AudioQuality
+import io.github.manuelrtsch.sideplay.DemoContentSource
 import io.github.manuelrtsch.sideplay.SideplayDebug
 import io.github.manuelrtsch.sideplay.SpotifyMediaItem
 import io.github.manuelrtsch.sideplay.SpotifyTrack
@@ -58,7 +59,14 @@ class SpotifySession(
 
     private val webApi by lazy { SpotifyWebApi { accessToken() } }
     val catalog: SpotifyCatalog by lazy {
-        if (nativeAvailable) NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() } else SpotifyWebCatalog(webApi)
+        // The demo build type serves a fixed catalog; playback still goes through the real
+        // account and librespot, so only the read/write side is replaced.
+        DemoContentSource.current?.catalog()
+            ?: if (nativeAvailable) {
+                NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
+            } else {
+                SpotifyWebCatalog(webApi)
+            }
     }
     val writer: SpotifyLibraryWriter? get() = catalog as? SpotifyLibraryWriter
 
@@ -89,6 +97,7 @@ class SpotifySession(
     }
 
     init {
+        DemoContentSource.current?.seed(history, queue)
         if (nativeAvailable) {
             tmpDir?.let(NativeBridge::setTmpDir)
             audioCacheDir?.let { NativeBridge.setCacheDir(it.absolutePath, AUDIO_CACHE_LIMIT_BYTES) }

@@ -36,9 +36,9 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/android-setup
-      - name: Assemble debug and profile
+      - name: Assemble debug, profile and demo builds
         run: >
-          ./gradlew :app:assembleDebug :app:assembleProfile
+          ./gradlew :app:assembleDebug :app:assembleProfile :app:assembleDemo
           --stacktrace
 
   unit-tests:

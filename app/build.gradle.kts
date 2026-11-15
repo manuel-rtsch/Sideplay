@@ -34,6 +34,14 @@ val releaseKeystoreProperties = Properties().apply {
     }
 }
 
+// `-PsideplayStandaloneDemo=true` turns `assembleDemo` into a second, co-installable app:
+// suffix `.demo` on the application id, its own Sidekit app id and label, so the host shows both
+// the release app and the fake-catalog build. The plain demo build keeps the release identity the
+// Maestro flows and promo recordings pin.
+val standaloneDemo = providers.gradleProperty("sideplayStandaloneDemo")
+    .map(String::toBoolean)
+    .getOrElse(false)
+
 android {
     ndkVersion = "27.1.12297006"
     namespace = "io.github.manuelrtsch.sideplay"
@@ -56,6 +64,18 @@ android {
         // The About screen reports the Sidekit SDK version the app was built against. Kept in
         // sync with the version catalog so it cannot drift from the actual dependency.
         buildConfigField("String", "SIDEKIT_VERSION", "\"${libs.versions.sidekit.get()}\"")
+
+        // The `demo` build type serves a fixed catalog instead of the signed-in account's
+        // Spotify library. It is never part of a release build.
+        buildConfigField("boolean", "DEMO_CONTENT", "false")
+        buildConfigField("String", "DEMO_PACK", "\"none\"")
+
+        // App identity the manifest and the OAuth landing page read. Overridden per build type when
+        // a build has to sit next to the release app instead of replacing it.
+        manifestPlaceholders["appLabel"] = "@string/app_name"
+        manifestPlaceholders["sidekitAppId"] = "sideplay"
+        manifestPlaceholders["authScheme"] = "sideplay"
+        buildConfigField("String", "AUTH_SCHEME", "\"sideplay\"")
     }
 
     signingConfigs {
@@ -88,6 +108,32 @@ android {
             versionNameSuffix = "-dev"
             matchingFallbacks += listOf("release")
         }
+        // Promo/demo builds. Same application id and signing as release on purpose: Sideplay is
+        // host-backed only when Sidekit trusts the release certificate, and the Maestro flows pin
+        // the production application id. Installing this build replaces the release app; the
+        // catalog is fixed and the account is only used for playback.
+        // With -PsideplayStandaloneDemo=true it instead becomes `…sideplay.demo` with its own
+        // Sidekit app id, so it co-installs with release and gets its own host tile and config.
+        // It stays signed with the release key, so Sidekit still trusts it.
+        create("demo") {
+            initWith(getByName("release"))
+            versionNameSuffix = "-demo"
+            matchingFallbacks += listOf("release")
+            if (standaloneDemo) {
+                applicationIdSuffix = ".demo"
+                manifestPlaceholders["appLabel"] = "Sideplay Demo"
+                manifestPlaceholders["sidekitAppId"] = "sideplay-demo"
+                manifestPlaceholders["authScheme"] = "sideplay-demo"
+                buildConfigField("String", "AUTH_SCHEME", "\"sideplay-demo\"")
+            }
+            buildConfigField("boolean", "DEMO_CONTENT", "true")
+            // `real` (default) shows the real-song pack, `fictional` the original backup pack.
+            buildConfigField(
+                "String",
+                "DEMO_PACK",
+                "\"${(project.findProperty("demoPack") as String?) ?: "real"}\""
+            )
+        }
     }
 
     compileOptions {
@@ -104,6 +150,10 @@ android {
         resources.merges += setOf("META-INF/NOTICE.md", "META-INF/LICENSE.md", "META-INF/LICENSE.txt", "META-INF/NOTICE.txt")
     }
     sourceSets["main"].jniLibs.directories.add(layout.buildDirectory.dir("generated/spotifyJniLibs").get().asFile.absolutePath)
+    // The demo catalog is a fictional pack from the screenshot suite, so it reuses the mock
+    // cover art that lives in the debug resources. The drawables are only ever packaged in
+    // debug and demo builds.
+    sourceSets["demo"].res.srcDir("src/debug/res")
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
