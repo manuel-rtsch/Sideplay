@@ -35,31 +35,25 @@ report alone with `./scripts/flow-times.py build/maestro-suite --verbose`.
 
 ## Record a video
 
-The checked-in recordings are one per suite flow:
+The checked-in recordings come from the recording-first variants in `flows/promo/`:
 
-| Recording | Flow |
-| --- | --- |
-| `recordings/01-browse-play.mp4` | `flows/suite/01-browse-play.yaml` |
-| `recordings/02-search-library-writes.mp4` | `flows/suite/02-search-library-writes.yaml` |
-| `recordings/03-queue-transport.mp4` | `flows/suite/03-queue-transport.yaml` |
-| `recordings/04-history-settings.mp4` | `flows/suite/04-history-settings.yaml` |
+| Recording | Flow | Length |
+| --- | --- | --- |
+| `recordings/01-browse-play.mp4` | `flows/promo/01-browse-play.yaml` | 30.4 s |
+| `recordings/02-search-library-writes.mp4` | `flows/promo/02-search-library-writes.yaml` | 43.3 s |
+| `recordings/03-queue-transport.mp4` | `flows/promo/03-queue-transport.yaml` | 33.0 s |
+| `recordings/04-history-settings.mp4` | `flows/promo/04-history-settings.yaml` | 42.4 s |
 
-Recording-first variants live in `flows/promo/`. They take the intended path directly (no `runFlow
-when` guards), use a warm launch, and are the flows that should satisfy the 45 s limit. Record one
-the same way, with the prep enabled:
-
-```sh
-./record.sh flows/promo/01-browse-play.yaml /tmp/01-browse-play.mp4
-```
-
-Use the wrapper, which records with `adb screenrecord` and runs the flow. The suite needs the
-seeded device fixture, so skip the recording prep that clears history:
+The promo variants use a warm launch and omit guards and content that can never match or do not fit
+the recording budget. State-dependent guards stay: a track tap that is already current opens Now
+Playing, so the following Options → Now playing step needs the branch.
 
 ```sh
-cd maestro
-for flow in 01-browse-play 02-search-library-writes 03-queue-transport 04-history-settings; do
-  SIDEPLAY_SKIP_PREPARE=1 ./record.sh "flows/suite/$flow.yaml" "recordings/$flow.mp4"
-done
+./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
+./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
+# 03/04 need a few recent plays: seed them, then skip the prep that clears history.
+SIDEPLAY_SKIP_PREPARE=1 ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
+SIDEPLAY_SKIP_PREPARE=1 ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
 ```
 
 The fixture must already satisfy the suite assumptions. Flow 4 removes a history entry, so reseed
@@ -74,7 +68,7 @@ first action or first assertion.
 To keep the device's animations on, set `SIDEPLAY_KEEP_ANIMATIONS=1`:
 
 ```sh
-SIDEPLAY_KEEP_ANIMATIONS=1 ./record.sh flows/suite/01-browse-play.yaml
+SIDEPLAY_KEEP_ANIMATIONS=1 ./record.sh flows/promo/01-browse-play.yaml
 ```
 
 For demo and promo flows that should start from a clean history, omit `SIDEPLAY_SKIP_PREPARE`.

@@ -167,14 +167,33 @@ The promo variant also had a latent failure: when a track tap opens Now Playing 
 already current), the following `Remote Menu` → `Now playing` step has nowhere to go. The suite hit
 that case in §5. Match-case guards are cheap (~0.3–0.5 s when they match); only a miss costs 7 s.
 
-§4 cuts applied to 01: remove §5 (another top track, two `Back`s, a scroll) and §6 (artist →
-Library → Home), and end on Now Playing. Flow 01 now:
+§4 cuts applied:
 
-| Run | Wall | Notes |
-| --- | --- | --- |
-| Promo variant, warm launch, state guards kept | **29.9 s** | 28 commands, no skipped commands |
-| Promo recording (`record.sh`) | 30.4 s | `/tmp/patch5.mp4` |
-| Suite flow 01, cold launch | **31.7 s** | 28 commands, both guards matched |
+- **01:** remove §5 (another top track, two `Back`s, a scroll) and §6 (artist → Library → Home); end
+  on Now Playing. Anchor the artist selection to `FOLLOWED ARTISTS` instead of a clipped row label.
+- **02:** remove the `Search in` detour; replace both follow and save with one `copyTextFrom` +
+  tap + `assertNotVisible` (one direction, no dead guard); drop all three `Done` taps by centring the
+  scroll targets above the keypad. The suite ends at the `SHOWS` section; the promo keeps the episode
+  playback and the Now Playing ending.
+- **03:** promo starts from the prep's current track, so the §1 track switch is gone; one play/pause,
+  one repeat and one save toggle (read the label, tap, assert it changed); shuffle removed. The suite
+  keeps one guarded track switch for standalone runs.
+- **04:** the promo drops one of the three settings toggles; one destructive confirmation stays.
 
-Next: add `flows/promo/02…04` with the §4 content cuts, record all four, then enable
-`FLOW_MAX_SECONDS=45` and pad every panel to 45.0 s in `design/promo/build-videos.sh`.
+Results (suite: `FLOW_MAX_SECONDS=45 ./run-suite.sh`, 4/4 passed in 2m 42s):
+
+| Flow | Suite wall | Promo recording | Notes |
+| --- | --- | --- | --- |
+| 01 Browse & Play | 35.6 s | 30.4 s | |
+| 02 Search & Library Writes | 37.1 s | 43.3 s | suite ends on SHOWS; promo plays the episode |
+| 03 Queue & Transport | 44.1 s | 33.0 s | suite pays one guarded track switch |
+| 04 History & Settings | 43.3 s | 42.4 s | promos need a seeded history; skip the prep |
+| **Full suite** | **160 s** | — | from 286 s at baseline |
+
+`design/promo/build-videos.sh` now pads every panel from its last presented frame to exactly
+45.000 s (`tpad` + `-t 45`), and the 16:9 grid is 45.000 s. Padding from the container duration is
+wrong for VFR screen recordings: the last frame can carry ~1.4 s of display duration that `tpad`
+does not count.
+
+Recording promos 03 and 04 requires history. The default prep clears it, so seed a few distinct
+plays first and record those two with `SIDEPLAY_SKIP_PREPARE=1`.

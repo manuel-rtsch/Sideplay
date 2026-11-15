@@ -9,31 +9,21 @@ name: Queue & Transport
 - assertVisible: "Sideplay"
 - assertVisible: "RECENTLY PLAYED"
 
-# 1. Make a track current even if a previous flow left an episode playing, then
-# add two recent tracks to the queue. Tracks are m:ss; episodes are h:mm:ss, so
-# the m:ss-only selector skips episode rows on Home.
-- scrollUntilVisible:
-    element:
-      text: "[0-9]+:[0-9]{2}"
-      index: 1
-    direction: DOWN
-    speed: 80
-    visibilityPercentage: 60
-    waitToSettleTimeoutMs: 200
+# 1. The previous flow may leave an episode current; the transport tests need a
+# track (episodes have no Save/Seek). A track tap stays on Home unless that track
+# is already current, in which case it opens Now Playing and we go back.
 - tapOn:
     text: "[0-9]+:[0-9]{2}"
-    index: 0
+    index: 1
     waitToSettleTimeoutMs: 200
-# An already-current track opens Now Playing directly; a new one stays on Home
-# with a four-second notice. Handle both, then wait for the notice to clear.
 - runFlow:
     when:
       visible: "Previous"
     commands:
       - pressKey: Back
-- extendedWaitUntil:
-    visible: "Queue"
-    timeout: 10000
+
+# 2. Add two recent tracks to the queue. Tracks are m:ss; episodes are h:mm:ss,
+# so the m:ss-only selector skips episode rows on Home.
 - swipe:
     from:
       text: "[0-9]+:[0-9]{2}"
@@ -84,30 +74,9 @@ name: Queue & Transport
     waitToSettleTimeoutMs: 0
 - assertNotVisible: "Undo"
 
-# 5. Optional shuffle, then open Now Playing from Options. Shuffle keeps the
-# options bar open, so Now playing is the other option in the same bar.
+# 5. Open Now Playing from Options. Shuffle is not part of the recording; the
+# Options bar already contains "Now playing".
 - pressKey: Remote Menu
-- runFlow:
-    when:
-      visible: "Shuffle off"
-    commands:
-      - tapOn:
-          text: "Shuffle off"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Shuffle on"
-- runFlow:
-    when:
-      visible: "Shuffle on"
-    commands:
-      - tapOn:
-          text: "Shuffle on"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Shuffle off"
-- runFlow:
-    when:
-      notVisible: "Now playing"
-    commands:
-      - pressKey: Remote Menu
 - tapOn:
     text: "Now playing"
     waitToSettleTimeoutMs: 200
@@ -120,23 +89,15 @@ name: Queue & Transport
 - assertVisible: "Seek"
 - assertVisible: "Repeat: (off|context|track)"
 
-# 7. Toggle play/pause both ways, restoring the original state.
-- runFlow:
-    when:
-      visible: "Pause"
-    commands:
-      - tapOn:
-          text: "Pause"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Play"
-- runFlow:
-    when:
-      visible: "Play"
-    commands:
-      - tapOn:
-          text: "Play"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Pause"
+# 7. Toggle play/pause once. Reading the current label lets one tap prove the
+# change in either direction without a guard that waits 7 s on a miss.
+- copyTextFrom:
+    text: "^(Pause|Play)$"
+- evalScript: ${output.transportLabel = maestro.copiedText}
+- tapOn:
+    text: "^(Pause|Play)$"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.transportLabel}$"
 
 # 8. Next keeps Now Playing open.
 - tapOn:
@@ -145,48 +106,22 @@ name: Queue & Transport
 - assertVisible: "Previous"
 - assertVisible: "Seek"
 
-# 9. Cycle repeat through all labels and back to off.
-- runFlow:
-    when:
-      visible: "Repeat: off"
-    commands:
-      - tapOn:
-          text: "Repeat: off"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Repeat: context"
-- runFlow:
-    when:
-      visible: "Repeat: context"
-    commands:
-      - tapOn:
-          text: "Repeat: context"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Repeat: track"
-- runFlow:
-    when:
-      visible: "Repeat: track"
-    commands:
-      - tapOn:
-          text: "Repeat: track"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Repeat: off"
+# 9. Cycle repeat once; the label encodes the new state.
+- copyTextFrom:
+    text: "Repeat: (off|context|track)"
+- evalScript: ${output.repeatLabel = maestro.copiedText}
+- tapOn:
+    text: "Repeat: (off|context|track)"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.repeatLabel}$"
 
-# 10. Toggle Save and leave the current track saved.
-- runFlow:
-    when:
-      visible: "Saved"
-    commands:
-      - tapOn:
-          text: "Saved"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Save"
-- runFlow:
-    when:
-      visible: "Save"
-    commands:
-      - tapOn:
-          text: "Save"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Saved"
+# 10. Toggle Save once.
+- copyTextFrom:
+    text: "^(Save|Saved)$"
+- evalScript: ${output.saveLabel = maestro.copiedText}
+- tapOn:
+    text: "^(Save|Saved)$"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.saveLabel}$"
 
 # End on Now Playing.

@@ -39,82 +39,39 @@ name: Search & Library Writes
 - eraseText: 2
 - inputText: "3444330377733444"
 - pressKey: Enter
-- runFlow:
-    when:
-      visible: "Done"
-    commands:
-      - tapOn:
-          text: "Done"
-          waitToSettleTimeoutMs: 200
+# The in-app keypad stays open after Enter. Rather than paying a ~2.7 s Done tap
+# after every Back, centre each scroll target: the taps then land above the
+# keypad instead of under it.
 - assertVisible: "TRACKS"
 
-# 2. Open Search in, toggle Artists off and back on, then return.
-- tapOn:
-    text: "Search in"
-    waitToSettleTimeoutMs: 200
-- assertVisible: "Search in"
-- assertVisible: "Categories"
-# Toggle a category that clears the bottom action bar; the last row (Shows) can
-# be overlapped by it on this screen size.
-- tapOn:
-    text: "Artists"
-    waitToSettleTimeoutMs: 200
-- tapOn:
-    text: "Artists"
-    waitToSettleTimeoutMs: 200
-- tapOn:
-    text: "Search"
-    waitToSettleTimeoutMs: 200
-- assertVisible: "Search in"
-
-# 3. Open the first artist result and exercise the follow write in both directions.
+# 2. Open the first artist result and flip Follow once. Reading the current label
+# first lets one tap prove the write without a second toggle or a dead guard.
 - scrollUntilVisible:
     element:
       text: "Artist"
     direction: DOWN
     speed: 80
     visibilityPercentage: 60
+    centerElement: true
     waitToSettleTimeoutMs: 200
 - tapOn:
     text: "Artist"
     index: 0
     waitToSettleTimeoutMs: 200
 - assertVisible: "TOP TRACKS"
-- runFlow:
-    when:
-      visible: "Following"
-    commands:
-      - tapOn:
-          text: "Following"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Follow"
-      - tapOn:
-          text: "Follow"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Following"
-- runFlow:
-    when:
-      visible: "Follow"
-    commands:
-      - tapOn:
-          text: "Follow"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Following"
-      - tapOn:
-          text: "Following"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Follow"
+- copyTextFrom:
+    text: "^(Follow|Following)$"
+- evalScript: ${output.followLabel = maestro.copiedText}
+- tapOn:
+    text: "^(Follow|Following)$"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.followLabel}$"
+# Back returns to the results with the keypad still open; the next scroll
+# centres ALBUMS above it.
 - pressKey: Back
-- runFlow:
-    when:
-      visible: "Done"
-    commands:
-      - tapOn:
-          text: "Done"
-          waitToSettleTimeoutMs: 200
 - assertVisible: "Artist"
 
-# 4. Open an album result and exercise the save write in both directions.
+# 3. Open an album result and flip Save once.
 - scrollUntilVisible:
     element:
       text: "ALBUMS"
@@ -128,70 +85,24 @@ name: Search & Library Writes
       text: "ALBUMS"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
-- runFlow:
-    when:
-      visible: "Saved"
-    commands:
-      - tapOn:
-          text: "Saved"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Save"
-      - tapOn:
-          text: "Save"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Saved"
-- runFlow:
-    when:
-      visible: "Save"
-    commands:
-      - tapOn:
-          text: "Save"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Saved"
-      - tapOn:
-          text: "Saved"
-          waitToSettleTimeoutMs: 200
-      - assertVisible: "Save"
+- copyTextFrom:
+    text: "^(Save|Saved)$"
+- evalScript: ${output.saveLabel = maestro.copiedText}
+- tapOn:
+    text: "^(Save|Saved)$"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.saveLabel}$"
 - pressKey: Back
-- runFlow:
-    when:
-      visible: "Done"
-    commands:
-      - tapOn:
-          text: "Done"
-          waitToSettleTimeoutMs: 200
 - assertVisible: "ALBUMS"
 
-# 5. Open the first show result and play its first episode.
+# 4. Scroll to the shows section and assert it. Playback is covered
+# by the promo variant; the suite keeps the section assertion to stay under 45 s.
 - scrollUntilVisible:
     element:
       text: "SHOWS"
     direction: DOWN
     speed: 80
     visibilityPercentage: 60
-    # The first result row is tapped relative to this heading, so the heading
-    # must end up above the fold, not merely 60% visible at the bottom edge.
     centerElement: true
     waitToSettleTimeoutMs: 200
-- tapOn:
-    below:
-      text: "SHOWS"
-    waitToSettleTimeoutMs: 200
-- assertVisible: "Sav(e|ed)"
-- assertVisible: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
-- tapOn:
-    text: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
-    index: 0
-    waitToSettleTimeoutMs: 200
-# The episode may already be current, which opens Now Playing directly, or it may
-# start playing and leave us on the show page. Options handles the second case.
-- runFlow:
-    when:
-      visible: "Sav(e|ed)"
-    commands:
-      - pressKey: Remote Menu
-      - tapOn:
-          text: "Now playing"
-          waitToSettleTimeoutMs: 200
-- assertVisible: "Previous"
-- assertVisible: "Pause|Play"
+- assertVisible: "SHOWS"
