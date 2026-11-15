@@ -196,6 +196,20 @@ val ndk = if (!nativeEnabled || cargo == null) {
     runCatching { androidComponents.sdkComponents.ndkDirectory.get().asFile }.getOrNull()?.takeIf { it.isDirectory }
 }
 
+// Rust bakes absolute source paths into panic messages and into the `protobuf` build-script output:
+// the checkout path (which carries this repository's directory name) and the Cargo registry (which
+// carries the builder's home directory). Remap both, so the shipped library holds no
+// machine-specific path and reads the same whatever the checkout is called.
+val remapPrefixes = listOf(
+    rootProject.projectDir.absolutePath to "/sidetrack",
+    (System.getenv("CARGO_HOME")?.let(::File) ?: File(System.getProperty("user.home"), ".cargo"))
+        .absolutePath to "/cargo"
+)
+val rustFlags = buildList {
+    System.getenv("RUSTFLAGS")?.takeIf { it.isNotBlank() }?.let(::add)
+    remapPrefixes.forEach { (from, to) -> add("--remap-path-prefix=$from=$to") }
+}.joinToString(" ")
+
 val buildSpotifyNative = tasks.register<Exec>("buildSpotifyNative") {
     description = "Build libsidetrack_spotify.so for arm64-v8a and x86_64."
     group = "native"
@@ -215,6 +229,7 @@ val buildSpotifyNative = tasks.register<Exec>("buildSpotifyNative") {
         "build", "--release"
     )
     if (ndk != null) environment("ANDROID_NDK_HOME", ndk.absolutePath)
+    environment("RUSTFLAGS", rustFlags)
     inputs.dir(rootProject.file("native/sidetrack-spotify/src"))
     inputs.files(rootProject.file("native/sidetrack-spotify/Cargo.toml"), rootProject.file("native/sidetrack-spotify/Cargo.lock"))
     outputs.dir(spotifyJniLibs)
