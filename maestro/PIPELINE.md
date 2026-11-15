@@ -56,7 +56,9 @@ So the flows are not slow because of what they *do*: they are slow because Maest
    `scriptCondition`, `true` — no timeout. **−35 s.**
 2. **Cap the pre-tap settle** with `waitToSettleTimeoutMs` (present on `tapOn`, `swipe` and
    `scrollUntilVisible` in 2.12.1, verified in the command models). Animations are already disabled,
-   so ~200 ms is safe; ~1.2 s × 70 taps ≈ **−84 s**.
+   so ~200 ms is safe; ~1.2 s × 70 taps ≈ **−84 s**. *Measured: the Android driver always burns a
+   fixed 750 ms window-update loop plus a fallback settle, so the cap only saves ~0.9 s/tap when
+   animations are on and almost nothing when they are off. See §6.*
    ```yaml
    - tapOn: { text: "Library", waitToSettleTimeoutMs: 200 }
    ```
@@ -116,3 +118,39 @@ recording-first variants — `flows/promo/*.yaml` — that contain only the inte
 narrative and the settle overrides. Gating inside one file is possible (`Condition` supports
 `true:` and `scriptCondition:`, so `-e PROMO=1` works), but two small files are easier to read and
 cannot accidentally weaken the suite.
+
+## 6. Implementation log
+
+Baseline committed as `3bc06b7` before any flow changed.
+
+Landed so far (technical changes only, no content cuts):
+
+| Change | Result |
+| --- | --- |
+| `waitToSettleTimeoutMs: 200` on taps, swipes and scrolls | ~3.3 s → ~2.4 s/tap with animations on; no measurable gain with animations off |
+| `speed: 80` + `visibilityPercentage: 60` on `scrollUntilVisible` | flow 01: 20.4 s → 11.3 s; `speed: 100` overshoots/undershoots and times out |
+| `waitForAnimationToEnd` removed | ~0.9 s per removed command |
+| `tapOn: "Back"` → `pressKey: Back` | ~2.1 s → ~0.7 s per navigation, 5–6 per flow |
+| keypad probe: `eraseText: 2`, prep leaves Abc mode | probe/correction path shortened; prep no longer pays 40 key events |
+| `flows/promo/01-browse-play.yaml` | guard-free recording variant, warm `launchApp` |
+| `record.sh` marker | `Launch app .*COMPLETED` regex: matches cold and warm launches, no flow-specific assert |
+| `run-suite.sh` + `scripts/flow-times.py` | one `maestro test --no-reinstall-driver --test-output-dir` run, animations off, per-flow wall time |
+| `FLOW_MAX_SECONDS` | opt-in length gate on the timing report |
+
+Correction to §3 item 2: in Maestro 2.12.1 `AndroidDriver.waitForWindowToSettle` loops for the fixed
+`WINDOW_UPDATE_TIMEOUT_MS` (750 ms) and then falls back to `ScreenshotUtils.waitForAppToSettle`,
+which needs two matching hierarchy dumps. `waitToSettleTimeoutMs` only bounds the inner settle, so
+it cannot bring a tap near the modelled 0.2 s. The real per-tap floor is ~2.0 s on this device; the
+lever that remains is doing fewer taps, which is the §4 work.
+
+Flow 01 after the technical changes:
+
+| Run | Wall | Notes |
+| --- | --- | --- |
+| Suite baseline | 68.4 s | |
+| Suite, technical changes + guards | 42.8 s | animations off, `pressKey: Back` |
+| Promo variant, warm launch, no guards | 40.5 s | `commands.json` span |
+| Promo recording (`record.sh`) | **39.4 s** | `/tmp/01-browse-play-promo.mp4` |
+
+Next: add `flows/promo/02…04` with the §4 content cuts, record all four, then enable
+`FLOW_MAX_SECONDS=45` and pad every panel to 45.0 s in `design/promo/build-videos.sh`.

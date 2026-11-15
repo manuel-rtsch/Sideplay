@@ -7,23 +7,37 @@ name: Prepare recording
 
 # 1. Clear Recently played through Options -> Settings -> Clear history.
 - pressKey: Remote Menu
-- tapOn: "Settings"
+- tapOn:
+    text: "Settings"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Settings"
 - scrollUntilVisible:
     element:
       text: "Clear history"
     direction: DOWN
-- tapOn: "Clear history"
-- tapOn: "Clear"
-- tapOn: "Listening history cleared"
-- waitForAnimationToEnd
-- tapOn: "Back"
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Clear history"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Clear"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Listening history cleared"
+    waitToSettleTimeoutMs: 200
+- pressKey: Back
 - assertVisible: "Sideplay"
 - assertVisible: "Nothing played yet"
 
 # 2. Start a known track so it plays in the background during the recording.
-- tapOn: "Search"
-- tapOn: "Search Spotify"
+- tapOn:
+    text: "Search"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Search Spotify"
+    waitToSettleTimeoutMs: 200
 # The keypad mode is process-wide. Press a harmless key so the action bar appears,
 # switch out of numeric mode if needed, then enter "toto" as T9 multi-tap digits
 # (t o t o = 8 666 8 666). Avoid adjacent same-key letters: "africa" ends c+a = 2222.
@@ -35,46 +49,55 @@ name: Prepare recording
     when:
       visible: "123"
     commands:
-      - tapOn: "123"
+      - tapOn:
+          text: "123"
+          waitToSettleTimeoutMs: 200
       - extendedWaitUntil:
           visible: "Abc|ABC|abc"
           timeout: 5000
-- eraseText: 40
+# The probe is the only text on screen, so erase just that character. Leaving the
+# keypad in Abc mode also makes the next flow's own mode probe cheap.
+- eraseText: 2
 - inputText: "86668666"
 # Enter takes the exact suggestion and leaves the keypad open with Done still available.
 - pressKey: Enter
-- waitForAnimationToEnd
-- tapOn: "Africa"
+- tapOn:
+    text: "Africa"
+    waitToSettleTimeoutMs: 200
 # If the track was already current, Africa opens Now Playing instead of starting it.
 # If it was not current, the now-playing notice appears on the search screen.
 - runFlow:
     when:
       visible: "Playing Africa. Open Now Playing"
     commands:
-      - tapOn: "Playing Africa. Open Now Playing"
+      - tapOn:
+          text: "Playing Africa. Open Now Playing"
+          waitToSettleTimeoutMs: 200
 - runFlow:
     when:
       visible: "Play"
     commands:
-      - tapOn: "Play"
-- waitForAnimationToEnd
+      - tapOn:
+          text: "Play"
+          waitToSettleTimeoutMs: 200
 # Leave Now Playing, close the keypad, and go back from Search so the recording starts on Home.
 - runFlow:
     when:
       visible: "Back"
     commands:
-      - tapOn: "Back"
+      - pressKey: Back
 - runFlow:
     when:
       visible: "Done"
     commands:
-      - tapOn: "Done"
-- waitForAnimationToEnd
+      - tapOn:
+          text: "Done"
+          waitToSettleTimeoutMs: 200
 - runFlow:
     when:
       visible: "Back"
     commands:
-      - tapOn: "Back"
+      - pressKey: Back
 - assertVisible: "Sideplay"
 - assertVisible: "NOW PLAYING"
 - assertVisible: "Africa"

@@ -17,16 +17,20 @@ name: Queue & Transport
       text: "[0-9]+:[0-9]{2}"
       index: 1
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
 - tapOn:
     text: "[0-9]+:[0-9]{2}"
     index: 0
+    waitToSettleTimeoutMs: 200
 # An already-current track opens Now Playing directly; a new one stays on Home
 # with a four-second notice. Handle both, then wait for the notice to clear.
 - runFlow:
     when:
       visible: "Previous"
     commands:
-      - tapOn: "Back"
+      - pressKey: Back
 - extendedWaitUntil:
     visible: "Queue"
     timeout: 10000
@@ -35,16 +39,24 @@ name: Queue & Transport
       text: "[0-9]+:[0-9]{2}"
       index: 0
     direction: LEFT
-- tapOn: "Add .* to queue"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Add .* to queue"
+    waitToSettleTimeoutMs: 200
 - swipe:
     from:
       text: "[0-9]+:[0-9]{2}"
       index: 1
     direction: LEFT
-- tapOn: "Add .* to queue"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Add .* to queue"
+    waitToSettleTimeoutMs: 200
 
 # 2. Open the queue.
-- tapOn: "Queue"
+- tapOn:
+    text: "Queue"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Queue"
 
 # 3. Remove the first upcoming item and undo it. Index 0 is the current row.
@@ -53,14 +65,23 @@ name: Queue & Transport
       text: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
       index: 1
     direction: LEFT
-- tapOn: "Remove .* from queue"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Remove .* from queue"
+    waitToSettleTimeoutMs: 200
 # Undo is only offered for five seconds; tap it without a settle wait in between.
-- tapOn: "Undo"
+- tapOn:
+    text: "Undo"
+    waitToSettleTimeoutMs: 0
 - assertNotVisible: "Undo"
 
 # 4. Clear the upcoming queue and undo it.
-- tapOn: "Clear"
-- tapOn: "Undo"
+- tapOn:
+    text: "Clear"
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    text: "Undo"
+    waitToSettleTimeoutMs: 0
 - assertNotVisible: "Undo"
 
 # 5. Optional shuffle, then open Now Playing from Options. Shuffle keeps the
@@ -70,20 +91,26 @@ name: Queue & Transport
     when:
       visible: "Shuffle off"
     commands:
-      - tapOn: "Shuffle off"
+      - tapOn:
+          text: "Shuffle off"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Shuffle on"
 - runFlow:
     when:
       visible: "Shuffle on"
     commands:
-      - tapOn: "Shuffle on"
+      - tapOn:
+          text: "Shuffle on"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Shuffle off"
 - runFlow:
     when:
       notVisible: "Now playing"
     commands:
       - pressKey: Remote Menu
-- tapOn: "Now playing"
+- tapOn:
+    text: "Now playing"
+    waitToSettleTimeoutMs: 200
 
 # 6. Assert the transport controls.
 - assertVisible: "Previous"
@@ -98,17 +125,23 @@ name: Queue & Transport
     when:
       visible: "Pause"
     commands:
-      - tapOn: "Pause"
+      - tapOn:
+          text: "Pause"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Play"
 - runFlow:
     when:
       visible: "Play"
     commands:
-      - tapOn: "Play"
+      - tapOn:
+          text: "Play"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Pause"
 
 # 8. Next keeps Now Playing open.
-- tapOn: "Next"
+- tapOn:
+    text: "Next"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Previous"
 - assertVisible: "Seek"
 
@@ -117,19 +150,25 @@ name: Queue & Transport
     when:
       visible: "Repeat: off"
     commands:
-      - tapOn: "Repeat: off"
+      - tapOn:
+          text: "Repeat: off"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Repeat: context"
 - runFlow:
     when:
       visible: "Repeat: context"
     commands:
-      - tapOn: "Repeat: context"
+      - tapOn:
+          text: "Repeat: context"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Repeat: track"
 - runFlow:
     when:
       visible: "Repeat: track"
     commands:
-      - tapOn: "Repeat: track"
+      - tapOn:
+          text: "Repeat: track"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Repeat: off"
 
 # 10. Toggle Save and leave the current track saved.
@@ -137,13 +176,17 @@ name: Queue & Transport
     when:
       visible: "Saved"
     commands:
-      - tapOn: "Saved"
+      - tapOn:
+          text: "Saved"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Save"
 - runFlow:
     when:
       visible: "Save"
     commands:
-      - tapOn: "Save"
+      - tapOn:
+          text: "Save"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Saved"
 
 # End on Now Playing.

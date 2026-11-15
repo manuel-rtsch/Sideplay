@@ -23,6 +23,16 @@ Run a single flow:
 maestro test flows/suite/01-browse-play.yaml
 ```
 
+Run the whole suite in one invocation, with device animations off and a per-flow timing report:
+
+```sh
+./run-suite.sh
+FLOW_MAX_SECONDS=45 ./run-suite.sh   # fail when a flow exceeds the limit
+```
+
+Artifacts (`commands.json`, logs, screenshots) are kept in `build/maestro-suite/`. Re-run the
+report alone with `./scripts/flow-times.py build/maestro-suite --verbose`.
+
 ## Record a video
 
 The checked-in recordings are one per suite flow:
@@ -33,6 +43,14 @@ The checked-in recordings are one per suite flow:
 | `recordings/02-search-library-writes.mp4` | `flows/suite/02-search-library-writes.yaml` |
 | `recordings/03-queue-transport.mp4` | `flows/suite/03-queue-transport.yaml` |
 | `recordings/04-history-settings.mp4` | `flows/suite/04-history-settings.yaml` |
+
+Recording-first variants live in `flows/promo/`. They take the intended path directly (no `runFlow
+when` guards), use a warm launch, and are the flows that should satisfy the 45 s limit. Record one
+the same way, with the prep enabled:
+
+```sh
+./record.sh flows/promo/01-browse-play.yaml /tmp/01-browse-play.mp4
+```
 
 Use the wrapper, which records with `adb screenrecord` and runs the flow. The suite needs the
 seeded device fixture, so skip the recording prep that clears history:
@@ -49,7 +67,9 @@ before recording the suite again or before the next full suite run.
 
 `record.sh` turns off the device's window, transition, and animator scales while it records
 (restoring them afterwards). This removes most of Maestro's per-tap settle wait. The recording
-starts only after the flow has launched the app, so Maestro's JVM startup is not in the video.
+starts when the flow's `launchApp` command completes (`Launch app ... COMPLETED` in the Maestro
+log), so Maestro's JVM startup is not in the video and the marker does not depend on the flow's
+first action or first assertion.
 
 To keep the device's animations on, set `SIDEPLAY_KEEP_ANIMATIONS=1`:
 
@@ -57,9 +77,10 @@ To keep the device's animations on, set `SIDEPLAY_KEEP_ANIMATIONS=1`:
 SIDEPLAY_KEEP_ANIMATIONS=1 ./record.sh flows/suite/01-browse-play.yaml
 ```
 
-For demo flows that should start from a clean history, omit `SIDEPLAY_SKIP_PREPARE`. Then
-`record.sh` runs `flows/utility/record-prepare.yaml`, which launches Sideplay, clears
-**Recently played**, starts **Africa** by TOTO, and returns Home with the song playing:
+For demo and promo flows that should start from a clean history, omit `SIDEPLAY_SKIP_PREPARE`.
+Then `record.sh` runs `flows/utility/record-prepare.yaml`, which launches Sideplay, clears
+**Recently played**, starts **Africa** by TOTO, leaves the keypad in Abc mode, and returns Home
+with the song playing:
 
 ```sh
 ./record.sh flows/demo/hero-play-search-queue.yaml
@@ -69,9 +90,8 @@ Do not use that prep for suite recordings: flow 4 needs enough existing history 
 **See more history**.
 
 `record.sh` picks the first online device; set `SIDEPLAY_DEVICE=<serial>` to choose one
-explicitly. The recording begins when the flow reaches
-`Assert that "Sideplay" is visible... COMPLETED`. Override that marker with
-`SIDEPLAY_RECORD_START_MARKER`.
+explicitly. The recording begins when the flow reaches `Launch app ... COMPLETED`. Override that
+marker with `SIDEPLAY_RECORD_START_MARKER` (matched as an extended regex).
 
 `maestro record --local` also works, but is currently very slow (several minutes for a
 ~1 minute flow) and leaves an unplayable file if interrupted. Prefer `record.sh`.
@@ -106,7 +126,7 @@ assignment. The T9 engine only multi-taps digits while it is in **Abc** mode, so
 
 1. taps the field and presses a harmless key so the keypad action bar appears;
 2. switches out of **123** mode if that is the current mode;
-3. erases the probe character and enters the query as T9 digit groups.
+3. erases the probe character (`eraseText: 2`) and enters the query as T9 digit groups.
 
 The pinned Search query is **Die drei**, entered as `3444330377733444`
 (`d i e <space> d r e i`). The show flow uses the first result below the **SHOWS** heading and
@@ -122,6 +142,7 @@ The planned four-flow suite, coverage map, fixture requirements, and implementat
 - `flows/suite/02-search-library-writes.yaml` — Home → Search → `Search in` scopes → artist follow write → album save write → show episode playback → Now Playing. Covers the show media kind.
 - `flows/suite/03-queue-transport.yaml` — Home → play a recent track (so an episode left current by an earlier flow cannot remove `Save`) → queue two recent tracks → remove/Undo → Clear/Undo → optional Shuffle → Now Playing transport (play/pause, Next, repeat, Save, seek). Covers queue and transport.
 - `flows/suite/04-history-settings.yaml` — Home → See more history → focus-revealed Remove one entry → Home → Settings (Autoplay, Normalize volume, Gapless, Audio quality) → cancel Clear cache and Clear history → Home. Covers History removal and Settings confirmations.
+- `flows/promo/01-browse-play.yaml` — recording-first Browse & Play: same path as the suite flow without guards, warm launch, and the settle/scroll overrides. Used for the promo video.
 - `flows/demo/home-library-home.yaml` — launches the app, opens the Library, and returns to Home.
 - `flows/demo/home-library-artist-nowplaying-home.yaml` — Library → second followed artist → third top track → Now Playing → Home, without using Search.
 - `flows/demo/queue-history-management.yaml` — queues two recent tracks, removes and undoes a queue item, toggles Autoplay, and cancels Clear history.
@@ -135,5 +156,6 @@ and a 4-up 16:9 grid). Decoding, geometry, crop values and the ffmpeg commands a
 [`PROMO-VIDEO.md`](PROMO-VIDEO.md); rebuild with `design/promo/build-videos.sh`.
 
 Flow length and per-command timing are analysed in [`PIPELINE.md`](PIPELINE.md): where the ~2 s per
-tap and ~7 s per unmet `runFlow when` guard come from, and the changes proposed to bring every
-recording under 45 s. That document is analysis only — nothing in it is implemented yet.
+tap and ~7 s per unmet `runFlow when` guard come from, and the changes that bring recordings under
+45 s. The technical changes are implemented for flow 01; see §6 of that document for measured
+results and the remaining work on flows 02–04.

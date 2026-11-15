@@ -11,12 +11,17 @@ name: Search & Library Writes
 
 # 1. Search the pinned query. The keypad's mode is process-wide, so switch it back
 # to multi-tap if a previous run left it in numeric mode.
-- tapOn: "Search"
+- tapOn:
+    text: "Search"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Search Spotify"
-- tapOn: "Search Spotify"
+- tapOn:
+    text: "Search Spotify"
+    waitToSettleTimeoutMs: 200
 # The keypad action bar only appears after the first key press. Press a harmless key,
 # then read its mode. The mode is process-wide and can be numeric from an earlier
-# session; only then is there a "123" button to switch back to multi-tap.
+# session; only then is there a "123" button to switch back to multi-tap. The probe
+# character is the only thing erased, so eraseText stays cheap.
 - inputText: "0"
 - extendedWaitUntil:
     visible: "Abc|ABC|abc|123"
@@ -25,30 +30,41 @@ name: Search & Library Writes
     when:
       visible: "123"
     commands:
-      - tapOn: "123"
+      - tapOn:
+          text: "123"
+          waitToSettleTimeoutMs: 200
       - extendedWaitUntil:
           visible: "Abc|ABC|abc"
           timeout: 5000
-- eraseText: 40
+- eraseText: 2
 - inputText: "3444330377733444"
 - pressKey: Enter
 - runFlow:
     when:
       visible: "Done"
     commands:
-      - tapOn: "Done"
-- waitForAnimationToEnd
+      - tapOn:
+          text: "Done"
+          waitToSettleTimeoutMs: 200
 - assertVisible: "TRACKS"
 
 # 2. Open Search in, toggle Artists off and back on, then return.
-- tapOn: "Search in"
+- tapOn:
+    text: "Search in"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Search in"
 - assertVisible: "Categories"
 # Toggle a category that clears the bottom action bar; the last row (Shows) can
 # be overlapped by it on this screen size.
-- tapOn: "Artists"
-- tapOn: "Artists"
-- tapOn: "Search"
+- tapOn:
+    text: "Artists"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Artists"
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Search"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Search in"
 
 # 3. Open the first artist result and exercise the follow write in both directions.
@@ -56,32 +72,46 @@ name: Search & Library Writes
     element:
       text: "Artist"
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
 - tapOn:
     text: "Artist"
     index: 0
+    waitToSettleTimeoutMs: 200
 - assertVisible: "TOP TRACKS"
 - runFlow:
     when:
       visible: "Following"
     commands:
-      - tapOn: "Following"
+      - tapOn:
+          text: "Following"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Follow"
-      - tapOn: "Follow"
+      - tapOn:
+          text: "Follow"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Following"
 - runFlow:
     when:
       visible: "Follow"
     commands:
-      - tapOn: "Follow"
+      - tapOn:
+          text: "Follow"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Following"
-      - tapOn: "Following"
+      - tapOn:
+          text: "Following"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Follow"
-- tapOn: "Back"
+- pressKey: Back
 - runFlow:
     when:
       visible: "Done"
     commands:
-      - tapOn: "Done"
+      - tapOn:
+          text: "Done"
+          waitToSettleTimeoutMs: 200
 - assertVisible: "Artist"
 
 # 4. Open an album result and exercise the save write in both directions.
@@ -89,33 +119,47 @@ name: Search & Library Writes
     element:
       text: "ALBUMS"
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
     centerElement: true
+    waitToSettleTimeoutMs: 200
 - tapOn:
     below:
       text: "ALBUMS"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
 - runFlow:
     when:
       visible: "Saved"
     commands:
-      - tapOn: "Saved"
+      - tapOn:
+          text: "Saved"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Save"
-      - tapOn: "Save"
+      - tapOn:
+          text: "Save"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Saved"
 - runFlow:
     when:
       visible: "Save"
     commands:
-      - tapOn: "Save"
+      - tapOn:
+          text: "Save"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Saved"
-      - tapOn: "Saved"
+      - tapOn:
+          text: "Saved"
+          waitToSettleTimeoutMs: 200
       - assertVisible: "Save"
-- tapOn: "Back"
+- pressKey: Back
 - runFlow:
     when:
       visible: "Done"
     commands:
-      - tapOn: "Done"
+      - tapOn:
+          text: "Done"
+          waitToSettleTimeoutMs: 200
 - assertVisible: "ALBUMS"
 
 # 5. Open the first show result and play its first episode.
@@ -123,14 +167,22 @@ name: Search & Library Writes
     element:
       text: "SHOWS"
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    # The first result row is tapped relative to this heading, so the heading
+    # must end up above the fold, not merely 60% visible at the bottom edge.
+    centerElement: true
+    waitToSettleTimeoutMs: 200
 - tapOn:
     below:
       text: "SHOWS"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
 - assertVisible: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
 - tapOn:
     text: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
     index: 0
+    waitToSettleTimeoutMs: 200
 # The episode may already be current, which opens Now Playing directly, or it may
 # start playing and leave us on the show page. Options handles the second case.
 - runFlow:
@@ -138,6 +190,8 @@ name: Search & Library Writes
       visible: "Sav(e|ed)"
     commands:
       - pressKey: Remote Menu
-      - tapOn: "Now playing"
+      - tapOn:
+          text: "Now playing"
+          waitToSettleTimeoutMs: 200
 - assertVisible: "Previous"
 - assertVisible: "Pause|Play"
