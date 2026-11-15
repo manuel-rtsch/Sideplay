@@ -87,7 +87,7 @@ class SideplayActivity : SidekitActivity() {
             if (search > 0) nav.navigate(SIDE_PLAY_SEARCH) { launchSingleTop = true }
         }
         NavHost(navController = nav, startDestination = SIDE_PLAY_ROOT) {
-            sideplayGraph(nav, startDestination = start)
+            sideplayGraph(nav, startDestination = start, hostBacked = stores.isHostBacked)
         }
     }
 

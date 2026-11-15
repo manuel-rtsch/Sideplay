@@ -123,8 +123,17 @@ private fun NavHostController.openTrack(
     if (vm.state.value.current?.id == item.id) openNowPlaying(vm) else play()
 }
 
-/** Registers the Sideplay screens. All screens share one account state holder. */
-fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: String = HOME) {
+/**
+ * Registers the Sideplay screens. All screens share one account state holder.
+ *
+ * When [hostBacked] is true a compatible Sidekit launcher is installed and its configuration is
+ * readable, so it owns appearance and keyboard settings; Sideplay hides its own copies.
+ */
+fun NavGraphBuilder.sideplayGraph(
+    nav: NavHostController,
+    startDestination: String = HOME,
+    hostBacked: Boolean = false
+) {
     navigation(startDestination = startDestination, route = ROOT) {
         composable(HOME) { entry ->
             val vm = entry.spotifyViewModel(nav)
@@ -452,9 +461,10 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                     nav.navigate(SIGN_IN) { launchSingleTop = true }
                 },
                 onDismissNotice = vm::dismissNotice,
-                // Temporary: keep these reachable even when Sidekit owns the host settings.
-                onAppearance = { nav.navigate(APPEARANCE) },
-                onKeyboard = { nav.navigate(KEYBOARD) },
+                // A host-backed Sidekit owns appearance and keyboard settings. Passing null hides
+                // those rows instead of offering edits the host would ignore.
+                onAppearance = if (hostBacked) null else ({ nav.navigate(APPEARANCE) }),
+                onKeyboard = if (hostBacked) null else ({ nav.navigate(KEYBOARD) }),
                 onAbout = { nav.navigate(ABOUT) }
             )
         }
