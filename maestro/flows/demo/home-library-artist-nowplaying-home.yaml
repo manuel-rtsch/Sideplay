@@ -4,7 +4,7 @@ name: Home -> Library -> Artist -> Now Playing -> Home
 # No artist or track names are hardcoded. This assumes the account has at least two
 # followed artists and the chosen artist has at least three top tracks.
 - launchApp
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Open the Library and scroll to the followed artists.
 - tapOn: "Library"
@@ -44,5 +44,5 @@ name: Home -> Library -> Artist -> Now Playing -> Home
 - assertVisible: "TOP TRACKS"
 - tapOn: "Back"
 - assertVisible: "Library"
-- tapOn: "Sideplay"
-- assertVisible: "Sideplay"
+- tapOn: "Sidetrack"
+- assertVisible: "Sidetrack"

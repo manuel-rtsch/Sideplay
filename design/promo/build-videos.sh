@@ -91,5 +91,28 @@ ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" \
   -vf "scale=${HD_W}:${HD_H}:flags=lanczos+accurate_rnd,setsar=1,format=yuv420p" \
   -map 0:v -an "${NVENC[@]}" -maxrate 60M -t "$CLIP_SECONDS" "$OUT/sideplay-suite-1920x1080.mp4"
 
+# Gallery GIF. Reddit's gallery takes an animated GIF but re-encodes video, so the
+# 16:9 grid is sampled straight from the already composited master instead of from
+# the four recordings again. 15 fps is the smallest rate where the focus rings and
+# the seek row still read as motion; 1728x972 is the native grid size, so no panel
+# is resampled twice. Two passes because a single-pass GIF would either spend the
+# 256-colour table on gradients or band the dark surfaces.
+GIF_FPS=15
+echo "== gallery gif"
+PALETTE="$(mktemp -d)/palette.png"
+ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" \
+  -vf "fps=${GIF_FPS},palettegen=max_colors=256:stats_mode=diff" "$PALETTE"
+ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" -i "$PALETTE" \
+  -lavfi "fps=${GIF_FPS},paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+  -loop 0 "$OUT/sideplay-suite-16x9.gif"
+
+# Banding check: one mid-GIF frame (20 s in, a dark flat surface, where a thin
+# palette shows up first). Written outside the repo; open it to review.
+BAND_FRAME="$(mktemp -d)/sideplay-suite-16x9-band-check.png"
+ffmpeg -y -hide_banner -loglevel error -ss 20 -i "$OUT/sideplay-suite-16x9.gif" \
+  -frames:v 1 "$BAND_FRAME"
+
 echo "== done"
-ls -lh "$PANELS"/*.mp4 "$OUT/sideplay-suite-16x9.mp4" "$OUT/sideplay-suite-1920x1080.mp4"
+ls -lh "$PANELS"/*.mp4 "$OUT/sideplay-suite-16x9.mp4" "$OUT/sideplay-suite-1920x1080.mp4" \
+  "$OUT/sideplay-suite-16x9.gif"
+echo "banding check frame: $BAND_FRAME"

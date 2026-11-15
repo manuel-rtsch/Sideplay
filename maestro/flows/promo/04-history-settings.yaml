@@ -5,7 +5,7 @@ name: History & Settings (promo)
 # Home shows "See more history". No history titles are hardcoded: the focused
 # row's generated Remove label identifies the entry.
 - launchApp
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Open the full History screen from the Home preview.
 - scrollUntilVisible:
@@ -46,12 +46,12 @@ name: History & Settings (promo)
           text: ".* removed from history"
           waitToSettleTimeoutMs: 200
 - extendedWaitUntil:
-    visible: "Sideplay"
+    visible: "Sidetrack"
     timeout: 3000
 - tapOn:
-    text: "Sideplay"
+    text: "Sidetrack"
     waitToSettleTimeoutMs: 200
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 3. Settings, via Options.
 - pressKey: Remote Menu
@@ -152,4 +152,4 @@ name: History & Settings (promo)
 
 # 8. Back to Home.
 - pressKey: Back
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"

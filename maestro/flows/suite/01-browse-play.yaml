@@ -10,7 +10,7 @@ name: Browse & Play
 # re-dump does not need its default 1.5 s. 200 ms is enough to catch layout changes
 # but keeps each tap cheap; override per command if a tap starts racing the UI.
 - launchApp
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Open the Library and the second followed artist.
 - tapOn:

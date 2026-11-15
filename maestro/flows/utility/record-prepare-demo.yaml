@@ -7,6 +7,6 @@ name: Prepare recording (demo build)
 # device must be signed in once before recording.
 - launchApp:
     stopApp: true
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - assertVisible: "NOW PLAYING"
 - assertVisible: "RECENTLY PLAYED"

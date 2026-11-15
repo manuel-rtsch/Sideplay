@@ -3,7 +3,7 @@ name: Prepare recording
 ---
 - launchApp:
     stopApp: true
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Clear Recently played through Options -> Settings -> Clear history.
 - pressKey: Remote Menu
@@ -28,7 +28,7 @@ name: Prepare recording
     text: "Listening history cleared"
     waitToSettleTimeoutMs: 200
 - pressKey: Back
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - assertVisible: "Nothing played yet"
 
 # 2. Start a known track so it plays in the background during the recording.
@@ -98,6 +98,6 @@ name: Prepare recording
       visible: "Back"
     commands:
       - pressKey: Back
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - assertVisible: "NOW PLAYING"
 - assertVisible: "Africa"

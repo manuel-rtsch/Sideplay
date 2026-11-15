@@ -111,10 +111,10 @@ class SpotifyAuth(
         val result = SpotifyPkce.parseCallback(target, expectedState)
         val (title, hint) = when (result) {
             is SpotifyPkce.Callback.Code ->
-                "Welcome to Sideplay" to
+                "Welcome to Sidetrack" to
                     "Signed in successfully.<br>You can now close this page."
 
-            is SpotifyPkce.Callback.Failure -> "Sign-in did not finish" to "Return to Sideplay and try again."
+            is SpotifyPkce.Callback.Failure -> "Sign-in did not finish" to "Return to Sidetrack and try again."
 
             SpotifyPkce.Callback.Ignored -> "Waiting for Spotify…" to "Complete sign-in in the browser."
         }
@@ -134,7 +134,7 @@ class SpotifyAuth(
             <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>$title · Sideplay</title>
+            <title>$title · Sidetrack</title>
             <style>
               :root {
                 color-scheme: dark;
@@ -230,7 +230,7 @@ class SpotifyAuth(
               <h1>$title</h1>
               <p>$hint</p>
               <a class="open" href="${BuildConfig.AUTH_SCHEME}://auth">
-                Open Sideplay
+                Open Sidetrack
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                   <path d="M3 9h11M10 4l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>

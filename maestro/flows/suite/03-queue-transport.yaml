@@ -6,7 +6,7 @@ name: Queue & Transport
 # are hardcoded: durations identify rows and the generated Add/Remove labels
 # identify queue actions.
 - launchApp
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - assertVisible: "RECENTLY PLAYED"
 
 # 1. The previous flow may leave an episode current; the transport tests need a

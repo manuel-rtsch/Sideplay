@@ -4,7 +4,7 @@ name: Hero - Play, Queue, Search
 # record.sh prepares playback first; do not stop the app or the background song would end.
 - launchApp:
     stopApp: false
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Open Now Playing from Home.
 - tapOn: "NOW PLAYING"
@@ -14,7 +14,7 @@ name: Hero - Play, Queue, Search
 # 2. Show the queue.
 - tapOn: "Queue"
 - assertVisible: "Queue"
-- tapOn: "Sideplay"
+- tapOn: "Sidetrack"
 
 # 3. Search with the keypad and reopen the prepared track.
 - tapOn: "Search"

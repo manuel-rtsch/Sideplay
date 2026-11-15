@@ -42,7 +42,7 @@ class SpotifyPlayback(
 ) : MediaSessionOwner {
     override val sessionId = "sideplay"
     override val notificationChannelId = "sideplay"
-    override val notificationChannelName = "Sideplay playback"
+    override val notificationChannelName = "Sidetrack playback"
     override val notificationId = 0x6D76
 
     @Volatile
@@ -508,7 +508,7 @@ class SpotifyPlayback(
 
     private fun session(): MediaSession? {
         val context = context ?: return null
-        return mediaSession ?: MediaSession(context, "SideKit Sideplay").also { session ->
+        return mediaSession ?: MediaSession(context, "SideKit Sidetrack").also { session ->
             session.setCallback(
                 object : MediaSession.Callback() {
                     override fun onPlay() {

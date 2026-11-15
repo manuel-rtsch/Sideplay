@@ -18,7 +18,7 @@ name: Browse & Play (promo)
 # visibility timeout (~7 s).
 - launchApp:
     stopApp: false
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - assertVisible: "NOW PLAYING"
 
 # 1. The hero tile opens Now Playing. The prep left a track current, so this is a
@@ -29,7 +29,7 @@ name: Browse & Play (promo)
 - assertVisible: "Previous"
 - assertVisible: "Pause|Play"
 - pressKey: Back
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 2. A recent row is the second way into playback. Nothing else is asserted: the row
 # starts playing, the notice says so, and the take moves on.
@@ -148,7 +148,7 @@ name: Browse & Play (promo)
 # hero avoids a long scroll back up the Library and gives the four-up grid a common
 # final state.
 - pressKey: Back
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - tapOn:
     text: "NOW PLAYING"
     waitToSettleTimeoutMs: 200

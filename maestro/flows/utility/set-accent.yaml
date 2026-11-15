@@ -55,4 +55,4 @@ name: Set accent colour
 - launchApp:
     appId: "io.github.manuelrtsch.sideplay"
     stopApp: true
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"

@@ -519,7 +519,7 @@ private fun MissingCollectionScreen(
     missingTitle: String = "This collection isn't available",
     onRetry: (() -> Unit)? = null
 ) {
-    SidekitScaffold(title = "Sideplay", actions = spotifyBack("Back", onBack)) { padding ->
+    SidekitScaffold(title = "Sidetrack", actions = spotifyBack("Back", onBack)) { padding ->
         androidx.compose.foundation.layout.Box(
             androidx.compose.ui.Modifier.padding(padding)
         ) {

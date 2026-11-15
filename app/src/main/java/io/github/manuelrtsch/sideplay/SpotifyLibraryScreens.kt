@@ -69,7 +69,7 @@ fun SideplayHomeScreen(
         )
     )
     SidekitScaffold(
-        title = "Sideplay",
+        title = "Sidetrack",
         actions = bar,
         options = listOf(
             SideAction("history", "History", SidekitIcon.Undo, motion = ActionMotion.Forward, onClick = onHistory),
@@ -161,7 +161,7 @@ fun LibraryScreen(
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        listOf(spotifyBack("Sideplay", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
+        listOf(spotifyBack("Sidetrack", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     )
     SidekitScaffold(
         title = "Library",

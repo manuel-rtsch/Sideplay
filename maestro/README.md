@@ -1,6 +1,6 @@
 # Maestro
 
-Reproducible UI flows for Sideplay, run against the connected Android device/emulator.
+Reproducible UI flows for Sidetrack, run against the connected Android device/emulator.
 
 ## Setup
 
@@ -80,7 +80,7 @@ Two caveats:
   restores it afterwards (`SIDEPLAY_KEEP_IME=1` opts out). With the IME hidden the app falls back to
   its own Abc/Done bar and the T9 digits work exactly as on the sidephone; with it visible the
   keyboard is drawn in the video and the query is typed as text instead.
-- **The accent comes from Sideplay itself.** The emulator has only the Sidekit SDK sample, not the
+- **The accent comes from Sidetrack itself.** The emulator has only the Sidekit SDK sample, not the
   host, so `record.sh` picks `flows/utility/set-accent-standalone.yaml` (Settings → Appearance)
   instead of the host flow. It detects this by looking for the host package; `SIDEPLAY_ACCENT_FLOW`
   overrides the choice.
@@ -153,7 +153,7 @@ SIDEPLAY_KEEP_ANIMATIONS=1 ./record.sh flows/promo/01-browse-play.yaml
 
 For demo and promo flows that should start from a clean history in account mode, omit
 `SIDEPLAY_SKIP_PREPARE`. Then `record.sh` runs `flows/utility/record-prepare.yaml`, which launches
-Sideplay, clears **Recently played**, starts **Africa** by TOTO, leaves the keypad in Abc mode, and
+Sidetrack, clears **Recently played**, starts **Africa** by TOTO, leaves the keypad in Abc mode, and
 returns Home with the song playing:
 
 ```sh
@@ -172,9 +172,9 @@ marker with `SIDEPLAY_RECORD_START_MARKER` (matched as an extended regex).
 
 ## Accent colour between runs
 
-Sideplay is host-backed when Sidekit is installed: it reads the case colour from Sidekit's
-configuration and ignores writes to Sideplay's own local Appearance screen. Change the host
-setting, then restart Sideplay:
+Sidetrack is host-backed when Sidekit is installed: it reads the case colour from Sidekit's
+configuration and ignores writes to Sidetrack's own local Appearance screen. Change the host
+setting, then restart Sidetrack:
 
 ```sh
 maestro test flows/utility/set-accent.yaml -e ACCENT=Lime
@@ -184,7 +184,7 @@ maestro test flows/utility/set-accent.yaml -e ACCENT=Pink
 ```
 
 The utility launches Sidekit, opens **Settings → Case colour** from the launcher's Options menu,
-selects the named swatch, asserts the new Active colour, and relaunches Sideplay. It force-stops
+selects the named swatch, asserts the new Active colour, and relaunches Sidetrack. It force-stops
 both apps, so run it between flows rather than inside one.
 
 ## Device fixture
@@ -242,7 +242,7 @@ The planned four-flow suite, coverage map, fixture requirements, and implementat
 - `flows/demo/queue-history-management.yaml` — queues two recent tracks, removes and undoes a queue item, toggles Autoplay, and cancels Clear history.
 - `flows/demo/hero-play-search-queue.yaml` — Now Playing, Queue, keypad search, and playback.
 - `flows/utility/record-prepare.yaml` — recording setup only: clear history, then start a song.
-- `flows/utility/set-accent.yaml` — sets Sidekit's host-backed case colour through **Settings → Case colour**, then restarts Sideplay so the theme takes effect. Use `-e ACCENT=<colour>` with `Lime`, `Orange`, `Blue`, `Pink`, `Sage`, or `Lavender`; it starts and ends on Sideplay Home.
+- `flows/utility/set-accent.yaml` — sets Sidekit's host-backed case colour through **Settings → Case colour**, then restarts Sidetrack so the theme takes effect. Use `-e ACCENT=<colour>` with `Lime`, `Orange`, `Blue`, `Pink`, `Sage`, or `Lavender`; it starts and ends on Sidetrack Home.
 
 ## Promo videos
 

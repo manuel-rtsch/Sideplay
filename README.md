@@ -1,17 +1,17 @@
-# Sideplay
+# Sidetrack
 
 **Spotify for your Sidephone, built for the keypad.**
 
-Sideplay is a Spotify player for [Sidekit](https://github.com/HarlenPostill/Sidekit), the
+Sidetrack is a Spotify player for [Sidekit](https://github.com/HarlenPostill/Sidekit), the
 minimalistic launcher and app suite for the [Sidephone SP-01](https://www.sidephone.com/).
-Sidekit replaces the home screen with a keypad-first launcher and a set of small apps; Sideplay
+Sidekit replaces the home screen with a keypad-first launcher and a set of small apps; Sidetrack
 is one of those apps, and it follows Sidekit's theme, accent, input mode, keypad module, and
 custom key mappings when Sidekit is installed.
 
-Sideplay also runs **standalone** on any Android 12+ phone. Without Sidekit it uses its own theme
+Sidetrack also runs **standalone** on any Android 12+ phone. Without Sidekit it uses its own theme
 and keyboard settings, and still works with a touchscreen or a physical keypad.
 
-> Sideplay is an independent project. It is not made by or affiliated with Spotify.
+> Sidetrack is an independent project. It is not made by or affiliated with Spotify.
 
 ## What you can do
 
@@ -48,9 +48,9 @@ size with the compact layout enabled, not hand-taken photos.
 ## Getting started
 
 1. Install [Sidekit](https://github.com/HarlenPostill/Sidekit/releases/latest) on your Sidephone
-   if you want the full launcher and app suite. Sideplay works without it too.
-2. Install the Sideplay APK.
-3. Open Sideplay and sign in with your Spotify account.
+   if you want the full launcher and app suite. Sidetrack works without it too.
+2. Install the Sidetrack APK.
+3. Open Sidetrack and sign in with your Spotify account.
 4. Pick something from your library, or press **Search** and start typing on the keypad.
 5. Press **OK** / **Enter** to play. A now-playing confirmation appears in the action bar for a
    few seconds; press it to open Now Playing, or press its X to dismiss it. Pressing **OK** /
@@ -90,18 +90,18 @@ the same application id and signing as release so it can replace the installed a
 ```
 
 `-PsideplayStandaloneDemo=true` gives the demo build the application id `…sideplay.demo`, the
-label **Sideplay Demo**, its own Sidekit app id (`sideplay-demo`, so the host shows a second tile
+label **Sidetrack Demo**, its own Sidekit app id (`sideplay-demo`, so the host shows a second tile
 with its own settings) and its own sign-in link (`sideplay-demo://auth`). It is still signed with
 the release key, so Sidekit trusts it and librespot playback works as usual. Its sandbox, queue,
 history and credentials are separate from the release app. The Maestro flows keep targeting the
 production application id, so leave the flag off when recording or running them.
 
 The native library is what makes library and search work. Without `-PsideplayNative=true`,
-Sideplay falls back to the public Spotify Web API, which currently rejects Spotify's desktop
+Sidetrack falls back to the public Spotify Web API, which currently rejects Spotify's desktop
 client ID with HTTP 429. The UI then looks empty: no library, no search results. Release and
 device builds must include the native bridge.
 
-Release builds are signed with the dedicated Sideplay release key. Create a gitignored
+Release builds are signed with the dedicated Sidetrack release key. Create a gitignored
 `keystore.properties` at the repository root:
 
 ```properties
@@ -112,15 +112,15 @@ keyPassword=…
 ```
 
 Without that file, `assembleRelease` produces an unsigned APK so CI can sign it separately. The
-release certificate digest is listed in Sidekit's `trusted_apps.xml`, which lets Sideplay read the
+release certificate digest is listed in Sidekit's `trusted_apps.xml`, which lets Sidetrack read the
 host case colour. Never add a debug certificate there.
 
-Sideplay builds against the published `1.5.1` Sidekit SDK from GitHub Pages. When a sibling
+Sidetrack builds against the published `1.5.1` Sidekit SDK from GitHub Pages. When a sibling
 `../Sidekit` checkout exists, Gradle substitutes it as a composite build so local Sidekit work can
 be tried without publishing; CI and clones without that checkout use the published SDK. Pass
 `-PsideplayLocalSidekit=false` to force the published SDK.
 
-The `profile` build is signed with the local debug key and is meant for trying Sideplay on a real
+The `profile` build is signed with the local debug key and is meant for trying Sidetrack on a real
 device. The `dev` build installs alongside the normal app as
 `io.github.manuelrtsch.sideplay.dev`.
 
@@ -128,4 +128,4 @@ More technical notes live in [docs/SIDEPLAY.md](docs/SIDEPLAY.md).
 
 ## License
 
-MIT. Sideplay also links librespot; its license and notice ship with the native build.
+MIT. Sidetrack also links librespot; its license and notice ship with the native build.

@@ -121,7 +121,7 @@ android {
             matchingFallbacks += listOf("release")
             if (standaloneDemo) {
                 applicationIdSuffix = ".demo"
-                manifestPlaceholders["appLabel"] = "Sideplay Demo"
+                manifestPlaceholders["appLabel"] = "Sidetrack Demo"
                 manifestPlaceholders["sidekitAppId"] = "sideplay-demo"
                 manifestPlaceholders["authScheme"] = "sideplay-demo"
                 buildConfigField("String", "AUTH_SCHEME", "\"sideplay-demo\"")

@@ -21,7 +21,7 @@ name: Set accent colour (standalone)
 - launchApp:
     appId: "io.github.manuelrtsch.sideplay"
     stopApp: true
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - pressKey: Remote Menu
 - tapOn:
     text: "Settings"
@@ -50,4 +50,4 @@ name: Set accent colour (standalone)
 - launchApp:
     appId: "io.github.manuelrtsch.sideplay"
     stopApp: true
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"

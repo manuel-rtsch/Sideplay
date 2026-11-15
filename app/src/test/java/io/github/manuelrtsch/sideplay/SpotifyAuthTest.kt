@@ -107,7 +107,7 @@ class SpotifyAuthTest {
         assertEquals("fresh-access", result.accessToken)
         assertEquals("fresh-access", store.saved?.accessToken)
         val landingPage = withContext(Dispatchers.IO) { withTimeout(5_000) { landing.await() } }
-        assertTrue(landingPage.contains("Welcome to Sideplay"))
+        assertTrue(landingPage.contains("Welcome to Sidetrack"))
         assertTrue(landingPage.contains("sideplay://auth"))
         // The listener serves one request; make sure the page is not accidentally written twice.
         assertEquals(1, landingPage.split("<!doctype html>").size - 1)

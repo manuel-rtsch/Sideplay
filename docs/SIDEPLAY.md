@@ -1,10 +1,10 @@
-# Sideplay
+# Sidetrack
 
 **Updated:** 2026-11-12
-**Repository:** `manuel-rtsch/Sideplay` (`main`)
+**Repository:** `manuel-rtsch/Sidetrack` (`main`)
 **Phase:** standalone APK; manual device checks are tracked in `docs/DEVICE-CHECKLIST.md`
 
-Sideplay is a standalone Spotify app for Sidekit-native phones: one account's library, search,
+Sidetrack is a standalone Spotify app for Sidekit-native phones: one account's library, search,
 playback, and queue, drawn with Sidekit's chrome and operated keypad-first on a 480 × 640 phone.
 It is not a Spotify client reproduction and not a web wrapper.
 
@@ -97,7 +97,7 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   ViewModel adopts the live item, position, and playing state. Starting a new item releases the
   previous `AudioTrack`.
 - The sleep timer is owned by `SpotifyPlayback`, not the ViewModel, so it survives leaving
-  Sideplay and activity recreation. Now Playing's Options offer a Bedtime square that opens a
+  Sidetrack and activity recreation. Now Playing's Options offer a Bedtime square that opens a
   one-shot picker (Off, 5/15/30/45/60/90 minutes, End of track); selecting a row arms the timer and
   returns. A slim, non-interactive status line appears between the artist and seek row, and the
   Home tile gains a Bedtime icon with the remaining minutes. Expiry pauses playback and clears
@@ -124,10 +124,10 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   sleep timer is active, the artist line gains `· sleep 23m` (or `· ends with this track`) and a
   minute tick rebuilds only the notification. When the
   ViewModel is gone, next/previous fall back to advancing the process-wide queue directly.
-  Tapping the notification opens Sideplay directly at Now Playing rather than the launcher.
+  Tapping the notification opens Sidetrack directly at Now Playing rather than the launcher.
   A native `stopped` event clears Now Playing and the queue so notification/lock-screen stop
   cannot leave stale UI or restore the stopped track.
-- Sideplay owns its media session and audio focus (`MediaSessions`, `AudioFocus`), taking and
+- Sidetrack owns its media session and audio focus (`MediaSessions`, `AudioFocus`), taking and
   abandoning `AUDIOFOCUS_GAIN`, including transient loss and headphone changes. A standalone
   install has no local Music process to coordinate with.
 - OAuth tokens rotate into an existing native session. Every play and resume revalidates that
@@ -197,7 +197,7 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   fallback screen. Home's empty recently-played list and an empty queue use the same still record
   without an action; History has no empty state and simply shows nothing when it has no entries.
 - `SideplayActivity` re-applies the host's input mode and keypad module on every resume, so a
-  T9 → mini QWERTY switch made while Sideplay was in the background takes effect immediately.
+  T9 → mini QWERTY switch made while Sidetrack was in the background takes effect immediately.
 - Settings shows the actual artwork + audio cache size. Sign-out clears artwork, audio, and
   credentials; the Settings action clears artwork and audio without touching the account.
 - Focus review: collection rows and Library category rows are focusable, and the first row
@@ -233,9 +233,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 ## 3. Known limitations
 
 1. **Recently played is local-only.** There is no safe first-party history endpoint, and the
-   Web API quota is not worth spending on a non-critical list. Home shows Sideplay's local
+   Web API quota is not worth spending on a non-critical list. Home shows Sidetrack's local
    history; it is not cross-device.
-2. **Sideplay owns queue, shuffle, and repeat.** librespot 0.8 plays one item at a time and has
+2. **Sidetrack owns queue, shuffle, and repeat.** librespot 0.8 plays one item at a time and has
    no shuffle/repeat setters. `SpotifyQueueRepository` is authoritative; native shuffle/repeat
    events are adopted when another client changes them. Queue, queue history, and recently
    played persist; playback does not resume automatically after process death.
@@ -249,7 +249,7 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 5. **The Options key does not dismiss the now-playing confirmation.** Sidekit's
    `ChromeState.toggleOptions()` owns the Options key and opens the screen's options instead. A
    later improvement is to make Options dismiss an auto-dismiss action before opening options;
-   that belongs in Sidekit and would benefit every app, not just Sideplay. Until then the
+   that belongs in Sidekit and would benefit every app, not just Sidetrack. Until then the
    confirmation is dismissed by its X, by opening Now Playing, or by its four-second timer.
 
 ---
@@ -278,7 +278,7 @@ declared in `bridge/NativeBridge.kt`.
   otherwise reports `INVALID_CREDENTIALS`/`BAD_REQUEST`.
 - Scope: one constant. No protocol, playback, audio, or auth logic changes.
 - Removal: delete the patch once librespot supports overriding platform/client identity, or once
-  Sideplay performs its own Android-client OAuth.
+  Sidetrack performs its own Android-client OAuth.
 - Verify with `diff -rq ~/.cargo/registry/src/index.crates.io-*/librespot-core-0.8.0
   native/vendor/librespot-core`; only `src/config.rs` (plus registry bookkeeping) should differ.
 

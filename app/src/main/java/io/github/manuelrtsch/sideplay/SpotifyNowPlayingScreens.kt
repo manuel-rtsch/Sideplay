@@ -354,7 +354,7 @@ fun QueueScreen(
         else -> state.upcoming.firstOrNull { it.id == focusedId }
     }
     val hasUpcoming = state.upcoming.isNotEmpty()
-    val back = spotifyBack("Sideplay", onBack).first()
+    val back = spotifyBack("Sidetrack", onBack).first()
     // Removing a track offers Undo in the bar and leaves the keypad on the row that moved up.
     val removeFromQueue: (SpotifyMediaItem) -> Unit = { item ->
         val index = onRemove(item)

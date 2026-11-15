@@ -22,7 +22,7 @@ import hrln.interactive.sidekit.design.theme.SidekitTheme
 private data class Licence(val software: String, val licence: String)
 
 private val licences = listOf(
-    Licence("Sideplay", "MIT"),
+    Licence("Sidetrack", "MIT"),
     Licence("Sidekit", "MIT"),
     Licence("librespot", "MIT"),
     Licence("AndroidX / Jetpack Compose", "Apache 2.0"),
@@ -51,7 +51,7 @@ fun SideplayAboutScreen(onBack: () -> Unit, backLabel: String = "Settings") {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SidekitText("Version", style = SidekitTheme.typography.headline)
                         SidekitText(
-                            "Sideplay $versionName ($versionCode)",
+                            "Sidetrack $versionName ($versionCode)",
                             style = SidekitTheme.typography.label,
                             maxLines = Int.MAX_VALUE
                         )

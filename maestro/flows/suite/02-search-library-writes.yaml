@@ -9,7 +9,7 @@ name: Search & Library Writes
 # Account mode: any artist, album or show matching the query works; the demo pack
 # ships David Bowie, his two albums and the show "Bowie: A Life".
 - launchApp
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Search the pinned query. The keypad's mode is process-wide, so switch it back
 # to multi-tap if a previous run left it in numeric mode.

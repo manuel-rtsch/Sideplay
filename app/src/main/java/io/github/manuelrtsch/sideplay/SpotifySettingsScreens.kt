@@ -259,12 +259,12 @@ fun SpotifySignInScreen(
                 SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidekitText(
-                            "Connect Sideplay with your Spotify account",
+                            "Connect Sidetrack with your Spotify account",
                             style = SidekitTheme.typography.bodySmall,
                             maxLines = Int.MAX_VALUE
                         )
                         SidekitText(
-                            "Sideplay never sees your password or sensitive information.",
+                            "Sidetrack never sees your password or sensitive information.",
                             style = SidekitTheme.typography.caption,
                             color = colors.surfaceA6,
                             maxLines = Int.MAX_VALUE

@@ -137,20 +137,43 @@ ffmpeg -loop 1 -framerate 30 -i "$flat" \
   design/promo/sideplay-suite-16x9.mp4
 ```
 
-The four recordings have different lengths (68.6 s, 94.5 s, 71.1 s, 49.9 s), so the grid runs as
-long as the longest one (94.4 s). `hstack` keeps the shorter panels alive by repeating their last
-frame (`eof_action=repeat`), which freezes panels 1, 3 and 4 for 26 s, 23 s and 45 s respectively.
-That reads as "the flow finished, the screen stays put" — fine for a promo. If you would rather keep
-motion, replace the panel streams with `loop=loop=-1:size=<frames>` style input-side looping, but
-the restart jump is more noticeable than the freeze.
+The four recordings have different lengths (36.0 s, 38.8 s, 39.7 s, 39.1 s), so every panel is
+padded from its last presented frame to `CLIP_SECONDS = 40` with `tpad=stop_mode=clone` before the
+`hstack`. The grid is therefore exactly 40 s and all four phones end together — no panel freezes
+for tens of seconds, and nothing restarts mid-take.
 
-## 6. Outputs
+## 6. Gallery GIF
+
+Reddit's gallery takes a GIF but re-encodes video, so the 16:9 grid is sampled straight from the
+already composited `sideplay-suite-16x9.mp4` rather than from the four recordings again. The step
+lives at the end of `build-videos.sh`, so the GIF is regenerated with everything else:
+
+```sh
+ffmpeg -i design/promo/sideplay-suite-16x9.mp4 \
+  -vf "fps=15,palettegen=max_colors=256:stats_mode=diff" /tmp/palette.png
+ffmpeg -i design/promo/sideplay-suite-16x9.mp4 -i /tmp/palette.png \
+  -lavfi "fps=15,paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+  -loop 0 design/promo/sideplay-suite-16x9.gif
+```
+
+- **15 fps** is the smallest rate at which focus rings and the seek row still read as motion;
+  every frame is a full frame, so the rate is what decides the file size.
+- **1728×972** is the native grid size: no panel is resampled twice, and the GIF is 16:9 as-is.
+- **Two passes** because one pass either spends the 256-colour table on the gradients or bands the
+dark surfaces. `stats_mode=diff` spends the table on what changes between frames, and
+  `dither=bayer:bayer_scale=5:diff_mode=rectangle` dithers only the rectangles that changed, which
+  keeps the flat black chrome flat.
+- The script also writes a single mid-GIF frame (20 s in) to a temp path and prints it, so the
+  banding review is one `open` away and leaves no file in the repo.
+
+## 7. Outputs
 
 | File | Notes |
 | --- | --- |
 | `design/promo/sidephone.png` | 1000×1000 RGBA still, decoded from the AVIF |
-| `design/promo/01-browse-play-phone.mp4` | 1000×1000 composite, 30 fps, 68.5 s, 2.2 MB |
-| `design/promo/4x9/01…04-*.mp4` | 432×972 4:9 panels, 30 fps |
-| `design/promo/sideplay-suite-16x9.mp4` | 1728×972 16:9 grid, 30 fps, 94.4 s, 6.1 MB |
+| `design/promo/4x9/01…04-*.mp4` | 432×972 4:9 panels, 30 fps, 40 s each |
+| `design/promo/sideplay-suite-16x9.mp4` | 1728×972 16:9 grid, 30 fps, 40 s |
+| `design/promo/sideplay-suite-1920x1080.mp4` | 1920×1080 lanczos upscale of the grid, 30 fps, 40 s |
+| `design/promo/sideplay-suite-16x9.gif` | 1728×972, 15 fps, 40 s palette GIF |
 
 All encodes are H.264 High, `yuv420p`, `+faststart`, CRF/cq 19 — web-safe and quick to scrub.

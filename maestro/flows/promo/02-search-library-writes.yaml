@@ -13,7 +13,7 @@ name: Search & Library Writes (promo)
 # opens one from the Library, so this take never shows an album.
 - launchApp:
     stopApp: false
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Search the pinned query.
 - tapOn:

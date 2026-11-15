@@ -104,7 +104,7 @@ class SpotifyPlaybackService : Service() {
         )
         return Notification.Builder(this, playback.notificationChannelId)
             .setSmallIcon(SidekitIcon.MusicNote2.drawable)
-            .setContentTitle(playback.current?.title ?: "Sideplay")
+            .setContentTitle(playback.current?.title ?: "Sidetrack")
             .setContentText(contentText)
             .setSubText(if (timerSuffix != null) "Sleep timer" else null)
             .setLargeIcon(playback.notificationArt)

@@ -6,7 +6,7 @@ name: Queue & Transport (promo)
 # Add/Remove labels identify queue actions.
 - launchApp:
     stopApp: false
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 - assertVisible: "RECENTLY PLAYED"
 
 # 1. Start a track from a recent row. The previous take may leave an episode current

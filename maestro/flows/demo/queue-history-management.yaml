@@ -5,7 +5,7 @@ name: Queue and History Management
 # No track names are hardcoded: durations identify rows and the queue's
 # Remove/Add actions are matched by their generated labels.
 - launchApp
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
 
 # 1. Scroll to the recently played rows and add two songs to the queue.
 - scrollUntilVisible:
@@ -40,8 +40,8 @@ name: Queue and History Management
 - assertNotVisible: "Undo"
 
 # 3. Back to Home.
-- tapOn: "Sideplay"
-- assertVisible: "Sideplay"
+- tapOn: "Sidetrack"
+- assertVisible: "Sidetrack"
 - assertVisible: "RECENTLY PLAYED"
 
 # 4. Toggle Autoplay, open Clear history, cancel, and return Home.
@@ -58,4 +58,4 @@ name: Queue and History Management
 - tapOn: "Cancel"
 - assertNotVisible: "Clear"
 - tapOn: "Back"
-- assertVisible: "Sideplay"
+- assertVisible: "Sidetrack"
