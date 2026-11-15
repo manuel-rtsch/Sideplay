@@ -2,6 +2,8 @@ package io.github.manuelrtsch.sideplay
 
 import androidx.lifecycle.viewModelScope
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.manuelrtsch.sideplay.data.SpotifySession
+import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -76,6 +78,24 @@ class SpotifyViewModelEventTest {
         vm.handlePlaybackEvent("""{"type":"ended"}""")
 
         assertEquals(items[1].id, vm.state.value.current?.id)
+    }
+
+    @Test fun `end of track timer stops before advancing`() = runTest(dispatcher) {
+        val session = SpotifySession()
+        val vm = SpotifyViewModel(
+            MockSpotifyDataSource,
+            session = session,
+            simulatePlayback = false
+        ).also { viewModels += it }
+        val items = MockSpotifyDataSource.recentlyPlayed.take(2)
+        vm.play(items, 0)
+        vm.setSleepTimerEndOfTrack()
+
+        vm.handlePlaybackEvent("""{"type":"ended"}""")
+
+        assertEquals(items[0].id, vm.state.value.current?.id)
+        assertFalse(vm.state.value.isPlaying)
+        assertEquals(SleepTimerState.Off, vm.sleepTimer.value)
     }
 
     @Test fun `starting a new item shows the now-playing notice`() = runTest(dispatcher) {

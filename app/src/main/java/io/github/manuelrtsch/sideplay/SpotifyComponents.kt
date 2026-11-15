@@ -71,6 +71,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
@@ -84,8 +85,11 @@ import hrln.interactive.sidekit.design.components.SidekitTile
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtworkImage
+import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import io.github.manuelrtsch.sideplay.playback.formatDuration
+import io.github.manuelrtsch.sideplay.playback.tileText
 import io.github.manuelrtsch.sideplay.ui.LocalSwipeActionRevealed
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Artwork shown beside text inside a 104 dp list tile. 80 dp leaves a 12 dp margin on every side
@@ -246,10 +250,13 @@ enum class SpotifyTileTone {
 @Composable
 fun NowPlayingTile(
     current: SpotifyMediaItem?,
+    sleepTimer: StateFlow<SleepTimerState>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = SidekitTheme.colors
+    val timer by sleepTimer.collectAsStateWithLifecycle()
+    val timerLabel = timer.tileText()
     SidekitTile(modifier, onClick = onClick, onClickLabel = "Now playing") {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp),
@@ -264,12 +271,37 @@ fun NowPlayingTile(
                 SpotifyCover(current.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = current.artUrl)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                // With a live timer the overline becomes the indicator, so the title keeps the
+                // full width and never competes with a trailing label.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (timerLabel != null) {
+                        SidekitIconImage(
+                            SidekitIcon.Bedtime,
+                            size = 24.dp,
+                            tint = colors.surfaceA6
+                        )
+                        SidekitText(
+                            timerLabel,
+                            style = SidekitTheme.typography.small,
+                            color = colors.surfaceA6,
+                            maxLines = 1
+                        )
+                    } else {
+                        SidekitText(
+                            if (current == null) "NOTHING PLAYING" else "NOW PLAYING",
+                            style = SidekitTheme.typography.small,
+                            color = colors.surfaceA6
+                        )
+                    }
+                }
                 SidekitText(
-                    if (current == null) "NOTHING PLAYING" else "NOW PLAYING",
-                    style = SidekitTheme.typography.small,
-                    color = colors.surfaceA6
+                    current?.title ?: "Pick a track",
+                    style = SidekitTheme.typography.bodySmall,
+                    maxLines = 2
                 )
-                SidekitText(current?.title ?: "Pick a track", style = SidekitTheme.typography.bodySmall, maxLines = 2)
             }
         }
     }
