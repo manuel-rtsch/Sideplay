@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack.data
 
 import android.content.Context
+import android.os.SystemClock
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.DemoContentSource
@@ -89,6 +90,16 @@ class SpotifySession(
     @Volatile var halting = false
         private set
 
+    /**
+     * The uri of the item whose player was halted, and when. librespot emits one "stopped" event
+     * for the halt command itself; a recreated ViewModel can receive it seconds later, after the
+     * user has already reopened the app (and possibly resumed). That event carries no position, so
+     * applying it would reset the seek bar to zero and re-seat the stopped track as the player's
+     * current item. The next matching "stopped" event is therefore consumed as the halt echo.
+     */
+    @Volatile private var pendingHaltStopUri: String? = null
+    @Volatile private var pendingHaltStopAt = 0L
+
     val history = SpotifyHistoryRepository(
         load = { historyStore?.read().orEmpty() },
         save = { historyStore?.write(it) }
@@ -165,6 +176,9 @@ class SpotifySession(
 
     suspend fun play(uri: String, positionMs: Long = 0L, gapless: Boolean = false) {
         SidetrackDebug.log("session.play begin uri=$uri positionMs=$positionMs gapless=$gapless")
+        // A new start supersedes the close path, even when the old player's stopped event is
+        // still queued behind it.
+        halting = false
         connectForPlayback()
         SidetrackDebug.log("session.play connected; starting playback")
         val keepAudioSink = gapless && _settings.value.gapless && positionMs == 0L
@@ -280,8 +294,25 @@ class SpotifySession(
      */
     fun haltPlayback() {
         halting = true
+        pendingHaltStopUri = playback.current?.uri
+        pendingHaltStopAt = SystemClock.elapsedRealtime()
         rememberPosition()
         playbackScope.launch { runCatching { playback.stop(keepQueue = true) } }
+    }
+
+    /**
+     * Consumes the "stopped" event produced by [haltPlayback]. Returns true when [uri] belongs to
+     * that halt, so the caller can ignore an echo from the player generation that was closed.
+     */
+    fun consumeHaltStop(uri: String?): Boolean {
+        val expected = pendingHaltStopUri ?: return false
+        if (SystemClock.elapsedRealtime() - pendingHaltStopAt > HALT_STOP_GRACE_MS) {
+            pendingHaltStopUri = null
+            return false
+        }
+        if (uri != null && !uri.equals(expected, ignoreCase = true)) return false
+        pendingHaltStopUri = null
+        return true
     }
 
     /**
@@ -350,6 +381,9 @@ class SpotifySession(
 
         /** Upper bound for the audio cache; librespot evicts least-recently-used entries. */
         const val AUDIO_CACHE_LIMIT_BYTES = 1L shl 30
+
+        /** How long a close-path "stopped" event may still be waiting in the player queue. */
+        const val HALT_STOP_GRACE_MS = 15_000L
     }
 
     private object NoopCredentialStore : io.github.manuelrtsch.sidetrack.auth.SpotifyCredentialStore {

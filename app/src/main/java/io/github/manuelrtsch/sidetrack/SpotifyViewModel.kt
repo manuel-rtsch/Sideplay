@@ -1513,9 +1513,13 @@ class SpotifyViewModel(
             "ended" -> if (matchesCurrent(event)) onPlaybackEnded()
 
             "stopped" -> if (matchesCurrent(event)) {
+                // Closing the app halts the audio and saves its offset; the player's "stopped"
+                // echo can arrive later, after a recreated ViewModel has restored that offset.
+                // Ignoring it keeps the restored position and leaves the queue untouched.
+                val eventUri = event.opt("uri")?.toString()
+                if (session?.consumeHaltStop(eventUri) == true) return
                 // Stop from the notification or lock screen: clear both the UI and the queue so
-                // reopening Sidetrack cannot restore the track that was stopped. Closing the app
-                // halts the audio the same way but keeps the queue, so reopen it as it was.
+                // reopening Sidetrack cannot restore the track that was stopped.
                 awaitingPlaybackStart = false
                 session?.playback?.updateState(false, 0L)
                 val halting = session?.halting == true
