@@ -91,15 +91,16 @@ class SpotifySession(
         private set
 
     /**
-     * The uri of the item whose player was halted, and when. librespot emits one "stopped" event
-     * for the halt command itself; a recreated ViewModel can receive it seconds later, after the
-     * user has already reopened the app (and possibly resumed). That event carries no position, so
-     * applying it would reset the seek bar to zero and re-seat the stopped track as the player's
-     * current item. The next matching "stopped" event is therefore consumed as the halt echo.
+     * librespot emits one "stopped" event for the halt command itself; a recreated ViewModel can
+     * receive it seconds later, after the user has already reopened the app (and possibly
+     * resumed). The guard remembers the halted play request so that echo is consumed without
+     * swallowing a genuine stop from the new playback.
      */
-    @Volatile private var pendingHaltStopUri: String? = null
+    private val haltStop = HaltStopGuard(HALT_STOP_GRACE_MS)
 
-    @Volatile private var pendingHaltStopAt = 0L
+    @Volatile private var currentPlayRequestId = -1L
+
+    @Volatile private var currentPlayRequestUri: String? = null
 
     val history = SpotifyHistoryRepository(
         load = { historyStore?.read().orEmpty() },
@@ -295,26 +296,27 @@ class SpotifySession(
      */
     fun haltPlayback() {
         halting = true
-        pendingHaltStopUri = playback.current?.uri
-        pendingHaltStopAt = SystemClock.elapsedRealtime()
+        val uri = playback.current?.uri
+        // Only trust the id when the events it came from describe this track. A queued event for
+        // the previous track must not make the halt echo look like a different generation.
+        val id = currentPlayRequestId.takeIf { uri != null && uri.equals(currentPlayRequestUri, ignoreCase = true) } ?: -1L
+        haltStop.arm(uri, id, SystemClock.elapsedRealtime())
         rememberPosition()
         playbackScope.launch { runCatching { playback.stop(keepQueue = true) } }
     }
 
-    /**
-     * Consumes the "stopped" event produced by [haltPlayback]. Returns true when [uri] belongs to
-     * that halt, so the caller can ignore an echo from the player generation that was closed.
-     */
-    fun consumeHaltStop(uri: String?): Boolean {
-        val expected = pendingHaltStopUri ?: return false
-        if (SystemClock.elapsedRealtime() - pendingHaltStopAt > HALT_STOP_GRACE_MS) {
-            pendingHaltStopUri = null
-            return false
-        }
-        if (uri != null && !uri.equals(expected, ignoreCase = true)) return false
-        pendingHaltStopUri = null
-        return true
+    /** Remembers the player generation currently reporting events and, when present, its track. */
+    fun notePlayRequest(id: Long, uri: String?) {
+        if (id < 0L) return
+        currentPlayRequestId = id
+        if (uri != null) currentPlayRequestUri = uri
     }
+
+    /**
+     * Consumes the "stopped" event produced by [haltPlayback]. Returns true when the event belongs
+     * to that halted player, so the caller can ignore an echo from the generation that was closed.
+     */
+    fun consumeHaltStop(uri: String?, playRequestId: Long): Boolean = haltStop.consume(uri, playRequestId, SystemClock.elapsedRealtime())
 
     /**
      * Advances the queue when the notification/lock screen has no ViewModel to call back into.

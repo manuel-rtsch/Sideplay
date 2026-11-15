@@ -116,9 +116,11 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   authenticated session the catalog uses), resolved to normal track rows, and shown with the
   collection screen's play/artwork header and track list. Opening the station queues it behind
   the still-playing seed, so playback continues without a restart; the Queue screen carries the
-  same queue, subject to the current shuffle and repeat modes. Episodes have no song radio, so
-  the button is omitted for them. The Web API fallback uses `/recommendations` when the native
-  bridge is absent.
+  same queue, subject to the current shuffle and repeat modes. A late station response only queues
+  itself if the queue is still the one the request started from, so an add, remove, clear, reorder
+  or shuffle made while it loaded is never overwritten. Episodes have no song radio, so the button
+  is omitted for them. The Web API fallback uses `/recommendations` when the native bridge is
+  absent.
 - Starting a new item shows a transient now-playing confirmation in the action bar: artwork, an
   animated playing indicator, the title, and a right arrow to Now Playing. It replaces the normal
   actions for four seconds, can be dismissed immediately with its X, and never auto-navigates.
@@ -141,7 +143,9 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   ViewModel is gone, next/previous fall back to advancing the process-wide queue directly.
   Tapping the notification opens Sidetrack directly at Now Playing rather than the launcher.
   A native `stopped` event clears Now Playing and the queue so notification/lock-screen stop
-  cannot leave stale UI or restore the stopped track.
+  cannot leave stale UI or restore the stopped track. The one exception is the late `stopped`
+  echo from the app-close halt: the event carries librespot's play request id, so only the halted
+  generation is ignored and a genuine stop after resuming the same track still clears everything.
 - Sidetrack owns its media session and audio focus (`MediaSessions`, `AudioFocus`), taking and
   abandoning `AUDIOFOCUS_GAIN`, including transient loss and headphone changes. A standalone
   install has no local Music process to coordinate with.
@@ -197,7 +201,10 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   Undo, and removing one track offers Undo at the index it left. Remove and undo work by row index,
   so duplicated tracks are distinct and one copy never takes another with it. Shuffle is a
   one-time reorder of the existing tail, shown in the header as **Shuffled**; new tracks append in
-  order. A manual reorder turns shuffle off, so the mode always describes the order on screen.
+  order. A committed manual reorder turns shuffle off, so the mode always describes the order on
+  screen; Cancel restores the exact pre-reorder order, shuffle flag and backup. If playback moves
+  on or another surface changes the queue mid-reorder, the mode abandons instead of moving a row
+  the lift no longer owns.
 - Library category and collection lists page in 50-row chunks and load the next page as their
   footer becomes visible. Search and artist surfaces start with five items per section and show
   a pressable **See more** row; the next page is fetched only when that row is pressed.

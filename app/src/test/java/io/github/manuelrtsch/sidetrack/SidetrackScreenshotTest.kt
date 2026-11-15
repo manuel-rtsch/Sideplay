@@ -289,6 +289,7 @@ class SidetrackScreenshotTest {
             onNowPlaying = {},
             onJump = {},
             onMoveUpcoming = { _, _ -> },
+            onCommitReorder = {},
             onRemove = { -1 },
             onClearUpcoming = { emptyList() },
             onRestoreUpcoming = {},

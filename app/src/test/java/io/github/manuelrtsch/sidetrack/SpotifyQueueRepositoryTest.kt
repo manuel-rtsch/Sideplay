@@ -208,17 +208,32 @@ class SpotifyQueueRepositoryTest {
         assertEquals(listOf("c", "d", "b"), queue.snapshot.upcoming.map { it.id })
     }
 
-    @Test fun `a manual reorder turns shuffle off and keeps the chosen order`() {
+    @Test fun `cancelling a manual reorder keeps shuffle and its backup`() {
+        val queue = SpotifyQueueRepository(Random(7))
+        queue.play(tracks, 0)
+        queue.setShuffle(true)
+        val before = queue.snapshot.upcoming.map { it.id }
+        val backup = queue.snapshot.shuffleBackup?.map { it.id }
+
+        queue.moveUpcoming(from = 0, to = 2)
+        queue.moveUpcoming(from = 2, to = 0)
+
+        assertTrue(queue.snapshot.shuffle)
+        assertEquals(before, queue.snapshot.upcoming.map { it.id })
+        assertEquals(backup, queue.snapshot.shuffleBackup?.map { it.id })
+    }
+
+    @Test fun `finishing a manual reorder turns shuffle off and keeps the chosen order`() {
         val queue = SpotifyQueueRepository(Random(7))
         queue.play(tracks, 0)
         queue.setShuffle(true)
 
         queue.moveUpcoming(from = 0, to = 2)
         val arranged = queue.snapshot.upcoming.map { it.id }
+        queue.finishReorder()
 
         assertTrue(!queue.snapshot.shuffle)
         assertNull(queue.snapshot.shuffleBackup)
-        queue.setShuffle(false)
         assertEquals(arranged, queue.snapshot.upcoming.map { it.id })
     }
 

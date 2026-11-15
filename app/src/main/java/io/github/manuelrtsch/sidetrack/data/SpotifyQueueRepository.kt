@@ -210,9 +210,19 @@ class SpotifyQueueRepository(
         val target = to.coerceIn(0, upcoming.lastIndex)
         if (from == target) return snapshot
         val moved = upcoming.toMutableList().apply { add(target, removeAt(from)) }
-        // A hand-picked order is authoritative. Keeping shuffle on would claim the new order is
-        // random and leave no backup to restore, so the mode follows the order instead.
-        return commit(snapshot.copy(upcoming = moved, shuffle = false, shuffleBackup = null))
+        // Keep shuffle and its backup untouched until the reorder is committed. A cancelled lift
+        // moves the track back and must leave the pre-reorder shuffle state exactly as it was.
+        return commit(snapshot.copy(upcoming = moved))
+    }
+
+    /**
+     * Commits a hand-picked order. The user has arranged the tail themselves, so shuffle no longer
+     * describes it and its pre-shuffle backup must not replace the chosen order later.
+     */
+    fun finishReorder(): Snapshot = if (!snapshot.shuffle && snapshot.shuffleBackup == null) {
+        snapshot
+    } else {
+        commit(snapshot.copy(shuffle = false, shuffleBackup = null))
     }
 
     /** Removes every upcoming item and returns them so the caller can offer Undo. */

@@ -595,6 +595,9 @@ class SpotifyViewModel(
 
     private fun loadRadio(seed: SpotifyTrack) {
         radioJob?.cancel()
+        // The station request can take seconds. Remember the queue it was started from so a late
+        // response cannot replace edits the user made while it loaded.
+        val queueAtRequest = queue.snapshot
         _state.update {
             it.copy(radio = null, radioSeedId = seed.id, radioPending = true, radioError = null)
         }
@@ -631,9 +634,17 @@ class SpotifyViewModel(
                         radioError = null
                     )
                 }
-                // The seed keeps playing; the station becomes what follows it. The Queue then
-                // carries the same context, with its usual shuffle and repeat handling.
-                applyQueue(queue.play(listOf(seed) + tracks, 0), syncNowPlaying = false)
+                // The seed keeps playing; the station becomes what follows it. Only do that if
+                // the queue is still the one this request started from. A late response must not
+                // overwrite a track the user added, removed, cleared or reordered meanwhile.
+                val queueNow = queue.snapshot
+                if (
+                    queueNow.current?.id == seed.id &&
+                    queueNow.upcoming == queueAtRequest.upcoming &&
+                    queueNow.shuffle == queueAtRequest.shuffle
+                ) {
+                    applyQueue(queue.play(listOf(seed) + tracks, 0), syncNowPlaying = false)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1009,6 +1020,11 @@ class SpotifyViewModel(
     /** Drag-and-drop reorder of the upcoming tail; the current item and history never move. */
     fun moveUpcoming(from: Int, to: Int) {
         applyQueue(queue.moveUpcoming(from, to), syncNowPlaying = false)
+    }
+
+    /** The user kept the hand-picked order: shuffle no longer describes it. */
+    fun finishReorder() {
+        applyQueue(queue.finishReorder(), syncNowPlaying = false)
     }
 
     fun removeHistory(item: SpotifyMediaItem) {
@@ -1535,6 +1551,9 @@ class SpotifyViewModel(
     internal fun handlePlaybackEvent(raw: String) {
         val event = runCatching { JSONObject(raw) }.getOrNull() ?: return
         val position = event.optLong("positionMs", _playbackPositionMs.value)
+        val playRequestId = event.optLong("playRequestId", -1L)
+        val eventUri = event.opt("uri")?.toString()
+        session?.notePlayRequest(playRequestId, eventUri)
         val type = event.opt("type")?.toString().orEmpty()
         SidetrackDebug.log("event type=$type uri=${event.opt("uri")?.toString().orEmpty()} positionMs=$position")
         when (type) {
@@ -1609,8 +1628,7 @@ class SpotifyViewModel(
                 // Closing the app halts the audio and saves its offset; the player's "stopped"
                 // echo can arrive later, after a recreated ViewModel has restored that offset.
                 // Ignoring it keeps the restored position and leaves the queue untouched.
-                val eventUri = event.opt("uri")?.toString()
-                if (session?.consumeHaltStop(eventUri) == true) return
+                if (session?.consumeHaltStop(eventUri, playRequestId) == true) return
                 // Stop from the notification or lock screen: clear both the UI and the queue so
                 // reopening Sidetrack cannot restore the track that was stopped.
                 awaitingPlaybackStart = false

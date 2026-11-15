@@ -474,6 +474,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onJump = vm::jumpTo,
                 onMoveUpcoming = vm::moveUpcoming,
+                onCommitReorder = vm::finishReorder,
                 onRemove = vm::removeUpcoming,
                 onRestoreRemoved = vm::restoreRemovedUpcoming,
                 onClearUpcoming = vm::clearUpcoming,

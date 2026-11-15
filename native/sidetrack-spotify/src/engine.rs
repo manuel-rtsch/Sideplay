@@ -356,33 +356,47 @@ pub fn poll_event() -> Option<String> {
     let events = guard.events.as_mut()?;
     let event = events.try_recv().ok()?;
     let value = match event {
-        PlayerEvent::Stopped { track_id, .. } => json!({"type": "stopped", "uri": uri(&track_id)}),
+        PlayerEvent::Stopped {
+            play_request_id,
+            track_id,
+        } => {
+            json!({"type": "stopped", "uri": uri(&track_id), "playRequestId": play_request_id})
+        }
+        PlayerEvent::PlayRequestIdChanged { play_request_id } => {
+            json!({"type": "playRequestId", "playRequestId": play_request_id})
+        }
         PlayerEvent::Loading {
+            play_request_id,
             track_id,
             position_ms,
-            ..
         } => {
-            json!({"type": "loading", "uri": uri(&track_id), "positionMs": position_ms})
+            json!({"type": "loading", "uri": uri(&track_id), "positionMs": position_ms, "playRequestId": play_request_id})
         }
         PlayerEvent::Playing {
+            play_request_id,
             track_id,
             position_ms,
-            ..
         } => {
-            json!({"type": "playing", "uri": uri(&track_id), "positionMs": position_ms})
+            json!({"type": "playing", "uri": uri(&track_id), "positionMs": position_ms, "playRequestId": play_request_id})
         }
         PlayerEvent::Paused {
+            play_request_id,
             track_id,
             position_ms,
-            ..
         } => {
-            json!({"type": "paused", "uri": uri(&track_id), "positionMs": position_ms})
+            json!({"type": "paused", "uri": uri(&track_id), "positionMs": position_ms, "playRequestId": play_request_id})
         }
-        PlayerEvent::EndOfTrack { track_id, .. } => {
-            json!({"type": "ended", "uri": uri(&track_id)})
+        PlayerEvent::EndOfTrack {
+            play_request_id,
+            track_id,
+        } => {
+            json!({"type": "ended", "uri": uri(&track_id), "playRequestId": play_request_id})
         }
-        PlayerEvent::Unavailable { track_id, .. } => {
-            json!({"type": "unavailable", "uri": uri(&track_id)})
+        PlayerEvent::Unavailable {
+            play_request_id,
+            track_id,
+        } => {
+            json!({"type": "unavailable", "uri": uri(&track_id), "playRequestId": play_request_id})
         }
         PlayerEvent::PositionChanged { position_ms, .. }
         | PlayerEvent::PositionCorrection { position_ms, .. }

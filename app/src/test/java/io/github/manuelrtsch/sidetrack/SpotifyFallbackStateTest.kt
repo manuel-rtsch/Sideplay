@@ -5,12 +5,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -89,6 +91,34 @@ class SpotifyFallbackStateTest {
 
         assertEquals(seed.id, vm.state.value.current?.id)
         assertEquals(station.map { it.id }, vm.state.value.upcoming.map { it.id })
+        assertEquals(station.map { it.id }, vm.state.value.radio?.items?.map { it.id })
+        assertNull(vm.state.value.radioError)
+    }
+
+    @Test fun `a late song radio response does not overwrite queue edits`() = runTest(dispatcher) {
+        val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
+        val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)
+        val added = MockSpotifyDataSource.playlist("late_night")!!.tracks.last()
+        val gate = CompletableDeferred<Unit>()
+        val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
+            override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> {
+                gate.await()
+                return station
+            }
+        }
+        val vm = viewModel(catalog)
+
+        vm.playItem(seed)
+        advanceUntilIdle()
+        vm.ensureRadio()
+        runCurrent()
+        vm.addToQueue(added)
+        val edited = vm.state.value.upcoming.map { it.id }
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(seed.id, vm.state.value.current?.id)
+        assertEquals(edited, vm.state.value.upcoming.map { it.id })
         assertEquals(station.map { it.id }, vm.state.value.radio?.items?.map { it.id })
         assertNull(vm.state.value.radioError)
     }

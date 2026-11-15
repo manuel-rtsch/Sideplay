@@ -62,6 +62,10 @@ class QueueReorderState internal constructor(
     var origin by mutableIntStateOf(-1)
         private set
 
+    /** Whether this lift actually changed the order. A no-op drop must not alter shuffle. */
+    var hasMoved by mutableStateOf(false)
+        private set
+
     private var pointerDelta = 0f
     private var scrolled = 0f
     private var startOffset = 0f
@@ -79,6 +83,7 @@ class QueueReorderState internal constructor(
         pointerDelta = 0f
         scrolled = 0f
         translation = 0f
+        hasMoved = false
     }
 
     /**
@@ -108,6 +113,7 @@ class QueueReorderState internal constructor(
         }
         from = desired
         to = desired
+        hasMoved = true
         updateTranslation()
         return current to desired
     }
@@ -124,6 +130,7 @@ class QueueReorderState internal constructor(
         if (next == current) return null
         from = next
         to = next
+        hasMoved = true
         translation = 0f
         return current to next
     }
@@ -150,6 +157,7 @@ class QueueReorderState internal constructor(
         pointerDelta = 0f
         scrolled = 0f
         keypad = false
+        hasMoved = false
     }
 
     /**
@@ -221,7 +229,8 @@ fun Modifier.queueReorder(
     count: Int,
     key: Any,
     onPickUp: () -> Unit = {},
-    onDrop: (from: Int, to: Int) -> Unit
+    onDrop: (from: Int, to: Int) -> Unit,
+    onDropEnd: () -> Unit = {}
 ): Modifier {
     // The row's index changes every time the drag reorders the queue, so the gesture must not be
     // keyed on it: a restarted pointer input would drop the row mid-drag. The latest values are
@@ -230,7 +239,13 @@ fun Modifier.queueReorder(
     val latestCount by rememberUpdatedState(count)
     val latestPickUp by rememberUpdatedState(onPickUp)
     val latestDrop by rememberUpdatedState(onDrop)
+    val latestDropEnd by rememberUpdatedState(onDropEnd)
     return pointerInput(state, key) {
+        fun finishDrag() {
+            val moved = state.hasMoved
+            state.end()
+            if (moved) latestDropEnd()
+        }
         try {
             detectDragGesturesAfterLongPress(
                 onDragStart = {
@@ -242,13 +257,14 @@ fun Modifier.queueReorder(
                     change.consume()
                     state.drag(delta.y)?.let { (from, to) -> latestDrop(from, to) }
                 },
-                onDragEnd = { state.end() },
-                onDragCancel = { state.cancel() }
+                onDragEnd = { finishDrag() },
+                onDragCancel = { finishDrag() }
             )
         } finally {
             // A row that scrolls out of the list is disposed mid-drag, which cancels this coroutine
-            // without a callback: never leave a lift behind.
-            if (state.active) state.cancel()
+            // without a callback: never leave a lift behind. Moves already committed during the
+            // drag still count, so commit the hand-picked order once.
+            if (state.active) finishDrag()
         }
     }
 }

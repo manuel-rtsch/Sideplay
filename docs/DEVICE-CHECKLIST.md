@@ -40,8 +40,11 @@ driven from `adb`.
 - [ ] **Manual:** swipe a focused row open, then press Down. Confirm the swipe closes as the
       focus moves and that only the next row's gutter can appear, never both at once.
 - [ ] **Manual:** open Options, choose **Reorder**, then Up/Down to step the lifted track. Confirm
-      it stays in view, Confirm drops it, and Back returns it to where it started without leaving
-      the queue. Confirm the bar shows Back + Done while reordering.
+      it stays in view, Confirm drops it, and Cancel returns it to where it started without leaving
+      the queue. Confirm the bar shows Cancel + Done while reordering.
+- [ ] **Manual:** start Reorder while Shuffled, step once, then Cancel. Confirm both the order and
+      the **Shuffled** state return exactly. Then start Reorder, let the track end, and confirm the
+      mode exits instead of moving a different row.
 - [ ] **Manual:** add the same track to the queue twice, remove one copy, and confirm the other
       copy remains and Undo restores only the removed copy.
 - [ ] **Manual:** press Clear, confirm Cancel leaves the queue alone, then confirm Clear wipes the
@@ -49,6 +52,12 @@ driven from `adb`.
 - [ ] **Manual:** toggle shuffle from Options and confirm the **Up next** header says
       **Shuffled**. Manually reorder the tail and confirm shuffle turns off and the header drops
       the label.
+- [ ] **Manual:** start Song radio on a slow connection, add or remove a queue track while it
+      loads, and confirm the late station does not overwrite that edit. Reopen Song radio and
+      confirm it is ready to play.
+- [ ] **Manual:** close Sidetrack mid-track, reopen it, and confirm the position and queue are
+      preserved. Then resume the same track and press stop from the notification within a few
+      seconds; confirm the UI and queue clear normally instead of the stop being swallowed.
 - [x] The notification shows artwork, title, artist, and previous/play-pause/next.
 - [x] The media session reports the current item and playing state.
 - [ ] **Manual:** tapping the notification opens Sidetrack at Now Playing.

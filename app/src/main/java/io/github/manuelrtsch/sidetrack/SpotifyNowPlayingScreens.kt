@@ -287,6 +287,7 @@ fun QueueScreen(
     onNowPlaying: () -> Unit,
     onJump: (Int) -> Unit,
     onMoveUpcoming: (Int, Int) -> Unit,
+    onCommitReorder: () -> Unit,
     onRemove: (Int) -> Int,
     onRestoreRemoved: (Int, SpotifyMediaItem) -> Unit,
     onClearUpcoming: () -> List<SpotifyMediaItem>,
@@ -298,6 +299,11 @@ fun QueueScreen(
     var pendingUndo by remember { mutableStateOf<QueueUndo?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var reorderMode by remember { mutableStateOf(false) }
+    // The current item and tail size at the start of a reorder. If either changes (playback moves
+    // on, another surface edits the queue, radio loads), the lift no longer describes the row it
+    // started on, so the mode abandons instead of moving a stranger.
+    var reorderCurrentId by remember { mutableStateOf<String?>(null) }
+    var reorderSize by remember { mutableStateOf(0) }
     // The list and the reorder state live above the scaffold: the key handler on the scaffold needs
     // them, and the rows below share the same list state.
     val listState = rememberLazyListState()
@@ -375,6 +381,18 @@ fun QueueScreen(
         val open = swipes.openKey
         if (open != null && upcomingKeys.none { it == open }) swipes.closeAll()
     }
+    // A reorder must not survive the queue changing underneath it. Commit what was already picked
+    // (if anything) and leave the mode; moving back to a stale index could target another track.
+    LaunchedEffect(state.current?.id, state.upcoming.size) {
+        if (!reorderMode) return@LaunchedEffect
+        if (state.current?.id == reorderCurrentId && state.upcoming.size == reorderSize) return@LaunchedEffect
+        val moved = reorder.hasMoved
+        reorder.end()
+        reorderMode = false
+        if (moved) onCommitReorder()
+        focusedKey = null
+        clearFocusPending = true
+    }
     val back = spotifyBack("Back", onBack).first()
     // Removing a track offers Undo in the bar but drops the focus: the list must not choose a
     // neighbour for the user. The index identifies the occurrence, so duplicates are safe.
@@ -394,18 +412,31 @@ fun QueueScreen(
     }
     val finishReorder: () -> Unit = {
         if (reorderMode) {
+            val moved = reorder.hasMoved
             reorder.end()
             reorderMode = false
+            // Only a real move makes the hand-picked order authoritative. Pressing Done without
+            // moving must not silently turn shuffle off.
+            if (moved) onCommitReorder()
             focusedKey = null
             clearFocusPending = true
         }
     }
     val cancelReorder: () -> Unit = {
         if (reorderMode) {
+            val moved = reorder.hasMoved
             val origin = reorder.origin
             val current = reorder.from
+            val sameQueue = state.current?.id == reorderCurrentId && state.upcoming.size == reorderSize
             reorder.cancel()
-            if (current != null && origin >= 0 && current != origin) onMoveUpcoming(current, origin)
+            if (moved) {
+                if (sameQueue && current != null && origin >= 0 && current != origin) {
+                    onMoveUpcoming(current, origin)
+                } else {
+                    // The queue changed underneath the lift; the old origin no longer exists.
+                    onCommitReorder()
+                }
+            }
             reorderMode = false
             focusedKey = null
             clearFocusPending = true
@@ -421,6 +452,8 @@ fun QueueScreen(
             val offset = listState.layoutInfo.visibleItemsInfo
                 .firstOrNull { it.key == targetKey }
                 ?.offset ?: 0
+            reorderCurrentId = state.current?.id
+            reorderSize = state.upcoming.size
             reorder.begin(target, state.upcoming.size, offset.toFloat(), keypad = true)
             reorderMode = true
             focusPending = true
@@ -659,8 +692,11 @@ fun QueueScreen(
                                 Modifier
                                     // The picked-up row is the thing being looked at: never fade it.
                                     .then(
-                                        if (pickedUp) Modifier
-                                        else Modifier.listFade(listState, firstQueueItem + index)
+                                        if (pickedUp) {
+                                            Modifier
+                                        } else {
+                                            Modifier.listFade(listState, firstQueueItem + index)
+                                        }
                                     )
                                     .zIndex(if (pickedUp) 1f else 0f)
                                     .graphicsLayer {
@@ -681,7 +717,8 @@ fun QueueScreen(
                                             swipes.closeAll()
                                             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                                         },
-                                        onDrop = onMoveUpcoming
+                                        onDrop = onMoveUpcoming,
+                                        onDropEnd = { if (!reorderMode) onCommitReorder() }
                                     )
                             ) {
                                 SidekitSwipeRow(
@@ -709,8 +746,11 @@ fun QueueScreen(
                                                 }
                                             }
                                             .then(
-                                                if (focusedKey == key) Modifier.focusRequester(rowFocus)
-                                                else Modifier
+                                                if (focusedKey == key) {
+                                                    Modifier.focusRequester(rowFocus)
+                                                } else {
+                                                    Modifier
+                                                }
                                             ),
                                         secondary = item.creator,
                                         // The side control gets the right edge while it is visible.
@@ -809,12 +849,9 @@ private enum class GutterMode { Lifted, Remove }
 /** Icon size of the bare arrows beside a lifted row. */
 private val LiftedIconSize = 24.dp
 
-/** Breathing room between the now-playing row and the top of the queue. */
-
 /**
  * A full-height square row control, the same footprint as the swipe reveal's Remove from queue
- * block: one item-height square, the item's corner radius, a large icon. Only the colour and the
- * glyph change between play, rearrange and remove.
+ * block: one item-height square, the item's corner radius, a large icon.
  */
 @Composable
 private fun GutterSquare(
