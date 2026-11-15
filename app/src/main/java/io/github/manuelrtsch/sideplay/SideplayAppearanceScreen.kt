@@ -27,7 +27,6 @@ fun SideplayAppearanceScreen(onBack: () -> Unit) {
 
     SidekitScaffold("Appearance", actions = listOf(SideAction.back("back", "Settings", onBack))) { padding ->
         SidekitList(padding, state = list) {
-            caseColourChoices(theme.caseColour) { store.writeCaseColour(it) }
             item {
                 SideplayItem(
                     "Compact layout",
@@ -37,6 +36,7 @@ fun SideplayAppearanceScreen(onBack: () -> Unit) {
                     onClick = { store.writeCompact(!theme.compact) }
                 )
             }
+            caseColourChoices(theme.caseColour) { store.writeCaseColour(it) }
         }
     }
 }
