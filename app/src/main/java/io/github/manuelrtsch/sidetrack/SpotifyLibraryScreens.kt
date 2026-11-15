@@ -392,7 +392,9 @@ fun CollectionScreen(
     onLoadMore: () -> Unit,
     loadingMore: Boolean,
     onDismissNotice: () -> Unit,
-    onDismissNowPlaying: () -> Unit
+    onDismissNowPlaying: () -> Unit,
+    /** Generated pages such as Song radio re-use the collection body but cannot be saved. */
+    showSave: Boolean = true
 ) {
     val colors = SidekitTheme.colors
     val saved = "${collection.type.route}:${collection.id}" in state.savedCollectionKeys
@@ -441,12 +443,14 @@ fun CollectionScreen(
                         collection.artUrl,
                         onClick = onArtwork
                     )
-                    SpotifyIconTile(
-                        if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-                        if (saved) "Saved" else "Save",
-                        onSave,
-                        tone = if (saved) SpotifyTileTone.Library else SpotifyTileTone.Neutral
-                    )
+                    if (showSave) {
+                        SpotifyIconTile(
+                            if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
+                            if (saved) "Saved" else "Save",
+                            onSave,
+                            tone = if (saved) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                        )
+                    }
                 }
             }
             rowIndex += 1

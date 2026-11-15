@@ -1,6 +1,6 @@
 # Sidetrack
 
-**Updated:** 2026-11-12
+**Updated:** 2026-11-15
 **Repository:** `manuel-rtsch/Sidetrack` (`main`)
 **Phase:** standalone APK; manual device checks are tracked in `docs/DEVICE-CHECKLIST.md`
 
@@ -41,7 +41,7 @@ Spotify.
 
 Rejected on purpose: algorithmic home feed, horizontal shelves, persistent mini-player, bottom
 navigation, full-screen drag-dismiss player, queue bottom sheet, Spotify Connect device switching,
-lyrics/Canvas/video, social features, account management, crossfade/EQ, and track-seeded radio.
+lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 
 ---
 
@@ -110,6 +110,15 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   the timer without touching system volume. `End of track` stops before repeat/advance and
   retargets naturally when the user skips. The timer is not persisted and is cleared on stop,
   disconnect, and sign-out.
+- Song radio is seeded from the current track. Now Playing's Options bar carries three square,
+  primary-coloured icon buttons — Queue, Song radio and Sleep timer — with no text labels. The
+  station is read through librespot's first-party `get_radio_for_track` endpoint (the same
+  authenticated session the catalog uses), resolved to normal track rows, and shown with the
+  collection screen's play/artwork header and track list. Opening the station queues it behind
+  the still-playing seed, so playback continues without a restart; the Queue screen carries the
+  same queue, subject to the current shuffle and repeat modes. Episodes have no song radio, so
+  the button is omitted for them. The Web API fallback uses `/recommendations` when the native
+  bridge is absent.
 - Starting a new item shows a transient now-playing confirmation in the action bar: artwork, an
   animated playing indicator, the title, and a right arrow to Now Playing. It replaces the normal
   actions for four seconds, can be dismissed immediately with its X, and never auto-navigates.

@@ -101,7 +101,13 @@ data class SpotifyUiState(
     val cacheSizeBytes: Long = 0L,
     val notice: String? = null,
     /** The item that just started, shown briefly in the action bar as a now-playing confirmation. */
-    val nowPlayingNotice: SpotifyMediaItem? = null
+    val nowPlayingNotice: SpotifyMediaItem? = null,
+    /** The station built from the current track, shown by the Song radio screen. */
+    val radio: SpotifyCollection? = null,
+    /** Which track seeded [radio], so revisiting the same song does not refetch it. */
+    val radioSeedId: String? = null,
+    val radioPending: Boolean = false,
+    val radioError: String? = null
 ) {
     val savedCurrent: Boolean get() = current?.let { it.id in savedTrackIds } ?: false
 }
@@ -141,6 +147,7 @@ class SpotifyViewModel(
 
     private var searchJob: Job? = null
     private var autoplayJob: Job? = null
+    private var radioJob: Job? = null
     private var nowPlayingNoticeJob: Job? = null
     private var librarySectionsJob: Job? = null
     private var libraryJob: Job? = null
@@ -557,6 +564,94 @@ class SpotifyViewModel(
     }
 
     fun playItem(item: SpotifyMediaItem) = play(listOf(item), 0)
+
+    /**
+     * Builds a station from the current track, queues it behind the still-playing seed, and makes
+     * it available to the Song radio screen. Revisiting the same seed is a no-op.
+     */
+    fun ensureRadio() {
+        val seed = _state.value.current as? SpotifyTrack
+        if (seed == null) {
+            _state.update {
+                it.copy(radio = null, radioSeedId = null, radioPending = false, radioError = "Nothing playing")
+            }
+            return
+        }
+        if (radioJob?.isActive == true && _state.value.radioSeedId == seed.id) return
+        if (_state.value.radioSeedId == seed.id && _state.value.radio != null) return
+        loadRadio(seed)
+    }
+
+    fun retryRadio() {
+        radioJob?.cancel()
+        _state.update { it.copy(radio = null, radioSeedId = null, radioError = null) }
+        ensureRadio()
+    }
+
+    fun playRadio(index: Int) {
+        val radio = _state.value.radio ?: return
+        play(radio.items, index)
+    }
+
+    private fun loadRadio(seed: SpotifyTrack) {
+        radioJob?.cancel()
+        _state.update {
+            it.copy(radio = null, radioSeedId = seed.id, radioPending = true, radioError = null)
+        }
+        radioJob = viewModelScope.launch {
+            try {
+                val tracks = catalog.songRadio(seed.id, SPOTIFY_PAGE_SIZE)
+                    .filter { it.playable && it.id != seed.id }
+                    .distinctBy { it.id }
+                if (_state.value.current?.id != seed.id) {
+                    _state.update {
+                        it.copy(radioPending = false, radioError = "The track changed — try again")
+                    }
+                    return@launch
+                }
+                if (tracks.isEmpty()) {
+                    _state.update { it.copy(radioPending = false, radioError = "No similar tracks found") }
+                    return@launch
+                }
+                val station = SpotifyCollection(
+                    type = SpotifyCollectionType.Playlist,
+                    id = "radio:${seed.id}",
+                    title = "Song radio",
+                    subtitle = "Based on ${seed.title} · ${tracks.size} tracks",
+                    artRes = seed.artRes,
+                    items = tracks,
+                    artUrl = seed.artUrl,
+                    totalItems = tracks.size
+                )
+                _state.update {
+                    it.copy(
+                        radio = station,
+                        radioSeedId = seed.id,
+                        radioPending = false,
+                        radioError = null
+                    )
+                }
+                // The seed keeps playing; the station becomes what follows it. The Queue then
+                // carries the same context, with its usual shuffle and repeat handling.
+                applyQueue(queue.play(listOf(seed) + tracks, 0), syncNowPlaying = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (_state.value.radioSeedId == seed.id) {
+                    _state.update {
+                        it.copy(
+                            radioPending = false,
+                            radioError = if (it.current?.id == seed.id) {
+                                playbackNotice(e)
+                            } else {
+                                "The track changed — try again"
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     fun playCollection(collection: SpotifyCollection, index: Int) {
         if (!collection.hasMore) {
@@ -1125,6 +1220,7 @@ class SpotifyViewModel(
         history.clear()
         librarySectionsJob?.cancel()
         libraryJob?.cancel()
+        radioJob?.cancel()
         libraryCategoryLoaded = false
         savedTrackTouched.clear()
         savedCollectionTouched.clear()
@@ -1157,7 +1253,11 @@ class SpotifyViewModel(
                 savedTrackIds = emptySet(),
                 savedCollectionKeys = emptySet(),
                 followedArtistIds = emptySet(),
-                nowPlayingNotice = null
+                nowPlayingNotice = null,
+                radio = null,
+                radioSeedId = null,
+                radioPending = false,
+                radioError = null
             )
         }
     }

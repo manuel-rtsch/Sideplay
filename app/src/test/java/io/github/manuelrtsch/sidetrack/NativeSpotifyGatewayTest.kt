@@ -251,6 +251,7 @@ class NativeSpotifyGatewayTest {
         override fun catalogArtist(id: String): String? = null
         override fun catalogAlbumsBy(id: String, offset: Long, limit: Long): String? = null
         override fun catalogTopTracks(id: String, offset: Long, limit: Long): String? = null
+        override fun catalogSongRadio(id: String, limit: Long): String? = null
         override fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String? = null
         override fun collectionContains(set: String, uris: String): String? = null
         override fun collectionWrite(set: String, uris: String, removed: Boolean): Boolean = true

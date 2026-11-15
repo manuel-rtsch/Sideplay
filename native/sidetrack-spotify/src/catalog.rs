@@ -552,6 +552,44 @@ async fn fetch_tracks(
     join_all(futures).await.into_iter().flatten().collect()
 }
 
+/// The inspired-by endpoint returns a media list of radio playlists, not tracks. Pick the first
+/// playlist URI; the station's tracks come from that playlist.
+fn radio_playlist_uri(json: &Value) -> Option<String> {
+    json.get("mediaItems")
+        .and_then(Value::as_array)?
+        .iter()
+        .filter_map(|item| item.get("uri").and_then(Value::as_str))
+        .find(|uri| matches!(SpotifyUri::from_uri(uri), Ok(SpotifyUri::Playlist { .. })))
+        .map(str::to_string)
+}
+
+/// Keep only real tracks, drop the seed itself, and preserve Spotify's order while removing
+/// duplicates.
+fn radio_track_uris<'a>(
+    seed_uri: &str,
+    tracks: impl IntoIterator<Item = &'a SpotifyUri>,
+    limit: usize,
+) -> Vec<SpotifyUri> {
+    let mut seen = HashSet::new();
+    let mut uris = Vec::new();
+    for uri in tracks {
+        if !matches!(uri, SpotifyUri::Track { .. }) {
+            continue;
+        }
+        let Ok(text) = uri.to_uri() else {
+            continue;
+        };
+        if text == seed_uri || !seen.insert(text) {
+            continue;
+        }
+        uris.push(uri.clone());
+        if uris.len() >= limit {
+            break;
+        }
+    }
+    uris
+}
+
 async fn fetch_albums(
     session: &Session,
     token: &str,
@@ -1787,6 +1825,44 @@ pub async fn collection(
     }
 }
 
+/// Reads a track-seeded station through librespot's first-party radio endpoint, then resolves
+/// each returned track to the metadata rows the UI already consumes.
+pub async fn radio(
+    session: &Session,
+    token: &str,
+    id: &str,
+    limit: usize,
+) -> Result<String, String> {
+    let seed = spotify_uri(id, "track")?;
+    let seed_uri = seed.to_uri().map_err(|e| e.to_string())?;
+    let response = session
+        .spclient()
+        .get_radio_for_track(&seed)
+        .await
+        .map_err(|e| format!("RADIO_FAILED: {e}"))?;
+    let json: Value = serde_json::from_slice(&response).map_err(|e| e.to_string())?;
+    let Some(playlist_uri) = radio_playlist_uri(&json) else {
+        log::warn!("radio for {seed_uri} returned no playlist");
+        return Ok("[]".to_string());
+    };
+    let playlist = playlist_get(
+        session,
+        token,
+        &SpotifyUri::from_uri(&playlist_uri).map_err(|e| e.to_string())?,
+    )
+    .await?;
+    let uris = radio_track_uris(&seed_uri, playlist.tracks(), limit.clamp(1, MAX_PAGE));
+    log::info!(
+        "radio for {seed_uri} resolved playlist {playlist_uri} to {} tracks",
+        uris.len()
+    );
+    if uris.is_empty() {
+        return Ok("[]".to_string());
+    }
+    let tracks = fetch_tracks(session, token, &uris, uris.len()).await;
+    Ok(serde_json::to_string(&tracks).map_err(|e| e.to_string())?)
+}
+
 pub async fn artist(session: &Session, token: &str, id: &str) -> Result<String, String> {
     let artist = artist_get(session, token, &spotify_uri(id, "artist")?)
         .await
@@ -1847,8 +1923,53 @@ pub async fn top_tracks(
 #[cfg(test)]
 mod tests {
     use super::{
-        owner_display, percent_decode, rootlist_folder_name, sort_newest_first, CollectionItem,
+        owner_display, percent_decode, radio_playlist_uri, radio_track_uris, rootlist_folder_name,
+        sort_newest_first, CollectionItem,
     };
+    use librespot_core::SpotifyUri;
+    use serde_json::json;
+
+    #[test]
+    fn radio_playlist_uri_skips_non_playlists() {
+        let response = json!({
+            "mediaItems": [
+                {"uri": "spotify:track:4uLU6hMCjMI75M1A2tKUQC"},
+                {"uri": "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"}
+            ]
+        });
+
+        assert_eq!(
+            radio_playlist_uri(&response).as_deref(),
+            Some("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M")
+        );
+    }
+
+    #[test]
+    fn radio_uris_drop_seed_non_tracks_and_duplicates() {
+        let tracks: Vec<SpotifyUri> = [
+            "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+            "spotify:track:0VjIjW4GlUZAMYd2vXMi3b",
+            "spotify:track:0VjIjW4GlUZAMYd2vXMi3b",
+            "spotify:episode:4rOoJ6Egrf8K2IrywzwOMk",
+            "spotify:track:1ZbT7TBIuOCjXePHVaqCWx",
+        ]
+        .into_iter()
+        .filter_map(|uri| SpotifyUri::from_uri(uri).ok())
+        .collect();
+
+        let uris: Vec<String> =
+            radio_track_uris("spotify:track:4uLU6hMCjMI75M1A2tKUQC", &tracks, 50)
+                .iter()
+                .filter_map(|uri| uri.to_uri().ok())
+                .collect();
+        assert_eq!(
+            uris,
+            vec![
+                "spotify:track:0VjIjW4GlUZAMYd2vXMi3b",
+                "spotify:track:1ZbT7TBIuOCjXePHVaqCWx"
+            ]
+        );
+    }
 
     #[test]
     fn collection_items_are_newest_first() {

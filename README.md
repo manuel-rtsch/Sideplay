@@ -21,6 +21,7 @@ and keyboard settings, and still works with a touchscreen or a physical keypad.
   phone's own volume keys. Normalize loudness across tracks and join sequential tracks without
   a gap.
 - **Keep a queue** — add tracks, reorder the queue, and see what played before.
+- **Start a song radio** — build a station from whatever is playing and keep it flowing.
 - **Save what you like** — like tracks, save albums and shows, follow artists, and add playlists.
 - **Use the keypad** — T9, mini QWERTY, Sundial, and game controller are all supported. On the
   mini QWERTY, **T / D / B / J** move up, left, down, and right; **Enter** selects; **Back** goes

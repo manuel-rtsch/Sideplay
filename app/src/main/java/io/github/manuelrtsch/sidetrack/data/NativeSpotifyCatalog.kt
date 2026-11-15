@@ -67,6 +67,11 @@ class NativeSpotifyCatalog(
         return SpotifyPage.of(array.tracks(), offset, limit)
     }
 
+    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> {
+        val array = parseArray(callText { native.catalogSongRadio(trackId, limit.toLong()) })
+        return array.tracks()
+    }
+
     override suspend fun search(
         query: String,
         scopes: Set<SearchScope>,

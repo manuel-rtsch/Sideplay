@@ -98,6 +98,7 @@ class SpotifySession(
      * current item. The next matching "stopped" event is therefore consumed as the halt echo.
      */
     @Volatile private var pendingHaltStopUri: String? = null
+
     @Volatile private var pendingHaltStopAt = 0L
 
     val history = SpotifyHistoryRepository(

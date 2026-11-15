@@ -109,6 +109,7 @@ fun SpotifyNowPlayingScreen(
     onRepeat: () -> Unit,
     onSave: () -> Unit,
     onQueue: () -> Unit,
+    onRadio: () -> Unit,
     onAlbum: () -> Unit,
     onShow: () -> Unit,
     onArtist: () -> Unit,
@@ -141,14 +142,17 @@ fun SpotifyNowPlayingScreen(
         emptyList()
     } else {
         buildList {
-            add(SideAction("queue", "Queue", SidekitIcon.QueueMusic, onClick = onQueue))
+            add(SideAction.square("queue", SidekitIcon.QueueMusic, "Queue", onQueue))
+            // A station needs a track seed; an episode has no song radio.
+            if (current is SpotifyTrack) {
+                add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
+            }
             add(
                 SideAction.square(
                     "sleepTimer",
                     SidekitIcon.Bedtime,
                     if (timer.active) "Sleep timer on" else "Sleep timer",
-                    onSleepTimer,
-                    tone = if (timer.active) ActionTone.Secondary else ActionTone.Muted
+                    onSleepTimer
                 )
             )
         }
@@ -360,7 +364,7 @@ fun QueueScreen(
         else -> state.upcoming.firstOrNull { it.id == focusedId }
     }
     val hasUpcoming = state.upcoming.isNotEmpty()
-    val back = spotifyBack("Sidetrack", onBack).first()
+    val back = spotifyBack("Back", onBack).first()
     // Removing a track offers Undo in the bar and leaves the keypad on the row that moved up.
     val removeFromQueue: (SpotifyMediaItem) -> Unit = { item ->
         val index = onRemove(item)

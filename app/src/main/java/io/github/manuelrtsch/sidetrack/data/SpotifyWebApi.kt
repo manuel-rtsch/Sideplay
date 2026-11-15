@@ -119,6 +119,14 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         return SpotifyPage.of(tracks, offset, limit)
     }
 
+    suspend fun songRadio(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> {
+        val json = get(
+            "$RECOMMENDATIONS?seed_tracks=${enc(trackId)}&limit=${limit.coerceIn(1, 100)}&market=from_token",
+            token()
+        )
+        return json.optJSONArray("tracks").tracks()
+    }
+
     /** Visible for tests: maps Spotify's search envelope without touching the network. */
     internal fun parseSearchTracks(json: JSONObject): List<SpotifyTrack> = json.optJSONObject("tracks")?.optJSONArray("items").tracks()
 
@@ -431,6 +439,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         const val ARTISTS = "$API/artists"
         const val PLAYLISTS = "$API/playlists"
         const val SHOWS = "$API/shows"
+        const val RECOMMENDATIONS = "$API/recommendations"
         const val TIMEOUT_MS = 15_000
     }
 }

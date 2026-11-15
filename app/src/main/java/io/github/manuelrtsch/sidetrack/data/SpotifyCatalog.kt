@@ -42,6 +42,12 @@ interface SpotifyCatalog {
         limit: Int = SPOTIFY_PAGE_SIZE
     ): SpotifyPage<SpotifyTrack>
 
+    /**
+     * Tracks for a station seeded by [trackId]. The native catalog uses librespot's first-party
+     * radio endpoint; transports that cannot build a station return an empty list.
+     */
+    suspend fun songRadio(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> = emptyList()
+
     suspend fun search(
         query: String,
         scopes: Set<SearchScope>,

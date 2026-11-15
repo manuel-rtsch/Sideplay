@@ -74,6 +74,25 @@ class SpotifyFallbackStateTest {
         assertNotNull(vm.artist(id))
     }
 
+    @Test fun `song radio queues its station behind the playing seed`() = runTest(dispatcher) {
+        val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
+        val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)
+        val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
+            override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> = station
+        }
+        val vm = viewModel(catalog)
+
+        vm.playItem(seed)
+        advanceUntilIdle()
+        vm.ensureRadio()
+        advanceUntilIdle()
+
+        assertEquals(seed.id, vm.state.value.current?.id)
+        assertEquals(station.map { it.id }, vm.state.value.upcoming.map { it.id })
+        assertEquals(station.map { it.id }, vm.state.value.radio?.items?.map { it.id })
+        assertNull(vm.state.value.radioError)
+    }
+
     private fun viewModel(catalog: SpotifyCatalog) = SpotifyViewModel(catalog, simulatePlayback = false).also { viewModels += it }
 
     private class FlakyCatalog : SpotifyCatalog by MockSpotifyDataSource {

@@ -39,6 +39,8 @@ class SpotifyWebCatalog(private val api: SpotifyWebApi) : SpotifyCatalog {
         limit: Int
     ): SpotifyPage<SpotifyTrack> = api.topTracks(artist, offset, limit)
 
+    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> = api.songRadio(trackId, limit)
+
     override suspend fun search(
         query: String,
         scopes: Set<SearchScope>,

@@ -79,6 +79,8 @@ object NativeBridge : SpotifyNative {
 
     override fun catalogTopTracks(id: String, offset: Long, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogTopTracks(id, offset, limit) }.getOrNull() else null
 
+    override fun catalogSongRadio(id: String, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogSongRadio(id, limit) }.getOrNull() else null
+
     override fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogSearch(query, scopes, offset, limit) }.getOrNull() else null
 
     override fun collectionContains(set: String, uris: String): String? = if (isAvailable) runCatching { nativeCollectionContains(set, uris) }.getOrNull() else null
@@ -112,6 +114,7 @@ object NativeBridge : SpotifyNative {
     private external fun nativeCatalogArtist(id: String): String?
     private external fun nativeCatalogAlbumsBy(id: String, offset: Long, limit: Long): String?
     private external fun nativeCatalogTopTracks(id: String, offset: Long, limit: Long): String?
+    private external fun nativeCatalogSongRadio(id: String, limit: Long): String?
     private external fun nativeCatalogSearch(query: String, scopes: String, offset: Long, limit: Long): String?
     private external fun nativeCollectionContains(set: String, uris: String): String?
     private external fun nativeCollectionWrite(set: String, uris: String, removed: Boolean): Boolean

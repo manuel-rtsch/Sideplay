@@ -43,6 +43,7 @@ private val SEARCH = SIDE_PLAY_SEARCH
 private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
+private val RADIO = "$ROOT/song-radio"
 private val SLEEP_TIMER = "$ROOT/sleep-timer"
 private val SETTINGS = "$ROOT/settings"
 private val AUDIO_QUALITY = "$ROOT/audio-quality"
@@ -387,6 +388,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 onRepeat = vm::cycleRepeat,
                 onSave = vm::toggleSaveCurrent,
                 onQueue = { nav.navigate(QUEUE) },
+                onRadio = { nav.navigate(RADIO) },
                 onAlbum = {
                     (state.current as? SpotifyTrack)?.albumId?.spotifyIdOrNull()?.let { id ->
                         nav.navigate(collectionRoute(SpotifyCollectionType.Album, id))
@@ -422,6 +424,46 @@ fun NavGraphBuilder.sidetrackGraph(
                     nav.popBackStack()
                 }
             )
+        }
+        composable(RADIO) { entry ->
+            val vm = entry.spotifyViewModel(nav)
+            val state by vm.state.collectAsStateWithLifecycle()
+            LaunchedEffect(Unit) { vm.ensureRadio() }
+            val radio = state.radio
+            if (radio == null) {
+                MissingCollectionScreen(
+                    onBack = { nav.popBackStack() },
+                    title = "Song radio",
+                    // Before the LaunchedEffect runs there is no request state yet; treat that
+                    // first frame as loading instead of flashing the empty station message.
+                    loading = state.radioPending || state.radioError == null,
+                    loadingTitle = "Starting radio",
+                    error = state.radioError,
+                    errorTitle = "Couldn't start song radio",
+                    missingTitle = "No radio for this track",
+                    onRetry = vm::retryRadio
+                )
+            } else {
+                CollectionScreen(
+                    radio,
+                    state,
+                    onBack = { nav.popBackStack() },
+                    onPlay = { vm.playRadio(0) },
+                    onPlayPause = vm::togglePlayPause,
+                    onItem = { vm.playRadio(it) },
+                    onSave = {},
+                    onArtist = {},
+                    onQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
+                    onQueueItem = vm::addToQueue,
+                    onNowPlaying = { nav.openNowPlaying(vm) },
+                    onArtwork = { nav.openNowPlaying(vm) },
+                    onLoadMore = {},
+                    loadingMore = false,
+                    onDismissNotice = vm::dismissNotice,
+                    onDismissNowPlaying = vm::dismissNowPlayingNotice,
+                    showSave = false
+                )
+            }
         }
         composable(QUEUE) { entry ->
             val vm = entry.spotifyViewModel(nav)
@@ -535,6 +577,7 @@ fun NavGraphBuilder.sidetrackGraph(
 @Composable
 private fun MissingCollectionScreen(
     onBack: () -> Unit,
+    title: String = "Sidetrack",
     loading: Boolean = false,
     loadingTitle: String = "Loading…",
     error: String? = null,
@@ -542,7 +585,7 @@ private fun MissingCollectionScreen(
     missingTitle: String = "This collection isn't available",
     onRetry: (() -> Unit)? = null
 ) {
-    SidekitScaffold(title = "Sidetrack", actions = spotifyBack("Back", onBack)) { padding ->
+    SidekitScaffold(title = title, actions = spotifyBack("Back", onBack)) { padding ->
         androidx.compose.foundation.layout.Box(
             androidx.compose.ui.Modifier.padding(padding)
         ) {

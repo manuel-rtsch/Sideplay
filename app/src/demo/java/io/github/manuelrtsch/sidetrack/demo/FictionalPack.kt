@@ -357,6 +357,13 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         return SpotifyPage.of(all.drop(offset).take(limit), offset, limit, all.size)
     }
 
+    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> {
+        val all = albumList.flatMap { it.tracks }
+        val seed = all.firstOrNull { it.id == trackId }
+        val sameArtist = all.filter { seed != null && it.artistId == seed.artistId }
+        return (sameArtist + all).distinctBy { it.id }.filter { it.id != trackId }.take(limit)
+    }
+
     override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<Any> {
         val all: List<Any> = when (filter) {
             LibraryFilter.LikedSongs -> likedTracks
