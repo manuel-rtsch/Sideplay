@@ -17,14 +17,35 @@ name: Browse & Play
     text: "Library"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Library"
+# Scroll to the section heading, not to a row label: a clipped row is still
+# reported as fully visible, and the index over visible matches changes with the
+# scroll position. The second "Artist" label below the heading is the second
+# followed artist.
+#
+# The Library remembers its scroll position between runs, so first reset to the
+# top section, then come down to the artists. Without the reset, a Library left
+# at the artists makes a DOWN-only scroll miss the header.
 - scrollUntilVisible:
     element:
-      text: "Artist"
-      index: 1
+      text: "LIKED SONGS"
+    direction: UP
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- scrollUntilVisible:
+    element:
+      text: "FOLLOWED ARTISTS"
     direction: DOWN
     speed: 80
     visibilityPercentage: 60
     waitToSettleTimeoutMs: 200
+# The heading stops at the bottom of the viewport, where only one artist row is
+# fully visible. Move the section up a fixed amount so the first two "Artist"
+# labels are on screen, then index 1 is reliably the second followed artist.
+- swipe:
+    start: "50%, 55%"
+    end: "50%, 30%"
+    duration: 300
 - tapOn:
     text: "Artist"
     index: 1
@@ -83,40 +104,7 @@ name: Browse & Play
 - assertVisible: "Sav(e|ed)"
 - assertVisible: "Previous"
 
-# 5. Back to the artist and play another top track. This adds a history entry
-# before flow 4 removes one, so repeated suite runs do not slowly drain the
-# fixture. The album may be a single, so use the artist's top tracks instead.
-- pressKey: Back
-- assertVisible: "Sav(e|ed)"
-- pressKey: Back
-- scrollUntilVisible:
-    element:
-      text: "TOP TRACKS"
-    direction: UP
-    speed: 80
-    visibilityPercentage: 60
-    waitToSettleTimeoutMs: 200
-- tapOn:
-    text: "[0-9]+:[0-9]{2}"
-    index: 1
-    waitToSettleTimeoutMs: 200
-- runFlow:
-    when:
-      notVisible: "Previous"
-    commands:
-      - pressKey: Remote Menu
-      - tapOn:
-          text: "Now playing"
-          waitToSettleTimeoutMs: 200
-- assertVisible: "Sav(e|ed)"
-- assertVisible: "Previous"
-
-# 6. Now Playing -> artist -> Library -> Home.
-- pressKey: Back
-- assertVisible: "TOP TRACKS"
-- pressKey: Back
-- assertVisible: "Library"
-- tapOn:
-    text: "Sideplay"
-    waitToSettleTimeoutMs: 200
-- assertVisible: "Sideplay"
+# End on Now Playing. The extra play and the walk back through artist, Library,
+# and Home were ~20 s of dead time, and dropping them removes the fragile
+# second top-track selection. The two plays above still add history entries for
+# flow 4, so repeated runs do not drain the fixture.

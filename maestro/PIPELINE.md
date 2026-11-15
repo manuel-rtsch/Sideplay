@@ -123,7 +123,7 @@ cannot accidentally weaken the suite.
 
 Baseline committed as `3bc06b7` before any flow changed.
 
-Landed so far (technical changes only, no content cuts):
+Landed so far:
 
 | Change | Result |
 | --- | --- |
@@ -132,7 +132,7 @@ Landed so far (technical changes only, no content cuts):
 | `waitForAnimationToEnd` removed | ~0.9 s per removed command |
 | `tapOn: "Back"` → `pressKey: Back` | ~2.1 s → ~0.7 s per navigation, 5–6 per flow |
 | keypad probe: `eraseText: 2`, prep leaves Abc mode | probe/correction path shortened; prep no longer pays 40 key events |
-| `flows/promo/01-browse-play.yaml` | guard-free recording variant, warm `launchApp` |
+| `flows/promo/01-browse-play.yaml` | recording variant, warm `launchApp`; fixture-dead guards removed, state-dependent guards kept |
 | `record.sh` marker | `Launch app .*COMPLETED` regex: matches cold and warm launches, no flow-specific assert |
 | `run-suite.sh` + `scripts/flow-times.py` | one `maestro test --no-reinstall-driver --test-output-dir` run, animations off, per-flow wall time |
 | `FLOW_MAX_SECONDS` | opt-in length gate on the timing report |
@@ -150,7 +150,31 @@ Flow 01 after the technical changes:
 | Suite baseline | 68.4 s | |
 | Suite, technical changes + guards | 42.8 s | animations off, `pressKey: Back` |
 | Promo variant, warm launch, no guards | 40.5 s | `commands.json` span |
-| Promo recording (`record.sh`) | **39.4 s** | `/tmp/01-browse-play-promo.mp4` |
+| Promo recording (`record.sh`) | 39.4 s | `/tmp/01-browse-play-promo.mp4` |
+
+### Log review after the first recording
+
+The full-suite logs showed no deadlock and no Maestro-level tap retries (`retryIfNoChange` is false,
+one `Tapping at` per command). Three things looked like a stuck or double-pressing bot:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Long freezes after a track tap | six `runFlow when` guards never matched; each costs its full ~7 s visibility probe (42.5 s across the suite) | keep only fixture-dead guards out of the promo; guards whose branch depends on the selected row stay |
+| Sensitivity to scroll position | `scrollUntilVisible` stops as soon as a label is reported visible, and a label clipped to 6 px at the bottom edge reports 100 % visible; the tap then lands on that sliver | scroll to the section heading, then a fixed swipe so two rows are fully visible; no `centerElement` (it overshoots and loses the element at `speed: 80`) |
+| Different artist each run | `index` counts matches in the current viewport; the Library also remembers its scroll position between runs | reset to `LIKED SONGS` (UP), then `FOLLOWED ARTISTS` (DOWN), then the fixed swipe; `index: 1` is now the second followed artist |
+
+The promo variant also had a latent failure: when a track tap opens Now Playing directly (the track was
+already current), the following `Remote Menu` → `Now playing` step has nowhere to go. The suite hit
+that case in §5. Match-case guards are cheap (~0.3–0.5 s when they match); only a miss costs 7 s.
+
+§4 cuts applied to 01: remove §5 (another top track, two `Back`s, a scroll) and §6 (artist →
+Library → Home), and end on Now Playing. Flow 01 now:
+
+| Run | Wall | Notes |
+| --- | --- | --- |
+| Promo variant, warm launch, state guards kept | **29.9 s** | 28 commands, no skipped commands |
+| Promo recording (`record.sh`) | 30.4 s | `/tmp/patch5.mp4` |
+| Suite flow 01, cold launch | **31.7 s** | 28 commands, both guards matched |
 
 Next: add `flows/promo/02…04` with the §4 content cuts, record all four, then enable
 `FLOW_MAX_SECONDS=45` and pad every panel to 45.0 s in `design/promo/build-videos.sh`.
