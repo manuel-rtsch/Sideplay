@@ -472,10 +472,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 state,
                 onBack = { nav.popBackStack() },
                 onNowPlaying = { nav.openNowPlaying(vm) },
-                onJump = { id ->
-                    if (state.current?.id == id) nav.openNowPlaying(vm) else vm.jumpTo(id)
-                },
-                onPlayNext = vm::moveToNext,
+                onJump = vm::jumpTo,
                 onMoveUpcoming = vm::moveUpcoming,
                 onRemove = vm::removeUpcoming,
                 onRestoreRemoved = vm::restoreRemovedUpcoming,

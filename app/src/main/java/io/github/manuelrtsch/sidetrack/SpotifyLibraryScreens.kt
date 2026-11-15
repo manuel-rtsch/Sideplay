@@ -210,9 +210,8 @@ fun LibraryScreen(
             LibraryFilter.entries.forEach { filter ->
                 val items = sections[filter].orEmpty()
                 if (items.isEmpty()) return@forEach
-                val labelIndex = rowIndex
                 item(key = "label.${filter.name}") {
-                    SectionLabel(filter.label, Modifier.listFade(listState, labelIndex))
+                    SectionLabel(filter.label)
                 }
                 rowIndex += 1
                 val base = rowIndex
@@ -573,9 +572,8 @@ fun ArtistScreen(
                 }
             }
             rowIndex += 1
-            val topLabelIndex = rowIndex
             item(key = "topLabel") {
-                SectionLabel("Top tracks", Modifier.listFade(listState, topLabelIndex))
+                SectionLabel("Top tracks")
             }
             rowIndex += 1
             val tracksBase = rowIndex
@@ -602,9 +600,8 @@ fun ArtistScreen(
                 }
                 rowIndex += 1
             }
-            val albumsLabelIndex = rowIndex
             item(key = "albumsLabel") {
-                SectionLabel("Albums", Modifier.listFade(listState, albumsLabelIndex))
+                SectionLabel("Albums")
             }
             rowIndex += 1
             val albumsBase = rowIndex

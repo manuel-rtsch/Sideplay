@@ -32,18 +32,23 @@ driven from `adb`.
 - [ ] **Manual:** long-press an upcoming track, drag it above and below its neighbours, and
       release. Confirm the order sticks after reopening the queue, that a drag past the bottom
       edge auto-scrolls, and that swipe-to-remove still works on a row that was not picked up.
-- [ ] **Manual:** focus an upcoming track with the keypad and confirm the row narrows to show one
-      full-height green play square on its right. Press that square and confirm the track plays.
-- [ ] **Manual:** with a track focused, press the row's body and confirm the play square is
-      replaced by the rearrange and remove squares. At the first track the rearrange square shows
-      only a down arrow; at the last only an up arrow.
-- [ ] **Manual:** press the rearrange square, then Up/Down to step the track. Confirm it stays in
-      view and does not flicker, that Confirm drops, that Back returns it to where it started
-      without leaving the queue, and that focus stays on the moved row.
-- [ ] **Manual:** press the remove square and confirm it removes that track, the same as the
-      row's swipe, and that the bar offers Undo, which puts it back where it was.
-- [ ] **Manual:** focus an upcoming track, press Play next, and confirm the track lands at the top
-      of the queue with the focus on the now-playing row.
+- [ ] **Manual:** focus an upcoming track and confirm Enter plays it now. Focus the current row
+      and confirm Enter opens Now Playing.
+- [ ] **Manual:** on a focused upcoming row, confirm one full-height red Remove square appears
+      after the focus settles. Press it and confirm that track is removed, the bar offers Undo,
+      and Undo puts it back at the same index.
+- [ ] **Manual:** swipe a focused row open, then press Down. Confirm the swipe closes as the
+      focus moves and that only the next row's gutter can appear, never both at once.
+- [ ] **Manual:** open Options, choose **Reorder**, then Up/Down to step the lifted track. Confirm
+      it stays in view, Confirm drops it, and Back returns it to where it started without leaving
+      the queue. Confirm the bar shows Back + Done while reordering.
+- [ ] **Manual:** add the same track to the queue twice, remove one copy, and confirm the other
+      copy remains and Undo restores only the removed copy.
+- [ ] **Manual:** press Clear, confirm Cancel leaves the queue alone, then confirm Clear wipes the
+      tail and Undo restores it.
+- [ ] **Manual:** toggle shuffle from Options and confirm the **Up next** header says
+      **Shuffled**. Manually reorder the tail and confirm shuffle turns off and the header drops
+      the label.
 - [x] The notification shows artwork, title, artist, and previous/play-pause/next.
 - [x] The media session reports the current item and playing state.
 - [ ] **Manual:** tapping the notification opens Sidetrack at Now Playing.

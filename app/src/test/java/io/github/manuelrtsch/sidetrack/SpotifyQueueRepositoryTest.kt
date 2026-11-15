@@ -167,7 +167,7 @@ class SpotifyQueueRepositoryTest {
         val queue = SpotifyQueueRepository(Random(1))
         queue.play(tracks, 0)
 
-        queue.jumpTo("c")
+        queue.jumpTo(1)
 
         assertEquals("c", queue.snapshot.current?.id)
         assertEquals(listOf("a", "b"), queue.snapshot.history.map { it.id })
@@ -208,16 +208,61 @@ class SpotifyQueueRepositoryTest {
         assertEquals(listOf("c", "d", "b"), queue.snapshot.upcoming.map { it.id })
     }
 
-    @Test fun `a manual reorder survives switching shuffle off`() {
+    @Test fun `a manual reorder turns shuffle off and keeps the chosen order`() {
         val queue = SpotifyQueueRepository(Random(7))
         queue.play(tracks, 0)
         queue.setShuffle(true)
 
         queue.moveUpcoming(from = 0, to = 2)
         val arranged = queue.snapshot.upcoming.map { it.id }
-        queue.setShuffle(false)
 
+        assertTrue(!queue.snapshot.shuffle)
+        assertNull(queue.snapshot.shuffleBackup)
+        queue.setShuffle(false)
         assertEquals(arranged, queue.snapshot.upcoming.map { it.id })
+    }
+
+    @Test fun `removing one duplicate leaves the others alone`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(listOf(track("a"), track("b"), track("b"), track("c")), 0)
+
+        val removed = queue.removeUpcoming(1)
+
+        assertEquals(1, removed)
+        assertEquals(listOf("b", "c"), queue.snapshot.upcoming.map { it.id })
+
+        queue.restoreRemovedUpcoming(1, track("b"))
+        assertEquals(listOf("b", "b", "c"), queue.snapshot.upcoming.map { it.id })
+    }
+
+    @Test fun `play next moves one duplicate and keeps the other`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(listOf(track("a"), track("c"), track("b"), track("d"), track("b")), 0)
+
+        queue.playNext(track("b"))
+
+        assertEquals(listOf("b", "c", "d", "b"), queue.snapshot.upcoming.map { it.id })
+    }
+
+    @Test fun `jumping to one duplicate uses the occurrence index`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(listOf(track("a"), track("b"), track("b"), track("c")), 0)
+
+        queue.jumpTo(2)
+
+        assertEquals("c", queue.snapshot.current?.id)
+        assertTrue(queue.snapshot.upcoming.isEmpty())
+    }
+
+    @Test fun `clearing upcoming leaves shuffle off`() {
+        val queue = SpotifyQueueRepository(Random(7))
+        queue.play(tracks, 0)
+        queue.setShuffle(true)
+
+        queue.clearUpcoming()
+
+        assertTrue(!queue.snapshot.shuffle)
+        assertNull(queue.snapshot.shuffleBackup)
     }
 
     @Test fun `clearing upcoming can be undone`() {

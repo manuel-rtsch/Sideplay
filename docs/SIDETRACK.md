@@ -169,33 +169,35 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   Upcoming rows in the queue swipe left to remove; the queue shows only the current item and what
   is next, while the full listening history lives on the History screen. Library uses the standard
   single-line header; Settings has one sign-out action in the bar.
-- Upcoming tracks reorder by long-press and drag, or from the keypad; the current item never moves. A focused upcoming row gives up its play time and shows one full-height square on its
-  right once the focus has settled for a moment, so holding Up/Down through the queue does not
-  flash a button on every row it passes, the same footprint as the swipe reveal: a green play button. The gutter opens and closes with a short animation rather than
-  snapping, the control sliding in from the right as the row narrows. Pressing the row's body
-  swaps that square for the edit pair, rearrange and remove. The rearrange square stacks the up and
-  down arrows and hides the one it cannot move towards at the ends of the queue; pressing it lifts
-  the row for the keypad, where Up/Down step it, Confirm drops it and closes the edit pair so the
-  row comes back as a play square, Back puts it back where it started,
-  and Left/Right are swallowed so focus cannot strand the lift. A lifted row drops the square and
-  shows the two bare arrows instead, as Arrange apps does. Play next in the bar moves the track to
-  the top of the queue and takes the focus up to the now-playing row; removing a track leaves an
-  Undo in the bar that puts it back at the index it left. A focused row is parked in the list's top band in the same measure pass
-  rather than by Sidekit's animated focus scroll, which a held key outruns: the focus would reach a
-  row the list had not scrolled to yet, the row would be disposed, and the focus would be lost.
-  Rows are keyed by track identity,
-  so a stepped track keeps its node and its focus, and each step scrolls it into view in the same
-  measure pass instead of blinking out of the viewport. The stepped track is parked one place below
-  the top so the track it is about to pass stays visible above it — at the top of the queue that
-  neighbour is the now-playing row — which leaves the track free to be dropped anywhere in the
-  queue. A touch pickup shows the same lifted state
-  with the two arrows in a narrow sliver of the row's right edge. The queue reorders live as the
-  finger crosses each row, so the row's slot travels with it: a row whose slot is left behind
-  scrolls out of the list and is disposed, which is what used to end a long drag after a moment.
-  The auto-scroll still carries the queue past the edges, so the ends of the list stay reachable.
-  A small gap separates the now-playing row from the top of the queue. While shuffle is on, a manual
-  reorder is authoritative: the pre-shuffle backup is dropped, so turning shuffle off keeps the
-  chosen order instead of restoring the old one.
+- The queue has one primary action per row. Enter or a tap on an upcoming track plays it now; the
+  current row opens Now Playing. Remove is the single focused-row square and the left swipe; the
+  keypad square appears after the focus settles, so holding Up/Down does not flash a button on
+  every row. A touch swipe and the keypad gutter share one right edge: an open swipe suppresses
+  every gutter, and a keypad move away from the swiped row closes the swipe, so two Remove buttons
+  are never visible together. There is no edit pair and no Play next: reorder-to-top covers Play
+  next, and the row body never turns into a menu. A non-focusable **Up next · N tracks**
+  section label separates the current item from the tail and carries the shuffle state. It uses the
+  same uppercase, small, muted `SectionLabel` as Home, Library, Search and album/playlist sections.
+  Section labels are structural, so they do not take `listFade`: every label keeps the same full
+  `surfaceA6` alpha, while the content rows below still step down toward the action bar.
+- Reorder is a list mode from Options, not a per-row menu. Choosing **Reorder** lifts the focused
+  upcoming track (or the first one when the current row has focus), shows the two bare arrows in a
+  narrow sliver, and lets Up/Down step it, Confirm drop it, and Back cancel back to where it
+  started; Left/Right are swallowed so focus cannot strand the lift. The bar becomes Cancel + Done.
+  Finishing or cancelling a reorder leaves no row focused, and neither does Remove or Clear: the
+  keypad user picks the next row explicitly instead of the list choosing a neighbour. A touch
+  long-press still lifts and drags directly. The current item never moves. Rows are keyed by
+  track identity, so a stepped track keeps its node and focus and each step scrolls it into view in
+  the same measure pass rather than by Sidekit's animated focus scroll, which a held key outruns.
+  The stepped track is parked one place below the top so the track it is about to pass stays
+  visible. The queue reorders live as the finger crosses each row, so a long drag keeps its slot
+  on screen, and auto-scroll carries it past the edges. The header's own top padding separates it
+  from the now-playing row; no extra spacer is needed.
+- **Clear** in the bar asks for confirmation before wiping the tail; a confirmed clear still offers
+  Undo, and removing one track offers Undo at the index it left. Remove and undo work by row index,
+  so duplicated tracks are distinct and one copy never takes another with it. Shuffle is a
+  one-time reorder of the existing tail, shown in the header as **Shuffled**; new tracks append in
+  order. A manual reorder turns shuffle off, so the mode always describes the order on screen.
 - Library category and collection lists page in 50-row chunks and load the next page as their
   footer becomes visible. Search and artist surfaces start with five items per section and show
   a pressable **See more** row; the next page is fetched only when that row is pressed.

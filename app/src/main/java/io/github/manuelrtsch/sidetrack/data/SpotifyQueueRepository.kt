@@ -145,48 +145,55 @@ class SpotifyQueueRepository(
         )
     }
 
-    fun jumpTo(id: String): Snapshot {
+    /**
+     * Jumps to one upcoming occurrence. The index, not the track id, identifies the row so that
+     * duplicates can be told apart.
+     */
+    fun jumpTo(index: Int): Snapshot {
         val current = snapshot.current ?: return snapshot
-        if (current.id == id) return snapshot
-        val at = snapshot.upcoming.indexOfFirst { it.id == id }
-        if (at >= 0) {
-            val skipped = snapshot.upcoming.take(at)
-            val target = snapshot.upcoming[at]
-            return commit(
-                snapshot.copy(
-                    current = target,
-                    upcoming = snapshot.upcoming.drop(at + 1),
-                    history = (listOf(current) + skipped + snapshot.history).take(HISTORY_LIMIT)
-                )
+        if (index !in snapshot.upcoming.indices) return snapshot
+        val skipped = snapshot.upcoming.take(index)
+        val target = snapshot.upcoming[index]
+        return commit(
+            snapshot.copy(
+                current = target,
+                upcoming = snapshot.upcoming.drop(index + 1),
+                history = (listOf(current) + skipped + snapshot.history).take(HISTORY_LIMIT)
             )
-        }
-        snapshot.history.firstOrNull { it.id == id }?.let { playItem(it) }
-        return snapshot
+        )
     }
 
-    /** Inserts directly after the current item; an id already upcoming is moved, not duplicated. */
+    /**
+     * Puts one occurrence directly after the current item. An existing occurrence is moved, not
+     * duplicated; the first match is enough because the queue UI has no id-based Play next.
+     */
     fun playNext(item: SpotifyMediaItem): Snapshot {
         if (item.id == snapshot.current?.id) return snapshot
-        val remaining = snapshot.upcoming.filterNot { it.id == item.id }
-        return commit(snapshot.copy(upcoming = listOf(item) + remaining))
+        val upcoming = snapshot.upcoming.toMutableList()
+        val at = upcoming.indexOfFirst { it.id == item.id }
+        if (at >= 0) upcoming.removeAt(at)
+        upcoming.add(0, item)
+        return commit(snapshot.copy(upcoming = upcoming))
     }
 
     fun addToQueue(item: SpotifyMediaItem): Snapshot = addToQueue(listOf(item))
 
     fun addToQueue(items: List<SpotifyMediaItem>): Snapshot = commit(snapshot.copy(upcoming = snapshot.upcoming + items))
 
-    /** Removes an upcoming item and returns where it was, so the caller can offer Undo. */
-    fun removeUpcoming(item: SpotifyMediaItem): Int {
-        val index = snapshot.upcoming.indexOfFirst { it.id == item.id }
-        if (index < 0) return -1
-        commit(snapshot.copy(upcoming = snapshot.upcoming.filterNot { it.id == item.id }))
+    /**
+     * Removes one upcoming occurrence by index and returns where it was, so the caller can offer
+     * Undo. Removing by index is what keeps a duplicated track from taking its other copies with
+     * it.
+     */
+    fun removeUpcoming(index: Int): Int {
+        if (index !in snapshot.upcoming.indices) return -1
+        commit(snapshot.copy(upcoming = snapshot.upcoming.filterIndexed { at, _ -> at != index }))
         return index
     }
 
-    /** Puts a removed item back where it was, or as close to it as the tail allows. */
+    /** Puts a removed occurrence back where it was, or as close to it as the tail allows. */
     fun restoreRemovedUpcoming(index: Int, item: SpotifyMediaItem): Snapshot {
         val upcoming = snapshot.upcoming.toMutableList()
-        if (upcoming.any { it.id == item.id }) return snapshot
         upcoming.add(index.coerceIn(0, upcoming.size), item)
         return commit(snapshot.copy(upcoming = upcoming))
     }
@@ -203,13 +210,15 @@ class SpotifyQueueRepository(
         val target = to.coerceIn(0, upcoming.lastIndex)
         if (from == target) return snapshot
         val moved = upcoming.toMutableList().apply { add(target, removeAt(from)) }
-        return commit(snapshot.copy(upcoming = moved, shuffleBackup = null))
+        // A hand-picked order is authoritative. Keeping shuffle on would claim the new order is
+        // random and leave no backup to restore, so the mode follows the order instead.
+        return commit(snapshot.copy(upcoming = moved, shuffle = false, shuffleBackup = null))
     }
 
     /** Removes every upcoming item and returns them so the caller can offer Undo. */
     fun clearUpcoming(): List<SpotifyMediaItem> {
         val removed = snapshot.upcoming
-        commit(snapshot.copy(upcoming = emptyList(), shuffleBackup = null))
+        commit(snapshot.copy(upcoming = emptyList(), shuffle = false, shuffleBackup = null))
         return removed
     }
 

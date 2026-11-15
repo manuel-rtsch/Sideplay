@@ -994,16 +994,14 @@ class SpotifyViewModel(
         _state.update { it.copy(cacheSizeBytes = session?.cacheSizeBytes() ?: 0L) }
     }
 
-    fun moveToNext(item: SpotifyMediaItem) {
-        applyQueue(queue.playNext(item), syncNowPlaying = false)
-    }
-
-    /** Removes an upcoming item and returns where it was, so the caller can offer Undo. */
-    fun removeUpcoming(item: SpotifyMediaItem): Int {
-        if (queue.snapshot.upcoming.none { it.id == item.id }) return -1
-        val index = queue.removeUpcoming(item)
-        applyQueue(queue.snapshot, syncNowPlaying = false)
-        return index
+    /**
+     * Removes one upcoming occurrence by index and returns where it was, so the caller can offer
+     * Undo. The index keeps duplicated tracks from taking each other with them.
+     */
+    fun removeUpcoming(index: Int): Int {
+        val at = queue.removeUpcoming(index)
+        if (at >= 0) applyQueue(queue.snapshot, syncNowPlaying = false)
+        return at
     }
 
     fun restoreRemovedUpcoming(index: Int, item: SpotifyMediaItem) = applyQueue(queue.restoreRemovedUpcoming(index, item), syncNowPlaying = false)
@@ -1037,14 +1035,9 @@ class SpotifyViewModel(
 
     fun restoreUpcoming(items: List<SpotifyMediaItem>) = applyQueue(queue.restoreUpcoming(items), syncNowPlaying = false)
 
-    fun jumpTo(id: String) {
+    fun jumpTo(index: Int) {
         val s = _state.value
-        if (s.current?.id == id) {
-            _playbackPositionMs.value = 0L
-            _state.update { it.copy(isPlaying = true) }
-            return
-        }
-        val snapshot = queue.jumpTo(id)
+        val snapshot = queue.jumpTo(index)
         if (snapshot.current !== s.current) {
             snapshot.current?.let(::recorded)
             applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)

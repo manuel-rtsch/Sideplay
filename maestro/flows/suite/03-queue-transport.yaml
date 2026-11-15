@@ -65,7 +65,11 @@ name: Queue & Transport
     waitToSettleTimeoutMs: 0
 - assertNotVisible: "Undo"
 
-# 4. Clear the upcoming queue and undo it.
+# 4. Clear the upcoming queue, confirm it, then undo it.
+- tapOn:
+    text: "Clear"
+    waitToSettleTimeoutMs: 0
+- assertVisible: "Cancel"
 - tapOn:
     text: "Clear"
     waitToSettleTimeoutMs: 0
@@ -74,11 +78,12 @@ name: Queue & Transport
     waitToSettleTimeoutMs: 0
 - assertNotVisible: "Undo"
 
-# 5. Open Now Playing from Options. Shuffle is not part of the recording; the
-# Options bar already contains "Now playing".
-- pressKey: Remote Menu
+# 5. Return Home and open Now Playing from the now-playing tile. The queue no
+# longer duplicates that navigation in Options.
+- pressKey: Back
+- assertVisible: "Sidetrack"
 - tapOn:
-    text: "Now playing"
+    text: "NOW PLAYING"
     waitToSettleTimeoutMs: 200
 
 # 6. Assert the transport controls.

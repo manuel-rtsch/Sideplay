@@ -227,9 +227,8 @@ fun SpotifySearchScreen(
 
                 else -> {
                     if (results.tracks.isNotEmpty()) {
-                        val labelIndex = rowIndex
                         item(key = "tracksLabel") {
-                            SectionLabel("Tracks", Modifier.listFade(listState, labelIndex))
+                            SectionLabel("Tracks")
                         }
                         rowIndex += 1
                         val base = rowIndex
@@ -269,9 +268,8 @@ fun SpotifySearchScreen(
                         }
                     }
                     if (results.artists.isNotEmpty()) {
-                        val labelIndex = rowIndex
                         item(key = "artistsLabel") {
-                            SectionLabel("Artists", Modifier.listFade(listState, labelIndex))
+                            SectionLabel("Artists")
                         }
                         rowIndex += 1
                         val base = rowIndex
@@ -301,9 +299,8 @@ fun SpotifySearchScreen(
                         }
                     }
                     if (results.albums.isNotEmpty()) {
-                        val labelIndex = rowIndex
                         item(key = "albumsLabel") {
-                            SectionLabel("Albums", Modifier.listFade(listState, labelIndex))
+                            SectionLabel("Albums")
                         }
                         rowIndex += 1
                         val base = rowIndex
@@ -333,9 +330,8 @@ fun SpotifySearchScreen(
                         }
                     }
                     if (results.playlists.isNotEmpty()) {
-                        val labelIndex = rowIndex
                         item(key = "playlistsLabel") {
-                            SectionLabel("Playlists", Modifier.listFade(listState, labelIndex))
+                            SectionLabel("Playlists")
                         }
                         rowIndex += 1
                         val base = rowIndex
@@ -365,9 +361,8 @@ fun SpotifySearchScreen(
                         }
                     }
                     if (results.shows.isNotEmpty()) {
-                        val labelIndex = rowIndex
                         item(key = "showsLabel") {
-                            SectionLabel("Shows", Modifier.listFade(listState, labelIndex))
+                            SectionLabel("Shows")
                         }
                         rowIndex += 1
                         val base = rowIndex
@@ -426,7 +421,7 @@ fun SearchScopesScreen(
         val listState = rememberLazyListState()
         SidekitList(padding, state = listState) {
             item(key = "label") {
-                SectionLabel("Categories", Modifier.listFade(listState, 0))
+                SectionLabel("Categories")
             }
             SearchScope.entries.forEachIndexed { index, scope ->
                 item(key = scope.name) {
