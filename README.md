@@ -122,7 +122,7 @@ Without that file, `assembleRelease` produces an unsigned APK so CI can sign it 
 release certificate digest is listed in Sidekit's `trusted_apps.xml`, which lets Sidetrack read the
 host case colour. Never add a debug certificate there.
 
-Sidetrack builds against the published `1.5.1` Sidekit SDK from GitHub Pages. When a sibling
+Sidetrack builds against the published `1.7.0` Sidekit SDK from GitHub Pages. When a sibling
 `../Sidekit` checkout exists, Gradle substitutes it as a composite build so local Sidekit work can
 be tried without publishing; CI and clones without that checkout use the published SDK. Pass
 `-PsidetrackLocalSidekit=false` to force the published SDK.
