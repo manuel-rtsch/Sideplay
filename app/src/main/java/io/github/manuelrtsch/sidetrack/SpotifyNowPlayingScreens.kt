@@ -155,8 +155,14 @@ fun SpotifyNowPlayingScreen(
     }
     SidekitScaffold(title = null, actions = actions, options = options) { padding ->
         if (current == null) {
+            // The same status block the queue and the library use: vinyl, title and hint, so an
+            // empty Now Playing reads like every other empty page instead of a bare line of text.
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                EmptyMessage("Nothing playing", hint = "Pick something from your library")
+                SpotifyStatusScreen(
+                    "Nothing playing",
+                    Modifier.fillMaxWidth(),
+                    hint = "Pick something from your library"
+                )
             }
         } else {
             Column(
