@@ -40,8 +40,7 @@ fun SleepTimerState.statusText(): String? = when (this) {
     is SleepTimerState.Countdown -> "$remainingMinutes min left"
 }
 
-private fun SleepTimerState.Countdown.minuteWord(): String =
-    if (remainingMinutes == 1) "minute" else "minutes"
+private fun SleepTimerState.Countdown.minuteWord(): String = if (remainingMinutes == 1) "minute" else "minutes"
 
 /** TalkBack description for the non-interactive status line. */
 fun SleepTimerState.statusDescription(): String? = when (this) {

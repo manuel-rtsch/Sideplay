@@ -2,10 +2,10 @@ package io.github.manuelrtsch.sideplay
 
 import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import io.github.manuelrtsch.sideplay.playback.notificationSuffix
-import io.github.manuelrtsch.sideplay.playback.tileText
 import io.github.manuelrtsch.sideplay.playback.sleepTimerRemainingMinutes
 import io.github.manuelrtsch.sideplay.playback.statusDescription
 import io.github.manuelrtsch.sideplay.playback.statusText
+import io.github.manuelrtsch.sideplay.playback.tileText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
