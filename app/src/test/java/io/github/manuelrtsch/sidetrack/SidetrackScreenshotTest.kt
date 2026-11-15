@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import hrln.interactive.sidekit.design.input.KeypadModule
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
@@ -329,6 +330,18 @@ class SidetrackScreenshotTest {
 
     @Test fun loading() = shoot("sidetrack_loading") {
         SpotifyLoadingScreen(title = "Loading artist")
+    }
+
+    @Test fun onboarding() = shoot("sidetrack_welcome") {
+        SidetrackOnboardingContent(
+            module = KeypadModule.T9,
+            keyboardLabel = KeypadModule.T9.label,
+            keyboardHint = "Press Keyboard to switch modules.",
+            canSwitchKeyboard = true,
+            onSwitchKeyboard = {},
+            onAbout = {},
+            onDone = {}
+        )
     }
 
     @Test fun signIn() = shoot("sidetrack_sign_in") {

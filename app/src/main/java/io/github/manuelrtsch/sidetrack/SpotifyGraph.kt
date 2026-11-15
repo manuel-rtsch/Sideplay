@@ -29,9 +29,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 const val SIDE_PLAY_ROOT = "sidetrack"
 private const val ROOT = SIDE_PLAY_ROOT
 const val SIDE_PLAY_START = "sidetrack/home"
+const val SIDE_PLAY_ONBOARDING = "sidetrack/welcome"
 const val SIDE_PLAY_SIGN_IN = "sidetrack/sign-in"
 const val SIDE_PLAY_SEARCH = "sidetrack/search"
 private const val HOME = SIDE_PLAY_START
+private const val ONBOARDING = SIDE_PLAY_ONBOARDING
 private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
 private val LIBRARY_FILTER = "$ROOT/library/{filter}"
@@ -485,16 +487,37 @@ fun NavGraphBuilder.sidetrackGraph(
             SidetrackKeyboardScreen(onBack = { nav.popBackStack() })
         }
         composable(ABOUT) {
-            val backLabel = if (nav.previousBackStackEntry?.destination?.route == SIGN_IN) "Sign in" else "Settings"
+            val backLabel = when (nav.previousBackStackEntry?.destination?.route) {
+                SIGN_IN -> "Sign in"
+                ONBOARDING -> "Welcome"
+                else -> "Settings"
+            }
             SidetrackAboutScreen(onBack = { nav.popBackStack() }, backLabel = backLabel)
+        }
+        composable(ONBOARDING) {
+            SidetrackOnboardingScreen(
+                hostBacked = hostBacked,
+                onAbout = { nav.navigate(ABOUT) },
+                onDone = {
+                    nav.navigate(HOME) {
+                        // Replace Welcome (and anything still below it, such as Sign in), so Back
+                        // from Home leaves Sidetrack instead of replaying the welcome. The flag is
+                        // written by the screen before this runs.
+                        popUpTo(ROOT) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+            )
         }
         composable(SIGN_IN) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
+            val context = LocalContext.current
             LaunchedEffect(state.signedIn) {
                 if (state.signedIn) {
-                    nav.navigate(HOME) {
-                        popUpTo(HOME) { inclusive = false }
+                    val next = if (SidetrackLocalSettings(context).hasSeenOnboarding()) HOME else ONBOARDING
+                    nav.navigate(next) {
+                        popUpTo(ROOT) { inclusive = false }
                         launchSingleTop = true
                     }
                 }

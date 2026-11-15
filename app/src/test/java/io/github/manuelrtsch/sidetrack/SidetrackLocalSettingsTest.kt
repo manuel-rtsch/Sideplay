@@ -33,4 +33,14 @@ class SidetrackLocalSettingsTest {
 
         assertFalse(themeStore.read().compact)
     }
+
+    @Test fun `an existing install has not seen the welcome yet`() {
+        assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
+    }
+
+    @Test fun `finishing the welcome is remembered across instances`() {
+        SidetrackLocalSettings(context).markOnboardingSeen()
+
+        assertTrue(SidetrackLocalSettings(context).hasSeenOnboarding())
+    }
 }

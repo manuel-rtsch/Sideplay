@@ -28,6 +28,16 @@ internal class SidetrackLocalSettings(context: Context) {
     }
 
     /**
+     * The welcome screen is shown once per install, not once per process. A release that adds it
+     * therefore reaches existing signed-in users too: the key is absent until they finish it.
+     */
+    fun hasSeenOnboarding(): Boolean = prefs.getBoolean(KEY_ONBOARDING_SEEN, false)
+
+    fun markOnboardingSeen() {
+        prefs.edit().putBoolean(KEY_ONBOARDING_SEEN, true).apply()
+    }
+
+    /**
      * Standalone Sidetrack starts in the compact layout. Only writes the default when the choice
      * has never been saved, so a user who turned compact off keeps that decision.
      */
@@ -40,6 +50,7 @@ internal class SidetrackLocalSettings(context: Context) {
         const val FILE = "sidetrack_settings"
         const val KEYPAD_FILE = "sidetrack_keypad"
         private const val KEY_INPUT_MODE = "input_mode"
+        private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
 
         // Must match the key SharedPreferencesSidekitThemeStore reads and writes.
         private const val KEY_COMPACT_LAYOUT = "compact_layout"

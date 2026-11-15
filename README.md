@@ -51,8 +51,10 @@ size with the compact layout enabled, not hand-taken photos.
    if you want the full launcher and app suite. Sidetrack works without it too.
 2. Install the Sidetrack APK.
 3. Open Sidetrack and sign in with your Spotify account.
-4. Pick something from your library, or press **Search** and start typing on the keypad.
-5. Press **OK** / **Enter** to play. A now-playing confirmation appears in the action bar for a
+4. On the one-time **Welcome** screen, check the selected keypad and press **Get started**. Press
+   **Options** to see the extra actions it explains.
+5. Pick something from your library, or press **Search** and start typing on the keypad.
+6. Press **OK** / **Enter** to play. A now-playing confirmation appears in the action bar for a
    few seconds; press it to open Now Playing, or press its X to dismiss it. Pressing **OK** /
    **Enter** again on the track that is already playing opens Now Playing directly.
 

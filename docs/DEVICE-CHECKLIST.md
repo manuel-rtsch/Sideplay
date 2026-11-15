@@ -53,6 +53,11 @@ driven from `adb`.
 
 ## Keypad
 
+- [ ] **Manual:** after signing in, Welcome shows the selected keypad, cycles modules on a
+      standalone install, and opens About from Options. **Get started** goes Home and a relaunch
+      does not show Welcome again.
+- [ ] **Manual:** upgrading a signed-in install shows Welcome once. With Sidekit installed, the
+      keyboard row shows the host module without offering a switch.
 - [ ] **Manual:** T9 typing and suggestions.
 - [ ] **Manual:** mini QWERTY navigation with T / D / B / J, Enter, Back, and Options.
 - [ ] **Manual:** switch T9 → mini QWERTY while Sidetrack is backgrounded, return, and confirm the

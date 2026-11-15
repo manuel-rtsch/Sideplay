@@ -55,9 +55,10 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   (SpClient/Pathfinder). `SpotifyWebCatalog` remains a fallback when native is unavailable.
 - UI: `SpotifyViewModel` maps catalog responses, queue/history repositories, and native player
   events into one immutable `SpotifyUiState`.
-- Screens: Home, History, Library overview, Library category, Collection (album/playlist/show),
-  Artist, Search, Search scopes, Now Playing, Queue, Sleep timer, Settings, Appearance (only
-  without a Sidekit host), Sign in. Mock data is confined to the screenshot-test source set.
+- Screens: Welcome, Home, History, Library overview, Library category, Collection
+  (album/playlist/show), Artist, Search, Search scopes, Now Playing, Queue, Sleep timer, Settings,
+  Appearance (only without a Sidekit host), Sign in. Mock data is confined to the
+  screenshot-test source set.
 - Shell: `SidetrackActivity` reads Sidekit's theme and keypad configuration when a compatible host
   is installed; otherwise it uses local stores and shows Appearance settings in-app. Host support
   is best-effort: an absent, older, or unreadable Sidekit falls back to standalone mode instead of
@@ -67,6 +68,11 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 
 **Behaviour**
 
+- Welcome is the one-time onboarding after sign-in. It names the attached keypad, cycles the
+  module on a standalone install, explains that Options reveals each screen's extra actions, and
+  shows the keypad guide. Finishing it writes `onboarding_seen` to the local settings file; an
+  existing signed-in install without that key sees it once after updating. A Sidekit host keeps
+  ownership of the keyboard choice, so Welcome shows the module without offering a switch.
 - Library, collection, artist, and grouped search reads use first-party endpoints, avoiding the
   public Web API quota and the old HTTP 429 failures.
 - Native events (`loading`, `playing`, `paused`, `position`, `ended`, `unavailable`) drive Now
