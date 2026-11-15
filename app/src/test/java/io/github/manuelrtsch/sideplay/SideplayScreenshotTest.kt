@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -45,6 +46,24 @@ class SideplayScreenshotTest {
     @Test fun home() = shoot("sideplay_home") {
         SideplayHomeScreen(
             state,
+            sleepTimer = MutableStateFlow(SleepTimerState.Off),
+            onNowPlaying = {},
+            onLibrary = {},
+            onSearch = {},
+            onSettings = {},
+            onPlay = {},
+            onQueue = {},
+            onQueueTrack = {},
+            onHistory = {},
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
+        )
+    }
+
+    @Test fun homeWithSleepTimer() = shoot("sideplay_home_sleep_timer") {
+        SideplayHomeScreen(
+            state,
+            sleepTimer = MutableStateFlow(SleepTimerState.Countdown(30, 1_800_000L, 23)),
             onNowPlaying = {},
             onLibrary = {},
             onSearch = {},
@@ -61,6 +80,7 @@ class SideplayScreenshotTest {
     @Test fun nowPlayingNotice() = shoot("sideplay_now_playing_notice") {
         SideplayHomeScreen(
             state.copy(nowPlayingNotice = current),
+            sleepTimer = MutableStateFlow(SleepTimerState.Off),
             onNowPlaying = {},
             onLibrary = {},
             onSearch = {},
@@ -209,6 +229,7 @@ class SideplayScreenshotTest {
         SpotifyNowPlayingScreen(
             state,
             playbackPositionMs = MutableStateFlow(68_000L),
+            sleepTimer = MutableStateFlow(SleepTimerState.Off),
             onBack = {},
             onPlayPause = {},
             onPrevious = {},
@@ -221,7 +242,40 @@ class SideplayScreenshotTest {
             onAlbum = {},
             onShow = {},
             onArtist = {},
+            onSleepTimer = {},
             onDismissNotice = {}
+        )
+    }
+
+    @Test fun nowPlayingWithSleepTimer() = shoot("sideplay_now_playing_sleep_timer") {
+        SpotifyNowPlayingScreen(
+            state,
+            playbackPositionMs = MutableStateFlow(68_000L),
+            sleepTimer = MutableStateFlow(SleepTimerState.Countdown(30, 1_800_000L, 23)),
+            onBack = {},
+            onPlayPause = {},
+            onPrevious = {},
+            onNext = {},
+            onSeek = {},
+            onShuffle = {},
+            onRepeat = {},
+            onSave = {},
+            onQueue = {},
+            onAlbum = {},
+            onShow = {},
+            onArtist = {},
+            onSleepTimer = {},
+            onDismissNotice = {}
+        )
+    }
+
+    @Test fun sleepTimer() = shoot("sideplay_sleep_timer") {
+        SpotifySleepTimerScreen(
+            sleepTimer = MutableStateFlow(SleepTimerState.Countdown(30, 1_800_000L, 23)),
+            onBack = {},
+            onOff = {},
+            onDuration = {},
+            onEndOfTrack = {}
         )
     }
 

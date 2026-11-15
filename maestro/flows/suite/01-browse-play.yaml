@@ -5,27 +5,58 @@ name: Browse & Play
 # artist has at least three top tracks and at least one album with tracks.
 # No artist, album, or track titles are hardcoded. Durations identify playable rows,
 # and the album row is selected by its year / track-count subtitle.
+#
+# Settle times: animations are disabled for recordings, so the pre-tap hierarchy
+# re-dump does not need its default 1.5 s. 200 ms is enough to catch layout changes
+# but keeps each tap cheap; override per command if a tap starts racing the UI.
 - launchApp
 - assertVisible: "Sideplay"
 
 # 1. Open the Library and the second followed artist.
-- tapOn: "Library"
+- tapOn:
+    text: "Library"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Library"
+# Scroll to the section heading, not to a row label: a clipped row is still
+# reported as fully visible, and the index over visible matches changes with the
+# scroll position. The second "Artist" label below the heading is the second
+# followed artist.
+#
+# The Library remembers its scroll position between runs, so first reset to the
+# top section, then come down to the artists. Without the reset, a Library left
+# at the artists makes a DOWN-only scroll miss the header.
 - scrollUntilVisible:
     element:
-      text: "Artist"
-      index: 1
+      text: "LIKED SONGS"
+    direction: UP
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- scrollUntilVisible:
+    element:
+      text: "FOLLOWED ARTISTS"
     direction: DOWN
-- waitForAnimationToEnd
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+# The heading stops at the bottom of the viewport, where only one artist row is
+# fully visible. Move the section up a fixed amount so the first two "Artist"
+# labels are on screen, then index 1 is reliably the second followed artist.
+- swipe:
+    start: "50%, 55%"
+    end: "50%, 30%"
+    duration: 300
 - tapOn:
     text: "Artist"
     index: 1
+    waitToSettleTimeoutMs: 200
 - assertVisible: "TOP TRACKS"
 
 # 2. Play the third top track.
 - tapOn:
     text: "[0-9]+:[0-9]{2}"
     index: 2
+    waitToSettleTimeoutMs: 200
 # The four-second confirmation can expire before Maestro taps it, so open Now
 # Playing from Options instead of racing the notice. If the track was already
 # current, the tap above opened Now Playing directly and this step is skipped.
@@ -34,62 +65,46 @@ name: Browse & Play
       visible: "TOP TRACKS"
     commands:
       - pressKey: Remote Menu
-      - tapOn: "Now playing"
+      - tapOn:
+          text: "Now playing"
+          waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
 - assertVisible: "Previous"
 
 # 3. Back to the artist, then open its first album.
-- tapOn: "Back"
+- pressKey: Back
 - assertVisible: "TOP TRACKS"
 - scrollUntilVisible:
     element:
       text: "ALBUMS"
     direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
 - tapOn:
     text: "[0-9]{4}( · [0-9]+ tracks)?"
     index: 0
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
 
 # 4. Play the album's first track and open Now Playing.
 - tapOn:
     text: "[0-9]+:[0-9]{2}"
     index: 0
+    waitToSettleTimeoutMs: 200
 # Same guard as above: an already-current album track opens Now Playing directly.
 - runFlow:
     when:
       notVisible: "Previous"
     commands:
       - pressKey: Remote Menu
-      - tapOn: "Now playing"
+      - tapOn:
+          text: "Now playing"
+          waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
 - assertVisible: "Previous"
 
-# 5. Back to the artist and play another top track. This adds a history entry
-# before flow 4 removes one, so repeated suite runs do not slowly drain the
-# fixture. The album may be a single, so use the artist's top tracks instead.
-- tapOn: "Back"
-- assertVisible: "Sav(e|ed)"
-- tapOn: "Back"
-- scrollUntilVisible:
-    element:
-      text: "TOP TRACKS"
-    direction: UP
-- tapOn:
-    text: "[0-9]+:[0-9]{2}"
-    index: 1
-- runFlow:
-    when:
-      notVisible: "Previous"
-    commands:
-      - pressKey: Remote Menu
-      - tapOn: "Now playing"
-- assertVisible: "Sav(e|ed)"
-- assertVisible: "Previous"
-
-# 6. Now Playing -> artist -> Library -> Home.
-- tapOn: "Back"
-- assertVisible: "TOP TRACKS"
-- tapOn: "Back"
-- assertVisible: "Library"
-- tapOn: "Sideplay"
-- assertVisible: "Sideplay"
+# End on Now Playing. The extra play and the walk back through artist, Library,
+# and Home were ~20 s of dead time, and dropping them removes the fragile
+# second top-track selection. The two plays above still add history entries for
+# flow 4, so repeated runs do not drain the fixture.

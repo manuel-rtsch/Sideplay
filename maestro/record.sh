@@ -7,8 +7,8 @@
 #
 # Before recording, `flows/utility/record-prepare.yaml` clears the Recently played
 # history and starts a song so it is already playing in the background. The
-# recording itself starts only once the flow has launched the app, so the MP4 does
-# not begin with Maestro's JVM startup time. Set SIDEPLAY_SKIP_PREPARE=1 to record
+# recording itself starts once the flow's launchApp command completes, so the MP4
+# does not begin with Maestro's JVM startup time. Set SIDEPLAY_SKIP_PREPARE=1 to record
 # the flow as-is instead.
 #
 # Usage: ./record.sh [flow] [output]
@@ -20,7 +20,11 @@ FLOW="${1:-flows/demo/hero-play-search-queue.yaml}"
 OUT="${2:-recordings/hero-play-search-queue.mp4}"
 PREP_FLOW="${SIDEPLAY_PREP_FLOW:-flows/utility/record-prepare.yaml}"
 DEVICE_FILE="/sdcard/maestro-recording.mp4"
-START_MARKER="${SIDEPLAY_RECORD_START_MARKER:-Assert that \"Sideplay\" is visible... COMPLETED}"
+# Start at the end of the flow's launchApp command: it is the first command every
+# flow runs, so the marker cannot drift when the flow's first action or first
+# assertion changes, and it matches both cold and warm launches. The JVM startup
+# stays out of the video.
+START_MARKER="${SIDEPLAY_RECORD_START_MARKER:-Launch app .*COMPLETED}"
 START_TIMEOUT="${SIDEPLAY_RECORD_START_TIMEOUT:-30}"
 REC_PID=""
 MAESTRO_PID=""
@@ -112,7 +116,7 @@ MAESTRO_PID=$!
 
 deadline=$((SECONDS + START_TIMEOUT))
 while (( SECONDS < deadline )); do
-    if grep -Fq "$START_MARKER" "$MAESTRO_LOG" 2>/dev/null; then
+    if grep -Eq "$START_MARKER" "$MAESTRO_LOG" 2>/dev/null; then
         break
     fi
     if ! kill -0 "$MAESTRO_PID" 2>/dev/null; then
@@ -121,7 +125,7 @@ while (( SECONDS < deadline )); do
     sleep 0.1
 done
 
-if ! grep -Fq "$START_MARKER" "$MAESTRO_LOG" 2>/dev/null; then
+if ! grep -Eq "$START_MARKER" "$MAESTRO_LOG" 2>/dev/null; then
     echo "Warning: did not reach recording start marker; recording the whole flow." >&2
 fi
 start_recording

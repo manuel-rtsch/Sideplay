@@ -44,6 +44,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -61,7 +62,10 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import io.github.manuelrtsch.sideplay.playback.formatDuration
+import io.github.manuelrtsch.sideplay.playback.statusDescription
+import io.github.manuelrtsch.sideplay.playback.statusText
 import io.github.manuelrtsch.sideplay.ui.QueueIndication
 import io.github.manuelrtsch.sideplay.ui.QueueReorderAutoScroll
 import io.github.manuelrtsch.sideplay.ui.RowActionSquare
@@ -95,6 +99,7 @@ private fun NowPlayingSeek(
 fun SpotifyNowPlayingScreen(
     state: SpotifyUiState,
     playbackPositionMs: StateFlow<Long>,
+    sleepTimer: StateFlow<SleepTimerState>,
     onBack: () -> Unit,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
@@ -107,9 +112,11 @@ fun SpotifyNowPlayingScreen(
     onAlbum: () -> Unit,
     onShow: () -> Unit,
     onArtist: () -> Unit,
+    onSleepTimer: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val current = state.current
+    val timer by sleepTimer.collectAsStateWithLifecycle()
     // Episodes have no saved-track endpoint, so Save is a track-only action.
     val save = (current as? SpotifyTrack)?.let {
         SideAction.square(
@@ -135,7 +142,15 @@ fun SpotifyNowPlayingScreen(
     } else {
         buildList {
             add(SideAction("queue", "Queue", SidekitIcon.QueueMusic, onClick = onQueue))
-            if (current is SpotifyTrack) add(SideAction("album", "Album", SidekitIcon.Album, onClick = onAlbum))
+            add(
+                SideAction.square(
+                    "sleepTimer",
+                    SidekitIcon.Bedtime,
+                    if (timer.active) "Sleep timer on" else "Sleep timer",
+                    onSleepTimer,
+                    tone = if (timer.active) ActionTone.Secondary else ActionTone.Muted
+                )
+            )
         }
     }
     SidekitScaffold(title = null, actions = actions, options = options) { padding ->
@@ -191,6 +206,7 @@ fun SpotifyNowPlayingScreen(
                         )
                     }
                 }
+                NowPlayingSleepTimer(sleepTimer)
                 // Only the seek bar subscribes to the playback position flow, so the 10x/s
                 // position ticks recompose just this small composable, not the whole screen.
                 // The seek block owns its own height, so the labels can sit close to the artist
@@ -223,6 +239,33 @@ fun SpotifyNowPlayingScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * A slim, deliberately non-interactive status record between the artist and the seek row. It is
+ * not a 48 dp target because it is not a control: changes go through Options.
+ */
+@Composable
+private fun NowPlayingSleepTimer(sleepTimer: StateFlow<SleepTimerState>) {
+    val timer by sleepTimer.collectAsStateWithLifecycle()
+    val label = timer.statusText() ?: return
+    val description = timer.statusDescription() ?: return
+    Row(
+        Modifier.clearAndSetSemantics { contentDescription = description },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        SidekitIconImage(
+            SidekitIcon.Bedtime,
+            size = 24.dp,
+            tint = SidekitTheme.colors.surfaceA6
+        )
+        SidekitText(
+            label,
+            style = SidekitTheme.typography.small,
+            color = SidekitTheme.colors.surfaceA6
+        )
     }
 }
 

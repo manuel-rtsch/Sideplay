@@ -18,6 +18,9 @@ import io.github.manuelrtsch.sideplay.data.SpotifyGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,7 +36,9 @@ class SpotifyPlayback(
     private val scope: CoroutineScope,
     private val registry: MediaSessionRegistry = MediaSessions,
     private val audio: SpotifyAudioSink? = null,
-    private val context: Context? = null
+    private val context: Context? = null,
+    /** Monotonic clock seam: the sleep timer's deadline math is the only consumer. */
+    private val elapsedTime: () -> Long = { SystemClock.elapsedRealtime() }
 ) : MediaSessionOwner {
     override val sessionId = "sideplay"
     override val notificationChannelId = "sideplay"
@@ -51,6 +56,16 @@ class SpotifyPlayback(
         private set
 
     val position: Long get() = positionMs
+
+    private val _sleepTimer = MutableStateFlow<SleepTimerState>(SleepTimerState.Off)
+
+    /**
+     * The sleep timer lives on the process-wide player, not the ViewModel, so backing out of
+     * Sideplay cannot silently cancel it.
+     */
+    val sleepTimer: StateFlow<SleepTimerState> = _sleepTimer.asStateFlow()
+
+    private var sleepTimerJob: Job? = null
 
     @Volatile
     var notificationArt: Bitmap? = null
@@ -120,8 +135,86 @@ class SpotifyPlayback(
 
     val sessionToken: MediaSession.Token? get() = session()?.sessionToken
 
+    init {
+        // A minute tick only needs the notification text rebuilt, not the media session
+        // republished. The service refresh path deliberately does not call publish().
+        if (context != null) {
+            scope.launch {
+                _sleepTimer.collect { SpotifyPlaybackService.refresh(context, this@SpotifyPlayback) }
+            }
+        }
+    }
+
     /** Registers once so starting local Music can pause this owner even before the first track. */
     fun register() = registry.register(this)
+
+    /** Replaces any running timer with a fresh countdown. */
+    fun setSleepTimer(minutes: Int) {
+        if (minutes <= 0) {
+            clearSleepTimer()
+            return
+        }
+        val now = elapsedTime()
+        val deadline = now + minutes * SLEEP_TIMER_MINUTE_MS
+        installSleepTimer(
+            SleepTimerState.Countdown(
+                minutes = minutes,
+                deadlineElapsedMs = deadline,
+                remainingMinutes = sleepTimerRemainingMinutes(deadline, now)
+            )
+        )
+    }
+
+    /** Stops when the current track ends instead of advancing the queue. */
+    fun setSleepTimerEndOfTrack() = installSleepTimer(SleepTimerState.EndOfTrack)
+
+    fun clearSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimer.value = SleepTimerState.Off
+    }
+
+    /**
+     * Called by the ViewModel when librespot reports the end of a track. Returns true once when
+     * the end-of-track mode consumed the event, so normal repeat/advance must not run.
+     */
+    fun consumeEndOfTrackTimer(): Boolean {
+        if (_sleepTimer.value != SleepTimerState.EndOfTrack) return false
+        clearSleepTimer()
+        return true
+    }
+
+    private fun installSleepTimer(state: SleepTimerState) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimer.value = state
+        if (state !is SleepTimerState.Countdown) return
+        sleepTimerJob = scope.launch {
+            while (true) {
+                val current = _sleepTimer.value as? SleepTimerState.Countdown ?: return@launch
+                val now = elapsedTime()
+                if (now >= current.deadlineElapsedMs) {
+                    expireSleepTimer()
+                    return@launch
+                }
+                val remaining = sleepTimerRemainingMinutes(current.deadlineElapsedMs, now)
+                if (remaining != current.remainingMinutes) {
+                    _sleepTimer.value = current.copy(remainingMinutes = remaining)
+                }
+                // Wake exactly when the whole-minute value changes; no per-second ticking.
+                val nextChange = current.deadlineElapsedMs - (remaining - 1) * SLEEP_TIMER_MINUTE_MS
+                delay((nextChange - now).coerceAtLeast(SLEEP_TIMER_MIN_DELAY_MS))
+            }
+        }
+    }
+
+    private fun expireSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimer.value = SleepTimerState.Off
+        // Pause never touches system volume, and an already-paused player needs no pause call.
+        if (playing) pause()
+    }
 
     fun setNowPlaying(item: SpotifyMediaItem?, position: Long = 0L) {
         current = item
@@ -322,6 +415,7 @@ class SpotifyPlayback(
     }
 
     suspend fun stop() {
+        clearSleepTimer()
         playing = false
         lastCommandWasPause = true
         lastCommandAt = SystemClock.elapsedRealtime()
@@ -459,5 +553,10 @@ class SpotifyPlayback(
 
         /** How long after a command a contradicting native event is treated as stale. */
         const val COMMAND_EVENT_WINDOW_MS = 2_000L
+
+        const val SLEEP_TIMER_MINUTE_MS = 60_000L
+
+        /** Guards against a zero-delay spin when the clock lands exactly on a minute edge. */
+        const val SLEEP_TIMER_MIN_DELAY_MS = 1_000L
     }
 }

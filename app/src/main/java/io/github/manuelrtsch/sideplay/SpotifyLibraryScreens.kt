@@ -32,14 +32,17 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import io.github.manuelrtsch.sideplay.ui.SidekitSwipeRow
 import io.github.manuelrtsch.sideplay.ui.SwipeAction
 import io.github.manuelrtsch.sideplay.ui.SwipeRevealGroup
 import io.github.manuelrtsch.sideplay.ui.rememberSwipeRevealGroup
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 fun SideplayHomeScreen(
     state: SpotifyUiState,
+    sleepTimer: StateFlow<SleepTimerState>,
     onNowPlaying: () -> Unit,
     onLibrary: () -> Unit,
     onSearch: () -> Unit,
@@ -78,7 +81,7 @@ fun SideplayHomeScreen(
         SidekitList(padding, state = listState) {
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, 0)) {
-                    NowPlayingTile(state.current, onNowPlaying, Modifier.weight(1f))
+                    NowPlayingTile(state.current, sleepTimer, onNowPlaying, Modifier.weight(1f))
                     LibraryTile(onLibrary, Modifier.width(SidekitTheme.spacing.itemHeight))
                 }
             }

@@ -10,6 +10,7 @@ import io.github.manuelrtsch.sideplay.data.SpotifyHistoryRepository
 import io.github.manuelrtsch.sideplay.data.SpotifyLibraryWriter
 import io.github.manuelrtsch.sideplay.data.SpotifyQueueRepository
 import io.github.manuelrtsch.sideplay.data.SpotifySession
+import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -117,6 +118,13 @@ class SpotifyViewModel(
      */
     private val _playbackPositionMs = MutableStateFlow(0L)
     val playbackPositionMs: StateFlow<Long> = _playbackPositionMs.asStateFlow()
+
+    /**
+     * The sleep timer is owned by the process-wide player so it survives this ViewModel. The
+     * fallback flow only exists for context-free fixtures without a session.
+     */
+    private val offlineSleepTimer = MutableStateFlow<SleepTimerState>(SleepTimerState.Off)
+    val sleepTimer: StateFlow<SleepTimerState> = session?.playback?.sleepTimer ?: offlineSleepTimer
 
     private var searchJob: Job? = null
     private var autoplayJob: Job? = null
@@ -242,6 +250,18 @@ class SpotifyViewModel(
             if (it.onSeek === seekHandler) it.onSeek = null
         }
         super.onCleared()
+    }
+
+    fun setSleepTimer(minutes: Int) {
+        session?.playback?.setSleepTimer(minutes)
+    }
+
+    fun setSleepTimerEndOfTrack() {
+        session?.playback?.setSleepTimerEndOfTrack()
+    }
+
+    fun clearSleepTimer() {
+        session?.playback?.clearSleepTimer()
     }
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
@@ -1483,6 +1503,11 @@ class SpotifyViewModel(
     private fun onPlaybackEnded() {
         val snapshot = _state.value
         val current = snapshot.current ?: return
+        // The sleep timer wins over repeat and autoplay: this is where the queue must stop.
+        if (session?.playback?.consumeEndOfTrackTimer() == true) {
+            _state.update { it.copy(isPlaying = false) }
+            return
+        }
         if (snapshot.repeat == RepeatMode.Track) {
             _playbackPositionMs.value = 0L
             _state.update { it.copy(isPlaying = true) }

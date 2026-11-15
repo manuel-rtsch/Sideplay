@@ -56,8 +56,8 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - UI: `SpotifyViewModel` maps catalog responses, queue/history repositories, and native player
   events into one immutable `SpotifyUiState`.
 - Screens: Home, History, Library overview, Library category, Collection (album/playlist/show),
-  Artist, Search, Search scopes, Now Playing, Queue, Settings, Appearance (only without a Sidekit
-  host), Sign in. Mock data is confined to the screenshot-test source set.
+  Artist, Search, Search scopes, Now Playing, Queue, Sleep timer, Settings, Appearance (only
+  without a Sidekit host), Sign in. Mock data is confined to the screenshot-test source set.
 - Shell: `SideplayActivity` reads Sidekit's theme and keypad configuration when a compatible host
   is installed; otherwise it uses local stores and shows Appearance settings in-app. Host support
   is best-effort: an absent, older, or unreadable Sidekit falls back to standalone mode instead of
@@ -96,6 +96,14 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
 - Playback is process-wide. Queue and local history live on `SpotifySession`; a recreated
   ViewModel adopts the live item, position, and playing state. Starting a new item releases the
   previous `AudioTrack`.
+- The sleep timer is owned by `SpotifyPlayback`, not the ViewModel, so it survives leaving
+  Sideplay and activity recreation. Now Playing's Options offer a Bedtime square that opens a
+  one-shot picker (Off, 5/15/30/45/60/90 minutes, End of track); selecting a row arms the timer and
+  returns. A slim, non-interactive status line appears between the artist and seek row, and the
+  Home tile gains a Bedtime icon with the remaining minutes. Expiry pauses playback and clears
+  the timer without touching system volume. `End of track` stops before repeat/advance and
+  retargets naturally when the user skips. The timer is not persisted and is cleared on stop,
+  disconnect, and sign-out.
 - Starting a new item shows a transient now-playing confirmation in the action bar: artwork, an
   animated playing indicator, the title, and a right arrow to Now Playing. It replaces the normal
   actions for four seconds, can be dismissed immediately with its X, and never auto-navigates.
@@ -112,7 +120,9 @@ lyrics/Canvas/video, social features, account management, crossfade/EQ, and trac
   kept so existing dev installs keep their data). Playback
   itself does not resume on launch.
 - Foreground `mediaPlayback` service and platform `MediaSession` keep librespot alive with the
-  screen off. Notification shows artwork, title, artist, and previous/play-pause/next. When the
+  screen off. Notification shows artwork, title, artist, and previous/play-pause/next; while a
+  sleep timer is active, the artist line gains `· sleep 23m` (or `· ends with this track`) and a
+  minute tick rebuilds only the notification. When the
   ViewModel is gone, next/previous fall back to advancing the process-wide queue directly.
   Tapping the notification opens Sideplay directly at Now Playing rather than the launcher.
   A native `stopped` event clears Now Playing and the queue so notification/lock-screen stop

@@ -84,6 +84,16 @@ class SpotifyPlaybackService : Service() {
     }
 
     private fun notification(playback: SpotifyPlayback, playing: Boolean): Notification {
+        val timer = playback.sleepTimer.value
+        val timerSuffix = timer.notificationSuffix()
+        val creator = playback.current?.creator.orEmpty()
+        val contentText = buildString {
+            append(creator)
+            if (timerSuffix != null) {
+                if (isNotEmpty()) append(" · ")
+                append(timerSuffix)
+            }
+        }
         val open = PendingIntent.getActivity(
             this,
             0,
@@ -95,12 +105,14 @@ class SpotifyPlaybackService : Service() {
         return Notification.Builder(this, playback.notificationChannelId)
             .setSmallIcon(SidekitIcon.MusicNote2.drawable)
             .setContentTitle(playback.current?.title ?: "Sideplay")
-            .setContentText(playback.current?.creator.orEmpty())
+            .setContentText(contentText)
+            .setSubText(if (timerSuffix != null) "Sleep timer" else null)
             .setLargeIcon(playback.notificationArt)
             .setContentIntent(open)
             .setDeleteIntent(action(ACTION_STOP))
             .setOngoing(playing)
             .setShowWhen(false)
+            .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .addAction(
                 Notification.Action.Builder(
@@ -148,6 +160,11 @@ class SpotifyPlaybackService : Service() {
         private const val ACTION_STOP = "io.github.manuelrtsch.sideplay.STOP"
 
         private var running: SpotifyPlaybackService? = null
+
+        /** Rebuilds the notification for a state-only change, such as a sleep-timer minute tick. */
+        fun refresh(context: Context, playback: SpotifyPlayback) {
+            running?.update(playback)
+        }
 
         /** Brings the service in line with the player. Main thread only, like the player. */
         fun sync(context: Context, playback: SpotifyPlayback) {

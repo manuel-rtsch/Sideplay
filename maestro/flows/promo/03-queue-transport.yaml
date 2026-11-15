@@ -1,0 +1,106 @@
+appId: io.github.manuelrtsch.sideplay
+name: Queue & Transport (promo)
+---
+# Fixture assumptions: signed in and on Home, one current track, at least two
+# recently played rows, and at least two upcoming queue items. No track titles
+# are hardcoded: durations identify rows and the generated Add/Remove labels
+# identify queue actions.
+- launchApp:
+    stopApp: false
+- assertVisible: "Sideplay"
+- assertVisible: "RECENTLY PLAYED"
+
+# 2. Add a recent track to the queue. The prep clears history and plays Africa,
+# so there is one row and the queue starts with a single upcoming item.
+- swipe:
+    from:
+      text: "[0-9]+:[0-9]{2}"
+      index: 0
+    direction: LEFT
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Add .* to queue"
+    waitToSettleTimeoutMs: 200
+
+# 2. Open the queue.
+- tapOn:
+    text: "Queue"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Queue"
+
+# 3. Remove the first upcoming item and undo it. Index 0 is the current row.
+- swipe:
+    from:
+      text: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
+      index: 1
+    direction: LEFT
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Remove .* from queue"
+    waitToSettleTimeoutMs: 200
+# Undo is only offered for five seconds; tap it without a settle wait in between.
+- tapOn:
+    text: "Undo"
+    waitToSettleTimeoutMs: 0
+- assertNotVisible: "Undo"
+
+# 4. Clear the upcoming queue and undo it.
+- tapOn:
+    text: "Clear"
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    text: "Undo"
+    waitToSettleTimeoutMs: 0
+- assertNotVisible: "Undo"
+
+# 5. Open Now Playing from Options. Shuffle is not part of the recording; the
+# Options bar already contains "Now playing".
+- pressKey: Remote Menu
+- tapOn:
+    text: "Now playing"
+    waitToSettleTimeoutMs: 200
+
+# 6. Assert the transport controls.
+- assertVisible: "Previous"
+- assertVisible: "Pause|Play"
+- assertVisible: "Next"
+- assertVisible: "Sav(e|ed)"
+- assertVisible: "Seek"
+- assertVisible: "Repeat: (off|context|track)"
+
+# 7. Toggle play/pause once. Reading the current label lets one tap prove the
+# change in either direction without a guard that waits 7 s on a miss.
+- copyTextFrom:
+    text: "^(Pause|Play)$"
+- evalScript: ${output.transportLabel = maestro.copiedText}
+- tapOn:
+    text: "^(Pause|Play)$"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.transportLabel}$"
+
+# 8. Next keeps Now Playing open.
+- tapOn:
+    text: "Next"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Previous"
+- assertVisible: "Seek"
+
+# 9. Cycle repeat once; the label encodes the new state.
+- copyTextFrom:
+    text: "Repeat: (off|context|track)"
+- evalScript: ${output.repeatLabel = maestro.copiedText}
+- tapOn:
+    text: "Repeat: (off|context|track)"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.repeatLabel}$"
+
+# 10. Toggle Save once.
+- copyTextFrom:
+    text: "^(Save|Saved)$"
+- evalScript: ${output.saveLabel = maestro.copiedText}
+- tapOn:
+    text: "^(Save|Saved)$"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "^${output.saveLabel}$"
+
+# End on Now Playing.

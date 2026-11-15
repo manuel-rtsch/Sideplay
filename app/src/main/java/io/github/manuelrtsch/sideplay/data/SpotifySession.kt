@@ -104,6 +104,7 @@ class SpotifySession(
     fun signOut() {
         queue.stop()
         history.clear()
+        playback.clearSleepTimer()
         if (nativeAvailable) {
             playback.setNowPlaying(null)
             playback.pause()

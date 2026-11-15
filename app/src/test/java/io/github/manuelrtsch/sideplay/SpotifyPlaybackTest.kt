@@ -5,10 +5,12 @@ import io.github.manuelrtsch.sideplay.data.SpotifyGateway
 import io.github.manuelrtsch.sideplay.data.SpotifyGatewayException
 import io.github.manuelrtsch.sideplay.playback.MediaSessionOwner
 import io.github.manuelrtsch.sideplay.playback.MediaSessionRegistry
+import io.github.manuelrtsch.sideplay.playback.SleepTimerState
 import io.github.manuelrtsch.sideplay.playback.SpotifyPlayback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -136,6 +138,100 @@ class SpotifyPlaybackTest {
         playback.requestNext()
 
         assertEquals(1, fallbackCalls)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `sleep timer counts down once per minute`() = runTest {
+        val playback = SpotifyPlayback(
+            FakeGateway(),
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            MediaSessionRegistry(),
+            elapsedTime = { testScheduler.currentTime }
+        )
+
+        playback.setSleepTimer(5)
+        assertEquals(SleepTimerState.Countdown(5, 300_000L, 5), playback.sleepTimer.value)
+
+        advanceTimeBy(60_000L)
+        runCurrent()
+        assertEquals(4, (playback.sleepTimer.value as SleepTimerState.Countdown).remainingMinutes)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `sleep timer pauses at the deadline`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(
+            gateway,
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            MediaSessionRegistry(),
+            elapsedTime = { testScheduler.currentTime }
+        )
+        playback.start("spotify:track:a", 0L)
+
+        playback.setSleepTimer(5)
+        advanceTimeBy(5 * 60_000L + 1)
+        runCurrent()
+
+        assertEquals(SleepTimerState.Off, playback.sleepTimer.value)
+        assertFalse(playback.isActive)
+        assertTrue(gateway.paused)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a new duration replaces the old deadline`() = runTest {
+        val playback = SpotifyPlayback(
+            FakeGateway(),
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            MediaSessionRegistry(),
+            elapsedTime = { testScheduler.currentTime }
+        )
+
+        playback.setSleepTimer(5)
+        playback.setSleepTimer(30)
+        advanceTimeBy(5 * 60_000L + 1)
+        runCurrent()
+
+        val timer = playback.sleepTimer.value as SleepTimerState.Countdown
+        assertEquals(30, timer.minutes)
+        assertTrue(timer.remainingMinutes > 0)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `clearing the timer cancels expiry`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(
+            gateway,
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            MediaSessionRegistry(),
+            elapsedTime = { testScheduler.currentTime }
+        )
+        playback.start("spotify:track:a", 0L)
+
+        playback.setSleepTimer(5)
+        playback.clearSleepTimer()
+        advanceTimeBy(6 * 60_000L)
+        runCurrent()
+
+        assertEquals(SleepTimerState.Off, playback.sleepTimer.value)
+        assertTrue(playback.isActive)
+        assertFalse(gateway.paused)
+    }
+
+    @Test fun `end of track timer is consumed once`() {
+        val playback = SpotifyPlayback(
+            FakeGateway(),
+            CoroutineScope(StandardTestDispatcher()),
+            MediaSessionRegistry()
+        )
+        playback.setSleepTimerEndOfTrack()
+
+        assertTrue(playback.consumeEndOfTrackTimer())
+        assertEquals(SleepTimerState.Off, playback.sleepTimer.value)
+        assertFalse(playback.consumeEndOfTrackTimer())
     }
 
     private class FakeGateway(private val failLoad: Boolean = false) : SpotifyGateway {

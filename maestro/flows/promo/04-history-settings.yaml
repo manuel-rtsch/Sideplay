@@ -1,0 +1,129 @@
+appId: io.github.manuelrtsch.sideplay
+name: History & Settings (promo)
+---
+# Fixture assumptions: signed in and on Home, with enough recent history that
+# Home shows "See more history". No history titles are hardcoded: the focused
+# row's generated Remove label identifies the entry.
+- launchApp
+- assertVisible: "Sideplay"
+
+# 1. Open the full History screen from the Home preview.
+- scrollUntilVisible:
+    element:
+      text: "See more history"
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "See more history"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "History"
+
+# 2. Focus the first row so its gutter opens, then remove that entry. The gutter
+# is focus-revealed; a touch tap on the row would play it instead.
+- pressKey: Remote Dpad Down
+- extendedWaitUntil:
+    visible: "Remove .* from history"
+    timeout: 3000
+- copyTextFrom:
+    text: "Remove .* from history"
+- evalScript: ${output.removedHistory = maestro.copiedText}
+- assertTrue: ${output.removedHistory.startsWith("Remove ")}
+- tapOn:
+    text: "Remove .* from history"
+    index: 0
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: ${output.removedHistory}
+- assertVisible: "History"
+# Removing shows "<title> removed from history" in the action bar until it is
+# dismissed. Tap the notice, then wait for the normal back action to return.
+- runFlow:
+    when:
+      visible: ".* removed from history"
+    commands:
+      - tapOn:
+          text: ".* removed from history"
+          waitToSettleTimeoutMs: 200
+- extendedWaitUntil:
+    visible: "Sideplay"
+    timeout: 3000
+- tapOn:
+    text: "Sideplay"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Sideplay"
+
+# 3. Settings, via Options.
+- pressKey: Remote Menu
+- tapOn:
+    text: "Settings"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Settings"
+
+# 4. Toggle two playback settings. The initial state is intentionally not
+# hardcoded, so repeated runs flip the values and still pass.
+- tapOn:
+    text: "Autoplay"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Autoplay"
+- tapOn:
+    text: "Normalize volume"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Normalize volume"
+
+# 5. Audio quality: assert all choices, select High, then return to Settings.
+- tapOn:
+    text: "Audio quality"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Normal"
+- assertVisible: "High"
+- assertVisible: "Max"
+- tapOn:
+    text: "High"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Audio quality"
+- tapOn:
+    text: "Settings"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Settings"
+
+# 6. Cancel the Clear cache confirmation.
+- scrollUntilVisible:
+    element:
+      text: "Clear cache"
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Clear cache"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Cancel"
+- assertVisible: "Clear"
+- tapOn:
+    text: "Cancel"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "Clear"
+
+# 7. Cancel the Clear history confirmation. Do not confirm: it destroys the
+# fixture for the rest of the suite.
+- scrollUntilVisible:
+    element:
+      text: "Clear history"
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Clear history"
+    waitToSettleTimeoutMs: 200
+- assertVisible: "Cancel"
+- assertVisible: "Clear"
+- tapOn:
+    text: "Cancel"
+    waitToSettleTimeoutMs: 200
+- assertNotVisible: "Clear"
+
+# 8. Back to Home.
+- pressKey: Back
+- assertVisible: "Sideplay"

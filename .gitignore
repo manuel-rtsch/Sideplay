@@ -33,3 +33,7 @@ crash-logs/
 
 # Local Reddit announcement draft
 /.reddit-intro.md
+
+# Python tooling
+__pycache__/
+*.pyc

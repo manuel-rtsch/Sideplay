@@ -41,6 +41,7 @@ private val SEARCH = SIDE_PLAY_SEARCH
 private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
+private val SLEEP_TIMER = "$ROOT/sleep-timer"
 private val SETTINGS = "$ROOT/settings"
 private val AUDIO_QUALITY = "$ROOT/audio-quality"
 private val SIGN_IN = SIDE_PLAY_SIGN_IN
@@ -133,6 +134,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
             }
             SideplayHomeScreen(
                 state,
+                vm.sleepTimer,
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onLibrary = { nav.navigate(LIBRARY) },
                 onSearch = { nav.navigate(SEARCH) },
@@ -364,6 +366,7 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
             SpotifyNowPlayingScreen(
                 state,
                 vm.playbackPositionMs,
+                vm.sleepTimer,
                 onBack = { nav.popBackStack() },
                 onPlayPause = vm::togglePlayPause,
                 onPrevious = vm::previous,
@@ -386,7 +389,27 @@ fun NavGraphBuilder.sideplayGraph(nav: NavHostController, startDestination: Stri
                 onArtist = {
                     state.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
                 },
+                onSleepTimer = { nav.navigate(SLEEP_TIMER) },
                 onDismissNotice = vm::dismissNotice
+            )
+        }
+        composable(SLEEP_TIMER) { entry ->
+            val vm = entry.spotifyViewModel(nav)
+            SpotifySleepTimerScreen(
+                vm.sleepTimer,
+                onBack = { nav.popBackStack() },
+                onOff = {
+                    vm.clearSleepTimer()
+                    nav.popBackStack()
+                },
+                onDuration = { minutes ->
+                    vm.setSleepTimer(minutes)
+                    nav.popBackStack()
+                },
+                onEndOfTrack = {
+                    vm.setSleepTimerEndOfTrack()
+                    nav.popBackStack()
+                }
             )
         }
         composable(QUEUE) { entry ->

@@ -12,7 +12,12 @@ name: History & Settings
     element:
       text: "See more history"
     direction: DOWN
-- tapOn: "See more history"
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "See more history"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "History"
 
 # 2. Focus the first row so its gutter opens, then remove that entry. The gutter
@@ -21,7 +26,6 @@ name: History & Settings
 - extendedWaitUntil:
     visible: "Remove .* from history"
     timeout: 3000
-- waitForAnimationToEnd
 - copyTextFrom:
     text: "Remove .* from history"
 - evalScript: ${output.removedHistory = maestro.copiedText}
@@ -29,6 +33,7 @@ name: History & Settings
 - tapOn:
     text: "Remove .* from history"
     index: 0
+    waitToSettleTimeoutMs: 200
 - assertNotVisible: ${output.removedHistory}
 - assertVisible: "History"
 # Removing shows "<title> removed from history" in the action bar until it is
@@ -37,35 +42,53 @@ name: History & Settings
     when:
       visible: ".* removed from history"
     commands:
-      - tapOn: ".* removed from history"
+      - tapOn:
+          text: ".* removed from history"
+          waitToSettleTimeoutMs: 200
 - extendedWaitUntil:
     visible: "Sideplay"
     timeout: 3000
-- tapOn: "Sideplay"
+- tapOn:
+    text: "Sideplay"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Sideplay"
 
 # 3. Settings, via Options.
 - pressKey: Remote Menu
-- tapOn: "Settings"
+- tapOn:
+    text: "Settings"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Settings"
 
 # 4. Toggle each playback setting once. The initial state is intentionally not
 # hardcoded, so repeated runs flip the value and still pass.
-- tapOn: "Autoplay"
+- tapOn:
+    text: "Autoplay"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Autoplay"
-- tapOn: "Normalize volume"
+- tapOn:
+    text: "Normalize volume"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Normalize volume"
-- tapOn: "Gapless playback"
+- tapOn:
+    text: "Gapless playback"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Gapless playback"
 
 # 5. Audio quality: assert all choices, select High, then return to Settings.
-- tapOn: "Audio quality"
+- tapOn:
+    text: "Audio quality"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Normal"
 - assertVisible: "High"
 - assertVisible: "Max"
-- tapOn: "High"
+- tapOn:
+    text: "High"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Audio quality"
-- tapOn: "Settings"
+- tapOn:
+    text: "Settings"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Settings"
 
 # 6. Cancel the Clear cache confirmation.
@@ -73,10 +96,17 @@ name: History & Settings
     element:
       text: "Clear cache"
     direction: DOWN
-- tapOn: "Clear cache"
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Clear cache"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Cancel"
 - assertVisible: "Clear"
-- tapOn: "Cancel"
+- tapOn:
+    text: "Cancel"
+    waitToSettleTimeoutMs: 200
 - assertNotVisible: "Clear"
 
 # 7. Cancel the Clear history confirmation. Do not confirm: it destroys the
@@ -85,12 +115,19 @@ name: History & Settings
     element:
       text: "Clear history"
     direction: DOWN
-- tapOn: "Clear history"
+    speed: 80
+    visibilityPercentage: 60
+    waitToSettleTimeoutMs: 200
+- tapOn:
+    text: "Clear history"
+    waitToSettleTimeoutMs: 200
 - assertVisible: "Cancel"
 - assertVisible: "Clear"
-- tapOn: "Cancel"
+- tapOn:
+    text: "Cancel"
+    waitToSettleTimeoutMs: 200
 - assertNotVisible: "Clear"
 
 # 8. Back to Home.
-- tapOn: "Back"
+- pressKey: Back
 - assertVisible: "Sideplay"
