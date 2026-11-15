@@ -41,6 +41,12 @@ private const val POSITION_EVENT_JUMP_MS = 5_000L
  */
 private const val PLAYBACK_START_TIMEOUT_MS = 10_000L
 
+/** How long a resumed track ignores player events from the generation that was stopped. */
+private const val RESUME_GRACE_MS = 8_000L
+
+/** An event this far below the resumed offset is the old player state, not a real seek. */
+private const val RESUME_EVENT_SLACK_MS = 2_000L
+
 data class SpotifyUiState(
     val signedIn: Boolean = false,
     val current: SpotifyMediaItem? = null,
@@ -243,8 +249,11 @@ class SpotifyViewModel(
             queue.restore(snapshot.copy(current = current))
         }
         val restored = queue.snapshot
-        anchorPosition(playback.position)
-        _playbackPositionMs.value = playback.position
+        // A closed app leaves the item at the offset it reached; a live player owns its position.
+        val resume = session.resumePoint?.takeIf { it.trackId == current?.id }
+        val position = if (playback.current != null) playback.position else resume?.positionMs ?: 0L
+        anchorPosition(position)
+        _playbackPositionMs.value = position
         _state.update {
             it.copy(
                 current = current,
@@ -589,8 +598,9 @@ class SpotifyViewModel(
             try {
                 if (play && session.playback.current == null) {
                     // A restored queue outlives the native player. Start the current item instead
-                    // of resuming a source that no longer exists.
-                    startRemote(item, 0L)
+                    // of resuming a source that no longer exists, from the offset it stopped at.
+                    val resume = session.resumePoint?.takeIf { it.trackId == item.id }
+                    startRemote(item, resume?.positionMs ?: 0L, resuming = resume != null)
                 } else if (play) {
                     if (!session.resume()) {
                         _state.update { it.copy(isPlaying = false) }
@@ -1435,7 +1445,7 @@ class SpotifyViewModel(
         val type = event.opt("type")?.toString().orEmpty()
         SidetrackDebug.log("event type=$type uri=${event.opt("uri")?.toString().orEmpty()} positionMs=$position")
         when (type) {
-            "loading" -> if (matchesCurrent(event)) {
+            "loading" -> if (matchesCurrent(event) && !staleResumeEvent(position)) {
                 // The player has accepted the new item: the hold can end and the clock may run
                 // from the position the player will actually start at.
                 awaitingPlaybackStart = false
@@ -1480,7 +1490,7 @@ class SpotifyViewModel(
                 val current = _playbackPositionMs.value
                 // Ignore the decoder's stale position events while a local seek is settling.
                 val settling = SystemClock.elapsedRealtime() - lastSeekAt < 1_500L
-                if (!settling && abs(position - current) > POSITION_EVENT_JUMP_MS) {
+                if (!settling && !staleResumeEvent(position) && abs(position - current) > POSITION_EVENT_JUMP_MS) {
                     anchorPosition(position)
                     session?.playback?.updatePosition(position)
                     _playbackPositionMs.value = position
@@ -1504,10 +1514,12 @@ class SpotifyViewModel(
 
             "stopped" -> if (matchesCurrent(event)) {
                 // Stop from the notification or lock screen: clear both the UI and the queue so
-                // reopening Sidetrack cannot restore the track that was stopped.
+                // reopening Sidetrack cannot restore the track that was stopped. Closing the app
+                // halts the audio the same way but keeps the queue, so reopen it as it was.
                 awaitingPlaybackStart = false
                 session?.playback?.updateState(false, 0L)
-                applyQueue(queue.stop(), positionMs = 0L, playing = false)
+                val halting = session?.halting == true
+                applyQueue(if (halting) queue.snapshot else queue.stop(), positionMs = 0L, playing = false)
             }
 
             "unavailable" -> if (matchesCurrent(event)) {
@@ -1538,6 +1550,11 @@ class SpotifyViewModel(
             advance(auto = true, forceContextLoop = snapshot.repeat == RepeatMode.Context)
         }
     }
+
+    private data class ResumeAnchor(val trackId: String, val positionMs: Long, val atMs: Long)
+
+    /** Which offset a restored track was started at, and when, so stale events can be spotted. */
+    private var resumeAnchor: ResumeAnchor? = null
 
     private fun anchorPosition(positionMs: Long) {
         positionAnchorMs = positionMs
@@ -1664,18 +1681,29 @@ class SpotifyViewModel(
     }
 
     /** Starts a real Spotify item; local test fixtures have no URI and keep the local simulation. */
-    private fun startRemote(item: SpotifyMediaItem, positionMs: Long, gapless: Boolean = false) {
+    private fun startRemote(
+        item: SpotifyMediaItem,
+        positionMs: Long,
+        gapless: Boolean = false,
+        resuming: Boolean = false
+    ) {
         val uri = item.uri ?: return
         val session = session ?: return
-        SidetrackDebug.log("viewModel.startRemote uri=$uri positionMs=$positionMs gapless=$gapless")
+        SidetrackDebug.log("viewModel.startRemote uri=$uri positionMs=$positionMs gapless=$gapless resuming=$resuming")
         anchorPosition(positionMs)
         awaitingPlaybackStart = true
         awaitingPlaybackStartAt = SystemClock.elapsedRealtime()
+        if (resuming) {
+            resumeAnchor = ResumeAnchor(item.id, positionMs, SystemClock.elapsedRealtime())
+        } else {
+            resumeAnchor = null
+        }
         session.playback.setNowPlaying(item, positionMs)
         viewModelScope.launch {
             try {
                 session.play(uri, positionMs, gapless)
                 SidetrackDebug.log("viewModel.startRemote returned")
+                if (resuming) releaseResumeHold(item, positionMs)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1686,6 +1714,36 @@ class SpotifyViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * The audio is running at [positionMs] once the start call returns, so let the seek bar run
+     * from that offset instead of waiting for a player event. A reconnecting player can replay the
+     * previous generation's state — typically position 0 — which left the bar stuck, then watched
+     * it snap back to the start while the transport said it was playing.
+     */
+    private fun releaseResumeHold(item: SpotifyMediaItem, positionMs: Long) {
+        awaitingPlaybackStart = false
+        anchorPosition(positionMs)
+        _playbackPositionMs.value = positionMs
+        session?.playback?.updateState(true, positionMs)
+        _state.update { state ->
+            if (state.current?.id == item.id) state.copy(isPlaying = true) else state
+        }
+    }
+
+    /**
+     * True while a player event still describes the generation that was stopped: it reports a
+     * position well below the offset the user resumed from. Adopting it would move the bar back to
+     * the start even though the audio is playing further in.
+     */
+    private fun staleResumeEvent(eventPositionMs: Long): Boolean {
+        val anchor = resumeAnchor ?: return false
+        if (SystemClock.elapsedRealtime() - anchor.atMs > RESUME_GRACE_MS) {
+            resumeAnchor = null
+            return false
+        }
+        return eventPositionMs + RESUME_EVENT_SLACK_MS < anchor.positionMs
     }
 
     private fun playbackNotice(error: Exception): String = when ((error as? SpotifyGatewayException)?.failure) {

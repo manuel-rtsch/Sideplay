@@ -47,6 +47,11 @@ class SpotifySession(
     // Legacy file names kept so existing dev installs keep their queue and history.
     private val queueStore = appContext?.let { FileSpotifyQueueStore(File(it.filesDir, "sidetracks-queue.bin")) }
     private val historyStore = appContext?.let { FileSpotifyHistoryStore(File(it.filesDir, "sidetracks-history.bin")) }
+    private val positionStore = appContext?.let { FileSpotifyPositionStore(File(it.filesDir, "sidetracks-resume.bin")) }
+
+    /** Where the last session stopped: the item and the offset, so reopening resumes it. */
+    @Volatile var resumePoint: SpotifyResumePoint? = positionStore?.read()
+        private set
     private val _settings = MutableStateFlow(settingsStore?.read() ?: SpotifySettings())
     val settings: StateFlow<SpotifySettings> = _settings.asStateFlow()
 
@@ -75,6 +80,15 @@ class SpotifySession(
         load = { queueStore?.read() ?: SpotifyQueueRepository.Snapshot() },
         save = { queueStore?.write(it) }
     )
+
+    /**
+     * True between [haltPlayback] and the next start. The ViewModel polls native events on a
+     * background thread, so a "stopped" event arriving after the app-close path could otherwise
+     * clear the queue that path deliberately keeps.
+     */
+    @Volatile var halting = false
+        private set
+
     val history = SpotifyHistoryRepository(
         load = { historyStore?.read().orEmpty() },
         save = { historyStore?.write(it) }
@@ -111,6 +125,7 @@ class SpotifySession(
     }
 
     fun signOut() {
+        rememberPosition(clear = true)
         queue.stop()
         history.clear()
         playback.clearSleepTimer()
@@ -168,6 +183,7 @@ class SpotifySession(
     }
 
     suspend fun resume(): Boolean {
+        halting = false
         val rebuilt = connectForPlayback()
         // A rebuilt session starts from an empty native player. Reload the current item instead of
         // asking the player to resume a track it no longer has.
@@ -182,7 +198,10 @@ class SpotifySession(
 
     suspend fun seek(positionMs: Long) = playback.seek(positionMs)
 
-    fun pause() = playback.pause()
+    fun pause() {
+        rememberPosition()
+        playback.pause()
+    }
 
     suspend fun accessToken(): String? = auth.accessToken()
 
@@ -234,8 +253,35 @@ class SpotifySession(
     }
 
     fun stopPlayback() {
+        halting = false
+        rememberPosition(clear = true)
         queue.stop()
         playbackScope.launch { runCatching { playback.stop() } }
+    }
+
+    /**
+     * Writes the resume point: the current item and its offset. [clear] wipes it instead, for the
+     * paths that end playback on purpose (sign out, the notification's Stop action).
+     */
+    private fun rememberPosition(clear: Boolean = false) {
+        val point = if (clear) {
+            null
+        } else {
+            playback.current?.let { SpotifyResumePoint(it.id, playback.position.coerceAtLeast(0L)) }
+        }
+        positionStore?.write(point)
+        resumePoint = point
+    }
+
+    /**
+     * Halts the audio and keeps everything else. Closing Sidetrack has to silence the player, but
+     * the queue, the history and the selected track are persisted by [queue], so the next launch
+     * finds them again. [halting] tells a late "stopped" event not to clear that queue.
+     */
+    fun haltPlayback() {
+        halting = true
+        rememberPosition()
+        playbackScope.launch { runCatching { playback.stop(keepQueue = true) } }
     }
 
     /**
@@ -264,6 +310,7 @@ class SpotifySession(
     }
 
     private fun startFromTransport(item: SpotifyMediaItem) {
+        halting = false
         history.record(item, System.currentTimeMillis())
         playback.setNowPlaying(item, 0L)
         val uri = item.uri ?: return

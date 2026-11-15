@@ -3,9 +3,11 @@ package io.github.manuelrtsch.sidetrack
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.github.manuelrtsch.sidetrack.data.FileSpotifyHistoryStore
+import io.github.manuelrtsch.sidetrack.data.FileSpotifyPositionStore
 import io.github.manuelrtsch.sidetrack.data.FileSpotifyQueueStore
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
+import io.github.manuelrtsch.sidetrack.data.SpotifyResumePoint
 import java.io.File
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
@@ -71,6 +73,29 @@ class SpotifyPersistenceTest {
         val snapshot = FileSpotifyQueueStore(file).read()
 
         assertEquals(SpotifyQueueRepository.Snapshot(), snapshot)
+    }
+
+    @Test fun `resume point survives a restart with its offset`() {
+        val file = tempFile("resume")
+        FileSpotifyPositionStore(file).write(SpotifyResumePoint("b", 42_500L))
+
+        assertEquals(SpotifyResumePoint("b", 42_500L), FileSpotifyPositionStore(file).read())
+    }
+
+    @Test fun `a cleared resume point reads back as nothing`() {
+        val file = tempFile("resume-cleared")
+        val store = FileSpotifyPositionStore(file)
+        store.write(SpotifyResumePoint("b", 1_000L))
+        store.write(null)
+
+        assertEquals(null, FileSpotifyPositionStore(file).read())
+    }
+
+    @Test fun `a corrupt resume point falls back to the start`() {
+        val file = tempFile("resume-corrupt")
+        file.writeBytes(byteArrayOf(1, 2, 3, 4, 5))
+
+        assertEquals(null, FileSpotifyPositionStore(file).read())
     }
 
     private fun tempFile(name: String) = File(context.cacheDir, "sidetrack-$name-${System.nanoTime()}.bin").also { it.delete() }

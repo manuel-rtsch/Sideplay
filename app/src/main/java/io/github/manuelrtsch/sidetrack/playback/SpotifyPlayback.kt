@@ -414,7 +414,11 @@ class SpotifyPlayback(
         }
     }
 
-    suspend fun stop() {
+    /**
+     * Ends playback. [keepQueue] leaves the queue, the history and the selected track alone: the
+     * app closing has to silence the audio, but the next launch should still find what was playing.
+     */
+    suspend fun stop(keepQueue: Boolean = false) {
         clearSleepTimer()
         playing = false
         lastCommandWasPause = true
@@ -438,7 +442,7 @@ class SpotifyPlayback(
         current = null
         notificationArt = null
         artJob?.cancel()
-        onStopped?.invoke()
+        if (!keepQueue) onStopped?.invoke()
         publish()
     }
 

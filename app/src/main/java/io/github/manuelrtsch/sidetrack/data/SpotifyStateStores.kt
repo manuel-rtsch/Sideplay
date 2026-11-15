@@ -84,6 +84,61 @@ class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
     }
 }
 
+/**
+ * Where the last session left off: the item that was playing and the offset it had reached, so
+ * reopening Sidetrack can pick the same track up at the same second instead of starting at 0:00.
+ */
+data class SpotifyResumePoint(val trackId: String, val positionMs: Long)
+
+/** Persists the resume point. A missing or unreadable file simply means "start at the beginning". */
+interface SpotifyPositionStore {
+    fun read(): SpotifyResumePoint?
+    fun write(point: SpotifyResumePoint?)
+}
+
+class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
+    private val file = AtomicFile(file)
+
+    override fun read(): SpotifyResumePoint? {
+        val stream = try {
+            file.openRead()
+        } catch (_: IOException) {
+            return null
+        }
+        return try {
+            DataInputStream(BufferedInputStream(stream)).use { input ->
+                if (input.readInt() != MAGIC || input.readInt() != VERSION) return null
+                val id = input.readUTF()
+                val position = input.readLong()
+                if (id.isEmpty()) null else SpotifyResumePoint(id, position.coerceAtLeast(0L))
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    override fun write(point: SpotifyResumePoint?) {
+        val out = file.startWrite()
+        try {
+            val data = DataOutputStream(BufferedOutputStream(out))
+            data.writeInt(MAGIC)
+            data.writeInt(VERSION)
+            data.writeUTF(point?.trackId.orEmpty())
+            data.writeLong(point?.positionMs ?: 0L)
+            data.flush()
+            file.finishWrite(out)
+        } catch (e: Exception) {
+            file.failWrite(out)
+            throw e
+        }
+    }
+
+    private companion object {
+        const val MAGIC = 0x534B5452 // "SKTR"
+        const val VERSION = 1
+    }
+}
+
 class FileSpotifyHistoryStore(file: File) : SpotifyHistoryStore {
     private val file = AtomicFile(file)
 

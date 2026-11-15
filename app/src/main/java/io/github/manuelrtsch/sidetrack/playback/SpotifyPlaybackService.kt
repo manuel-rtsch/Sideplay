@@ -57,6 +57,17 @@ class SpotifyPlaybackService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * Closing the app halts the audio: the window is gone, so nothing should keep playing behind
+     * the launcher. Only the sound goes away, though — the queue, the history and the selected
+     * track stay saved, so reopening Sidetrack restores them. Merely leaving the app in the
+     * background is not a close, so the notification keeps playing there.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        SpotifySessions.get(this).haltPlayback()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         if (running === this) running = null
         super.onDestroy()
