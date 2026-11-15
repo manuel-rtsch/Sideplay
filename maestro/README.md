@@ -127,3 +127,13 @@ The planned four-flow suite, coverage map, fixture requirements, and implementat
 - `flows/demo/queue-history-management.yaml` — queues two recent tracks, removes and undoes a queue item, toggles Autoplay, and cancels Clear history.
 - `flows/demo/hero-play-search-queue.yaml` — Now Playing, Queue, keypad search, and playback.
 - `flows/utility/record-prepare.yaml` — recording setup only: clear history, then start a song.
+
+## Promo videos
+
+The recordings are also composited into the Sidephone promo videos in `design/promo/` (4:9 panels
+and a 4-up 16:9 grid). Decoding, geometry, crop values and the ffmpeg commands are documented in
+[`PROMO-VIDEO.md`](PROMO-VIDEO.md); rebuild with `design/promo/build-videos.sh`.
+
+Flow length and per-command timing are analysed in [`PIPELINE.md`](PIPELINE.md): where the ~2 s per
+tap and ~7 s per unmet `runFlow when` guard come from, and the changes proposed to bring every
+recording under 45 s. That document is analysis only — nothing in it is implemented yet.
