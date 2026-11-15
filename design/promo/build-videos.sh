@@ -19,7 +19,7 @@ C_W=432 C_H=972 C_X=284 C_Y=14
 # then hand off to NVENC. x264 here is ~100x slower for the same visual result.
 REC=(01-browse-play 02-search-library-writes 03-queue-transport 04-history-settings)
 # Every panel is padded to the same length so the four-up grid ends together.
-CLIP_SECONDS=45
+CLIP_SECONDS=40
 NVENC=(-c:v h264_nvenc -preset p6 -tune hq -rc vbr -cq 19 -b:v 0 -pix_fmt yuv420p -r 30 -movflags +faststart)
 
 command -v ffmpeg >/dev/null || { echo "ffmpeg not found" >&2; exit 1; }
@@ -81,5 +81,15 @@ ffmpeg -y -hide_banner -loglevel error -loop 1 -framerate 30 -i "$FLAT" \
 [c1][c2][c3][c4]hstack=inputs=4,format=yuv420p[v]" \
   -map "[v]" -an "${NVENC[@]}" -maxrate 60M -t "$CLIP_SECONDS" "$OUT/sideplay-suite-16x9.mp4"
 
+# Full-HD master. The grid is 1728x972 (four 4:9 panels), so 1920x1080 is a 1.11x
+# upscale of an already composited frame: one lanczos pass on the finished grid, and
+# the panel seams stay put because both sizes are exactly 16:9.
+HD_W=1920
+HD_H=1080
+echo "== 1080p master"
+ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" \
+  -vf "scale=${HD_W}:${HD_H}:flags=lanczos+accurate_rnd,setsar=1,format=yuv420p" \
+  -map 0:v -an "${NVENC[@]}" -maxrate 60M -t "$CLIP_SECONDS" "$OUT/sideplay-suite-1920x1080.mp4"
+
 echo "== done"
-ls -lh "$PANELS"/*.mp4 "$OUT/sideplay-suite-16x9.mp4"
+ls -lh "$PANELS"/*.mp4 "$OUT/sideplay-suite-16x9.mp4" "$OUT/sideplay-suite-1920x1080.mp4"
