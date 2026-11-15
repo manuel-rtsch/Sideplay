@@ -35,15 +35,15 @@ size with the compact layout enabled, not hand-taken photos.
 
 | Home | Search | Artist |
 | --- | --- | --- |
-| ![Home](app/screenshots/sideplay_home.png) | ![Search](app/screenshots/sideplay_search.png) | ![Artist](app/screenshots/sideplay_artist.png) |
+| ![Home](app/screenshots/sidetrack_home.png) | ![Search](app/screenshots/sidetrack_search.png) | ![Artist](app/screenshots/sidetrack_artist.png) |
 
 | Album | Now Playing | Queue |
 | --- | --- | --- |
-| ![Album](app/screenshots/sideplay_album.png) | ![Now Playing](app/screenshots/sideplay_now_playing.png) | ![Queue](app/screenshots/sideplay_queue.png) |
+| ![Album](app/screenshots/sidetrack_album.png) | ![Now Playing](app/screenshots/sidetrack_now_playing.png) | ![Queue](app/screenshots/sidetrack_queue.png) |
 
 | Library | Settings | Sign in |
 | --- | --- | --- |
-| ![Library](app/screenshots/sideplay_library.png) | ![Settings](app/screenshots/sideplay_settings.png) | ![Sign in](app/screenshots/sideplay_sign_in.png) |
+| ![Library](app/screenshots/sidetrack_library.png) | ![Settings](app/screenshots/sidetrack_settings.png) | ![Sign in](app/screenshots/sidetrack_sign_in.png) |
 
 ## Getting started
 
@@ -72,7 +72,7 @@ Android NDK and a Rust toolchain.
 ./gradlew :app:assembleProfile
 
 # Include the native Spotify playback library (required for a device/release build)
-./gradlew :app:assembleProfile -PsideplayNative=true
+./gradlew :app:assembleProfile -PsidetrackNative=true
 
 # Promo recordings: a fixed, fictional catalog instead of the account's library
 ./gradlew :app:assembleDemo
@@ -86,17 +86,17 @@ the same application id and signing as release so it can replace the installed a
 
 ```sh
 # A demo build that installs next to release instead of replacing it
-./gradlew :app:assembleDemo -PsideplayNative=true -PsideplayStandaloneDemo=true
+./gradlew :app:assembleDemo -PsidetrackNative=true -PsidetrackStandaloneDemo=true
 ```
 
-`-PsideplayStandaloneDemo=true` gives the demo build the application id `…sideplay.demo`, the
-label **Sidetrack Demo**, its own Sidekit app id (`sideplay-demo`, so the host shows a second tile
-with its own settings) and its own sign-in link (`sideplay-demo://auth`). It is still signed with
+`-PsidetrackStandaloneDemo=true` gives the demo build the application id `…sidetrack.demo`, the
+label **Sidetrack Demo**, its own Sidekit app id (`sidetrack-demo`, so the host shows a second tile
+with its own settings) and its own sign-in link (`sidetrack-demo://auth`). It is still signed with
 the release key, so Sidekit trusts it and librespot playback works as usual. Its sandbox, queue,
 history and credentials are separate from the release app. The Maestro flows keep targeting the
 production application id, so leave the flag off when recording or running them.
 
-The native library is what makes library and search work. Without `-PsideplayNative=true`,
+The native library is what makes library and search work. Without `-PsidetrackNative=true`,
 Sidetrack falls back to the public Spotify Web API, which currently rejects Spotify's desktop
 client ID with HTTP 429. The UI then looks empty: no library, no search results. Release and
 device builds must include the native bridge.
@@ -111,6 +111,10 @@ keyAlias=sideplay
 keyPassword=…
 ```
 
+The file name and alias still say `sideplay` on purpose: the certificate is the identity Sidekit
+trusts — its digest is in Sidekit's `trusted_apps.xml` — so the signing material keeps the name it
+was created with. Only the app's identifiers were renamed.
+
 Without that file, `assembleRelease` produces an unsigned APK so CI can sign it separately. The
 release certificate digest is listed in Sidekit's `trusted_apps.xml`, which lets Sidetrack read the
 host case colour. Never add a debug certificate there.
@@ -118,13 +122,13 @@ host case colour. Never add a debug certificate there.
 Sidetrack builds against the published `1.5.1` Sidekit SDK from GitHub Pages. When a sibling
 `../Sidekit` checkout exists, Gradle substitutes it as a composite build so local Sidekit work can
 be tried without publishing; CI and clones without that checkout use the published SDK. Pass
-`-PsideplayLocalSidekit=false` to force the published SDK.
+`-PsidetrackLocalSidekit=false` to force the published SDK.
 
 The `profile` build is signed with the local debug key and is meant for trying Sidetrack on a real
 device. The `dev` build installs alongside the normal app as
-`io.github.manuelrtsch.sideplay.dev`.
+`io.github.manuelrtsch.sidetrack.dev`.
 
-More technical notes live in [docs/SIDEPLAY.md](docs/SIDEPLAY.md).
+More technical notes live in [docs/SIDETRACK.md](docs/SIDETRACK.md).
 
 ## License
 

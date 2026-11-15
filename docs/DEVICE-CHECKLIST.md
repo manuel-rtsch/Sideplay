@@ -1,17 +1,17 @@
-# Sideplay device checklist
+# Sidetrack device checklist
 
 Run this on a physical Sidephone before tagging a release. Record the build, device, and result.
 Items marked **manual** need a second Spotify client, a waiting period, or hardware that cannot be
 driven from `adb`.
 
 **Device:** `SP01GE260600886` (480 × 640, Android 12)  
-**Last run:** 2026-11-11, Sideplay 0.1.1 (`versionCode=8`)
+**Last run:** 2026-11-11, Sidetrack 0.1.1 (`versionCode=8`)
 
 ## Install and shell
 
 - [x] Install the profile APK over the previous build.
-- [x] Launch `SideplayActivity`; the app resumes without a crash.
-- [x] **Manual:** with Sidekit installed, confirm Sideplay follows the host theme and keypad.
+- [x] Launch `SidetrackActivity`; the app resumes without a crash.
+- [x] **Manual:** with Sidekit installed, confirm Sidetrack follows the host theme and keypad.
 - [x] **Manual:** repeat with Sidekit absent and confirm the standalone Appearance screen.
 
 ## Account and catalog
@@ -46,17 +46,17 @@ driven from `adb`.
       of the queue with the focus on the now-playing row.
 - [x] The notification shows artwork, title, artist, and previous/play-pause/next.
 - [x] The media session reports the current item and playing state.
-- [ ] **Manual:** tapping the notification opens Sideplay at Now Playing.
+- [ ] **Manual:** tapping the notification opens Sidetrack at Now Playing.
 - [ ] **Manual:** lock the screen and confirm transport controls still work.
 - [ ] **Manual:** unplug headphones and confirm playback pauses.
-- [ ] **Manual:** start playback in another media app and confirm Sideplay releases audio focus.
+- [ ] **Manual:** start playback in another media app and confirm Sidetrack releases audio focus.
 
 ## Keypad
 
 - [ ] **Manual:** T9 typing and suggestions.
 - [ ] **Manual:** mini QWERTY navigation with T / D / B / J, Enter, Back, and Options.
-- [ ] **Manual:** switch T9 → mini QWERTY while Sideplay is backgrounded, return, and confirm the
-      navigation cross is active without restarting Sideplay.
+- [ ] **Manual:** switch T9 → mini QWERTY while Sidetrack is backgrounded, return, and confirm the
+      navigation cross is active without restarting Sidetrack.
 - [ ] **Manual:** Sundial and game-controller modules.
 
 ## Lists and focus

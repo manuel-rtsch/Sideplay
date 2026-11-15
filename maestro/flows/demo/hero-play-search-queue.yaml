@@ -1,4 +1,4 @@
-appId: io.github.manuelrtsch.sideplay
+appId: io.github.manuelrtsch.sidetrack
 name: Hero - Play, Queue, Search
 ---
 # record.sh prepares playback first; do not stop the app or the background song would end.

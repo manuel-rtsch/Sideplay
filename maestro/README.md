@@ -29,7 +29,7 @@ per-flow timing report:
 ```sh
 ./run-suite.sh
 FLOW_MAX_SECONDS=45 ./run-suite.sh   # fail when a flow exceeds the limit
-SIDEPLAY_ACCENTS="Lime Orange Blue Pink" ./run-suite.sh   # override the rotation
+SIDETRACK_ACCENTS="Lime Orange Blue Pink" ./run-suite.sh   # override the rotation
 ```
 
 The flows run in `config.yaml` order. Suite artifacts (`commands.json`, logs, screenshots) are
@@ -68,7 +68,7 @@ past the clip.
 
 ### Working on the emulator
 
-`SIDEPLAY_DEVICE=emulator-5554 ./record.sh …` records against an emulator, which is enough to
+`SIDETRACK_DEVICE=emulator-5554 ./record.sh …` records against an emulator, which is enough to
 iterate on flows that do not type: the device is 480×640 like the Sidephone, so the layouts match.
 Two caveats:
 
@@ -77,12 +77,12 @@ Two caveats:
   40 s clip — the promo flows are now paced for the emulator, so a phone take of 02 or 03 would
   overrun it.
 - **Hide the soft keyboard.** `record.sh` sets `show_ime_with_hard_keyboard=0` for the take and
-  restores it afterwards (`SIDEPLAY_KEEP_IME=1` opts out). With the IME hidden the app falls back to
+  restores it afterwards (`SIDETRACK_KEEP_IME=1` opts out). With the IME hidden the app falls back to
   its own Abc/Done bar and the T9 digits work exactly as on the sidephone; with it visible the
   keyboard is drawn in the video and the query is typed as text instead.
 - **The accent comes from Sidetrack itself.** The emulator has only the Sidekit SDK sample, not the
   host, so `record.sh` picks `flows/utility/set-accent-standalone.yaml` (Settings → Appearance)
-  instead of the host flow. It detects this by looking for the host package; `SIDEPLAY_ACCENT_FLOW`
+  instead of the host flow. It detects this by looking for the host package; `SIDETRACK_ACCENT_FLOW`
   overrides the choice.
 - **Takes are shorter than on the phone** (see the ratio above), so a phone re-record would overrun
   the clip instead of underrunning it. The emulator takes now fill the 40 s panel to within 1–5 s.
@@ -101,16 +101,16 @@ invented pack instead. See `CONTENT-FIXTURE.md` for what the pack contains and w
 ./gradlew :app:assembleDemo
 adb install -r app/build/outputs/apk/demo/app-demo.apk   # replaces the release app
 # Sign in once if the stored credentials are gone; then, per take:
-SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
-SIDEPLAY_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
-SIDEPLAY_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
-SIDEPLAY_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
+SIDETRACK_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
+SIDETRACK_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
+SIDETRACK_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
+SIDETRACK_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
 ```
 
 Every take needs its own cold launch: the demo build rewrites history and the queue at process
 start, which is what makes each video start from the same rows. `record.sh` detects the `-demo`
 version name and runs `flows/utility/record-prepare-demo.yaml` instead of the account prep, so
-never set `SIDEPLAY_SKIP_PREPARE=1` here. That also means flow `02`'s follow/save writes never
+never set `SIDETRACK_SKIP_PREPARE=1` here. That also means flow `02`'s follow/save writes never
 reach the account.
 
 To go back to the real account, reinstall the release APK.
@@ -121,16 +121,16 @@ The flows still work against a real account, which is useful when the demo build
 installed. Seed the profile first (see `CONTENT-FIXTURE.md` §6), then:
 
 ```sh
-SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
+SIDETRACK_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
 # Keep the history from flow 01 for the later history recording.
-SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
+SIDETRACK_SKIP_PREPARE=1 SIDETRACK_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
 # Seed first: play several distinct tracks so history reaches six entries and a
 # track (not the episode from 02) is current. See CONTENT-FIXTURE.md §6.
-SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
-SIDEPLAY_SKIP_PREPARE=1 SIDEPLAY_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
+SIDETRACK_SKIP_PREPARE=1 SIDETRACK_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
+SIDETRACK_SKIP_PREPARE=1 SIDETRACK_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
 ```
 
-`SIDEPLAY_ACCENT` runs `flows/utility/set-accent.yaml` before the prep and the recording, so the
+`SIDETRACK_ACCENT` runs `flows/utility/set-accent.yaml` before the prep and the recording, so the
 video picks up Sidekit's host-backed case colour. The checked-in set uses Lime, Orange, Blue, and
 Pink in flow order. Assemble the four panels and the combined 16:9 grid with
 `design/promo/build-videos.sh`.
@@ -145,14 +145,14 @@ starts when the flow's `launchApp` command completes (`Launch app ... COMPLETED`
 log), so Maestro's JVM startup is not in the video and the marker does not depend on the flow's
 first action or first assertion.
 
-To keep the device's animations on, set `SIDEPLAY_KEEP_ANIMATIONS=1`:
+To keep the device's animations on, set `SIDETRACK_KEEP_ANIMATIONS=1`:
 
 ```sh
-SIDEPLAY_KEEP_ANIMATIONS=1 ./record.sh flows/promo/01-browse-play.yaml
+SIDETRACK_KEEP_ANIMATIONS=1 ./record.sh flows/promo/01-browse-play.yaml
 ```
 
 For demo and promo flows that should start from a clean history in account mode, omit
-`SIDEPLAY_SKIP_PREPARE`. Then `record.sh` runs `flows/utility/record-prepare.yaml`, which launches
+`SIDETRACK_SKIP_PREPARE`. Then `record.sh` runs `flows/utility/record-prepare.yaml`, which launches
 Sidetrack, clears **Recently played**, starts **Africa** by TOTO, leaves the keypad in Abc mode, and
 returns Home with the song playing:
 
@@ -163,9 +163,9 @@ returns Home with the song playing:
 Do not use that prep for suite recordings: flow 4 needs enough existing history to show
 **See more history**.
 
-`record.sh` picks the first online device; set `SIDEPLAY_DEVICE=<serial>` to choose one
+`record.sh` picks the first online device; set `SIDETRACK_DEVICE=<serial>` to choose one
 explicitly. The recording begins when the flow reaches `Launch app ... COMPLETED`. Override that
-marker with `SIDEPLAY_RECORD_START_MARKER` (matched as an extended regex).
+marker with `SIDETRACK_RECORD_START_MARKER` (matched as an extended regex).
 
 `maestro record --local` also works, but is currently very slow (several minutes for a
 ~1 minute flow) and leaves an unplayable file if interrupted. Prefer `record.sh`.

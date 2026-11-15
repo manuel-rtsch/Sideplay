@@ -134,7 +134,7 @@ ffmpeg -loop 1 -framerate 30 -i "$flat" \
   -map "[v]" -an \
   -c:v h264_nvenc -preset p6 -tune hq -rc vbr -cq 19 -b:v 0 -maxrate 60M \
   -pix_fmt yuv420p -r 30 -movflags +faststart \
-  design/promo/sideplay-suite-16x9.mp4
+  design/promo/sidetrack-suite-16x9.mp4
 ```
 
 The four recordings have different lengths (36.0 s, 38.8 s, 39.7 s, 39.1 s), so every panel is
@@ -145,15 +145,15 @@ for tens of seconds, and nothing restarts mid-take.
 ## 6. Gallery GIF
 
 Reddit's gallery takes a GIF but re-encodes video, so the 16:9 grid is sampled straight from the
-already composited `sideplay-suite-16x9.mp4` rather than from the four recordings again. The step
+already composited `sidetrack-suite-16x9.mp4` rather than from the four recordings again. The step
 lives at the end of `build-videos.sh`, so the GIF is regenerated with everything else:
 
 ```sh
-ffmpeg -i design/promo/sideplay-suite-16x9.mp4 \
+ffmpeg -i design/promo/sidetrack-suite-16x9.mp4 \
   -vf "fps=15,palettegen=max_colors=256:stats_mode=diff" /tmp/palette.png
-ffmpeg -i design/promo/sideplay-suite-16x9.mp4 -i /tmp/palette.png \
+ffmpeg -i design/promo/sidetrack-suite-16x9.mp4 -i /tmp/palette.png \
   -lavfi "fps=15,paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
-  -loop 0 design/promo/sideplay-suite-16x9.gif
+  -loop 0 design/promo/sidetrack-suite-16x9.gif
 ```
 
 - **15 fps** is the smallest rate at which focus rings and the seek row still read as motion;
@@ -172,8 +172,8 @@ dark surfaces. `stats_mode=diff` spends the table on what changes between frames
 | --- | --- |
 | `design/promo/sidephone.png` | 1000×1000 RGBA still, decoded from the AVIF |
 | `design/promo/4x9/01…04-*.mp4` | 432×972 4:9 panels, 30 fps, 40 s each |
-| `design/promo/sideplay-suite-16x9.mp4` | 1728×972 16:9 grid, 30 fps, 40 s |
-| `design/promo/sideplay-suite-1920x1080.mp4` | 1920×1080 lanczos upscale of the grid, 30 fps, 40 s |
-| `design/promo/sideplay-suite-16x9.gif` | 1728×972, 15 fps, 40 s palette GIF |
+| `design/promo/sidetrack-suite-16x9.mp4` | 1728×972 16:9 grid, 30 fps, 40 s |
+| `design/promo/sidetrack-suite-1920x1080.mp4` | 1920×1080 lanczos upscale of the grid, 30 fps, 40 s |
+| `design/promo/sidetrack-suite-16x9.gif` | 1728×972, 15 fps, 40 s palette GIF |
 
 All encodes are H.264 High, `yuv420p`, `+faststart`, CRF/cq 19 — web-safe and quick to scrub.

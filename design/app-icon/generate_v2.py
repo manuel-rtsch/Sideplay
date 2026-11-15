@@ -96,11 +96,11 @@ R512 = 512 * (62/108) / 2
 # 108 adaptive foreground: 62dp record inside the 66dp safe zone.
 R108 = 31.0
 
-(OUT / "sideplay-icon-v2.svg").write_text(color_svg(512, R512, play=False, background=True))
-(OUT / "sideplay-icon-v2-play.svg").write_text(color_svg(512, R512, play=True, background=True))
-(OUT / "sideplay-foreground-v2.svg").write_text(color_svg(108, R108, play=False, background=False))
-(OUT / "sideplay-foreground-v2-play.svg").write_text(color_svg(108, R108, play=True, background=False))
-(OUT / "sideplay-monochrome-v2.svg").write_text(mono_svg(108, R108, play=False))
-(OUT / "sideplay-monochrome-v2-play.svg").write_text(mono_svg(108, R108, play=True))
+(OUT / "sidetrack-icon-v2.svg").write_text(color_svg(512, R512, play=False, background=True))
+(OUT / "sidetrack-icon-v2-play.svg").write_text(color_svg(512, R512, play=True, background=True))
+(OUT / "sidetrack-foreground-v2.svg").write_text(color_svg(108, R108, play=False, background=False))
+(OUT / "sidetrack-foreground-v2-play.svg").write_text(color_svg(108, R108, play=True, background=False))
+(OUT / "sidetrack-monochrome-v2.svg").write_text(mono_svg(108, R108, play=False))
+(OUT / "sidetrack-monochrome-v2-play.svg").write_text(mono_svg(108, R108, play=True))
 
 print("R512", R512, "R108", R108)

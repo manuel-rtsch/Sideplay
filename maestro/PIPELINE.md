@@ -84,7 +84,7 @@ So the flows are not slow because of what they *do*: they are slow because Maest
    (driver reinstall is 5–10 s per invocation), and `--test-output-dir` so `commands.json` is kept.
    Then gate the build on flow length — it is a ten-line check over the timestamps above.
 8. **`record.sh` start marker is brittle**: it greps for the literal
-   `Assert that "Sideplay" is visible... COMPLETED`. Remove that assert and the recording only starts
+   `Assert that "Sidetrack" is visible... COMPLETED`. Remove that assert and the recording only starts
    after the 30 s timeout, capturing the whole flow. Match the first real action instead
    (`Tap on "…" RUNNING`), or keep a deliberate first assert as the marker.
 
@@ -196,7 +196,7 @@ wrong for VFR screen recordings: the last frame can carry ~1.4 s of display dura
 does not count.
 
 Recording promos 03 and 04 requires history. The default prep clears it, so seed a few distinct
-plays first and record those two with `SIDEPLAY_SKIP_PREPARE=1`.
+plays first and record those two with `SIDETRACK_SKIP_PREPARE=1`.
 
 ## 2026-11-15 — the demo build replaces seeded account state
 
@@ -207,7 +207,7 @@ longer describe the current recipes:
   take can begin with an episode current and episodes have no Save/Seek. That is also what makes
   the promo 03 safe after 02 on the same device.
 - **Promos no longer need seeding.** The demo pack rewrites history (9 entries) and the queue at
-  every process start, and `record-prepare-demo.yaml` is a cold launch. `SIDEPLAY_SKIP_PREPARE=1`
+  every process start, and `record-prepare-demo.yaml` is a cold launch. `SIDETRACK_SKIP_PREPARE=1`
   must not be used with it.
 - **02 pays for the keypad probe again** (~2 s when the mode is already `Abc`). It was skipped
   only because the account prep left `Abc` behind; the demo prep does not touch the keypad.
@@ -222,7 +222,7 @@ The four takes in `recordings/` were re-recorded against the demo build with the
   generated art, so a green/teal spiral on an episode is expected, not a regression.
 - **New lengths**: 29.9 s, 37.6 s, 43.4 s, 45.4 s (last presented frame). The fourth take lands
   0.1 s past `CLIP_SECONDS=45`, which trims part of an already frozen final frame — cosmetic only.
-  `design/promo/build-videos.sh` rebuilt the four 4:9 panels and `sideplay-suite-16x9.mp4`.
+  `design/promo/build-videos.sh` rebuilt the four 4:9 panels and `sidetrack-suite-16x9.mp4`.
 
 ## 2026-11-15 — promo 01 rewritten, 01 and 02 split by story
 
@@ -244,10 +244,10 @@ The sidephone was uninstalled and disconnected, so the four takes were re-record
 `emulator-5554` (480×640, same layout). Two harness changes made that possible:
 
 - `record.sh` hides the soft keyboard for the take (`show_ime_with_hard_keyboard=0`, restored on
-  exit, `SIDEPLAY_KEEP_IME=1` to opt out). Without it the emulator draws Gboard over the search
+  exit, `SIDETRACK_KEEP_IME=1` to opt out). Without it the emulator draws Gboard over the search
   screen and `inputText` types text instead of T9 key events.
 - `record.sh` picks the accent flow by host presence: `set-accent.yaml` with Sidekit installed,
-  the new `set-accent-standalone.yaml` (Settings → Appearance) without it. `SIDEPLAY_ACCENT_FLOW`
+  the new `set-accent-standalone.yaml` (Settings → Appearance) without it. `SIDETRACK_ACCENT_FLOW`
   still overrides.
 - Promo 02's query entry is now device-agnostic: digits first, and if the system IME is still up
   (a "Space" key in the hierarchy) the digits are replaced by the word and Back closes the IME.
@@ -281,7 +281,7 @@ Three things worth keeping in mind:
 
 Panels now pad by 4.6 s, 2.1 s, 1.2 s and 1.7 s; the grid is exactly 40.000 s.
 
-`build-videos.sh` also emits a **1920×1080 master** (`sideplay-suite-1920x1080.mp4`) next to the
+`build-videos.sh` also emits a **1920×1080 master** (`sidetrack-suite-1920x1080.mp4`) next to the
 1728×972 grid. Both are exactly 16:9, so the master is one lanczos pass over the finished grid and
 the panel seams do not move; the phone render is native 373×863, so nothing is gained by rendering
 the grid larger than this.

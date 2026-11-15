@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild the Sideplay promo videos from the static phone render + Maestro recordings.
+# Rebuild the Sidetrack promo videos from the static phone render + Maestro recordings.
 # See maestro/PROMO-VIDEO.md for the reasoning behind every number here.
 set -euo pipefail
 
@@ -79,7 +79,7 @@ ffmpeg -y -hide_banner -loglevel error -loop 1 -framerate 30 -i "$FLAT" \
 [b2][f3]overlay=${OV_X}:${OV_Y}:shortest=1,crop=${C_W}:${C_H}:${C_X}:${C_Y},fps=30,format=yuv420p[c3];\
 [b3][f4]overlay=${OV_X}:${OV_Y}:shortest=1,crop=${C_W}:${C_H}:${C_X}:${C_Y},fps=30,format=yuv420p[c4];\
 [c1][c2][c3][c4]hstack=inputs=4,format=yuv420p[v]" \
-  -map "[v]" -an "${NVENC[@]}" -maxrate 60M -t "$CLIP_SECONDS" "$OUT/sideplay-suite-16x9.mp4"
+  -map "[v]" -an "${NVENC[@]}" -maxrate 60M -t "$CLIP_SECONDS" "$OUT/sidetrack-suite-16x9.mp4"
 
 # Full-HD master. The grid is 1728x972 (four 4:9 panels), so 1920x1080 is a 1.11x
 # upscale of an already composited frame: one lanczos pass on the finished grid, and
@@ -87,9 +87,9 @@ ffmpeg -y -hide_banner -loglevel error -loop 1 -framerate 30 -i "$FLAT" \
 HD_W=1920
 HD_H=1080
 echo "== 1080p master"
-ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" \
+ffmpeg -y -hide_banner -loglevel error -i "$OUT/sidetrack-suite-16x9.mp4" \
   -vf "scale=${HD_W}:${HD_H}:flags=lanczos+accurate_rnd,setsar=1,format=yuv420p" \
-  -map 0:v -an "${NVENC[@]}" -maxrate 60M -t "$CLIP_SECONDS" "$OUT/sideplay-suite-1920x1080.mp4"
+  -map 0:v -an "${NVENC[@]}" -maxrate 60M -t "$CLIP_SECONDS" "$OUT/sidetrack-suite-1920x1080.mp4"
 
 # Gallery GIF. Reddit's gallery takes an animated GIF but re-encodes video, so the
 # 16:9 grid is sampled straight from the already composited master instead of from
@@ -100,19 +100,19 @@ ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" \
 GIF_FPS=15
 echo "== gallery gif"
 PALETTE="$(mktemp -d)/palette.png"
-ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" \
+ffmpeg -y -hide_banner -loglevel error -i "$OUT/sidetrack-suite-16x9.mp4" \
   -vf "fps=${GIF_FPS},palettegen=max_colors=256:stats_mode=diff" "$PALETTE"
-ffmpeg -y -hide_banner -loglevel error -i "$OUT/sideplay-suite-16x9.mp4" -i "$PALETTE" \
+ffmpeg -y -hide_banner -loglevel error -i "$OUT/sidetrack-suite-16x9.mp4" -i "$PALETTE" \
   -lavfi "fps=${GIF_FPS},paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
-  -loop 0 "$OUT/sideplay-suite-16x9.gif"
+  -loop 0 "$OUT/sidetrack-suite-16x9.gif"
 
 # Banding check: one mid-GIF frame (20 s in, a dark flat surface, where a thin
 # palette shows up first). Written outside the repo; open it to review.
-BAND_FRAME="$(mktemp -d)/sideplay-suite-16x9-band-check.png"
-ffmpeg -y -hide_banner -loglevel error -ss 20 -i "$OUT/sideplay-suite-16x9.gif" \
+BAND_FRAME="$(mktemp -d)/sidetrack-suite-16x9-band-check.png"
+ffmpeg -y -hide_banner -loglevel error -ss 20 -i "$OUT/sidetrack-suite-16x9.gif" \
   -frames:v 1 "$BAND_FRAME"
 
 echo "== done"
-ls -lh "$PANELS"/*.mp4 "$OUT/sideplay-suite-16x9.mp4" "$OUT/sideplay-suite-1920x1080.mp4" \
-  "$OUT/sideplay-suite-16x9.gif"
+ls -lh "$PANELS"/*.mp4 "$OUT/sidetrack-suite-16x9.mp4" "$OUT/sidetrack-suite-1920x1080.mp4" \
+  "$OUT/sidetrack-suite-16x9.gif"
 echo "banding check frame: $BAND_FRAME"

@@ -1,4 +1,4 @@
-appId: io.github.manuelrtsch.sideplay
+appId: io.github.manuelrtsch.sidetrack
 name: Prepare recording (demo build)
 ---
 # The demo build rewrites Recently played and the queue at every process start, so a

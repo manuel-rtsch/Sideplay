@@ -3,7 +3,7 @@
 # and report per-flow length.
 #
 # The flows run in config.yaml order. Before each one, set-accent.yaml changes
-# Sidekit's host-backed case colour and restarts Sideplay so the flow records with
+# Sidekit's host-backed case colour and restarts Sidetrack so the flow records with
 # that accent. The accent steps write to a separate directory, so the timing
 # report only sees the suite flows.
 #
@@ -15,7 +15,7 @@
 #   ./run-suite.sh                       # run + report
 #   FLOW_MAX_SECONDS=45 ./run-suite.sh   # also fail if a flow is longer
 #   MAESTRO_OUT_DIR=/tmp/run ./run-suite.sh
-#   SIDEPLAY_ACCENTS="Lime Orange Blue Pink" ./run-suite.sh
+#   SIDETRACK_ACCENTS="Lime Orange Blue Pink" ./run-suite.sh
 #
 # Extra arguments are passed to each `maestro test` flow invocation, e.g.
 # `-e FOO=bar` or `--include-tags nightly`.
@@ -27,7 +27,7 @@ OUT="${MAESTRO_OUT_DIR:-build/maestro-suite}"
 ACCENT_OUT="${MAESTRO_ACCENT_OUT_DIR:-build/maestro-accent}"
 MAX_SECONDS="${FLOW_MAX_SECONDS:-}"
 # The order used when the accent rotation was verified on device.
-read -r -a ACCENTS <<< "${SIDEPLAY_ACCENTS:-Lime Orange Blue Pink}"
+read -r -a ACCENTS <<< "${SIDETRACK_ACCENTS:-Lime Orange Blue Pink}"
 mapfile -t FLOWS < <(sed -n 's/^[[:space:]]*-[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' config.yaml)
 ANIMATION_KEYS=(window_animation_scale transition_animation_scale animator_duration_scale)
 ANIMATION_VALUES=()
@@ -37,7 +37,7 @@ export PATH="$PATH:$HOME/.maestro/bin"
 export MAESTRO_CLI_NO_ANALYTICS=1
 export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
 
-DEVICE="${SIDEPLAY_DEVICE:-}"
+DEVICE="${SIDETRACK_DEVICE:-}"
 if [[ -z "$DEVICE" ]]; then
     DEVICE="$(adb devices | awk '$2 == "device" { print $1; exit }')"
 fi
@@ -63,7 +63,7 @@ restore_animations() {
 }
 trap restore_animations EXIT
 
-if [[ "${SIDEPLAY_KEEP_ANIMATIONS:-0}" != "1" ]]; then
+if [[ "${SIDETRACK_KEEP_ANIMATIONS:-0}" != "1" ]]; then
     for key in "${ANIMATION_KEYS[@]}"; do
         ANIMATION_VALUES+=("$("${ADB[@]}" shell settings get global "$key" | tr -d '\r')")
         "${ADB[@]}" shell settings put global "$key" 0
@@ -76,7 +76,7 @@ if (( ${#FLOWS[@]} == 0 )); then
     exit 1
 fi
 if (( ${#ACCENTS[@]} == 0 )); then
-    echo "SIDEPLAY_ACCENTS is empty." >&2
+    echo "SIDETRACK_ACCENTS is empty." >&2
     exit 1
 fi
 

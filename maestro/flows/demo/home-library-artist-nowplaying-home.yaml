@@ -1,4 +1,4 @@
-appId: io.github.manuelrtsch.sideplay
+appId: io.github.manuelrtsch.sidetrack
 name: Home -> Library -> Artist -> Now Playing -> Home
 ---
 # No artist or track names are hardcoded. This assumes the account has at least two

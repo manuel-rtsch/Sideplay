@@ -8,11 +8,11 @@
 # Before recording, `flows/utility/record-prepare.yaml` clears the Recently played
 # history and starts a song so it is already playing in the background. The
 # recording itself starts once the flow's launchApp command completes, so the MP4
-# does not begin with Maestro's JVM startup time. Set SIDEPLAY_SKIP_PREPARE=1 to record
+# does not begin with Maestro's JVM startup time. Set SIDETRACK_SKIP_PREPARE=1 to record
 # the flow as-is instead.
 #
-# Set SIDEPLAY_ACCENT to change Sidekit's host-backed case colour before recording:
-#   SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml
+# Set SIDETRACK_ACCENT to change Sidekit's host-backed case colour before recording:
+#   SIDETRACK_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml
 #
 # Usage: ./record.sh [flow] [output]
 set -euo pipefail
@@ -21,16 +21,16 @@ cd "$(dirname "$0")"
 
 FLOW="${1:-flows/demo/hero-play-search-queue.yaml}"
 OUT="${2:-recordings/hero-play-search-queue.mp4}"
-PREP_FLOW="${SIDEPLAY_PREP_FLOW:-flows/utility/record-prepare.yaml}"
-ACCENT_FLOW="${SIDEPLAY_ACCENT_FLOW:-}"
-ACCENT="${SIDEPLAY_ACCENT:-}"
+PREP_FLOW="${SIDETRACK_PREP_FLOW:-flows/utility/record-prepare.yaml}"
+ACCENT_FLOW="${SIDETRACK_ACCENT_FLOW:-}"
+ACCENT="${SIDETRACK_ACCENT:-}"
 DEVICE_FILE="/sdcard/maestro-recording.mp4"
 # Start at the end of the flow's launchApp command: it is the first command every
 # flow runs, so the marker cannot drift when the flow's first action or first
 # assertion changes, and it matches both cold and warm launches. The JVM startup
 # stays out of the video.
-START_MARKER="${SIDEPLAY_RECORD_START_MARKER:-Launch app .*COMPLETED}"
-START_TIMEOUT="${SIDEPLAY_RECORD_START_TIMEOUT:-30}"
+START_MARKER="${SIDETRACK_RECORD_START_MARKER:-Launch app .*COMPLETED}"
+START_TIMEOUT="${SIDETRACK_RECORD_START_TIMEOUT:-30}"
 REC_PID=""
 MAESTRO_PID=""
 MAESTRO_LOG=""
@@ -45,7 +45,7 @@ export PATH="$PATH:$HOME/.maestro/bin"
 export MAESTRO_CLI_NO_ANALYTICS=1
 export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
 
-DEVICE="${SIDEPLAY_DEVICE:-}"
+DEVICE="${SIDETRACK_DEVICE:-}"
 if [[ -z "$DEVICE" ]]; then
     DEVICE="$(adb devices | awk '$2 == "device" { print $1; exit }')"
 fi
@@ -56,9 +56,9 @@ fi
 ADB=(adb -s "$DEVICE")
 export MAESTRO_DEVICE_UDID="$DEVICE"
 
-# With the Sidekit host installed, Sideplay follows the host's case colour; without it
+# With the Sidekit host installed, Sidetrack follows the host's case colour; without it
 # (the emulator, or any phone running the standalone build) the colour lives in
-# Sideplay's own Appearance screen. Pick the matching flow instead of assuming.
+# Sidetrack's own Appearance screen. Pick the matching flow instead of assuming.
 if [[ -z "$ACCENT_FLOW" ]]; then
     if "${ADB[@]}" shell 'pm list packages hrln.interactive.sidekit | grep -qx package:hrln.interactive.sidekit' 2>/dev/null; then
         ACCENT_FLOW="flows/utility/set-accent.yaml"
@@ -121,7 +121,7 @@ rm -f "$OUT"
 
 # System animations make every Maestro tap wait for the screen to settle. Turn
 # them off for the recording and restore the device's values on exit.
-if [[ "${SIDEPLAY_KEEP_ANIMATIONS:-0}" != "1" ]]; then
+if [[ "${SIDETRACK_KEEP_ANIMATIONS:-0}" != "1" ]]; then
     for key in "${ANIMATION_KEYS[@]}"; do
         ANIMATION_VALUES+=("$("${ADB[@]}" shell settings get global "$key" | tr -d '\r')")
         "${ADB[@]}" shell settings put global "$key" 0
@@ -132,8 +132,8 @@ fi
 # A device that draws its soft keyboard (emulator, or a touch phone) would show that
 # keyboard in the video instead of the app's compact Abc/Done bar, and the query would
 # be typed as text instead of T9 key events. Hiding the IME for the take makes the
-# emulator behave like the sidephone. SIDEPLAY_KEEP_IME=1 leaves it alone.
-if [[ "${SIDEPLAY_KEEP_IME:-0}" != "1" ]]; then
+# emulator behave like the sidephone. SIDETRACK_KEEP_IME=1 leaves it alone.
+if [[ "${SIDETRACK_KEEP_IME:-0}" != "1" ]]; then
     IME_VALUE="$("${ADB[@]}" shell settings get secure "$IME_KEY" | tr -d '\r')"
     "${ADB[@]}" shell settings put secure "$IME_KEY" 0
     IME_HIDDEN=1
@@ -144,12 +144,12 @@ if [[ -n "$ACCENT" ]]; then
     maestro test --udid "$DEVICE" -e ACCENT="$ACCENT" "$ACCENT_FLOW"
 fi
 
-if [[ "${SIDEPLAY_SKIP_PREPARE:-0}" != "1" ]]; then
+if [[ "${SIDETRACK_SKIP_PREPARE:-0}" != "1" ]]; then
     # The demo build serves a fixed catalog and rewrites its history and queue on every
     # start, so seeding a track or clearing history would fight it. Pick its prep by the
     # installed version name unless the caller chose one explicitly.
-    if [[ -z "${SIDEPLAY_PREP_FLOW:-}" ]]; then
-        VERSION_NAME="$("${ADB[@]}" shell dumpsys package io.github.manuelrtsch.sideplay | grep -m1 versionName | cut -d= -f2 | tr -d '\r')"
+    if [[ -z "${SIDETRACK_PREP_FLOW:-}" ]]; then
+        VERSION_NAME="$("${ADB[@]}" shell dumpsys package io.github.manuelrtsch.sidetrack | grep -m1 versionName | cut -d= -f2 | tr -d '\r')"
         if [[ "$VERSION_NAME" == *-demo ]]; then
             PREP_FLOW="flows/utility/record-prepare-demo.yaml"
         fi
@@ -161,7 +161,7 @@ fi
 # Start Maestro first, then begin screen recording once the app is up. This keeps
 # the JVM startup and app launch out of the video while still catching the first
 # real interaction.
-MAESTRO_LOG="$(mktemp "${TMPDIR:-/tmp}/sideplay-maestro.XXXXXX.log")"
+MAESTRO_LOG="$(mktemp "${TMPDIR:-/tmp}/sidetrack-maestro.XXXXXX.log")"
 maestro test --udid "$DEVICE" "$FLOW" >"$MAESTRO_LOG" 2>&1 &
 MAESTRO_PID=$!
 

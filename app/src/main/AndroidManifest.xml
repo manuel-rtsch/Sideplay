@@ -14,7 +14,7 @@
 
     <!--
         The SDK library declares this normal permission so a client installed before Sidekit still
-        has the definition. Sideplay must not redeclare it: Sidekit (or Sidekit dev) already owns
+        has the definition. Sidetrack must not redeclare it: Sidekit (or Sidekit dev) already owns
         it, and Android rejects a second declaration from a differently signed package.
     -->
     <permission
@@ -31,7 +31,7 @@
         android:theme="@style/Theme.Sidetrack">
 
         <activity
-            android:name=".SideplayActivity"
+            android:name=".SidetrackActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection|touchscreen|colorMode|mcc|mnc"
             android:exported="true"
             android:launchMode="singleTask"

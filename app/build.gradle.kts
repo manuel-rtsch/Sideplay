@@ -26,7 +26,7 @@ fun versionCodeFromGit() = runCatching { gitVersionCode.get() }.getOrDefault(fal
 fun versionNameFromGit() = runCatching { gitVersionName.get() }.getOrDefault(fallbackVersionName)
 
 // Release signing is configured locally: keystore.properties is gitignored and points at the
-// dedicated Sideplay release certificate. Without it, release stays unsigned so CI can sign.
+// dedicated Sidetrack release certificate. Without it, release stays unsigned so CI can sign.
 val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
 val releaseKeystoreProperties = Properties().apply {
     if (releaseKeystorePropertiesFile.isFile) {
@@ -34,29 +34,29 @@ val releaseKeystoreProperties = Properties().apply {
     }
 }
 
-// `-PsideplayStandaloneDemo=true` turns `assembleDemo` into a second, co-installable app:
+// `-PsidetrackStandaloneDemo=true` turns `assembleDemo` into a second, co-installable app:
 // suffix `.demo` on the application id, its own Sidekit app id and label, so the host shows both
 // the release app and the fake-catalog build. The plain demo build keeps the release identity the
 // Maestro flows and promo recordings pin.
-val standaloneDemo = providers.gradleProperty("sideplayStandaloneDemo")
+val standaloneDemo = providers.gradleProperty("sidetrackStandaloneDemo")
     .map(String::toBoolean)
     .getOrElse(false)
 
 android {
     ndkVersion = "27.1.12297006"
-    namespace = "io.github.manuelrtsch.sideplay"
+    namespace = "io.github.manuelrtsch.sidetrack"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "io.github.manuelrtsch.sideplay"
+        applicationId = "io.github.manuelrtsch.sidetrack"
         minSdk = 31
         targetSdk = 36
-        versionCode = providers.gradleProperty("sideplayVersionCode")
+        versionCode = providers.gradleProperty("sidetrackVersionCode")
             .map(String::toInt)
             .getOrElse(versionCodeFromGit())
-        versionName = providers.gradleProperty("sideplayVersionName")
+        versionName = providers.gradleProperty("sidetrackVersionName")
             .getOrElse(versionNameFromGit())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -73,9 +73,9 @@ android {
         // App identity the manifest and the OAuth landing page read. Overridden per build type when
         // a build has to sit next to the release app instead of replacing it.
         manifestPlaceholders["appLabel"] = "@string/app_name"
-        manifestPlaceholders["sidekitAppId"] = "sideplay"
-        manifestPlaceholders["authScheme"] = "sideplay"
-        buildConfigField("String", "AUTH_SCHEME", "\"sideplay\"")
+        manifestPlaceholders["sidekitAppId"] = "sidetrack"
+        manifestPlaceholders["authScheme"] = "sidetrack"
+        buildConfigField("String", "AUTH_SCHEME", "\"sidetrack\"")
     }
 
     signingConfigs {
@@ -108,11 +108,11 @@ android {
             versionNameSuffix = "-dev"
             matchingFallbacks += listOf("release")
         }
-        // Promo/demo builds. Same application id and signing as release on purpose: Sideplay is
+        // Promo/demo builds. Same application id and signing as release on purpose: Sidetrack is
         // host-backed only when Sidekit trusts the release certificate, and the Maestro flows pin
         // the production application id. Installing this build replaces the release app; the
         // catalog is fixed and the account is only used for playback.
-        // With -PsideplayStandaloneDemo=true it instead becomes `…sideplay.demo` with its own
+        // With -PsidetrackStandaloneDemo=true it instead becomes `…sidetrack.demo` with its own
         // Sidekit app id, so it co-installs with release and gets its own host tile and config.
         // It stays signed with the release key, so Sidekit still trusts it.
         create("demo") {
@@ -122,9 +122,9 @@ android {
             if (standaloneDemo) {
                 applicationIdSuffix = ".demo"
                 manifestPlaceholders["appLabel"] = "Sidetrack Demo"
-                manifestPlaceholders["sidekitAppId"] = "sideplay-demo"
-                manifestPlaceholders["authScheme"] = "sideplay-demo"
-                buildConfigField("String", "AUTH_SCHEME", "\"sideplay-demo\"")
+                manifestPlaceholders["sidekitAppId"] = "sidetrack-demo"
+                manifestPlaceholders["authScheme"] = "sidetrack-demo"
+                buildConfigField("String", "AUTH_SCHEME", "\"sidetrack-demo\"")
             }
             buildConfigField("boolean", "DEMO_CONTENT", "true")
             // `real` (default) shows the real-song pack, `fictional` the original backup pack.
@@ -166,26 +166,26 @@ android {
 
     lint {
         // AGP, Kotlin, and the AndroidX libraries are pinned to the Sidekit toolchain. Version
-        // availability is reviewed with that toolchain, not on every Sideplay lint run. targetSdk
+        // availability is reviewed with that toolchain, not on every Sidetrack lint run. targetSdk
         // stays at 36 until the Sidekit host has been tested against 37.
         disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable", "OldTargetApi")
     }
 }
 
-// Sideplay's librespot bridge. The generated ABI directory is a normal jniLibs source, so an
+// Sidetrack's librespot bridge. The generated ABI directory is a normal jniLibs source, so an
 // unsupported ABI simply has no .so and the Kotlin bridge reports it as unavailable.
 val spotifyJniLibs = layout.buildDirectory.dir("generated/spotifyJniLibs")
 // Native playback is opt-in: CI has no Rust toolchain or NDK, and probing Cargo at
 // configuration time would break Gradle's configuration cache. Use
-// `-PsideplayNative=true` after installing both.
+// `-PsidetrackNative=true` after installing both.
 val cargo = listOf(
     File(System.getProperty("user.home"), ".cargo/bin/cargo"),
     File("/usr/bin/cargo"),
     File("/usr/local/bin/cargo")
 ).firstOrNull { it.canExecute() }
-val nativeEnabled = providers.gradleProperty("sideplayNative")
+val nativeEnabled = providers.gradleProperty("sidetrackNative")
     .map(String::toBoolean)
-    .orElse(providers.environmentVariable("SIDEPLAY_NATIVE").map(String::toBoolean))
+    .orElse(providers.environmentVariable("SIDETRACK_NATIVE").map(String::toBoolean))
     .getOrElse(false)
 
 // Resolve the NDK only when Cargo is present. CI has no Rust toolchain, and asking Gradle for
@@ -197,15 +197,15 @@ val ndk = if (!nativeEnabled || cargo == null) {
 }
 
 val buildSpotifyNative = tasks.register<Exec>("buildSpotifyNative") {
-    description = "Build libsideplay_spotify.so for arm64-v8a and x86_64."
+    description = "Build libsidetrack_spotify.so for arm64-v8a and x86_64."
     group = "native"
     enabled = nativeEnabled && cargo != null && ndk != null
     when {
-        !nativeEnabled -> logger.lifecycle("Sideplay: native playback is off; pass -PsideplayNative=true to build libsideplay_spotify.so.")
-        cargo == null -> logger.warn("Sideplay: cargo is unavailable; libsideplay_spotify.so will not be packaged.")
-        ndk == null -> logger.warn("Sideplay: the Android NDK is unavailable; libsideplay_spotify.so will not be packaged.")
+        !nativeEnabled -> logger.lifecycle("Sidetrack: native playback is off; pass -PsidetrackNative=true to build libsidetrack_spotify.so.")
+        cargo == null -> logger.warn("Sidetrack: cargo is unavailable; libsidetrack_spotify.so will not be packaged.")
+        ndk == null -> logger.warn("Sidetrack: the Android NDK is unavailable; libsidetrack_spotify.so will not be packaged.")
     }
-    workingDir = rootProject.file("native/sideplay-spotify")
+    workingDir = rootProject.file("native/sidetrack-spotify")
     commandLine(
         cargo?.absolutePath.orEmpty(),
         "ndk",
@@ -215,8 +215,8 @@ val buildSpotifyNative = tasks.register<Exec>("buildSpotifyNative") {
         "build", "--release"
     )
     if (ndk != null) environment("ANDROID_NDK_HOME", ndk.absolutePath)
-    inputs.dir(rootProject.file("native/sideplay-spotify/src"))
-    inputs.files(rootProject.file("native/sideplay-spotify/Cargo.toml"), rootProject.file("native/sideplay-spotify/Cargo.lock"))
+    inputs.dir(rootProject.file("native/sidetrack-spotify/src"))
+    inputs.files(rootProject.file("native/sidetrack-spotify/Cargo.toml"), rootProject.file("native/sidetrack-spotify/Cargo.lock"))
     outputs.dir(spotifyJniLibs)
 }
 

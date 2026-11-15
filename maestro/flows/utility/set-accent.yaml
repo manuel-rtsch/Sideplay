@@ -1,8 +1,8 @@
-appId: io.github.manuelrtsch.sideplay
+appId: io.github.manuelrtsch.sidetrack
 name: Set accent colour
 ---
 # Set the Sidephone accent colour through Sidekit's Settings -> Case colour, then
-# restart Sideplay so it picks up the host-backed theme.
+# restart Sidetrack so it picks up the host-backed theme.
 #
 # Usage:
 #   maestro test flows/utility/set-accent.yaml -e ACCENT=Orange
@@ -11,9 +11,9 @@ name: Set accent colour
 # Lavender. Sidekit exposes each swatch by its label as the accessibility content
 # description, and its Active line confirms the write.
 #
-# Sideplay is host-backed when Sidekit is installed: it reads the theme from the
+# Sidetrack is host-backed when Sidekit is installed: it reads the theme from the
 # host and ignores writes to its own local Appearance screen. That is why the
-# setting is changed in Sidekit and Sideplay is relaunched afterwards.
+# setting is changed in Sidekit and Sidetrack is relaunched afterwards.
 - assertTrue: ${["Lime", "Orange", "Blue", "Pink", "Sage", "Lavender"].includes(ACCENT)}
 
 # 1. Open Sidekit's Settings. The launcher's Settings entry lives behind Options.
@@ -47,12 +47,12 @@ name: Set accent colour
     waitToSettleTimeoutMs: 200
 - assertVisible: "Active: ${ACCENT}"
 
-# 3. Leave Sidekit cleanly, then relaunch Sideplay so it re-reads the host theme.
+# 3. Leave Sidekit cleanly, then relaunch Sidetrack so it re-reads the host theme.
 - pressKey: Back
 - assertVisible: "Settings"
 - pressKey: Back
 - assertVisible: "Sidemessage"
 - launchApp:
-    appId: "io.github.manuelrtsch.sideplay"
+    appId: "io.github.manuelrtsch.sidetrack"
     stopApp: true
 - assertVisible: "Sidetrack"

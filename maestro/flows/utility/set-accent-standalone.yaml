@@ -1,11 +1,11 @@
-appId: io.github.manuelrtsch.sideplay
+appId: io.github.manuelrtsch.sidetrack
 name: Set accent colour (standalone)
 ---
-# Set Sideplay's own case colour, for a device without the Sidekit host: the
-# emulator, or any Android phone running Sideplay standalone. With a host
-# installed, Sideplay follows Sidekit and this screen is only a local fallback —
+# Set Sidetrack's own case colour, for a device without the Sidekit host: the
+# emulator, or any Android phone running Sidetrack standalone. With a host
+# installed, Sidetrack follows Sidekit and this screen is only a local fallback —
 # use flows/utility/set-accent.yaml there instead. record.sh picks the right one by
-# looking for the host package; SIDEPLAY_ACCENT_FLOW overrides the choice.
+# looking for the host package; SIDETRACK_ACCENT_FLOW overrides the choice.
 #
 # Usage:
 #   maestro test flows/utility/set-accent-standalone.yaml -e ACCENT=Orange
@@ -19,7 +19,7 @@ name: Set accent colour (standalone)
 # floating action bar, so centre it: a tap on a row that is only visible at the
 # bottom edge lands on the bar's Back instead.
 - launchApp:
-    appId: "io.github.manuelrtsch.sideplay"
+    appId: "io.github.manuelrtsch.sidetrack"
     stopApp: true
 - assertVisible: "Sidetrack"
 - pressKey: Remote Menu
@@ -46,8 +46,8 @@ name: Set accent colour (standalone)
 - pressKey: Back
 - assertVisible: "Settings"
 
-# 3. Restart Sideplay so the take opens with the colour already applied.
+# 3. Restart Sidetrack so the take opens with the colour already applied.
 - launchApp:
-    appId: "io.github.manuelrtsch.sideplay"
+    appId: "io.github.manuelrtsch.sidetrack"
     stopApp: true
 - assertVisible: "Sidetrack"

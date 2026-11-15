@@ -87,7 +87,7 @@ Suite order (`config.yaml`) is `01 → 02 → 03 → 04` on the same device, fro
 | `04-history-settings` | none | ≥ 6 distinct history entries | −1 history entry | Home |
 
 Promo recording chain (`record.sh`, per `README.md`): `01` with prep, then `02`, `03`, `04` with
-`SIDEPLAY_SKIP_PREPARE=1`. The prep clears history and starts one known track, so the chain must
+`SIDETRACK_SKIP_PREPARE=1`. The prep clears history and starts one known track, so the chain must
 accumulate six distinct entries *before* `04` records. It currently does not (see §6).
 
 ## 4. Non-obvious constraints
@@ -227,7 +227,7 @@ only in `app/src/demo/`, and `assembleRelease` neither compiles it nor ships it.
 | File | Role |
 | --- | --- |
 | `app/build.gradle.kts` | `demo` build type, `BuildConfig.DEMO_CONTENT`/`DEMO_PACK`, `src/debug/res` added to the demo source set for the generated covers |
-| `app/proguard-rules.pro` | keeps `io.github.manuelrtsch.sideplay.demo.**` (release optimisation would strip a class only referenced by name) |
+| `app/proguard-rules.pro` | keeps `io.github.manuelrtsch.sidetrack.demo.**` (release optimisation would strip a class only referenced by name) |
 | `app/src/main/java/.../DemoContent.kt` | `DemoContent` interface + reflective lookup, `null` in every normal build |
 | `app/src/main/java/.../data/SpotifySession.kt` | `catalog` returns the demo pack when present; `init` seeds history and queue |
 | `app/src/demo/java/.../demo/RealPack.kt` | the default content: real songs, catalog + in-memory `SpotifyLibraryWriter` + seed |
@@ -266,7 +266,7 @@ Decisions worth knowing:
   track from a recent row (episodes have no Save/Seek, and `02` leaves an episode current), and
   promo `02` probes the keypad mode instead of assuming the prep left it in `Abc`.
 - `record.sh` selects `record-prepare-demo.yaml` automatically when the installed `versionName`
-  ends in `-demo`; `SIDEPLAY_PREP_FLOW` still wins.
+  ends in `-demo`; `SIDETRACK_PREP_FLOW` still wins.
 
 ## 10. Recording with the demo build
 
@@ -277,13 +277,13 @@ Decisions worth knowing:
 adb install -r app/build/outputs/apk/demo/app-demo.apk
 
 # Per take: the cold launch is the whole preparation (record.sh picks the demo prep).
-SIDEPLAY_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
-SIDEPLAY_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
-SIDEPLAY_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
-SIDEPLAY_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
+SIDETRACK_ACCENT=Lime ./record.sh flows/promo/01-browse-play.yaml "recordings/01-browse-play.mp4"
+SIDETRACK_ACCENT=Orange ./record.sh flows/promo/02-search-library-writes.yaml "recordings/02-search-library-writes.mp4"
+SIDETRACK_ACCENT=Blue ./record.sh flows/promo/03-queue-transport.yaml "recordings/03-queue-transport.mp4"
+SIDETRACK_ACCENT=Pink ./record.sh flows/promo/04-history-settings.yaml "recordings/04-history-settings.mp4"
 ```
 
-Do **not** set `SIDEPLAY_SKIP_PREPARE=1` with the demo build: every take needs the cold launch so
+Do **not** set `SIDETRACK_SKIP_PREPARE=1` with the demo build: every take needs the cold launch so
 the previous take's Home screen state and queue are discarded.
 
 To go back to the real account: `adb install -r app/build/outputs/apk/release/app-release.apk`.
