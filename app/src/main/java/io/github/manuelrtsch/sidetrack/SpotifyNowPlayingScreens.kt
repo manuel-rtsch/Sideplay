@@ -83,7 +83,7 @@ import kotlinx.coroutines.flow.StateFlow
  * the Now Playing layout (artwork, transport, action bar).
  */
 @Composable
-private fun NowPlayingSeek(
+internal fun NowPlayingSeek(
     playbackPositionMs: StateFlow<Long>,
     durationMs: Long,
     onSeek: (Long) -> Unit,
@@ -118,6 +118,8 @@ fun SpotifyNowPlayingScreen(
     onDismissNotice: () -> Unit
 ) {
     val current = state.current
+    val backdrop = rememberArtworkBackdropSetting()
+    val backdropped = current is SpotifyTrack && backdrop.enabled
     val timer by sleepTimer.collectAsStateWithLifecycle()
     // Episodes have no saved-track endpoint, so Save is a track-only action.
     val save = (current as? SpotifyTrack)?.let {
@@ -147,6 +149,9 @@ fun SpotifyNowPlayingScreen(
             // A station needs a track seed; an episode has no song radio.
             if (current is SpotifyTrack) {
                 add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
+                // The backdrop layout has no cover tile to focus, so the album needs a second
+                // route for the keypad. The old layout's cover was that route.
+                if (backdropped) add(SideAction("openAlbum", "Open album", SidekitIcon.Album, onClick = onAlbum))
             } else if (current is SpotifyEpisode) {
                 add(SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onEpisodeNotes))
             }
@@ -158,136 +163,168 @@ fun SpotifyNowPlayingScreen(
                     onSleepTimer
                 )
             )
+            add(
+                SideAction(
+                    "artworkBackdrop",
+                    label = if (backdrop.enabled) "Art backdrop on" else "Art backdrop off",
+                    icon = SidekitIcon.PhotoLibrary,
+                    tone = if (backdrop.enabled) ActionTone.Secondary else ActionTone.Muted,
+                    keepOptionsOpen = true,
+                    onClick = backdrop::toggle
+                )
+            )
         }
     }
-    SidekitScaffold(title = null, actions = actions, options = options) { padding ->
-        if (current == null) {
-            // The same status block the queue and the library use: vinyl, title and hint, so an
-            // empty Now Playing reads like every other empty page instead of a bare line of text.
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                SpotifyStatusScreen(
-                    "Nothing playing",
-                    Modifier.fillMaxWidth(),
-                    hint = "Pick something from your library"
-                )
-            }
-        } else {
-            Column(
-                Modifier.fillMaxSize().padding(padding),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    val art = minOf(maxWidth, maxHeight)
-                    SpotifyCover(
-                        current.artRes,
-                        Modifier.size(art),
-                        shape = SidekitTheme.shapes.item,
-                        bordered = true,
-                        contentDescription = "${current.title} artwork",
-                        artUrl = current.artUrl,
-                        onClick = when (current) {
-                            is SpotifyTrack -> onAlbum
-                            is SpotifyEpisode -> onShow
-                        },
-                        onClickLabel = when (current) {
-                            is SpotifyTrack -> "Open album"
-                            is SpotifyEpisode -> "Open show"
-                        }
-                    )
-                }
-                val episode = current as? SpotifyEpisode
-                // The creator line is a destination: an artist for a track, the show for an
-                // episode. Episodes also carry their publishing identity below it.
-                val creatorAction = when (current) {
-                    is SpotifyTrack -> onArtist.takeIf { current.artistId.spotifyIdOrNull() != null }
-                    is SpotifyEpisode -> onShow
-                }
-                val creatorLabel = if (current is SpotifyEpisode) "Open show" else "Open artist"
-                val notes = remember(episode?.description) { plainPodcastText(episode?.description.orEmpty()) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    SidekitText(
-                        current.title,
+    Box(Modifier.fillMaxSize()) {
+        if (backdropped && current is SpotifyTrack) {
+            // The artwork is the screen: behind the scaffold, so it can run under the chrome,
+            // which the canvas paints after the screens. The body has no cover tile of its own.
+            ArtworkBackdrop(current, onOpenAlbum = onAlbum, modifier = Modifier.matchParentSize())
+        }
+        SidekitScaffold(title = null, actions = actions, options = options) { padding ->
+            if (current == null) {
+                // The same status block the queue and the library use: vinyl, title and hint, so an
+                // empty Now Playing reads like every other empty page instead of a bare line of text.
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    SpotifyStatusScreen(
+                        "Nothing playing",
                         Modifier.fillMaxWidth(),
-                        style = SidekitTheme.typography.headline,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2
+                        hint = "Pick something from your library"
                     )
-                    if (current.creator.isNotBlank()) {
-                        SidekitText(
-                            current.creator,
-                            Modifier.fillMaxWidth().clickable(
-                                enabled = creatorAction != null,
-                                onClickLabel = creatorLabel,
-                                role = Role.Button,
-                                onClick = { creatorAction?.invoke() }
-                            ),
-                            style = SidekitTheme.typography.label,
-                            color = SidekitTheme.colors.surfaceA6,
-                            textAlign = TextAlign.Center
+                }
+            } else if (backdropped && current is SpotifyTrack) {
+                BackdroppedNowPlayingBody(
+                    state,
+                    current,
+                    playbackPositionMs,
+                    sleepTimer,
+                    padding,
+                    onPlayPause = onPlayPause,
+                    onPrevious = onPrevious,
+                    onNext = onNext,
+                    onSeek = onSeek,
+                    onShuffle = onShuffle,
+                    onRepeat = onRepeat,
+                    onArtist = onArtist
+                )
+            } else {
+                Column(
+                    Modifier.fillMaxSize().padding(padding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        val art = minOf(maxWidth, maxHeight)
+                        SpotifyCover(
+                            current.artRes,
+                            Modifier.size(art),
+                            shape = SidekitTheme.shapes.item,
+                            bordered = true,
+                            contentDescription = "${current.title} artwork",
+                            artUrl = current.artUrl,
+                            onClick = when (current) {
+                                is SpotifyTrack -> onAlbum
+                                is SpotifyEpisode -> onShow
+                            },
+                            onClickLabel = when (current) {
+                                is SpotifyTrack -> "Open album"
+                                is SpotifyEpisode -> "Open show"
+                            }
                         )
                     }
-                    if (episode != null) {
-                        if (notes.isNotBlank()) {
+                    val episode = current as? SpotifyEpisode
+                    // The creator line is a destination: an artist for a track, the show for an
+                    // episode. Episodes also carry their publishing identity below it.
+                    val creatorAction = when (current) {
+                        is SpotifyTrack -> onArtist.takeIf { current.artistId.spotifyIdOrNull() != null }
+                        is SpotifyEpisode -> onShow
+                    }
+                    val creatorLabel = if (current is SpotifyEpisode) "Open show" else "Open artist"
+                    val notes = remember(episode?.description) { plainPodcastText(episode?.description.orEmpty()) }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        SidekitText(
+                            current.title,
+                            Modifier.fillMaxWidth(),
+                            style = SidekitTheme.typography.headline,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2
+                        )
+                        if (current.creator.isNotBlank()) {
                             SidekitText(
-                                notes,
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 2.dp)
-                                    .clickable(
-                                        onClickLabel = "Read full episode notes",
-                                        role = Role.Button,
-                                        onClick = onEpisodeNotes
-                                    ),
-                                style = SidekitTheme.typography.caption,
+                                current.creator,
+                                Modifier.fillMaxWidth().clickable(
+                                    enabled = creatorAction != null,
+                                    onClickLabel = creatorLabel,
+                                    role = Role.Button,
+                                    onClick = { creatorAction?.invoke() }
+                                ),
+                                style = SidekitTheme.typography.label,
                                 color = SidekitTheme.colors.surfaceA6,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2
+                                textAlign = TextAlign.Center
                             )
                         }
+                        if (episode != null) {
+                            if (notes.isNotBlank()) {
+                                SidekitText(
+                                    notes,
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 2.dp)
+                                        .clickable(
+                                            onClickLabel = "Read full episode notes",
+                                            role = Role.Button,
+                                            onClick = onEpisodeNotes
+                                        ),
+                                    style = SidekitTheme.typography.caption,
+                                    color = SidekitTheme.colors.surfaceA6,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2
+                                )
+                            }
+                        }
                     }
-                }
-                NowPlayingSleepTimer(sleepTimer)
-                // Only the seek bar subscribes to the playback position flow, so the 10x/s
-                // position ticks recompose just this small composable, not the whole screen.
-                // The seek block owns its own height, so the labels can sit close to the artist
-                // line while the bar keeps a little air above the transport row.
-                NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
-                if (current is SpotifyEpisode) {
-                    // Podcasts do not repeat or shuffle. The two outer tiles are the podcast
-                    // controls a song player does not need: rewind and fast-forward by 30 s.
-                    SidekitItemRow {
-                        SpotifySkipTile("−30", "Back 30 seconds", onSkipBack)
-                        SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous episode", onPrevious, weight = 0.85f)
-                        SpotifyIconTile(
-                            if (state.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                            if (state.isPlaying) "Pause" else "Play",
-                            onPlayPause,
-                            tone = SpotifyTileTone.Play,
-                            weight = 1.2f
-                        )
-                        SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                        SpotifySkipTile("+30", "Forward 30 seconds", onSkipForward)
-                    }
-                } else {
-                    SidekitItemRow {
-                        SpotifyIconTile(
-                            SidekitIcon.Shuffle,
-                            if (state.shuffle) "Shuffle on" else "Shuffle off",
-                            onShuffle,
-                            tone = if (state.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
-                            weight = 0.85f
-                        )
-                        SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
-                        SpotifyIconTile(
-                            if (state.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                            if (state.isPlaying) "Pause" else "Play",
-                            onPlayPause,
-                            tone = SpotifyTileTone.Play,
-                            weight = 1.2f
-                        )
-                        SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                        SpotifyRepeatTile(state.repeat, onRepeat)
+                    NowPlayingSleepTimer(sleepTimer)
+                    // Only the seek bar subscribes to the playback position flow, so the 10x/s
+                    // position ticks recompose just this small composable, not the whole screen.
+                    // The seek block owns its own height, so the labels can sit close to the artist
+                    // line while the bar keeps a little air above the transport row.
+                    NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
+                    if (current is SpotifyEpisode) {
+                        // Podcasts do not repeat or shuffle. The two outer tiles are the podcast
+                        // controls a song player does not need: rewind and fast-forward by 30 s.
+                        SidekitItemRow {
+                            SpotifySkipTile("−30", "Back 30 seconds", onSkipBack)
+                            SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous episode", onPrevious, weight = 0.85f)
+                            SpotifyIconTile(
+                                if (state.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+                                if (state.isPlaying) "Pause" else "Play",
+                                onPlayPause,
+                                tone = SpotifyTileTone.Play,
+                                weight = 1.2f
+                            )
+                            SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+                            SpotifySkipTile("+30", "Forward 30 seconds", onSkipForward)
+                        }
+                    } else {
+                        SidekitItemRow {
+                            SpotifyIconTile(
+                                SidekitIcon.Shuffle,
+                                if (state.shuffle) "Shuffle on" else "Shuffle off",
+                                onShuffle,
+                                tone = if (state.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
+                                weight = 0.85f
+                            )
+                            SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
+                            SpotifyIconTile(
+                                if (state.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+                                if (state.isPlaying) "Pause" else "Play",
+                                onPlayPause,
+                                tone = SpotifyTileTone.Play,
+                                weight = 1.2f
+                            )
+                            SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+                            SpotifyRepeatTile(state.repeat, onRepeat)
+                        }
                     }
                 }
             }
@@ -300,7 +337,7 @@ fun SpotifyNowPlayingScreen(
  * not a 48 dp target because it is not a control: changes go through Options.
  */
 @Composable
-private fun NowPlayingSleepTimer(sleepTimer: StateFlow<SleepTimerState>) {
+internal fun NowPlayingSleepTimer(sleepTimer: StateFlow<SleepTimerState>) {
     val timer by sleepTimer.collectAsStateWithLifecycle()
     val label = timer.statusText() ?: return
     val description = timer.statusDescription() ?: return

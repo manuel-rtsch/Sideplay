@@ -20,9 +20,23 @@ internal class SidetrackLocalSettings(context: Context) {
             prefs.edit().putString(KEY_INPUT_MODE, value.name).apply()
         }
 
-    fun observeInputMode(onChange: () -> Unit): () -> Unit {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == KEY_INPUT_MODE) onChange()
+    fun observeInputMode(onChange: () -> Unit): () -> Unit = observe(KEY_INPUT_MODE, onChange)
+
+    /**
+     * Experimental: the song Now Playing screen draws its artwork behind the controls. Off by
+     * default, because it changes how one screen reads rather than how the app looks overall.
+     */
+    var artworkBackdrop: Boolean
+        get() = prefs.getBoolean(KEY_ARTWORK_BACKDROP, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ARTWORK_BACKDROP, value).apply()
+        }
+
+    fun observeArtworkBackdrop(onChange: () -> Unit): () -> Unit = observe(KEY_ARTWORK_BACKDROP, onChange)
+
+    private fun observe(key: String, onChange: () -> Unit): () -> Unit {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changed ->
+            if (changed == null || changed == key) onChange()
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         return { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -65,6 +79,7 @@ internal class SidetrackLocalSettings(context: Context) {
         const val FILE = "sidetrack_settings"
         const val KEYPAD_FILE = "sidetrack_keypad"
         private const val KEY_INPUT_MODE = "input_mode"
+        private const val KEY_ARTWORK_BACKDROP = "artwork_backdrop"
         private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
         private const val KEY_KEYPAD_ACCESS_PROMPTED = "keypad_access_prompted"
 

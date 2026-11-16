@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.GraphicsMode
 
 @RunWith(AndroidJUnit4::class)
@@ -304,56 +305,24 @@ class SidetrackScreenshotTest {
         )
     }
 
-    @Test fun nowPlaying() = shoot("sidetrack_now_playing") {
-        SpotifyNowPlayingScreen(
-            state,
-            playbackPositionMs = MutableStateFlow(68_000L),
-            sleepTimer = MutableStateFlow(SleepTimerState.Off),
-            onBack = {},
-            onPlayPause = {},
-            onPrevious = {},
-            onNext = {},
-            onSeek = {},
-            onSkipBack = {},
-            onSkipForward = {},
-            onShuffle = {},
-            onRepeat = {},
-            onSave = {},
-            onQueue = {},
-            onRadio = {},
-            onAlbum = {},
-            onShow = {},
-            onArtist = {},
-            onSleepTimer = {},
-            onEpisodeNotes = {},
-            onDismissNotice = {}
-        )
-    }
+    @Composable
+    private fun NowPlayingShot(timer: SleepTimerState = SleepTimerState.Off) = NowPlayingUnderTest(state, timer)
+
+    @Test fun nowPlaying() = shoot("sidetrack_now_playing") { NowPlayingShot() }
 
     @Test fun nowPlayingWithSleepTimer() = shoot("sidetrack_now_playing_sleep_timer") {
-        SpotifyNowPlayingScreen(
-            state,
-            playbackPositionMs = MutableStateFlow(68_000L),
-            sleepTimer = MutableStateFlow(SleepTimerState.Countdown(30, 1_800_000L, 23)),
-            onBack = {},
-            onPlayPause = {},
-            onPrevious = {},
-            onNext = {},
-            onSeek = {},
-            onSkipBack = {},
-            onSkipForward = {},
-            onShuffle = {},
-            onRepeat = {},
-            onSave = {},
-            onQueue = {},
-            onRadio = {},
-            onAlbum = {},
-            onShow = {},
-            onArtist = {},
-            onSleepTimer = {},
-            onEpisodeNotes = {},
-            onDismissNotice = {}
-        )
+        NowPlayingShot(SleepTimerState.Countdown(30, 1_800_000L, 23))
+    }
+
+    @Test
+    fun nowPlayingBackdrop() {
+        val settings = SidetrackLocalSettings(RuntimeEnvironment.getApplication())
+        settings.artworkBackdrop = true
+        try {
+            shoot("sidetrack_now_playing_backdrop") { NowPlayingShot() }
+        } finally {
+            settings.artworkBackdrop = false
+        }
     }
 
     @Test fun sleepTimer() = shoot("sidetrack_sleep_timer") {
