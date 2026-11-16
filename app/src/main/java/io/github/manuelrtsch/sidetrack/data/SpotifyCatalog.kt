@@ -16,6 +16,11 @@ import io.github.manuelrtsch.sidetrack.SpotifyTrack
  * API; tests supply their own catalog. No screen or ViewModel may call an endpoint directly.
  */
 interface SpotifyCatalog {
+    /**
+     * One page of a library category. Implementations that know the category size must report it as
+     * [SpotifyPage.total]; paging and the overview's "See more" row rely on it because a catalog
+     * can drop entries whose metadata failed to load.
+     */
     suspend fun library(
         filter: LibraryFilter,
         offset: Int = 0,

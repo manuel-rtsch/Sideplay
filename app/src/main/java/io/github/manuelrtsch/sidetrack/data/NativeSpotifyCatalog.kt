@@ -31,7 +31,11 @@ class NativeSpotifyCatalog(
 ) : SpotifyCatalog,
     SpotifyLibraryWriter {
     override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<Any> {
-        val array = parseArray(callText { native.catalogLibrary(filter.name, offset.toLong(), limit.toLong()) })
+        val text = callText { native.catalogLibrary(filter.name, offset.toLong(), limit.toLong()) }
+        // The native catalog answers with `{items, total}` so paging does not have to guess from
+        // how many entries survived metadata hydration. A bare array is still accepted.
+        val payload = if (text.trimStart().startsWith("{")) parseObject(text) else null
+        val array = payload?.optJSONArray("items") ?: parseArray(text)
         val items = when (filter) {
             LibraryFilter.LikedSongs -> array.tracks()
             LibraryFilter.Playlists -> array.playlists()
@@ -39,7 +43,8 @@ class NativeSpotifyCatalog(
             LibraryFilter.Artists -> array.artists()
             LibraryFilter.Shows -> array.shows()
         }
-        return SpotifyPage.of(items, offset, limit)
+        val total = payload?.optInt("total", -1)?.takeIf { it >= 0 }
+        return SpotifyPage.of(items, offset, limit, total)
     }
 
     override suspend fun collection(
@@ -167,6 +172,10 @@ class NativeSpotifyCatalog(
     }
 
     private fun parseArray(text: String): JSONArray = runCatching { JSONArray(text) }.getOrElse {
+        fail(SpotifyFailure.Unknown, "Spotify returned an unreadable catalog response")
+    }
+
+    private fun parseObject(text: String): JSONObject = runCatching { JSONObject(text) }.getOrElse {
         fail(SpotifyFailure.Unknown, "Spotify returned an unreadable catalog response")
     }
 

@@ -1121,7 +1121,11 @@ class SpotifyViewModel(
                     try {
                         val page = catalog.library(filter, 0, LIBRARY_SECTION_SIZE + 1)
                         sections[filter] = page.items.take(LIBRARY_SECTION_SIZE)
-                        if (page.items.size > LIBRARY_SECTION_SIZE) hasMore += filter
+                        // Prefer the category total over the delivered rows: a catalog may drop an
+                        // entry whose metadata failed to load, and an item-based check would then
+                        // hide "See more" for a category that still has more rows.
+                        val count = page.total ?: page.items.size
+                        if (count > LIBRARY_SECTION_SIZE) hasMore += filter
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

@@ -76,6 +76,41 @@ class NativeSpotifyCatalogTest {
         assertEquals(50L, native.libraryLimit)
     }
 
+    @Test fun `library reports the category total from the native payload`() = runTest {
+        val shows = JSONArray().apply {
+            put(JSONObject().put("id", "show1"))
+        }
+        val native = FakeNative().apply {
+            libraryResult = JSONObject()
+                .put("items", shows)
+                .put("total", 12)
+                .toString()
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val page = catalog.library(LibraryFilter.Shows, offset = 0, limit = 6)
+
+        assertEquals(1, page.items.size)
+        assertEquals(12, page.total)
+        // A short page (hydrated rows dropped) still knows the category has more rows.
+        assertTrue(page.hasMore)
+    }
+
+    @Test fun `library without a total falls back to the page size`() = runTest {
+        val shows = JSONArray().apply {
+            repeat(6) { put(JSONObject().put("id", "show$it")) }
+        }
+        val native = FakeNative().apply {
+            libraryResult = JSONObject().put("items", shows).toString()
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val page = catalog.library(LibraryFilter.Shows, offset = 0, limit = 6)
+
+        assertEquals(null, page.total)
+        assertTrue(page.hasMore)
+    }
+
     @Test fun `collection preserves total and page state`() = runTest {
         val native = FakeNative().apply {
             collectionResult = JSONObject()
@@ -105,6 +140,16 @@ class NativeSpotifyCatalogTest {
 
         assertEquals(50L, native.searchOffset)
         assertEquals(50L, native.searchLimit)
+    }
+
+    @Test fun `malformed library object maps to Unknown`() = runTest {
+        val native = FakeNative().apply { libraryResult = "{" }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.library(LibraryFilter.Shows, 0, 50) }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.Unknown, (error as SpotifyGatewayException).failure)
     }
 
     @Test fun `malformed library response maps to Unknown`() = runTest {

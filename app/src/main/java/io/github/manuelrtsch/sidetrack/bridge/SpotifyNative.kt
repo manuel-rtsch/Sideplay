@@ -25,6 +25,7 @@ interface SpotifyNative {
     fun audioFormat(): String?
     fun pollEvent(): String?
 
+    /** Returns `{"items":[...],"total":n}`; `total` is omitted when the endpoint can't report it. */
     fun catalogLibrary(filter: String, offset: Long, limit: Long): String?
     fun catalogCollection(kind: String, id: String, offset: Long, limit: Long): String?
     fun catalogArtist(id: String): String?

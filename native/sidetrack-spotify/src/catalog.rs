@@ -1183,6 +1183,8 @@ async fn collection_items(
     Ok(items)
 }
 
+/// Returns the requested slice plus the size of the whole category, so callers can tell whether
+/// more rows exist without guessing from the delivered page.
 async fn collection_page(
     session: &Session,
     token: &str,
@@ -1190,14 +1192,26 @@ async fn collection_page(
     prefix: &str,
     offset: usize,
     limit: usize,
-) -> Result<Vec<CollectionItem>, String> {
+) -> Result<(Vec<CollectionItem>, usize), String> {
     let items = collection_items(session, token, set).await?;
-    Ok(items
+    let matching: Vec<CollectionItem> = items
         .into_iter()
         .filter(|item| item.uri.starts_with(prefix))
-        .skip(offset)
-        .take(limit)
-        .collect())
+        .collect();
+    let total = matching.len();
+    let page = matching.into_iter().skip(offset).take(limit).collect();
+    Ok((page, total))
+}
+
+/// Library payload: the requested rows plus the category total. `total` is omitted when the
+/// endpoint does not cheaply know it, and the client then falls back to the delivered row count.
+fn library_page<T: Serialize>(items: Vec<T>, total: Option<usize>) -> Result<String, String> {
+    let mut body = serde_json::Map::new();
+    body.insert("items".to_string(), json!(items));
+    if let Some(total) = total {
+        body.insert("total".to_string(), json!(total));
+    }
+    serde_json::to_string(&Value::Object(body)).map_err(|e| e.to_string())
 }
 
 fn collection_uris(items: &[CollectionItem], prefix: &str) -> Vec<SpotifyUri> {
@@ -1580,7 +1594,7 @@ pub async fn library(
     let limit = limit.clamp(1, MAX_PAGE);
     match filter {
         "LikedSongs" => {
-            let items = collection_page(
+            let (items, total) = collection_page(
                 session,
                 token,
                 "collection",
@@ -1591,14 +1605,16 @@ pub async fn library(
             .await?;
             let uris = collection_uris(&items, "spotify:track:");
             let tracks = fetch_tracks(session, token, &uris, uris.len()).await;
-            Ok(serde_json::to_string(&tracks).map_err(|e| e.to_string())?)
+            library_page(tracks, Some(total))
         }
-        "Playlists" => Ok(serde_json::to_string(
-            &rootlist_playlists(session, token, offset, limit).await?,
-        )
-        .map_err(|e| e.to_string())?),
+        "Playlists" => {
+            let playlists = rootlist_playlists(session, token, offset, limit).await?;
+            // The rootlist paging API does not expose how many playlists lie behind the current
+            // window, so leave the total unknown and let the client infer from the page size.
+            library_page(playlists, None)
+        }
         "Albums" => {
-            let items = collection_page(
+            let (items, total) = collection_page(
                 session,
                 token,
                 "collection",
@@ -1609,15 +1625,15 @@ pub async fn library(
             .await?;
             let uris = collection_uris(&items, "spotify:album:");
             let albums = fetch_albums(session, token, &uris, false).await;
-            Ok(serde_json::to_string(&albums).map_err(|e| e.to_string())?)
+            library_page(albums, Some(total))
         }
         "Artists" => {
-            let mut items =
+            let (mut items, mut total) =
                 collection_page(session, token, "artist", "spotify:artist:", offset, limit).await?;
             // Only fall back for the first page. An empty page past the end is not a reason to
             // switch to the shared collection set.
             if items.is_empty() && offset == 0 {
-                items = collection_page(
+                let fallback = collection_page(
                     session,
                     token,
                     "collection",
@@ -1626,6 +1642,8 @@ pub async fn library(
                     limit,
                 )
                 .await?;
+                items = fallback.0;
+                total = fallback.1;
             }
             let uris = collection_uris(&items, "spotify:artist:");
             let futures = uris.iter().map(|uri| {
@@ -1639,10 +1657,10 @@ pub async fn library(
                 }
             });
             let artists: Vec<ArtistJson> = join_all(futures).await.into_iter().flatten().collect();
-            Ok(serde_json::to_string(&artists).map_err(|e| e.to_string())?)
+            library_page(artists, Some(total))
         }
         "Shows" => {
-            let items =
+            let (items, total) =
                 collection_page(session, token, "show", "spotify:show:", offset, limit).await?;
             let uris = collection_uris(&items, "spotify:show:");
             let futures = uris.iter().map(|uri| {
@@ -1656,7 +1674,7 @@ pub async fn library(
                 }
             });
             let shows: Vec<ShowJson> = join_all(futures).await.into_iter().flatten().collect();
-            Ok(serde_json::to_string(&shows).map_err(|e| e.to_string())?)
+            library_page(shows, Some(total))
         }
         other => Err(format!("unknown library filter: {other}")),
     }
@@ -1923,8 +1941,8 @@ pub async fn top_tracks(
 #[cfg(test)]
 mod tests {
     use super::{
-        owner_display, percent_decode, radio_playlist_uri, radio_track_uris, rootlist_folder_name,
-        sort_newest_first, CollectionItem,
+        library_page, owner_display, percent_decode, radio_playlist_uri, radio_track_uris,
+        rootlist_folder_name, sort_newest_first, CollectionItem,
     };
     use librespot_core::SpotifyUri;
     use serde_json::json;
@@ -1969,6 +1987,22 @@ mod tests {
                 "spotify:track:1ZbT7TBIuOCjXePHVaqCWx"
             ]
         );
+    }
+
+    #[test]
+    fn library_page_reports_the_category_total() {
+        let body = library_page(vec![json!({"id": "show1"})], Some(12)).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(value["items"][0]["id"], json!("show1"));
+        assert_eq!(value["total"], json!(12));
+    }
+
+    #[test]
+    fn library_page_omits_an_unknown_total() {
+        let body = library_page(vec![json!({"id": "playlist1"})], None).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(value["items"][0]["id"], json!("playlist1"));
+        assert!(value.get("total").is_none());
     }
 
     #[test]
