@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.content.Context
+import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import hrln.interactive.sidekit.sdk.theme.SharedPreferencesSidekitThemeStore
 import org.junit.Assert.assertFalse
@@ -42,5 +43,32 @@ class SidetrackLocalSettingsTest {
         SidetrackLocalSettings(context).markOnboardingSeen()
 
         assertTrue(SidetrackLocalSettings(context).hasSeenOnboarding())
+    }
+
+    @Test fun `an existing install without keypad access gets one welcome`() {
+        prefs.edit().putBoolean("onboarding_seen", true).commit()
+
+        assertTrue(SidetrackLocalSettings(context).needsOnboarding(hostBacked = false))
+
+        SidetrackLocalSettings(context).markOnboardingSeen()
+
+        assertFalse(SidetrackLocalSettings(context).needsOnboarding(hostBacked = false))
+    }
+
+    @Test fun `a host backed install does not ask for Sidetrack keypad access`() {
+        prefs.edit().putBoolean("onboarding_seen", true).commit()
+
+        assertFalse(SidetrackLocalSettings(context).needsOnboarding(hostBacked = true))
+    }
+
+    @Test fun `the keypad accessibility service is detected by package and class suffix`() {
+        val component = context.packageName + "/hrln.interactive.sidekit.sdk.system.KeypadAccessibilityService"
+        Settings.Secure.putString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            "other.app/.OtherService:$component"
+        )
+
+        assertTrue(SidetrackKeypadAccess.isEnabled(context))
     }
 }

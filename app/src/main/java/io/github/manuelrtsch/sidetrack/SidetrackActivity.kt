@@ -3,10 +3,12 @@ package io.github.manuelrtsch.sidetrack
 import android.content.Intent
 import android.os.Bundle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import hrln.interactive.sidekit.design.input.Keypad
@@ -14,6 +16,7 @@ import hrln.interactive.sidekit.sdk.SidekitStores
 import hrln.interactive.sidekit.sdk.app.SidekitActivity
 import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
 import hrln.interactive.sidekit.sdk.input.applyInputMode
+import hrln.interactive.sidekit.sdk.system.KeypadSystemBack
 import io.github.manuelrtsch.sidetrack.data.SpotifySessions
 
 /**
@@ -26,6 +29,20 @@ import io.github.manuelrtsch.sidetrack.data.SpotifySessions
 class SidetrackActivity : SidekitActivity() {
     private val homeRequests = mutableIntStateOf(0)
     private val searchRequests = mutableIntStateOf(0)
+
+    private var navController: NavHostController? = null
+    private var keypadBackOverride: (() -> Boolean)? = null
+    private val systemBack: () -> Boolean = {
+        keypadBackOverride?.invoke() ?: (navController?.keypadBack() == true)
+    }
+
+    /**
+     * A screen with a temporary mode (the Queue's reorder or clear confirmation) can claim the
+     * keypad Back key first. Returning null gives it back to the screen's left action.
+     */
+    fun setKeypadBackOverride(handler: (() -> Boolean)?) {
+        keypadBackOverride = handler
+    }
 
     override fun onSidekitHome() {
         homeRequests.intValue++
@@ -60,6 +77,12 @@ class SidetrackActivity : SidekitActivity() {
         val module = config?.keypadModuleOrDefault() ?: keypadPreferences.module()
         if (module != null) keypad.useModule(module)
         keypad.useCustomMapping(config?.customModuleOrDefault() ?: keypadPreferences.customModule())
+        KeypadSystemBack.delegate = systemBack
+    }
+
+    override fun onPause() {
+        if (KeypadSystemBack.delegate === systemBack) KeypadSystemBack.delegate = null
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -79,8 +102,15 @@ class SidetrackActivity : SidekitActivity() {
             val signedIn = SpotifySessions.get(context).signedIn.value
             when {
                 !signedIn -> SIDE_PLAY_SIGN_IN
-                !SidetrackLocalSettings(context).hasSeenOnboarding() -> SIDE_PLAY_ONBOARDING
+                SidetrackLocalSettings(context).needsOnboarding(stores.isHostBacked) -> SIDE_PLAY_ONBOARDING
                 else -> SIDE_PLAY_START
+            }
+        }
+        DisposableEffect(nav) {
+            navController = nav
+            onDispose {
+                if (navController === nav) navController = null
+                keypadBackOverride = null
             }
         }
         SidetrackLinks.Follow(nav)
@@ -93,7 +123,12 @@ class SidetrackActivity : SidekitActivity() {
             if (search > 0) nav.navigate(SIDE_PLAY_SEARCH) { launchSingleTop = true }
         }
         NavHost(navController = nav, startDestination = SIDE_PLAY_ROOT) {
-            sidetrackGraph(nav, startDestination = start, hostBacked = stores.isHostBacked)
+            sidetrackGraph(
+                nav,
+                startDestination = start,
+                hostBacked = stores.isHostBacked,
+                onKeypadBackOverride = ::setKeypadBackOverride
+            )
         }
     }
 

@@ -1,5 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -8,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -16,6 +19,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitCard
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -48,6 +52,17 @@ fun SidetrackOnboardingScreen(
         SharedPreferencesKeypadPreferences(context, SidetrackLocalSettings.KEYPAD_FILE)
     }
     val custom = keypad?.mapper?.customModule ?: keypadPrefs.customModule()
+    var accessRevision by remember { mutableIntStateOf(0) }
+    val keypadBackEnabled = remember(accessRevision) { SidetrackKeypadAccess.isEnabled(context) }
+    val accessSettings = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        accessRevision++
+    }
+    // Android does not report an accessibility-service change through a callback. Refresh when
+    // the user comes back from the system Accessibility screen.
+    LifecycleResumeEffect(Unit) {
+        accessRevision++
+        onPauseOrDispose {}
+    }
     var module by remember(keypad) {
         mutableStateOf(keypad?.module ?: custom ?: keypadPrefs.module() ?: KeypadModule.T9)
     }
@@ -73,6 +88,11 @@ fun SidetrackOnboardingScreen(
             keypad?.useModule(next) ?: keypadPrefs.writeModule(next)
             module = next
         },
+        canManageKeypadAccess = !hostBacked,
+        keypadBackEnabled = keypadBackEnabled,
+        onEnableKeypadBack = {
+            runCatching { accessSettings.launch(SidetrackKeypadAccess.settingsIntent()) }
+        },
         onAbout = onAbout,
         onDone = {
             local.markOnboardingSeen()
@@ -92,6 +112,9 @@ internal fun SidetrackOnboardingContent(
     keyboardHint: String,
     canSwitchKeyboard: Boolean,
     onSwitchKeyboard: () -> Unit,
+    canManageKeypadAccess: Boolean = false,
+    keypadBackEnabled: Boolean = false,
+    onEnableKeypadBack: () -> Unit = {},
     onAbout: () -> Unit,
     onDone: () -> Unit
 ) {
@@ -137,6 +160,31 @@ internal fun SidetrackOnboardingContent(
                     color = SidekitTheme.colors.surfaceA6,
                     maxLines = 2
                 )
+            }
+            if (canManageKeypadAccess) {
+                item(key = "keypadBack") {
+                    SidetrackItem(
+                        "Keypad Back key",
+                        secondary = if (keypadBackEnabled) "On" else "Off",
+                        secondaryToEnd = true,
+                        showLinkArrow = true,
+                        showLinkArrowWithSecondary = true,
+                        onClick = onEnableKeypadBack
+                    )
+                }
+                item(key = "keypadBackHint") {
+                    SidekitText(
+                        if (keypadBackEnabled) {
+                            "Enabled. The top-left key goes Back; hold it to open the dialer."
+                        } else {
+                            "Needed for the top-left Back key. Enable Sidetrack keypad in Accessibility; hold Back to open the dialer."
+                        },
+                        Modifier.padding(horizontal = 18.dp),
+                        style = SidekitTheme.typography.small,
+                        color = SidekitTheme.colors.surfaceA6,
+                        maxLines = 3
+                    )
+                }
             }
             item(key = "options") {
                 SidekitCard(Modifier.fillMaxWidth()) {

@@ -11,7 +11,8 @@ import hrln.interactive.sidekit.design.input.T9Mode
  * here because it belongs to Sidetrack's own shell, not to the SDK's theme contract.
  */
 internal class SidetrackLocalSettings(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+    private val context = context.applicationContext
+    private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
     var inputMode: T9Mode
         get() = T9Mode.entries.firstOrNull { it.name == prefs.getString(KEY_INPUT_MODE, null) } ?: T9Mode.MultiTap
@@ -33,9 +34,24 @@ internal class SidetrackLocalSettings(context: Context) {
      */
     fun hasSeenOnboarding(): Boolean = prefs.getBoolean(KEY_ONBOARDING_SEEN, false)
 
+    /**
+     * True when a standalone install still needs the keypad Back access prompt. The prompt is
+     * one-shot: declining it must not turn every launch into the welcome screen. Existing users
+     * upgrading into this release have [KEY_ONBOARDING_SEEN] set but [KEY_KEYPAD_ACCESS_PROMPTED]
+     * absent, so they see it once even though the welcome itself is already done.
+     */
+    fun needsOnboarding(hostBacked: Boolean): Boolean =
+        !hasSeenOnboarding() ||
+            (!hostBacked && !SidetrackKeypadAccess.isEnabled(context) && !hasPromptedKeypadAccess())
+
     fun markOnboardingSeen() {
-        prefs.edit().putBoolean(KEY_ONBOARDING_SEEN, true).apply()
+        prefs.edit()
+            .putBoolean(KEY_ONBOARDING_SEEN, true)
+            .putBoolean(KEY_KEYPAD_ACCESS_PROMPTED, true)
+            .apply()
     }
+
+    private fun hasPromptedKeypadAccess(): Boolean = prefs.getBoolean(KEY_KEYPAD_ACCESS_PROMPTED, false)
 
     /**
      * Standalone Sidetrack starts in the compact layout. Only writes the default when the choice
@@ -51,6 +67,7 @@ internal class SidetrackLocalSettings(context: Context) {
         const val KEYPAD_FILE = "sidetrack_keypad"
         private const val KEY_INPUT_MODE = "input_mode"
         private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
+        private const val KEY_KEYPAD_ACCESS_PROMPTED = "keypad_access_prompted"
 
         // Must match the key SharedPreferencesSidekitThemeStore reads and writes.
         private const val KEY_COMPACT_LAYOUT = "compact_layout"

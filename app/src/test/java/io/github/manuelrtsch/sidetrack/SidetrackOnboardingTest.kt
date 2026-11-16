@@ -54,6 +54,7 @@ class SidetrackOnboardingTest {
         compose.onNodeWithText("Keyboard").performClick()
 
         compose.onNodeWithText("Mini QWERTY").assertExists()
+        compose.onNodeWithText("Keypad Back key").assertExists()
         assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
     }
 
@@ -68,6 +69,7 @@ class SidetrackOnboardingTest {
         compose.onNodeWithText("Keyboard").performClick()
 
         compose.onNodeWithText("T9 · Sidekit").assertExists()
+        compose.onNodeWithText("Keypad Back key").assertDoesNotExist()
         assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
     }
 }
