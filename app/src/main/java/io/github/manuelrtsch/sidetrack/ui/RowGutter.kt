@@ -1,6 +1,5 @@
 package io.github.manuelrtsch.sidetrack.ui
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -136,7 +135,7 @@ fun GutterRow(
             Modifier
                 .graphicsLayer { translationX = -gutterPx }
                 .rowLongPress {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    view.longPressHaptic()
                     state.reveal(key)
                 }
         ) {
@@ -191,6 +190,10 @@ fun rememberGutterSquareFocus(key: Any, state: RowGutterState): Modifier {
 /**
  * Debounces the focus into the gutter. Scrubbing Up/Down through a list must not flash a pair of
  * buttons on every row it passes.
+ *
+ * Deliberately silent: the tick a reveal gets belongs to the long press above, not to the focus
+ * landing. The keypad has the focus ring to say where it is, and vibrating here would buzz on
+ * every row a held D-pad passes. See [Haptics].
  */
 @Composable
 internal fun RowGutterState.settle() {

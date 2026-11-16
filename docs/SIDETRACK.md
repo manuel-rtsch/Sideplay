@@ -36,7 +36,11 @@ Spotify.
   press is the touch equivalent of putting the focus on a row, because a touch screen has no focus
   border to follow. Movement past touch slop belongs to scrolling or swiping and never reveals a
   gutter. One row shows squares at a time, whichever hand opened them: a long press gives the
-  focus's gutter up, and moving the focus gives the long press's up.
+  focus's gutter up, and moving the focus gives the long press's up. The haptic tick that
+  acknowledges a reveal belongs to the touch route only: a long press ticks, a focus settle does
+  not. The keypad has the focus ring to say where it is, and buzzing there would fire on every
+  row a held D-pad passes. Every haptic in the app is touch-only for that reason, and they all
+  come from `ui/Haptics.kt`.
 - **Content never wears the theme colour.** Play, selection, progress, save/unsave, and
   follow/unfollow use the Library success fill; the case colour belongs to action-bar actions and
   the vinyl status record only. Save controls are always bookmark tiles: hollow (`BookmarkBorder`)
