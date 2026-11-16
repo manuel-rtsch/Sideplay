@@ -168,12 +168,21 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         t("sf8", "Out of Frame", "Lumen Park", "lumen", "soft_focus", R.drawable.cover_soft_focus)
     )
 
+    /** The sixth artist and album, so every library category has more than one screen's worth. */
+    private val northlight = listOf(
+        t("nl1", "Cold Front", "Northlight", "northlight", "northlight", R.drawable.cover_northlight),
+        t("nl2", "Signal Fire", "Northlight", "northlight", "northlight", R.drawable.cover_northlight),
+        t("nl3", "Low Beam", "Northlight", "northlight", "northlight", R.drawable.cover_northlight),
+        t("nl4", "First Light", "Northlight", "northlight", "northlight", R.drawable.cover_northlight)
+    )
+
     private val artistList = listOf(
         SpotifyArtist("aurora", TRIO, R.drawable.cover_aurora_vale, listOf("night_signals", "glass_hours")),
         SpotifyArtist("mira", "Mira Sol", R.drawable.cover_mira_sol, listOf("coastline")),
         SpotifyArtist("static", "The Static Coast", R.drawable.cover_static_coast, listOf("rooms_we_left")),
         SpotifyArtist("ivy", "Ivy & Ash", R.drawable.cover_ivy_ash, listOf("golden_hour")),
-        SpotifyArtist("lumen", "Lumen Park", R.drawable.cover_lumen_park, listOf("soft_focus"))
+        SpotifyArtist("lumen", "Lumen Park", R.drawable.cover_lumen_park, listOf("soft_focus")),
+        SpotifyArtist("northlight", "Northlight", R.drawable.cover_northlight, listOf("northlight"))
     )
 
     private val albumList = listOf(
@@ -182,7 +191,8 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         SpotifyAlbum("coastline", "Coastline", "Mira Sol", "mira", 2023, R.drawable.cover_coastline, coastline),
         SpotifyAlbum("rooms_we_left", "Rooms We Left", "The Static Coast", "static", 2024, R.drawable.cover_rooms_we_left, roomsWeLeft),
         SpotifyAlbum("golden_hour", "Golden Hour", "Ivy & Ash", "ivy", 2021, R.drawable.cover_golden_hour, goldenHour),
-        SpotifyAlbum("soft_focus", "Soft Focus", "Lumen Park", "lumen", 2025, R.drawable.cover_soft_focus, softFocus)
+        SpotifyAlbum("soft_focus", "Soft Focus", "Lumen Park", "lumen", 2025, R.drawable.cover_soft_focus, softFocus),
+        SpotifyAlbum("northlight", "Northlight", "Northlight", "northlight", 2025, R.drawable.cover_northlight, northlight)
     )
 
     private val playlistList = listOf(
@@ -217,6 +227,22 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             null,
             R.drawable.cover_kitchen_radio,
             listOf(goldenHour[1], coastline[1], nightSignals[8], goldenHour[4], glassHours[2], coastline[4], roomsWeLeft[0])
+        ),
+        SpotifyPlaylist(
+            "after_hours",
+            "After Hours",
+            "You",
+            null,
+            R.drawable.cover_after_hours,
+            listOf(nightSignals[1], softFocus[6], roomsWeLeft[3], coastline[5], glassHours[4], goldenHour[7])
+        ),
+        SpotifyPlaylist(
+            "slow_sundays",
+            "Slow Sundays",
+            "You",
+            null,
+            R.drawable.cover_slow_sundays,
+            listOf(goldenHour[2], coastline[3], softFocus[5], nightSignals[6], roomsWeLeft[6], northlight[2])
         )
     )
 
@@ -244,6 +270,50 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
                 e("sh2", "The Night Shift", "Small Hours", "small_hours", "11 Feb 2025", R.drawable.cover_small_hours, 1_976_000L),
                 e("sh3", "A Film We Nearly Made", "Small Hours", "small_hours", "18 Feb 2025", R.drawable.cover_small_hours, 2_035_000L),
                 e("sh4", "Room Tone", "Small Hours", "small_hours", "25 Feb 2025", R.drawable.cover_small_hours, 1_788_000L)
+            )
+        ),
+        SpotifyShow(
+            "between_takes",
+            "Between Takes",
+            "Northline Audio",
+            R.drawable.cover_between_takes,
+            listOf(
+                e("bt1", "The First Read", "Between Takes", "between_takes", "6 May 2025", R.drawable.cover_between_takes, 2_208_000L),
+                e("bt2", "Notes in the Margin", "Between Takes", "between_takes", "13 May 2025", R.drawable.cover_between_takes, 2_431_000L),
+                e("bt3", "The Cut We Kept", "Between Takes", "between_takes", "20 May 2025", R.drawable.cover_between_takes, 2_115_000L)
+            )
+        ),
+        SpotifyShow(
+            "night_bus",
+            "The Night Bus",
+            "Northline Audio",
+            R.drawable.cover_the_night_bus,
+            listOf(
+                e("nb1", "Two Streets Over", "The Night Bus", "night_bus", "3 Jun 2025", R.drawable.cover_the_night_bus, 1_964_000L),
+                e("nb2", "Last Stop", "The Night Bus", "night_bus", "10 Jun 2025", R.drawable.cover_the_night_bus, 2_142_000L),
+                e("nb3", "Home Before Light", "The Night Bus", "night_bus", "17 Jun 2025", R.drawable.cover_the_night_bus, 1_878_000L)
+            )
+        ),
+        SpotifyShow(
+            "signal_lost",
+            "Signal Lost",
+            "Station Nine",
+            R.drawable.cover_signal_lost,
+            listOf(
+                e("sl1", "Carrier Wave", "Signal Lost", "signal_lost", "1 Apr 2025", R.drawable.cover_signal_lost, 2_311_000L),
+                e("sl2", "Static Between Stations", "Signal Lost", "signal_lost", "8 Apr 2025", R.drawable.cover_signal_lost, 2_560_000L),
+                e("sl3", "The Long Reply", "Signal Lost", "signal_lost", "15 Apr 2025", R.drawable.cover_signal_lost, 2_077_000L)
+            )
+        ),
+        SpotifyShow(
+            "open_studio",
+            "Open Studio",
+            "Station Nine",
+            R.drawable.cover_open_studio,
+            listOf(
+                e("os1", "First Draft", "Open Studio", "open_studio", "2 Jul 2025", R.drawable.cover_open_studio, 2_485_000L),
+                e("os2", "Margins", "Open Studio", "open_studio", "9 Jul 2025", R.drawable.cover_open_studio, 2_196_000L),
+                e("os3", "The Edit", "Open Studio", "open_studio", "16 Jul 2025", R.drawable.cover_open_studio, 2_374_000L)
             )
         )
     )

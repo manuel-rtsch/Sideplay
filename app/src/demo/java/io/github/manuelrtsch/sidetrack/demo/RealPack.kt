@@ -127,7 +127,9 @@ object RealPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         SpotifyArtist("nina", "Nina Simone", R.drawable.album_spell, listOf("spell")),
         SpotifyArtist("massive", "Massive Attack", R.drawable.album_mezzanine, listOf("mezzanine")),
         SpotifyArtist("fela", "Fela Kuti", R.drawable.album_zombie, listOf("zombie")),
-        SpotifyArtist("bvsc", "Buena Vista Social Club", R.drawable.album_bvsc, listOf("bvsc"))
+        SpotifyArtist("bvsc", "Buena Vista Social Club", R.drawable.album_bvsc, listOf("bvsc")),
+        // A sixth artist, credited through the two albums he co-wrote with Bowie.
+        SpotifyArtist("eno", "Brian Eno", R.drawable.album_low, listOf("low", "heroes"))
     )
 
     private val albumList = listOf(
@@ -171,6 +173,22 @@ object RealPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             null,
             R.drawable.cover_kitchen_radio,
             listOf(bvsc[0], heroes[2], spell[3], zombie[0], mezzanine[2], heroes[1], bvsc[1])
+        ),
+        SpotifyPlaylist(
+            "after_hours",
+            "After Hours",
+            "You",
+            null,
+            R.drawable.cover_after_hours,
+            listOf(mezzanine[1], spell[2], low[1], zombie[1], heroes[3], bvsc[5])
+        ),
+        SpotifyPlaylist(
+            "slow_sundays",
+            "Slow Sundays",
+            "You",
+            null,
+            R.drawable.cover_slow_sundays,
+            listOf(bvsc[3], spell[0], heroes[4], low[2], mezzanine[4], bvsc[1])
         )
     )
 
@@ -198,6 +216,50 @@ object RealPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
                 e("sh2", "The Night Shift", "Small Hours", "small_hours", "11 Feb 2025", R.drawable.cover_small_hours, 1_976_000L),
                 e("sh3", "A Film We Nearly Made", "Small Hours", "small_hours", "18 Feb 2025", R.drawable.cover_small_hours, 2_035_000L),
                 e("sh4", "Room Tone", "Small Hours", "small_hours", "25 Feb 2025", R.drawable.cover_small_hours, 1_788_000L)
+            )
+        ),
+        SpotifyShow(
+            "between_takes",
+            "Between Takes",
+            "Northline Audio",
+            R.drawable.cover_between_takes,
+            listOf(
+                e("bt1", "The First Read", "Between Takes", "between_takes", "6 May 2025", R.drawable.cover_between_takes, 2_208_000L),
+                e("bt2", "Notes in the Margin", "Between Takes", "between_takes", "13 May 2025", R.drawable.cover_between_takes, 2_431_000L),
+                e("bt3", "The Cut We Kept", "Between Takes", "between_takes", "20 May 2025", R.drawable.cover_between_takes, 2_115_000L)
+            )
+        ),
+        SpotifyShow(
+            "night_bus",
+            "The Night Bus",
+            "Northline Audio",
+            R.drawable.cover_the_night_bus,
+            listOf(
+                e("nb1", "Two Streets Over", "The Night Bus", "night_bus", "3 Jun 2025", R.drawable.cover_the_night_bus, 1_964_000L),
+                e("nb2", "Last Stop", "The Night Bus", "night_bus", "10 Jun 2025", R.drawable.cover_the_night_bus, 2_142_000L),
+                e("nb3", "Home Before Light", "The Night Bus", "night_bus", "17 Jun 2025", R.drawable.cover_the_night_bus, 1_878_000L)
+            )
+        ),
+        SpotifyShow(
+            "signal_lost",
+            "Signal Lost",
+            "Station Nine",
+            R.drawable.cover_signal_lost,
+            listOf(
+                e("sl1", "Carrier Wave", "Signal Lost", "signal_lost", "1 Apr 2025", R.drawable.cover_signal_lost, 2_311_000L),
+                e("sl2", "Static Between Stations", "Signal Lost", "signal_lost", "8 Apr 2025", R.drawable.cover_signal_lost, 2_560_000L),
+                e("sl3", "The Long Reply", "Signal Lost", "signal_lost", "15 Apr 2025", R.drawable.cover_signal_lost, 2_077_000L)
+            )
+        ),
+        SpotifyShow(
+            "open_studio",
+            "Open Studio",
+            "Station Nine",
+            R.drawable.cover_open_studio,
+            listOf(
+                e("os1", "First Draft", "Open Studio", "open_studio", "2 Jul 2025", R.drawable.cover_open_studio, 2_485_000L),
+                e("os2", "Margins", "Open Studio", "open_studio", "9 Jul 2025", R.drawable.cover_open_studio, 2_196_000L),
+                e("os3", "The Edit", "Open Studio", "open_studio", "16 Jul 2025", R.drawable.cover_open_studio, 2_374_000L)
             )
         )
     )
