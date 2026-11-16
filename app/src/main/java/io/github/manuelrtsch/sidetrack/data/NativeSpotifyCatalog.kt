@@ -250,7 +250,8 @@ internal fun JSONObject.collection(type: SpotifyCollectionType): SpotifyCollecti
         artistId = optString("artistId").spotifyIdOrNull(),
         artUrl = optString("artUrl").takeIf { it.isNotEmpty() },
         totalItems = optInt("totalItems", items.size),
-        hasMore = optBoolean("hasMore", false)
+        hasMore = optBoolean("hasMore", false),
+        description = optString("description")
     )
 }
 
@@ -325,7 +326,8 @@ private fun showFromNative(json: JSONObject): SpotifyShow? {
         artRes = 0,
         episodes = json.optJSONArray("episodes").episodes(null),
         artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
-        episodeCount = json.optInt("episodeCount", 0)
+        episodeCount = json.optInt("episodeCount", 0),
+        description = json.optString("description")
     )
 }
 
@@ -345,7 +347,10 @@ private fun JSONArray?.episodes(show: SpotifyShow?): List<SpotifyEpisode> = buil
                 durationMs = json.optLong("durationMs", 0L),
                 video = json.optBoolean("video", false),
                 uri = json.optString("uri").takeIf { it.isNotEmpty() },
-                artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() }
+                artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+                description = json.optString("description"),
+                episodeNumber = json.optInt("number", 0).takeIf { it > 0 },
+                explicit = json.optBoolean("explicit", false)
             )
         )
     }

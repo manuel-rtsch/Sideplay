@@ -147,12 +147,13 @@ object MockSpotifyDataSource : SpotifyCatalog {
             "Northline Audio",
             R.drawable.cover_long_way_home,
             listOf(
-                SpotifyEpisode("lw1", "The Road Out of Town", "The Long Way Home", "long_way_home", "12 Mar 2025", R.drawable.cover_long_way_home, 2_442_000L),
-                SpotifyEpisode("lw2", "A Room with One Window", "The Long Way Home", "long_way_home", "19 Mar 2025", R.drawable.cover_long_way_home, 2_118_000L),
-                SpotifyEpisode("lw3", "The Ferry at Dusk", "The Long Way Home", "long_way_home", "26 Mar 2025", R.drawable.cover_long_way_home, 2_676_000L),
-                SpotifyEpisode("lw4", "Notes from the Coast Road", "The Long Way Home", "long_way_home", "2 Apr 2025", R.drawable.cover_long_way_home, 2_307_000L),
-                SpotifyEpisode("lw5", "The Last Bus", "The Long Way Home", "long_way_home", "9 Apr 2025", R.drawable.cover_long_way_home, 2_529_000L)
-            )
+                SpotifyEpisode("lw1", "The Road Out of Town", "The Long Way Home", "long_way_home", "12 Mar 2025", R.drawable.cover_long_way_home, 2_442_000L, description = "A borrowed car, a paper map and the first town sign that does not point home.", episodeNumber = 1),
+                SpotifyEpisode("lw2", "A Room with One Window", "The Long Way Home", "long_way_home", "19 Mar 2025", R.drawable.cover_long_way_home, 2_118_000L, description = "One window, one chair, and a landlord who remembers every guest who never stayed.", episodeNumber = 2),
+                SpotifyEpisode("lw3", "The Ferry at Dusk", "The Long Way Home", "long_way_home", "26 Mar 2025", R.drawable.cover_long_way_home, 2_676_000L, description = "The last crossing of the day, recorded from the back of the boat.", episodeNumber = 3),
+                SpotifyEpisode("lw4", "Notes from the Coast Road", "The Long Way Home", "long_way_home", "2 Apr 2025", R.drawable.cover_long_way_home, 2_307_000L, description = "A walk along the coast road, recorded in one take before the weather turns.", episodeNumber = 4),
+                SpotifyEpisode("lw5", "The Last Bus", "The Long Way Home", "long_way_home", "9 Apr 2025", R.drawable.cover_long_way_home, 2_529_000L, description = "The last bus leaves before the town wakes up. This is what it sounds like from the back seat.", episodeNumber = 5)
+            ),
+            description = "Stories from the roads between places, told by the people who keep moving."
         ),
         SpotifyShow(
             "small_hours",
@@ -160,11 +161,12 @@ object MockSpotifyDataSource : SpotifyCatalog {
             "Northline Audio",
             R.drawable.cover_small_hours,
             listOf(
-                SpotifyEpisode("sh1", "3:14 AM", "Small Hours", "small_hours", "4 Feb 2025", R.drawable.cover_small_hours, 1_842_000L),
-                SpotifyEpisode("sh2", "The Night Shift", "Small Hours", "small_hours", "11 Feb 2025", R.drawable.cover_small_hours, 1_976_000L),
-                SpotifyEpisode("sh3", "A Film We Nearly Made", "Small Hours", "small_hours", "18 Feb 2025", R.drawable.cover_small_hours, 2_035_000L),
-                SpotifyEpisode("sh4", "Room Tone", "Small Hours", "small_hours", "25 Feb 2025", R.drawable.cover_small_hours, 1_788_000L)
-            )
+                SpotifyEpisode("sh1", "3:14 AM", "Small Hours", "small_hours", "4 Feb 2025", R.drawable.cover_small_hours, 1_842_000L, description = "A city at the hour when only the bakeries and the taxis are awake.", episodeNumber = 1),
+                SpotifyEpisode("sh2", "The Night Shift", "Small Hours", "small_hours", "11 Feb 2025", R.drawable.cover_small_hours, 1_976_000L, description = "What the people who work while you sleep hear all night.", episodeNumber = 2),
+                SpotifyEpisode("sh3", "A Film We Nearly Made", "Small Hours", "small_hours", "18 Feb 2025", R.drawable.cover_small_hours, 2_035_000L, description = "The scenes that survived, and the ones that never left the editing room.", episodeNumber = 3),
+                SpotifyEpisode("sh4", "Room Tone", "Small Hours", "small_hours", "25 Feb 2025", R.drawable.cover_small_hours, 1_788_000L, description = "Silence is never really silent. A close listen to the spaces between recordings.", episodeNumber = 4)
+            ),
+            description = "A late-night documentary show about the sounds and people of a city after dark."
         )
     )
 
@@ -217,7 +219,8 @@ object MockSpotifyDataSource : SpotifyCatalog {
                 it.artRes,
                 items,
                 totalItems = it.episodes.size,
-                hasMore = offset + items.size < it.episodes.size
+                hasMore = offset + items.size < it.episodes.size,
+                description = it.description
             )
         }
     }

@@ -233,7 +233,8 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
             items = episodes,
             artUrl = show.artUrl,
             totalItems = show.episodeCount,
-            hasMore = offset + episodes.size < show.episodeCount
+            hasMore = offset + episodes.size < show.episodeCount,
+            description = show.description
         )
     }
 
@@ -269,7 +270,9 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
             durationMs = json.optLong("duration_ms", 0L),
             video = false,
             uri = json.optString("uri").takeIf { it.isNotEmpty() },
-            artUrl = images
+            artUrl = images,
+            description = json.optString("description"),
+            explicit = json.optBoolean("explicit", false)
         )
     }
 
@@ -314,7 +317,8 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
             publisher = json.optString("publisher").ifEmpty { "Podcast" },
             artRes = 0,
             episodes = emptyList(),
-            artUrl = artUrl
+            artUrl = artUrl,
+            description = json.optString("description")
         )
         val episodes = json.optJSONObject("episodes")?.optJSONArray("items").episodes(this, base)
         return base.copy(

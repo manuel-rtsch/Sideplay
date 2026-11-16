@@ -6,6 +6,7 @@ import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.DemoContentSource
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
+import io.github.manuelrtsch.sidetrack.SpotifyEpisode
 import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 import io.github.manuelrtsch.sidetrack.SpotifyTrack
 import io.github.manuelrtsch.sidetrack.auth.EncryptedSpotifyCredentialStore
@@ -49,10 +50,19 @@ class SpotifySession(
     private val queueStore = appContext?.let { FileSpotifyQueueStore(File(it.filesDir, "sidetracks-queue.bin")) }
     private val historyStore = appContext?.let { FileSpotifyHistoryStore(File(it.filesDir, "sidetracks-history.bin")) }
     private val positionStore = appContext?.let { FileSpotifyPositionStore(File(it.filesDir, "sidetracks-resume.bin")) }
+    private val episodeProgressStore = appContext?.let {
+        FileSpotifyEpisodeProgressStore(File(it.filesDir, "sidetracks-episode-progress.bin"))
+    }
 
     /** Where the last session stopped: the item and the offset, so reopening resumes it. */
     @Volatile var resumePoint: SpotifyResumePoint? = positionStore?.read()
         private set
+
+    /** Per-episode podcast offsets, independent of the single-session resume point. */
+    val episodeProgress = SpotifyEpisodeProgressRepository(
+        load = { episodeProgressStore?.read().orEmpty() },
+        save = { episodeProgressStore?.write(it) }
+    )
     private val _settings = MutableStateFlow(settingsStore?.read() ?: SpotifySettings())
     val settings: StateFlow<SpotifySettings> = _settings.asStateFlow()
 
@@ -205,6 +215,7 @@ class SpotifySession(
         rememberPosition(clear = true)
         queue.stop()
         history.clear()
+        episodeProgress.clearAll()
         playback.clearSleepTimer()
         if (nativeAvailable) {
             playback.setNowPlaying(null)
@@ -334,6 +345,7 @@ class SpotifySession(
 
     fun stopPlayback() {
         halting = false
+        rememberEpisodeProgress()
         rememberPosition(clear = true)
         queue.stop()
         playbackScope.launch { runCatching { playback.stop() } }
@@ -360,6 +372,7 @@ class SpotifySession(
      */
     fun haltPlayback() {
         halting = true
+        rememberEpisodeProgress()
         val uri = playback.current?.uri
         // Only trust the id when the events it came from describe this track. A queued event for
         // the previous track must not make the halt echo look like a different generation.
@@ -367,6 +380,12 @@ class SpotifySession(
         haltStop.arm(uri, id, SystemClock.elapsedRealtime())
         rememberPosition()
         playbackScope.launch { runCatching { playback.stop(keepQueue = true) } }
+    }
+
+    /** Saves the current podcast offset when the app closes or the notification stops playback. */
+    private fun rememberEpisodeProgress() {
+        val current = playback.current as? SpotifyEpisode ?: return
+        episodeProgress.record(current.id, playback.position, current.durationMs)
     }
 
     /** Remembers the player generation currently reporting events and, when present, its track. */

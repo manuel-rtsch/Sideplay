@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import hrln.interactive.sidekit.design.input.KeypadModule
+import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
@@ -177,6 +178,69 @@ class SidetrackScreenshotTest {
         )
     }
 
+    @Test fun show() = shoot("sidetrack_show") {
+        ShowScreen(
+            runBlocking { MockSpotifyDataSource.collection(SpotifyCollectionType.Show, "long_way_home") }!!,
+            state,
+            episodeProgress = mapOf(
+                "lw1" to SpotifyEpisodeProgress("lw1", 1_200_000L, 2_442_000L, 0L, completed = false)
+            ),
+            onBack = {},
+            onPlay = {},
+            onPlayPause = {},
+            onItem = {},
+            onSave = {},
+            onQueue = {},
+            onQueueItem = {},
+            onNowPlaying = {},
+            onArtwork = {},
+            onLoadMore = {},
+            loadingMore = false,
+            onShowNotes = {},
+            onEpisodeNotes = {},
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
+        )
+    }
+
+    @Test fun nowPlayingEpisode() = shoot("sidetrack_now_playing_episode") {
+        val episode = MockSpotifyDataSource.shows.first().episodes.last()
+        SpotifyNowPlayingScreen(
+            state.copy(current = episode, isPlaying = true),
+            playbackPositionMs = MutableStateFlow(68_000L),
+            sleepTimer = MutableStateFlow(SleepTimerState.Off),
+            onBack = {},
+            onPlayPause = {},
+            onPrevious = {},
+            onNext = {},
+            onSeek = {},
+            onSkipBack = {},
+            onSkipForward = {},
+            onShuffle = {},
+            onRepeat = {},
+            onSave = {},
+            onQueue = {},
+            onRadio = {},
+            onAlbum = {},
+            onShow = {},
+            onArtist = {},
+            onSleepTimer = {},
+            onEpisodeNotes = {},
+            onDismissNotice = {}
+        )
+    }
+
+    @Test fun notes() = shoot("sidetrack_notes") {
+        NotesScreen(
+            title = "The Last Bus",
+            body = "The last bus leaves before the town wakes up. This is what it sounds like from the back seat: " +
+                "the driver counting change, the heater clicking on, and a town that has not decided whether " +
+                "it is still yesterday. Recorded over three nights, with the permission of everyone aboard.",
+            label = "Episode notes",
+            onBack = {}
+        )
+    }
+
     @Test fun artist() = shoot("sidetrack_artist") {
         val artist = MockSpotifyDataSource.artists.first()
         ArtistScreen(
@@ -250,6 +314,8 @@ class SidetrackScreenshotTest {
             onPrevious = {},
             onNext = {},
             onSeek = {},
+            onSkipBack = {},
+            onSkipForward = {},
             onShuffle = {},
             onRepeat = {},
             onSave = {},
@@ -259,6 +325,7 @@ class SidetrackScreenshotTest {
             onShow = {},
             onArtist = {},
             onSleepTimer = {},
+            onEpisodeNotes = {},
             onDismissNotice = {}
         )
     }
@@ -273,6 +340,8 @@ class SidetrackScreenshotTest {
             onPrevious = {},
             onNext = {},
             onSeek = {},
+            onSkipBack = {},
+            onSkipForward = {},
             onShuffle = {},
             onRepeat = {},
             onSave = {},
@@ -282,6 +351,7 @@ class SidetrackScreenshotTest {
             onShow = {},
             onArtist = {},
             onSleepTimer = {},
+            onEpisodeNotes = {},
             onDismissNotice = {}
         )
     }

@@ -208,7 +208,8 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   browse row. A track that has never played has no known saved state, so the row asks for it when
   its gutter opens: liking a search result or a playlist track never interrupts what is playing,
   and unlike works from the Liked Songs list without starting the song first. Episodes reveal one
-  Add to queue square — there is no saved-episode endpoint, and a show is reached from Now Playing.
+  Add to queue square — there is no saved-episode endpoint, and the show is reached from Now
+  Playing (and from the episode's artwork and show-name line there).
   Recently played and History are the exception: their two actions are Add to queue and Remove
   from history, because saving belongs to the saved lists and history is where an entry is
   forgotten. The queue's own rows do not take a long press: they already swipe to remove and hold
@@ -256,8 +257,28 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   a pressable **See more** row; the next page is fetched only when that row is pressed. The artist
   page's play tile fetches the remaining top-track pages itself before playing, so the queue
   always matches the list the page ends up showing.
-- Album and show collections use a position number in the row's left column; playlist rows use
-  per-track artwork instead, since playlist tracks usually come from different albums.
+- Album collections use a position number in the row's left column; playlist rows use per-track
+  artwork instead, since playlist tracks usually come from different albums. Show pages have their
+  own episode row: artwork beside the title and real publishing metadata, then up to two lines of
+  show notes and a full-bleed local resume line at the card's bottom edge. They never use the row's list
+  position as a number, because the list is newest-first.
+- Podcasts have a dedicated show page and Now Playing variant. The show header carries at most two
+  lines of description, followed by a compact **Read full show notes** terminal row. The episode
+  list has no heading and keeps the normal Add to queue gutter plus an Episode notes square when
+  there is a description. Episode Now Playing replaces Shuffle and Repeat with −30 s and +30 s text
+  tiles, makes Previous mean the previous episode instead of the track restart rule, and shows the
+  show name and a two-line episode description without repeating the publication date or remaining
+  time already implied by the seek bar. The show name and artwork both open the show, and Options
+  stays down to Queue, Episode notes and Sleep timer. Song radio and Save stay absent for episodes.
+- Descriptions are never a dead end: tapping show notes, episode notes, or their Episode notes
+  square opens a dedicated reading screen with the full text. Options carries **Show notes** and
+  **Episode notes** as well, so the same page is reachable by keypad.
+- Episode progress is local and per episode (`sidetracks-episode-progress.bin`). Starting an
+  episode resumes from its saved offset, and the show row shows a 4 dp resume line clipped by the
+  card's radius and a compact `21m` remaining label. An episode within 30 seconds of the end
+  counts as **Played** and starts from the beginning next time. Progress is written every five
+  seconds while playing, immediately on seek or pause, when the item changes, and when the app
+  halts playback.
 - Search categories live behind the **Search in** row on the Search screen, not in Options.
   Toggling a category immediately changes the result sections and the empty-state hint. The
   selected categories sit at the right edge of that row in the high-contrast item colour.

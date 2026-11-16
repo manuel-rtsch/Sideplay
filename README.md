@@ -16,6 +16,9 @@ and keyboard settings, and still works with a touchscreen or a physical keypad.
 ## What you can do
 
 - **Listen to your Spotify library** — playlists, albums, artists, shows, and saved tracks.
+- **Listen to podcasts properly** — a dedicated show page with show notes, real episode numbers,
+  publication dates and descriptions, full-screen notes, local per-episode resume points, plus
+  ±30-second controls and no song-style shuffle or repeat in episode playback.
 - **Search everything** — tracks, artists, albums, playlists, and shows in one place.
 - **Control playback** — play, pause, skip, seek, shuffle, repeat, and change volume with the
   phone's own volume keys. Normalize loudness across tracks and join sequential tracks without

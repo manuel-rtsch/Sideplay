@@ -66,12 +66,16 @@ data class SpotifyEpisode(
     override val durationMs: Long,
     val video: Boolean = false,
     override val uri: String? = null,
-    override val artUrl: String? = null
+    override val artUrl: String? = null,
+    /** Show notes, already plain text. The catalog may return HTML; [plainPodcastText] cleans it. */
+    val description: String = "",
+    /** Spotify's publishing number, when the native metadata carries one. */
+    val episodeNumber: Int? = null,
+    override val explicit: Boolean = false
 ) : SpotifyMediaItem {
     override val creator: String get() = show
     override val artistId: String? get() = null
     override val playable: Boolean get() = !video
-    override val explicit: Boolean get() = false
 }
 
 data class SpotifyAlbum(
@@ -105,7 +109,8 @@ data class SpotifyShow(
     @param:DrawableRes val artRes: Int,
     val episodes: List<SpotifyEpisode>,
     val artUrl: String? = null,
-    val episodeCount: Int = episodes.size
+    val episodeCount: Int = episodes.size,
+    val description: String = ""
 )
 
 data class SpotifyArtist(
@@ -130,7 +135,9 @@ data class SpotifyCollection(
     val totalItems: Int = items.size,
     val hasMore: Boolean = false,
     /** False for generated pages (a station without a backing playlist) that cannot be saved. */
-    val saveable: Boolean = true
+    val saveable: Boolean = true,
+    /** Show notes for a podcast collection; the other collection kinds do not have any. */
+    val description: String = ""
 )
 
 /**

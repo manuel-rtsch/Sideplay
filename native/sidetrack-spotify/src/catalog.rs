@@ -117,6 +117,10 @@ struct EpisodeJson {
     video: bool,
     uri: String,
     art_url: Option<String>,
+    description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    number: Option<i32>,
+    explicit: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -129,6 +133,7 @@ struct ShowJson {
     episodes: Vec<EpisodeJson>,
     art_url: Option<String>,
     episode_count: i32,
+    description: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -145,6 +150,8 @@ struct CollectionJson {
     art_url: Option<String>,
     total_items: i32,
     has_more: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -329,6 +336,9 @@ fn episode_json_with(
         video: !episode.videos.is_empty(),
         uri: uri_of(&id_of(&episode.id), "episode"),
         art_url: image_url(&episode.covers).or(show_art_url),
+        description: episode.description.clone(),
+        number: Some(episode.number).filter(|number| *number > 0),
+        explicit: episode.is_explicit,
     }
 }
 
@@ -345,6 +355,7 @@ fn show_json(show: &Show, episodes: Vec<EpisodeJson>) -> ShowJson {
         episode_count: show.episodes.len() as i32,
         episodes,
         art_url: image_url(&show.covers),
+        description: show.description.clone(),
     }
 }
 
@@ -793,6 +804,7 @@ fn pf_show(data: &Value) -> Option<ShowJson> {
             .pointer("/episodes/totalCount")
             .and_then(Value::as_i64)
             .unwrap_or(0) as i32,
+        description: String::new(),
     })
 }
 
@@ -1727,6 +1739,7 @@ pub async fn collection(
                 art_url: album_json.art_url.clone(),
                 total_items: total as i32,
                 has_more: offset + album_json.tracks.len() < total,
+                description: None,
             };
             Ok(serde_json::to_string(&collection).map_err(|e| e.to_string())?)
         }
@@ -1760,13 +1773,14 @@ pub async fn collection(
                 art_url: playlist_json.art_url.clone(),
                 total_items: total as i32,
                 has_more: offset + playlist_json.tracks.len() < total,
+                description: None,
             };
             Ok(serde_json::to_string(&collection).map_err(|e| e.to_string())?)
         }
         "Show" => {
             let show_uri = spotify_uri(id, "show")?;
             let show = show_get(session, token, &show_uri).await;
-            let (title, publisher, art_url, all_uris) = match show {
+            let (title, publisher, art_url, description, all_uris) = match show {
                 Ok(show) => {
                     let mut uris: Vec<SpotifyUri> = show.episodes.iter().cloned().collect();
                     if uris.is_empty() {
@@ -1785,6 +1799,7 @@ pub async fn collection(
                             show.publisher.clone()
                         },
                         image_url(&show.covers),
+                        show.description.clone(),
                         uris,
                     )
                 }
@@ -1809,7 +1824,7 @@ pub async fn collection(
                         .get("image_url")
                         .cloned()
                         .filter(|value| !value.is_empty());
-                    (title, publisher, art_url, uris)
+                    (title, publisher, art_url, String::new(), uris)
                 }
             };
             let total = all_uris.len();
@@ -1845,6 +1860,7 @@ pub async fn collection(
                 art_url,
                 total_items: total as i32,
                 has_more: offset + episodes.len() < total,
+                description: Some(description),
             };
             Ok(serde_json::to_string(&collection).map_err(|e| e.to_string())?)
         }

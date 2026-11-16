@@ -53,12 +53,14 @@ private val APPEARANCE = "$ROOT/appearance"
 private val KEYBOARD = "$ROOT/keyboard"
 private val ABOUT = "$ROOT/about"
 private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={ratio}"
+private val NOTES = "$ROOT/notes?title={title}&body={body}&label={label}"
 
 private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
 private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/${Uri.encode(id)}"
 private fun artistRoute(id: String) = "$ROOT/artist/${Uri.encode(id)}"
 private fun artistRadioRoute(id: String) = "$ROOT/artist-radio/${Uri.encode(id)}"
 private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f) = "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.orEmpty())}&label=${Uri.encode(label)}&ratio=$ratio"
+private fun notesRoute(title: String, body: String, label: String) = "$ROOT/notes?title=${Uri.encode(title)}&body=${Uri.encode(body)}&label=${Uri.encode(label)}"
 
 /**
  * Routes whose left action is Back (or a named "Home"/"Library" back). The keypad's Back key uses
@@ -83,7 +85,8 @@ private val KEYPAD_BACK_ROUTES = setOf(
     APPEARANCE,
     KEYBOARD,
     ABOUT,
-    ARTWORK
+    ARTWORK,
+    NOTES
 )
 
 internal fun keypadBackIsLeftAction(route: String?, canPop: Boolean): Boolean = canPop && route in KEYPAD_BACK_ROUTES
@@ -132,6 +135,20 @@ private val collectionArgs = listOf(
     navArgument("id") { type = NavType.StringType }
 )
 private val artistArgs = listOf(navArgument("id") { type = NavType.StringType })
+private val notesArgs = listOf(
+    navArgument("title") {
+        type = NavType.StringType
+        defaultValue = ""
+    },
+    navArgument("body") {
+        type = NavType.StringType
+        defaultValue = ""
+    },
+    navArgument("label") {
+        type = NavType.StringType
+        defaultValue = "Notes"
+    }
+)
 private val artworkArgs = listOf(
     navArgument("artRes") { type = NavType.IntType },
     navArgument("url") {
@@ -269,6 +286,7 @@ fun NavGraphBuilder.sidetrackGraph(
         composable(COLLECTION, arguments = collectionArgs) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
+            val episodeProgress by vm.episodeProgress.collectAsStateWithLifecycle()
             val type = SpotifyCollectionType.entries.firstOrNull { it.route == entry.arguments?.getString("type") }
             val id = entry.arguments?.getString("id").orEmpty()
             LaunchedEffect(type, id) { type?.let { vm.ensureCollection(it, id) } }
@@ -293,6 +311,41 @@ fun NavGraphBuilder.sidetrackGraph(
                     },
                     missingTitle = "This collection isn't available",
                     onRetry = { if (type != null) vm.retryCollection(type, id) }
+                )
+            } else if (collection.type == SpotifyCollectionType.Show) {
+                ShowScreen(
+                    collection,
+                    state,
+                    episodeProgress,
+                    onBack = { nav.popBackStack() },
+                    onPlay = { vm.playCollection(collection, 0) },
+                    onPlayPause = vm::togglePlayPause,
+                    onItem = { index ->
+                        collection.items.getOrNull(index)?.let { item ->
+                            nav.openTrack(vm, item) { vm.playCollection(collection, index) }
+                        }
+                    },
+                    onSave = { vm.toggleSaved(collection) },
+                    onQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },
+                    onQueueItem = vm::addToQueue,
+                    onNowPlaying = { nav.openNowPlaying(vm) },
+                    onArtwork = {
+                        nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
+                    },
+                    onLoadMore = { type?.let { vm.loadMoreCollection(it, id) } },
+                    loadingMore = "${type?.route}:$id" in state.collectionMorePending,
+                    onShowNotes = {
+                        nav.navigate(
+                            notesRoute(collection.title, plainPodcastText(collection.description), "Show notes")
+                        )
+                    },
+                    onEpisodeNotes = { episode ->
+                        nav.navigate(
+                            notesRoute(episode.title, plainPodcastText(episode.description), "Episode notes")
+                        )
+                    },
+                    onDismissNotice = vm::dismissNotice,
+                    onDismissNowPlaying = vm::dismissNowPlayingNotice
                 )
             } else {
                 CollectionScreen(
@@ -421,6 +474,14 @@ fun NavGraphBuilder.sidetrackGraph(
                 aspectRatio = args?.getFloat("ratio") ?: 1f
             )
         }
+        composable(NOTES, arguments = notesArgs) { entry ->
+            NotesScreen(
+                title = entry.arguments?.getString("title").orEmpty(),
+                body = entry.arguments?.getString("body").orEmpty(),
+                label = entry.arguments?.getString("label").orEmpty().ifBlank { "Notes" },
+                onBack = { nav.popBackStack() }
+            )
+        }
         composable(NOW_PLAYING) { entry ->
             val vm = entry.spotifyViewModel(nav)
             val state by vm.state.collectAsStateWithLifecycle()
@@ -435,6 +496,8 @@ fun NavGraphBuilder.sidetrackGraph(
                 onPrevious = vm::previous,
                 onNext = vm::next,
                 onSeek = vm::seekTo,
+                onSkipBack = vm::skipBack,
+                onSkipForward = vm::skipForward,
                 onShuffle = vm::toggleShuffle,
                 onRepeat = vm::cycleRepeat,
                 onSave = vm::toggleSaveCurrent,
@@ -454,6 +517,13 @@ fun NavGraphBuilder.sidetrackGraph(
                     state.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
                 },
                 onSleepTimer = { nav.navigate(SLEEP_TIMER) },
+                onEpisodeNotes = {
+                    (state.current as? SpotifyEpisode)?.let { episode ->
+                        nav.navigate(
+                            notesRoute(episode.title, plainPodcastText(episode.description), "Episode notes")
+                        )
+                    }
+                },
                 onDismissNotice = vm::dismissNotice
             )
         }
@@ -741,6 +811,7 @@ private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyV
                         writer = session.writer,
                         queue = session.queue,
                         history = session.history,
+                        episodeProgressRepository = session.episodeProgress,
                         session = session,
                         openBrowser = openBrowser,
                         clearArtworkCache = { RemoteArtwork.clear(context) }

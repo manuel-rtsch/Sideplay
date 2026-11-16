@@ -262,6 +262,32 @@ fun RowScope.SpotifyRepeatTile(
     }
 }
 
+/**
+ * A deliberate text tile for podcast transport (±30 s). It avoids inventing a new icon while
+ * keeping the five-tile transport row intact.
+ */
+@Composable
+fun RowScope.SpotifySkipTile(
+    label: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    weight: Float = 0.85f
+) {
+    SidekitTile(
+        modifier = modifier.weight(weight),
+        color = SpotifyTileTone.Neutral.colour(SidekitTheme.colors),
+        onClick = onClick,
+        onClickLabel = contentDescription
+    ) {
+        SidekitText(
+            label,
+            style = SidekitTheme.typography.label,
+            color = SidekitTheme.colors.light
+        )
+    }
+}
+
 enum class SpotifyTileTone {
     Neutral,
     Play,
@@ -883,10 +909,16 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
 }
 
 @Composable
-fun PlayTile(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PlayTile(
+    playing: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    playLabel: String = "Play",
+    pauseLabel: String = "Pause"
+) {
     SidekitIconItem(
         if (playing) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-        if (playing) "Pause" else "Play",
+        if (playing) pauseLabel else playLabel,
         modifier,
         color = SidekitTheme.colors.emphasisA1,
         iconSize = SidekitTheme.spacing.tileIconSize,
@@ -906,7 +938,9 @@ fun ContextPlayTile(
     isPlaying: Boolean,
     onPlay: () -> Unit,
     onPlayPause: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    playLabel: String = "Play",
+    pauseLabel: String = "Pause"
 ) {
     var startedHere by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf(false) }
@@ -929,7 +963,9 @@ fun ContextPlayTile(
                 onPlay()
             }
         },
-        modifier = modifier
+        modifier = modifier,
+        playLabel = playLabel,
+        pauseLabel = pauseLabel
     )
 }
 

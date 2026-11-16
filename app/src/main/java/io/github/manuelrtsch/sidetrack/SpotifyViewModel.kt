@@ -4,6 +4,8 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
+import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
+import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgressRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
@@ -26,6 +28,12 @@ import org.json.JSONObject
 
 /** How long the now-playing confirmation owns the action bar before the normal actions return. */
 const val NOW_PLAYING_NOTICE_MS = 4_000L
+
+/** The podcast transport's rewind and fast-forward step. */
+private const val PODCAST_SKIP_MS = 30_000L
+
+/** How often a playing episode writes its local resume point. */
+private const val EPISODE_PROGRESS_INTERVAL_MS = 5_000L
 
 /**
  * A native position event this far from the UI clock is treated as a real seek from another
@@ -128,6 +136,7 @@ class SpotifyViewModel(
     private val writer: SpotifyLibraryWriter? = null,
     private val queue: SpotifyQueueRepository = SpotifyQueueRepository(),
     private val history: SpotifyHistoryRepository = SpotifyHistoryRepository(),
+    private val episodeProgressRepository: SpotifyEpisodeProgressRepository = SpotifyEpisodeProgressRepository(),
     private val session: SpotifySession? = null,
     private val openBrowser: (suspend (String) -> Unit)? = null,
     private val clearArtworkCache: () -> Unit = {},
@@ -143,6 +152,9 @@ class SpotifyViewModel(
      */
     private val _playbackPositionMs = MutableStateFlow(0L)
     val playbackPositionMs: StateFlow<Long> = _playbackPositionMs.asStateFlow()
+
+    /** Per-episode podcast progress, kept out of [state] so a five-second write does not redraw menus. */
+    val episodeProgress: StateFlow<Map<String, SpotifyEpisodeProgress>> = episodeProgressRepository.progress
 
     /**
      * The sleep timer is owned by the process-wide player so it survives this ViewModel. The
@@ -175,6 +187,7 @@ class SpotifyViewModel(
     private var positionAnchorMs = 0L
     private var positionAnchorAt = 0L
     private var lastSeekAt = 0L
+    private var lastEpisodeProgressAt = 0L
 
     /**
      * Set while a newly started item has not been confirmed by the native player. The ticker
@@ -286,8 +299,8 @@ class SpotifyViewModel(
         }
         val restored = queue.snapshot
         // A closed app leaves the item at the offset it reached; a live player owns its position.
-        val resume = session.resumePoint?.takeIf { it.trackId == current?.id }
-        val position = if (playback.current != null) playback.position else resume?.positionMs ?: 0L
+        val resume = current?.let(::savedPositionFor) ?: 0L
+        val position = if (playback.current != null) playback.position else resume
         anchorPosition(position)
         _playbackPositionMs.value = position
         _state.update {
@@ -586,10 +599,11 @@ class SpotifyViewModel(
         val snapshot = queue.play(items, index)
         if (item is SpotifyTrack) ensureTrackSaved(item.id)
         recorded(item)
-        applyQueue(snapshot, positionMs = 0L, playing = true)
+        val resume = itemStartPosition(item)
+        applyQueue(snapshot, positionMs = resume, playing = true)
         _state.update { it.copy(notice = null) }
         showNowPlayingNotice(item)
-        startRemote(item, 0L)
+        startRemote(item, resume, resuming = resume > 0L)
     }
 
     fun playItem(item: SpotifyMediaItem) = play(listOf(item), 0)
@@ -865,6 +879,7 @@ class SpotifyViewModel(
         val s = _state.value
         val item = s.current ?: return
         val play = !s.isPlaying
+        recordEpisodeProgress(force = true)
         anchorPosition(_playbackPositionMs.value)
         _state.update { it.copy(isPlaying = play) }
         if (item.uri == null || session == null) return
@@ -873,8 +888,8 @@ class SpotifyViewModel(
                 if (play && session.playback.current == null) {
                     // A restored queue outlives the native player. Start the current item instead
                     // of resuming a source that no longer exists, from the offset it stopped at.
-                    val resume = session.resumePoint?.takeIf { it.trackId == item.id }
-                    startRemote(item, resume?.positionMs ?: 0L, resuming = resume != null)
+                    val resume = savedPositionFor(item)
+                    startRemote(item, resume, resuming = resume > 0L)
                 } else if (play) {
                     if (!session.resume()) {
                         _state.update { it.copy(isPlaying = false) }
@@ -896,15 +911,32 @@ class SpotifyViewModel(
         val before = _state.value.current
         val snapshot = queue.next(auto = false)
         if (snapshot.current !== before) {
-            snapshot.current?.let(::recorded)
-            applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
-            snapshot.current?.let { startRemote(it, 0L) }
+            val next = snapshot.current
+            val resume = next?.let(::itemStartPosition) ?: 0L
+            next?.let(::recorded)
+            applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
+            next?.let { startRemote(it, resume, resuming = resume > 0L) }
         }
     }
 
     fun previous() {
         val s = _state.value
         if (s.current == null) return
+        // A podcast's Previous means the previous episode. Rewinding belongs to the ±30 s
+        // controls, so the track rule (restart after three seconds) does not apply here.
+        if (s.current is SpotifyEpisode) {
+            val snapshot = queue.previous(0L)
+            if (snapshot.current !== s.current) {
+                val previous = snapshot.current
+                val resume = previous?.let(::itemStartPosition) ?: 0L
+                previous?.let(::recorded)
+                applyQueue(snapshot, positionMs = resume, playing = previous?.playable == true)
+                previous?.let { startRemote(it, resume, resuming = resume > 0L) }
+            } else {
+                seekTo(0L)
+            }
+            return
+        }
         if (_playbackPositionMs.value > 3_000L) {
             _playbackPositionMs.value = 0L
             s.current?.uri?.let { uri ->
@@ -916,9 +948,11 @@ class SpotifyViewModel(
         }
         val snapshot = queue.previous(_playbackPositionMs.value)
         if (snapshot.current !== s.current) {
-            snapshot.current?.let(::recorded)
-            applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
-            snapshot.current?.let { startRemote(it, 0L) }
+            val previous = snapshot.current
+            val resume = previous?.let(::itemStartPosition) ?: 0L
+            previous?.let(::recorded)
+            applyQueue(snapshot, positionMs = resume, playing = previous?.playable == true)
+            previous?.let { startRemote(it, resume, resuming = resume > 0L) }
         } else {
             _playbackPositionMs.value = 0L
             s.current?.uri?.let { uri ->
@@ -935,9 +969,20 @@ class SpotifyViewModel(
         lastSeekAt = SystemClock.elapsedRealtime()
         anchorPosition(target)
         _playbackPositionMs.value = target
+        recordEpisodeProgress(force = true)
         if (current.uri != null && session != null) {
             viewModelScope.launch { runCatching { session.seek(target) } }
         }
+    }
+
+    /** Podcast rewind. [seekTo] clamps to the item's duration and never goes below zero. */
+    fun skipBack(milliseconds: Long = PODCAST_SKIP_MS) {
+        seekTo(_playbackPositionMs.value - milliseconds)
+    }
+
+    /** Podcast fast-forward. [seekTo] clamps to the item's duration. */
+    fun skipForward(milliseconds: Long = PODCAST_SKIP_MS) {
+        seekTo(_playbackPositionMs.value + milliseconds)
     }
 
     fun toggleShuffle() = applyQueue(queue.toggleShuffle(), syncNowPlaying = false)
@@ -1230,10 +1275,12 @@ class SpotifyViewModel(
         val s = _state.value
         val snapshot = queue.jumpTo(index)
         if (snapshot.current !== s.current) {
-            snapshot.current?.let(::recorded)
-            applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
-            snapshot.current?.takeIf { it.playable }?.let(::showNowPlayingNotice)
-            snapshot.current?.let { startRemote(it, 0L) }
+            val next = snapshot.current
+            val resume = next?.let(::itemStartPosition) ?: 0L
+            next?.let(::recorded)
+            applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
+            next?.takeIf { it.playable }?.let(::showNowPlayingNotice)
+            next?.let { startRemote(it, resume, resuming = resume > 0L) }
         }
     }
 
@@ -1552,7 +1599,8 @@ class SpotifyViewModel(
             artRes = collection.artRes,
             episodes = collection.items.filterIsInstance<SpotifyEpisode>(),
             artUrl = collection.artUrl,
-            episodeCount = collection.totalItems
+            episodeCount = collection.totalItems,
+            description = collection.description
         )
     }
 
@@ -1577,6 +1625,12 @@ class SpotifyViewModel(
         playing: Boolean? = null,
         syncNowPlaying: Boolean = true
     ) {
+        // Leaving an episode is the last chance to save where it stopped, before the new item
+        // resets the seek bar to its own offset.
+        val previous = _state.value.current
+        if (previous is SpotifyEpisode && (snapshot.current?.id != previous.id || positionMs != null)) {
+            episodeProgressRepository.record(previous.id, _playbackPositionMs.value, previous.durationMs)
+        }
         if (positionMs != null) {
             anchorPosition(positionMs)
             _playbackPositionMs.value = positionMs
@@ -1594,6 +1648,29 @@ class SpotifyViewModel(
         if (syncNowPlaying) {
             session?.playback?.setNowPlaying(snapshot.current, positionMs ?: _playbackPositionMs.value)
         }
+    }
+
+    /** Episode offsets are saved every few seconds while playing, and immediately on pauses/seeks. */
+    private fun recordEpisodeProgress(force: Boolean = false) {
+        val current = _state.value.current as? SpotifyEpisode ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (!force && now - lastEpisodeProgressAt < EPISODE_PROGRESS_INTERVAL_MS) return
+        lastEpisodeProgressAt = now
+        episodeProgressRepository.record(current.id, _playbackPositionMs.value, current.durationMs)
+    }
+
+    /** The offset this item should start at when it becomes current. */
+    private fun itemStartPosition(item: SpotifyMediaItem): Long = (item as? SpotifyEpisode)?.let { episodeProgressRepository.resumePosition(it.id) } ?: 0L
+
+    /** The offset a restored item was stopped at. Tracks still use the single-session resume point. */
+    private fun savedPositionFor(item: SpotifyMediaItem): Long = when (item) {
+        is SpotifyEpisode -> episodeProgressRepository.resumePosition(item.id)
+        else -> session?.resumePoint?.takeIf { it.trackId == item.id }?.positionMs ?: 0L
+    }
+
+    private fun markEpisodeFinished(item: SpotifyMediaItem) {
+        if (item !is SpotifyEpisode) return
+        episodeProgressRepository.record(item.id, item.durationMs, item.durationMs, completed = true)
     }
 
     private fun recorded(item: SpotifyMediaItem) {
@@ -1774,6 +1851,7 @@ class SpotifyViewModel(
                     anchorPosition(current)
                     playback?.updateState(false, current)
                     _state.update { it.copy(isPlaying = false) }
+                    recordEpisodeProgress(force = true)
                 }
             }
 
@@ -1788,6 +1866,7 @@ class SpotifyViewModel(
                     anchorPosition(position)
                     session?.playback?.updatePosition(position)
                     _playbackPositionMs.value = position
+                    recordEpisodeProgress(force = true)
                 }
             }
 
@@ -1834,6 +1913,7 @@ class SpotifyViewModel(
     private fun onPlaybackEnded() {
         val snapshot = _state.value
         val current = snapshot.current ?: return
+        markEpisodeFinished(current)
         // The sleep timer wins over repeat and autoplay: this is where the queue must stop.
         if (session?.playback?.consumeEndOfTrackTimer() == true) {
             _state.update { it.copy(isPlaying = false) }
@@ -1876,6 +1956,7 @@ class SpotifyViewModel(
         if (clamped != _playbackPositionMs.value) {
             session?.playback?.updatePosition(clamped)
             _playbackPositionMs.value = clamped
+            recordEpisodeProgress()
         }
     }
 
@@ -1886,6 +1967,7 @@ class SpotifyViewModel(
         val nextPosition = _playbackPositionMs.value + 1_000L
         if (nextPosition < current.durationMs) {
             _playbackPositionMs.value = nextPosition
+            recordEpisodeProgress()
         } else {
             when (s.repeat) {
                 RepeatMode.Track -> _playbackPositionMs.value = 0L
@@ -1898,12 +1980,15 @@ class SpotifyViewModel(
     private fun advance(auto: Boolean, forceContextLoop: Boolean) {
         val s = _state.value
         val current = s.current ?: return
+        if (auto) markEpisodeFinished(current)
         val hasNext = s.upcoming.isNotEmpty()
         if (!hasNext && forceContextLoop) {
             val snapshot = queue.next(auto = true)
-            snapshot.current?.let(::recorded)
-            applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
-            snapshot.current?.let { startRemote(it, 0L, gapless = auto && _state.value.gapless) }
+            val next = snapshot.current
+            val resume = next?.let(::itemStartPosition) ?: 0L
+            next?.let(::recorded)
+            applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
+            next?.let { startRemote(it, resume, gapless = auto && _state.value.gapless, resuming = resume > 0L) }
             return
         }
         if (!hasNext && !auto) return
@@ -1913,9 +1998,11 @@ class SpotifyViewModel(
         }
         val snapshot = queue.next(auto = true)
         if (snapshot.current !== current) {
-            snapshot.current?.let(::recorded)
-            applyQueue(snapshot, positionMs = 0L, playing = snapshot.current?.playable == true)
-            snapshot.current?.let { startRemote(it, 0L, gapless = auto && _state.value.gapless) }
+            val next = snapshot.current
+            val resume = next?.let(::itemStartPosition) ?: 0L
+            next?.let(::recorded)
+            applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
+            next?.let { startRemote(it, resume, gapless = auto && _state.value.gapless, resuming = resume > 0L) }
         } else {
             _playbackPositionMs.value = 0L
             _state.update { it.copy(isPlaying = false) }

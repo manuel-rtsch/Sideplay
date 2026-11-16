@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack
 
 import androidx.lifecycle.viewModelScope
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgressRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifySession
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +59,36 @@ class SpotifyViewModelEventTest {
 
         assertFalse(vm.state.value.isPlaying)
         assertEquals("This track isn't available", vm.state.value.notice)
+    }
+
+    @Test fun `an episode resumes at its saved local offset`() = runTest(dispatcher) {
+        val progress = SpotifyEpisodeProgressRepository(now = { 1_000L })
+        progress.record("lw5", 1_200_000L, 2_529_000L)
+        val vm = SpotifyViewModel(
+            MockSpotifyDataSource,
+            episodeProgressRepository = progress,
+            simulatePlayback = false
+        ).also { viewModels += it }
+        val episode = MockSpotifyDataSource.shows.first().episodes.last { it.id == "lw5" }
+
+        vm.playItem(episode)
+
+        assertEquals(1_200_000L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `seeking an episode saves the new local offset`() = runTest(dispatcher) {
+        val progress = SpotifyEpisodeProgressRepository(now = { 1_000L })
+        val vm = SpotifyViewModel(
+            MockSpotifyDataSource,
+            episodeProgressRepository = progress,
+            simulatePlayback = false
+        ).also { viewModels += it }
+        val episode = MockSpotifyDataSource.shows.first().episodes.last { it.id == "lw5" }
+        vm.playItem(episode)
+
+        vm.seekTo(900_000L)
+
+        assertEquals(900_000L, progress.resumePosition("lw5"))
     }
 
     @Test fun `shuffle and repeat events are adopted from the native player`() = runTest(dispatcher) {
