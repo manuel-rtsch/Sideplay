@@ -12,9 +12,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+
+/** How long a row must hold the focus before its gutter appears. */
+const val GUTTER_DELAY_MS = 250L
+
+/** How long the gutter takes to open or close. */
+const val GUTTER_ANIM_MS = 160
+
+/** Gap between two gutter squares. */
+val GutterGap = 3.dp
+
+/** How far the gutter squares slide in from the right as they appear. */
+val GUTTER_SLIDE = 12.dp
 
 /**
  * A full-height square row control, the same footprint as the swipe reveal's action block: one

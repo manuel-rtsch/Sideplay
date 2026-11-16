@@ -909,7 +909,11 @@ class SpotifyViewModel(
         }
     }
 
-    private fun ensureTrackSaved(id: String) {
+    /**
+     * Reads a track's saved state when it first becomes relevant: starting it, or opening its
+     * row's gutter. Idempotent, so a list can call it on every reveal.
+     */
+    fun ensureTrackSaved(id: String) {
         val writer = writer ?: return
         if (id in _state.value.savedTrackIds || id in savedTrackTouched) return
         viewModelScope.launch {

@@ -32,8 +32,6 @@ import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
-import io.github.manuelrtsch.sidetrack.ui.SidekitSwipeRow
-import io.github.manuelrtsch.sidetrack.ui.SwipeAction
 import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
 
 @Composable
@@ -49,6 +47,10 @@ fun SpotifySearchScreen(
     onAlbum: (SpotifyAlbum) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
+    onSaveTrack: (SpotifyTrack) -> Unit,
+    onArtistTrack: (SpotifyTrack) -> Unit,
+    onAlbumTrack: (SpotifyTrack) -> Unit,
+    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onLoadMore: (SearchScope) -> Unit,
     onRetry: () -> Unit,
     onScopes: () -> Unit,
@@ -57,6 +59,14 @@ fun SpotifySearchScreen(
     onDismissNowPlaying: () -> Unit
 ) {
     val results = state.searchResults
+    val rows = rememberTrackRows(
+        state,
+        onSaveTrack,
+        onArtistTrack,
+        onAlbumTrack,
+        onEnsureSavedTrack,
+        onQueue
+    )
     val actions = spotifyActions(
         state,
         onDismissNotice,
@@ -156,7 +166,8 @@ fun SpotifySearchScreen(
             }
         },
         actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)) +
+            rows.options()
     ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
@@ -236,24 +247,14 @@ fun SpotifySearchScreen(
                         rowIndex += 1
                         val base = rowIndex
                         itemsIndexed(results.tracks, key = { _, track -> "t${track.id}" }) { index, track ->
-                            SidekitSwipeRow(
-                                key = track.id,
-                                group = swipes,
-                                modifier = Modifier.listFade(listState, base + index),
-                                action = SwipeAction(
-                                    label = "Add ${track.title} to queue",
-                                    icon = SidekitIcon.QueueMusic,
-                                    color = SidekitTheme.colors.successA1,
-                                    armedColor = SidekitTheme.colors.successA2,
-                                    onClick = { onQueue(track) }
-                                )
-                            ) {
-                                SpotifyMediaRow(
-                                    track,
-                                    resultModifier(SearchScope.Tracks, index, results.tracks.lastIndex),
-                                    secondary = track.artist
-                                ) { onTrack(track) }
-                            }
+                            TrackRow(
+                                "t${track.id}",
+                                track,
+                                rows,
+                                swipes,
+                                Modifier.listFade(listState, base + index)
+                                    .then(resultModifier(SearchScope.Tracks, index, results.tracks.lastIndex))
+                            ) { onTrack(track) }
                         }
                         rowIndex += results.tracks.size
                         if (SearchScope.Tracks in state.searchHasMore) {

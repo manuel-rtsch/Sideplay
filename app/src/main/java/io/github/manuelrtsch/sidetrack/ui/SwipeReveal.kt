@@ -102,6 +102,9 @@ private class SwipeMetrics {
  * - Opening one row closes any other row in [group].
  * - With [revealOnFocus], a row focused by the D-pad reveals its action just like a swipe does,
  *   after a short delay so holding Up/Down through a list does not flash every button.
+ * - With [onLongPress], holding the row reports a long press instead of the tap it would otherwise
+ *   become. This is the touch route to a row's other actions: a touch screen has no focus border
+ *   for a gutter to follow.
  *
  * Cost per drag frame: one float state write, a RenderNode translation for the row (no
  * re-record of its contents) and a redraw of the button behind it. Nothing recomposes except
@@ -116,6 +119,7 @@ fun SidekitSwipeRow(
     deleteLabel: String = "Delete",
     action: SwipeAction? = null,
     revealOnFocus: Boolean = true,
+    onLongPress: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
@@ -254,6 +258,16 @@ fun SidekitSwipeRow(
                     with(actionIcon) { draw(Size(s, s), alpha = iconAlpha, colorFilter = tint) }
                 }
             }
+            .then(
+                if (onLongPress == null) {
+                    Modifier
+                } else {
+                    Modifier.rowLongPress {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onLongPress()
+                    }
+                }
+            )
             .draggable(
                 state = dragState,
                 orientation = Orientation.Horizontal,

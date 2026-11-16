@@ -29,6 +29,13 @@ Spotify.
   Long lists end with a "Load more" row.
 - **Keypad first.** Every interactive row is focusable, has a visible focus ring, and a 48 dp
   minimum target. Do not fade the focused element.
+- **Two squares, then Options.** A row may reveal at most two gutter squares. Anything else the
+  row can do belongs in the screen's Options, so a 480 dp row keeps its title.
+- **Every reveal has two hands.** Anything a keypad reaches is reachable by touch and the other way
+  round. A gutter opens on focus (after the focus settles) *and* on a long press; a long press is
+  the touch equivalent of putting the focus on a row, because a touch screen has no focus border
+  to follow. One row shows squares at a time, whichever hand opened them: a long press gives the
+  focus's gutter up, and moving the focus gives the long press's up.
 - **Content never wears the theme colour.** Play, selection, progress, save/unsave, and
   follow/unfollow use the Library success fill; the case colour belongs to action-bar actions and
   the vinyl status record only. Save controls are always bookmark tiles: hollow (`BookmarkBorder`)
@@ -169,6 +176,21 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   cap, `OutOfMemoryError` treated as a cache miss. List thumbnails use Sidekit's 24dp artwork
   shape, which matches the item's 36:104 corner ratio at 68dp without cropping the cover into a
   circle.
+- Every track row carries its whole action set without starting the song. A focused row opens a
+  two-square gutter: Save/Unsave (hollow/filled bookmark, the same success fill as every other
+  save control) and the artist page. A long press opens the same gutter on a touch screen, and a
+  tap closes it instead of starting the track, the contract a swiped-open row already has; touch
+  also keeps the left swipe for Add to queue. A swipe and the gutter never share the right edge:
+  whichever arrives second yields. The row's
+  remaining action sits in the screen's Options as **Open album**, omitted on the album's own
+  page. A track that has never played has no known saved state, so the row asks for it when its
+  gutter opens: liking a search result or a playlist track never interrupts what is playing, and
+  unlike works from the Liked Songs list without starting the song first. Episodes keep the plain
+  swipe row — there is no saved-episode endpoint, and a show is reached from Now Playing — and
+  History keeps Queue and Remove in its gutter, because dropping an entry belongs there, and
+  reveals them the same two ways. The queue's own rows do not take a long press: they already swipe
+  to remove and hold to drag-reorder, and a third touch meaning on the same gesture would fight
+  both.
 - Home's action bar opens the queue; track rows across the app expose Add to queue on left swipe.
   Upcoming rows in the queue swipe left to remove; the queue shows only the current item and what
   is next, while the full listening history lives on the History screen. Library uses the standard

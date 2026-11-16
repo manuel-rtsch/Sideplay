@@ -7,6 +7,10 @@ driven from `adb`.
 **Device:** `SP0100260901847` (SP01_FE_US, 480 × 640, Android 12)  
 **Last run:** 2026-11-16, Sidetrack 0.3.1 (`versionCode=89`)
 
+The row gutter and the touch long press were validated separately on 2026-11-16 on the
+`Sidephone_SP-01` emulator (480 × 640, Android 12, `versionCode=96`); the items below marked ✔︎ so
+far are that run plus this one.
+
 ## Install and shell
 
 - [x] Install the profile APK over the previous build.
@@ -95,6 +99,27 @@ driven from `adb`.
 - [ ] **Manual:** Home shows five recently played items and **See more history** when more exist;
       the Options menu's **History** opens the full list, a focused row reveals Add to queue and
       Remove squares, and left swipe still offers Add to queue.
+- [x] **Manual:** focus a track row in Search, Library, an album or a playlist and confirm a
+      two-square gutter appears after the focus settles: Save/Unsave and Artist. Start nothing,
+      press Save, and confirm the track lands in Liked Songs in another Spotify client while the
+      playing track continues. Press Artist and confirm that artist page opens.
+- [x] **Manual:** on a focused track row, open Options and confirm **Open album** is offered and
+      that it disappears on the album's own page. Confirm a row that has never played shows a
+      hollow bookmark before the saved-state read lands, and the filled one after.
+- [x] **Manual:** confirm Right from a focused track row reaches its gutter squares without the
+      gutter closing, and that holding Up/Down through a list never flashes a gutter.
+- [x] **Touch:** long-press a track row and confirm the same two squares appear (after a haptic
+      tick) without the row ever taking focus, that holding the same row and scrolling still
+      scrolls, and that a short tap still plays. Tap the row while the squares are up and confirm
+      they close and the track does not start; tap a square and confirm the action runs and the
+      squares close.
+- [x] **Touch:** long-press a History row and confirm Queue and Remove appear, that a tap closes
+      them without playing the entry, and that swiping the same row left still reveals Add to
+      queue. Confirm the queue screen's rows keep their swipe and drag only.
+- [ ] **Touch:** long-press one row, then move the keypad with Up/Down, and confirm the held row's
+      squares close as the focus lands on another row. Repeat the other way round: open a gutter
+      with the keypad, then long-press a different row. Two rows must never show squares at once,
+      and a long press made before the 250 ms settle must not let the focused row open as well.
 - [ ] **Manual:** on Now Playing, album, playlist, show, and artist screens, confirm the play
       control and every save/bookmark or follow control use the Library success fill, never the
       case/primary colour outside the action bar.

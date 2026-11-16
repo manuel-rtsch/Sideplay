@@ -3,21 +3,19 @@ package io.github.manuelrtsch.sidetrack
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.SideAction
@@ -27,10 +25,13 @@ import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
+import io.github.manuelrtsch.sidetrack.ui.GUTTER_ANIM_MS
+import io.github.manuelrtsch.sidetrack.ui.GUTTER_SLIDE
+import io.github.manuelrtsch.sidetrack.ui.GutterGap
 import io.github.manuelrtsch.sidetrack.ui.RowActionSquare
 import io.github.manuelrtsch.sidetrack.ui.SidekitSwipeRow
+import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
-import kotlinx.coroutines.delay
 
 /**
  * The full recently played list. Home previews five items; this screen shows the rest and lets
@@ -61,26 +62,14 @@ fun HistoryScreen(
     ) { padding ->
         val listState = rememberLazyListState()
         val swipes = rememberSwipeRevealGroup()
-        // The gutter follows the focused row, but only once the focus has settled: holding
-        // Up/Down through the list must not flash a pair of buttons on every row it passes.
-        var focusedKey by remember { mutableStateOf<Any?>(null) }
-        var gutterKey by remember { mutableStateOf<Any?>(null) }
-        LaunchedEffect(focusedKey) {
-            if (focusedKey == null) {
-                gutterKey = null
-            } else {
-                // Close the previous row's control as soon as the focus border moves.
-                gutterKey = null
-                delay(GUTTER_DELAY_MS)
-                gutterKey = focusedKey
-            }
-        }
+        // The gutter follows the focused row, or a long press when the list is driven by touch.
+        val gutters = rememberRowGutterState()
         SidekitList(padding, state = listState) {
             // History is local-only and has no empty state: with no entries the list is simply blank.
             // A track can be played again, so the id alone repeats; index keeps keys unique.
             itemsIndexed(state.recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
                 val key = "$index:${item.id}"
-                val gutterOpen = gutterKey == key
+                val gutterOpen = gutters.isOpen(key)
                 val square = SidekitTheme.spacing.itemHeight
                 val targetGutter = if (gutterOpen) square * 2 + GutterGap else 0.dp
                 // The gutter opens and closes rather than snapping: the row narrows as the
@@ -102,15 +91,34 @@ fun HistoryScreen(
                         action = queueAction(item, onQueue),
                         // The gutter already gives a focused row its actions; a second
                         // focus-revealed swipe button would crowd the same edge.
-                        revealOnFocus = false
+                        revealOnFocus = false,
+                        // Touch has no focus border to follow, so a long press asks for the
+                        // controls.
+                        onLongPress = { gutters.reveal(key) }
                     ) {
                         SpotifyMediaRow(
                             item,
-                            Modifier.onFocusChanged { if (it.isFocused) focusedKey = key },
+                            Modifier.onFocusChanged {
+                                if (it.isFocused) gutters.rowFocused(key) else gutters.rowUnfocused(key)
+                            },
                             secondary = item.creator,
                             // The side controls get the right edge while they are visible.
                             trailing = if (gutter > 0.dp) null else formatDuration(item.durationMs),
-                            onClick = { onPlay(item) }
+                            onClick = {
+                                gutters.touchDismissed(key)
+                                onPlay(item)
+                            }
+                        )
+                    }
+                    // While a long press holds the controls open, a tap closes them rather than
+                    // playing the track.
+                    if (gutters.touchedKey == key && gutter > 0.dp) {
+                        Box(
+                            Modifier
+                                .matchParentSize()
+                                .pointerInput(key) {
+                                    detectTapGestures { gutters.touchDismissed(key) }
+                                }
                         )
                     }
                     // Composed only while the gutter has width, so a faded-out control can never
@@ -129,13 +137,19 @@ fun HistoryScreen(
                                     color = SidekitTheme.colors.successA1,
                                     icon = SidekitIcon.QueueMusic,
                                     label = "Add ${item.title} to queue",
-                                    onClick = { onQueue(item) }
+                                    onClick = {
+                                        gutters.touchDismissed(key)
+                                        onQueue(item)
+                                    }
                                 )
                                 RowActionSquare(
                                     color = SidekitTheme.colors.dangerA1,
                                     icon = SidekitIcon.DeleteForever,
                                     label = "Remove ${item.title} from history",
-                                    onClick = { onRemove(item) }
+                                    onClick = {
+                                        gutters.touchDismissed(key)
+                                        onRemove(item)
+                                    }
                                 )
                             }
                         }
@@ -145,15 +159,3 @@ fun HistoryScreen(
         }
     }
 }
-
-/** How long a row must hold the focus before its gutter control appears. */
-private const val GUTTER_DELAY_MS = 250L
-
-/** How far the gutter control slides in from the right as it appears. */
-private val GUTTER_SLIDE = 12.dp
-
-/** How long the gutter takes to open or close. */
-private const val GUTTER_ANIM_MS = 160
-
-/** Gap between two gutter squares. */
-private val GutterGap = 3.dp

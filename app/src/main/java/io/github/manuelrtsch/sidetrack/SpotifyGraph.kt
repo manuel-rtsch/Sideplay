@@ -117,6 +117,21 @@ private fun NavHostController.openNowPlaying(vm: SpotifyViewModel) {
     }
 }
 
+/**
+ * A track row's Album and Artist actions. Both ids come from the row itself, so a browsed track
+ * reaches its pages without being started first; a fixture or a broken payload reports instead of
+ * navigating to a route that would fail verification.
+ */
+private fun NavHostController.openTrackAlbum(vm: SpotifyViewModel, track: SpotifyTrack) {
+    track.albumId.spotifyIdOrNull()?.let { navigate(collectionRoute(SpotifyCollectionType.Album, it)) }
+        ?: vm.notice("This track has no album page")
+}
+
+private fun NavHostController.openTrackArtist(vm: SpotifyViewModel, track: SpotifyTrack) {
+    track.artistId.spotifyIdOrNull()?.let { navigate(artistRoute(it)) }
+        ?: vm.notice("This track has no artist page")
+}
+
 /** A tap on the already-playing item opens Now Playing instead of restarting or toggling it. */
 private fun NavHostController.openTrack(
     vm: SpotifyViewModel,
@@ -154,6 +169,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onPlay = { item -> nav.openTrack(vm, item) { vm.playRecent(item) } },
                 onQueue = { nav.navigate(QUEUE) },
                 onQueueTrack = vm::addToQueue,
+                onSaveTrack = { vm.toggleSaved(it) },
+                onArtistTrack = { nav.openTrackArtist(vm, it) },
+                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onHistory = { nav.navigate(HISTORY) },
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
@@ -190,6 +209,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onSaveTrack = { vm.toggleSaved(it) },
+                onArtistTrack = { nav.openTrackArtist(vm, it) },
+                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onRetry = vm::refreshLibrary,
                 onDismissNotice = vm::dismissNotice,
@@ -215,6 +238,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onSaveTrack = { vm.toggleSaved(it) },
+                onArtistTrack = { nav.openTrackArtist(vm, it) },
+                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onLoadMore = vm::loadMoreLibrary,
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onRetry = vm::retryLibrary,
@@ -269,6 +296,10 @@ fun NavGraphBuilder.sidetrackGraph(
                     },
                     onQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
+                    onSaveTrack = { vm.toggleSaved(it) },
+                    onArtistTrack = { nav.openTrackArtist(vm, it) },
+                    onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                    onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = {
                         nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
@@ -310,6 +341,10 @@ fun NavGraphBuilder.sidetrackGraph(
                     onTrack = { track -> nav.openTrack(vm, track) { vm.play(tracks, tracks.indexOf(track)) } },
                     onQueue = vm::addToQueue,
                     onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
+                    onSaveTrack = { vm.toggleSaved(it) },
+                    onArtistTrack = { nav.openTrackArtist(vm, it) },
+                    onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                    onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onFollow = { vm.toggleFollow(artist) },
                     onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = {
@@ -340,6 +375,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onSaveTrack = { vm.toggleSaved(it) },
+                onArtistTrack = { nav.openTrackArtist(vm, it) },
+                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onLoadMore = vm::loadMoreSearch,
                 onRetry = vm::retrySearch,
                 onScopes = { nav.navigate(SEARCH_SCOPES) },
@@ -455,6 +494,10 @@ fun NavGraphBuilder.sidetrackGraph(
                     onArtist = {},
                     onQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
+                    onSaveTrack = { vm.toggleSaved(it) },
+                    onArtistTrack = { nav.openTrackArtist(vm, it) },
+                    onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                    onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = { nav.openNowPlaying(vm) },
                     onLoadMore = {},
