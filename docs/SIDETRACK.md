@@ -264,10 +264,15 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
    events are adopted when another client changes them. Queue, queue history, and recently
    played persist; playback does not resume automatically after process death.
 3. **Device builds must include the native bridge.** `libsidetrack_spotify.so` is opt-in via
-   `-PsidetrackNative=true`. Without it, `SpotifySession` falls back to `SpotifyWebCatalog`, and
-   Spotify now answers those requests with HTTP 429 because the OAuth token uses the desktop
-   client ID. Symptom: sign-in succeeds, but the library and search are empty. The 0.2.4 release
-   asset was rebuilt with the bridge after this was found on the emulator.
+   `-PsidetrackNative=true`. Without it, `SpotifySession.catalog` falls back to
+   `SpotifyWebCatalog`, and Spotify answers those requests with HTTP 429 because the OAuth token
+   uses the desktop client ID. Symptom: sign-in succeeds, but Home, Library, and Search are all
+   empty and every retry produces the same message. Nothing else in the app fails, so the build
+   is the only thing to check: `unzip -l <apk> | grep sidetrack_spotify`, or `adb logcat | grep
+   SidetrackApi` — a stream of `-> 429` lines means the fallback is running. Rebuilding with the
+   flag is the fix; the signing key and therefore the stored credentials do not change. The 0.2.4
+   release asset was rebuilt with the bridge after this was found on the emulator, and a plain
+   `assembleDebug` install on the emulator reproduced it again on 2026-11-16.
 4. **Playlist owner names.** Your own playlists show **You**; other users' playlists show their
    Spotify username. Display-name lookup is not worth a per-owner Web API call.
 5. **The Options key does not dismiss the now-playing confirmation.** Sidekit's

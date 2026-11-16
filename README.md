@@ -104,6 +104,39 @@ Sidetrack falls back to the public Spotify Web API, which currently rejects Spot
 client ID with HTTP 429. The UI then looks empty: no library, no search results. Release and
 device builds must include the native bridge.
 
+### "It signs in but nothing loads"
+
+That is always the same cause: the installed APK has no `libsidetrack_spotify.so`, so the app is
+running the Web API fallback and Spotify answers every request with `429 API rate limit exceeded`.
+The build succeeds and the APK installs normally, so nothing points at the build unless you look:
+
+```sh
+# 1. Does the artifact you are about to install contain the bridge?
+unzip -l app/build/outputs/apk/debug/app-debug.apk | grep sidetrack_spotify
+
+# 2. Does the *installed* app contain it? (downloads splits=[base] only)
+adb shell pm path io.github.manuelrtsch.sidetrack
+
+# 3. Which catalog is the running process using? 429 lines = Web API fallback.
+adb logcat | grep SidetrackApi
+```
+
+If step 1 is empty, rebuild with `-PsidetrackNative=true` and install again; the signing key does
+not change, so the stored credentials survive and no new sign-in is needed. Gradle prints
+`Sidetrack: native playback is off; pass -PsidetrackNative=true ...` while building, but that line
+is easy to miss in a long task list.
+
+A build taken from a tree without `.git` (for example a throwaway `rsync` copy) falls back to
+`versionName=0.1.0` / `versionCode=1`, and `adb install -r` then fails with
+`INSTALL_FAILED_VERSION_DOWNGRADE`. Pass the version explicitly, or allow the downgrade:
+
+```sh
+./gradlew :app:assembleDebug -PsidetrackNative=true \
+  -PsidetrackVersionCode=$(git rev-list --count HEAD) \
+  -PsidetrackVersionName=$(git describe --tags --match 'v[0-9]*' --dirty)
+adb install -r -d app/build/outputs/apk/debug/app-debug.apk
+```
+
 Release builds are signed with the dedicated Sidetrack release key. Create a gitignored
 `keystore.properties` at the repository root:
 

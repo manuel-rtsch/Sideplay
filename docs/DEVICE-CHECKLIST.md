@@ -10,6 +10,10 @@ driven from `adb`.
 ## Install and shell
 
 - [x] Install the profile APK over the previous build.
+- [ ] Confirm the installed APK contains the native bridge before testing: `adb shell pm path
+      io.github.manuelrtsch.sidetrack`, then check the APK for `lib/*/libsidetrack_spotify.so`.
+      A build without `-PsidetrackNative=true` installs and signs in fine but silently runs the
+      Web API fallback, so the catalog is empty (see README, "It signs in but nothing loads").
 - [x] Launch `SidetrackActivity`; the app resumes without a crash.
 - [x] **Manual:** with Sidekit installed, confirm Sidetrack follows the host theme and keypad.
 - [x] **Manual:** repeat with Sidekit absent and confirm the standalone Appearance screen.
