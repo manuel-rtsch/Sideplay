@@ -6,9 +6,15 @@ import org.junit.Test
 
 class PodcastTextTest {
     @Test
-    fun stripsMarkupAndCollapsesWhitespace() {
+    fun stripsMarkupAndKeepsParagraphs() {
         val raw = "<p>First line.</p>\n\n<p>Second line &amp; a <b>bold</b> word.</p>"
-        assertEquals("First line. Second line & a bold word.", plainPodcastText(raw))
+        assertEquals("First line.\n\nSecond line & a bold word.", plainPodcastText(raw))
+    }
+
+    @Test
+    fun wrapsAndIndentationCollapseIntoOneLine() {
+        val raw = "<div>First  part\n   continues here.</div>"
+        assertEquals("First part continues here.", plainPodcastText(raw))
     }
 
     @Test
@@ -26,6 +32,11 @@ class PodcastTextTest {
     fun blankInputBecomesEmpty() {
         assertEquals("", plainPodcastText("  \n\t "))
         assertEquals("", plainPodcastText("<p> </p>"))
+    }
+
+    @Test
+    fun runsOfBlankLinesCollapseToOneBreak() {
+        assertEquals("One.\n\nTwo.", plainPodcastText("One.<br><br><br><br>Two."))
     }
 
     @Test

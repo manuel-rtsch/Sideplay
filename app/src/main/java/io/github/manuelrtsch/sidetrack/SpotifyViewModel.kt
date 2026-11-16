@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
+import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeMetaRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgressRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
@@ -137,6 +138,7 @@ class SpotifyViewModel(
     private val queue: SpotifyQueueRepository = SpotifyQueueRepository(),
     private val history: SpotifyHistoryRepository = SpotifyHistoryRepository(),
     private val episodeProgressRepository: SpotifyEpisodeProgressRepository = SpotifyEpisodeProgressRepository(),
+    private val episodeMetaRepository: SpotifyEpisodeMetaRepository = SpotifyEpisodeMetaRepository(),
     private val session: SpotifySession? = null,
     private val openBrowser: (suspend (String) -> Unit)? = null,
     private val clearArtworkCache: () -> Unit = {},
@@ -660,6 +662,23 @@ class SpotifyViewModel(
         play(station.items, index)
     }
 
+    /**
+     * Adopts the library state of a station's backing playlist, unless the user already toggled
+     * the tile on this screen. Song radio and artist radio store their station in different
+     * fields but resolve the saved state the same way.
+     */
+    private fun SpotifyUiState.withStationSaved(
+        station: SpotifyCollection,
+        saved: Boolean?
+    ): SpotifyUiState {
+        if (saved == null) return this
+        val key = collectionKey(SpotifyCollectionType.Playlist, station.id)
+        if (key in savedCollectionTouched) return this
+        val keys = savedCollectionKeys.toMutableSet()
+        if (saved) keys.add(key) else keys.remove(key)
+        return copy(savedCollectionKeys = keys)
+    }
+
     private fun loadArtistRadio(artist: SpotifyArtist) {
         artistRadioJob?.cancel()
         val id = artist.id
@@ -695,17 +714,11 @@ class SpotifyViewModel(
                     runCatching { writer?.isSaved(SpotifyCollectionType.Playlist, it) }.getOrNull()
                 }
                 _state.update {
-                    val keys = it.savedCollectionKeys.toMutableSet()
-                    val key = collectionKey(SpotifyCollectionType.Playlist, station.id)
-                    if (saved != null && key !in savedCollectionTouched) {
-                        if (saved) keys.add(key) else keys.remove(key)
-                    }
                     it.copy(
                         artistRadio = station,
                         artistRadioPending = false,
-                        artistRadioError = null,
-                        savedCollectionKeys = keys
-                    )
+                        artistRadioError = null
+                    ).withStationSaved(station, saved)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -758,18 +771,12 @@ class SpotifyViewModel(
                     runCatching { writer?.isSaved(SpotifyCollectionType.Playlist, it) }.getOrNull()
                 }
                 _state.update {
-                    val keys = it.savedCollectionKeys.toMutableSet()
-                    val key = collectionKey(SpotifyCollectionType.Playlist, station.id)
-                    if (saved != null && key !in savedCollectionTouched) {
-                        if (saved) keys.add(key) else keys.remove(key)
-                    }
                     it.copy(
                         radio = station,
                         radioSeedId = seed.id,
                         radioPending = false,
-                        radioError = null,
-                        savedCollectionKeys = keys
-                    )
+                        radioError = null
+                    ).withStationSaved(station, saved)
                 }
                 // The seed keeps playing; the station becomes what follows it. Only do that if
                 // the queue is still the one this request started from. A late response must not
@@ -1631,6 +1638,9 @@ class SpotifyViewModel(
         if (previous is SpotifyEpisode && (snapshot.current?.id != previous.id || positionMs != null)) {
             episodeProgressRepository.record(previous.id, _playbackPositionMs.value, previous.durationMs)
         }
+        // Notes are not part of the queue file; keep them next to the episode that is playing so a
+        // restored session can still offer them without another request.
+        (snapshot.current as? SpotifyEpisode)?.let(episodeMetaRepository::remember)
         if (positionMs != null) {
             anchorPosition(positionMs)
             _playbackPositionMs.value = positionMs

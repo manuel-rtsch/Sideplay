@@ -53,6 +53,12 @@ class SpotifySession(
     private val episodeProgressStore = appContext?.let {
         FileSpotifyEpisodeProgressStore(File(it.filesDir, "sidetracks-episode-progress.bin"))
     }
+    private val episodeMetaStore = appContext?.let {
+        FileSpotifyEpisodeMetaStore(File(it.filesDir, "sidetracks-episode-meta.bin"))
+    }
+
+    /** Writes the podcast state files without holding up the main thread. */
+    private val storageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Where the last session stopped: the item and the offset, so reopening resumes it. */
     @Volatile var resumePoint: SpotifyResumePoint? = positionStore?.read()
@@ -61,7 +67,15 @@ class SpotifySession(
     /** Per-episode podcast offsets, independent of the single-session resume point. */
     val episodeProgress = SpotifyEpisodeProgressRepository(
         load = { episodeProgressStore?.read().orEmpty() },
-        save = { episodeProgressStore?.write(it) }
+        save = { episodeProgressStore?.write(it) },
+        saveScope = storageScope
+    )
+
+    /** Notes and identity for the episode a restored session puts back on the player. */
+    val episodeMeta = SpotifyEpisodeMetaRepository(
+        load = { episodeMetaStore?.read().orEmpty() },
+        save = { episodeMetaStore?.write(it) },
+        saveScope = storageScope
     )
     private val _settings = MutableStateFlow(settingsStore?.read() ?: SpotifySettings())
     val settings: StateFlow<SpotifySettings> = _settings.asStateFlow()
@@ -88,7 +102,9 @@ class SpotifySession(
 
     /** Process-wide queue and history so leaving Sidetrack does not forget what is playing. */
     val queue = SpotifyQueueRepository(
-        load = { queueStore?.read() ?: SpotifyQueueRepository.Snapshot() },
+        // The queue file holds the whole upcoming list, so an episode reaches Now Playing without
+        // its notes and publishing number; the metadata cache has them.
+        load = { queueStore?.read()?.let(episodeMeta::hydrate) ?: SpotifyQueueRepository.Snapshot() },
         save = { queueStore?.write(it) }
     )
 
@@ -216,6 +232,7 @@ class SpotifySession(
         queue.stop()
         history.clear()
         episodeProgress.clearAll()
+        episodeMeta.clearAll()
         playback.clearSleepTimer()
         if (nativeAvailable) {
             playback.setNowPlaying(null)

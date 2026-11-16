@@ -41,16 +41,24 @@ class SpotifyPlaybackService : Service() {
         }
     }
 
+    /** True while the service holds a foreground notification; guarded so a warm start is quiet. */
+    private var foreground = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Promote before anything that can block. The deadline runs from the
         // startForegroundService() call, so a cold process that spends seconds in SpotifySessions
         // would otherwise die with ForegroundServiceDidNotStartInTimeException — which is exactly
-        // how playback used to crash on the first track of a fresh process.
-        startForeground(
-            NOTIFICATION_ID,
-            placeholderNotification(),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-        )
+        // how playback used to crash on the first track of a fresh process. Every transport action
+        // from the notification starts the service again, so only do this when it is not already
+        // foreground: otherwise the real notification is replaced by the placeholder on each press.
+        if (!foreground) {
+            startForeground(
+                NOTIFICATION_ID,
+                placeholderNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
+            foreground = true
+        }
         val session = SpotifySessions.get(this)
         val playback = session.playback
         when (intent?.action) {
@@ -76,6 +84,7 @@ class SpotifyPlaybackService : Service() {
 
     override fun onDestroy() {
         if (running === this) running = null
+        foreground = false
         super.onDestroy()
     }
 
@@ -83,19 +92,24 @@ class SpotifyPlaybackService : Service() {
         when {
             playback.current == null -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
+                foreground = false
                 stopSelf()
             }
 
-            playback.isActive -> startForeground(
-                playback.notificationId,
-                notification(playback, playing = true),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            )
+            playback.isActive -> {
+                startForeground(
+                    playback.notificationId,
+                    notification(playback, playing = true),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+                foreground = true
+            }
 
             else -> {
                 getSystemService(NotificationManager::class.java)
                     .notify(playback.notificationId, notification(playback, playing = false))
                 stopForeground(STOP_FOREGROUND_DETACH)
+                foreground = false
             }
         }
     }

@@ -3,20 +3,23 @@ package io.github.manuelrtsch.sidetrack
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 
-/** Block-level tags become a space so two paragraphs do not glue their first and last words. */
+/** Block-level tags become a paragraph break so the reading screen can lay the text out lazily. */
 private val podcastBlockTag = Regex("(?i)<(br|/p|/div|/li|/h[1-6])\\s*/?>")
 private val podcastTag = Regex("<[^>]*>")
-private val podcastWhitespace = Regex("\\s+")
+private val podcastParagraphBreak = Regex("\\n{3,}")
+private val podcastLineBreak = Regex("(?<!\\n)\\n(?!\\n)")
+private val podcastSpaces = Regex("[\\t\\u00A0 ]+")
 private val podcastNumericEntity = Regex("&#(x?[0-9a-fA-F]+);")
 
 /**
  * Spotify show notes arrive as HTML on both catalog paths. Compose renders text, not markup, so
- * strip the markup, decode the common entities and collapse the whitespace into one readable
- * paragraph. Unknown entities are left alone instead of being replaced with a misleading character.
+ * strip the markup, decode the common entities and collapse each line into readable text while
+ * keeping the paragraph breaks, which the reading screen turns into separate rows. Unknown entities
+ * are left alone instead of being replaced with a misleading character.
  */
 fun plainPodcastText(value: String): String {
     if (value.isBlank()) return ""
-    var text = podcastBlockTag.replace(value, " ")
+    var text = podcastBlockTag.replace(value, "\n\n")
     text = podcastTag.replace(text, "")
     text = podcastNumericEntity.replace(text) { match ->
         val raw = match.groupValues[1]
@@ -42,7 +45,13 @@ fun plainPodcastText(value: String): String {
         .replace("&lsquo;", "‘")
         .replace("&ldquo;", "“")
         .replace("&rdquo;", "”")
-    return podcastWhitespace.replace(text, " ").trim()
+    text = text.replace("\r\n", "\n").replace('\r', '\n')
+    // A newline in HTML source is wrapping, not a line break; only the breaks the block tags left
+    // behind are paragraphs.
+    text = podcastLineBreak.replace(text, " ")
+    text = podcastSpaces.replace(text, " ")
+    text = podcastParagraphBreak.replace(text, "\n\n")
+    return text.lines().joinToString("\n") { it.trim() }.trim()
 }
 
 /**

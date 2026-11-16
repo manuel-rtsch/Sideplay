@@ -7,6 +7,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,12 +42,20 @@ interface SpotifyEpisodeProgressStore {
 class SpotifyEpisodeProgressRepository(
     private val load: () -> Map<String, SpotifyEpisodeProgress> = { emptyMap() },
     private val save: (Map<String, SpotifyEpisodeProgress>) -> Unit = {},
-    private val now: () -> Long = System::currentTimeMillis
+    private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * Where [save] runs. Null writes inline, which keeps tests deterministic; the app hands in a
+     * background scope so a five-second checkpoint never touches the main thread.
+     */
+    saveScope: CoroutineScope? = null
 ) {
     private var entries: Map<String, SpotifyEpisodeProgress> =
-        runCatching(load).getOrDefault(emptyMap()).toMutableMap()
-    private val _progress = MutableStateFlow(entries)
+        prune(runCatching(load).getOrDefault(emptyMap()))
+    private val _progress = MutableStateFlow(displayOf(entries))
     val progress: StateFlow<Map<String, SpotifyEpisodeProgress>> = _progress.asStateFlow()
+    private val saver = saveScope?.let { scope ->
+        ConflatedSaver<Map<String, SpotifyEpisodeProgress>>(scope) { next -> save(next) }
+    }
 
     fun get(episodeId: String): SpotifyEpisodeProgress? = entries[episodeId]
 
@@ -112,14 +121,48 @@ class SpotifyEpisodeProgressRepository(
     }
 
     private fun commit(next: Map<String, SpotifyEpisodeProgress>) {
-        entries = next
-        _progress.value = next
-        runCatching { save(next) }
+        entries = prune(next)
+        // The UI only prints whole minutes and draws a 4 dp line, so publishing an entry for every
+        // five-second tick would recompose the show page for a change nobody can see.
+        val displayed = displayOf(entries)
+        if (displayed != _progress.value) _progress.value = displayed
+        val snapshot = entries
+        if (saver != null) saver.submit(snapshot) else runCatching { save(snapshot) }
+    }
+
+    /** Keeps the newest [MAX_ENTRIES] episodes so the file and the map stay bounded. */
+    private fun prune(entries: Map<String, SpotifyEpisodeProgress>): Map<String, SpotifyEpisodeProgress> {
+        if (entries.size <= MAX_ENTRIES) return entries
+        return entries.values
+            .sortedByDescending { it.updatedAtMs }
+            .take(MAX_ENTRIES)
+            .associateByTo(LinkedHashMap(MAX_ENTRIES * 2)) { it.episodeId }
+    }
+
+    /** The map the UI reads: positions rounded to the display step, completed at the end. */
+    private fun displayOf(
+        entries: Map<String, SpotifyEpisodeProgress>
+    ): Map<String, SpotifyEpisodeProgress> {
+        if (entries.isEmpty()) return entries
+        return entries.mapValues { (_, entry) ->
+            val position = if (entry.completed) {
+                entry.durationMs
+            } else {
+                entry.positionMs / DISPLAY_STEP_MS * DISPLAY_STEP_MS
+            }
+            if (position == entry.positionMs) entry else entry.copy(positionMs = position)
+        }
     }
 
     private companion object {
         const val COMPLETION_SLACK_MS = 30_000L
         const val MIN_RESUME_MS = 5_000L
+
+        /** Episodes remembered on disk; older ones are dropped rather than growing the file. */
+        const val MAX_ENTRIES = 500
+
+        /** How much the published progress may move before the UI is told about it. */
+        const val DISPLAY_STEP_MS = 15_000L
     }
 }
 
@@ -162,7 +205,7 @@ class FileSpotifyEpisodeProgressStore(file: File) : SpotifyEpisodeProgressStore 
             val data = DataOutputStream(BufferedOutputStream(out))
             data.writeInt(MAGIC)
             data.writeInt(VERSION)
-            val values = entries.values.take(MAX_ENTRIES)
+            val values = entries.values.sortedByDescending { it.updatedAtMs }.take(MAX_ENTRIES)
             data.writeInt(values.size)
             values.forEach { entry ->
                 data.writeUTF(entry.episodeId)

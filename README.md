@@ -108,6 +108,11 @@ Sidetrack falls back to the public Spotify Web API, which currently rejects Spot
 client ID with HTTP 429. The UI then looks empty: no library, no search results. Release and
 device builds must include the native bridge.
 
+The bridge is built for `arm64-v8a` (phones) and `x86_64` (emulators), and both are packaged by
+default. `-PsidetrackAbis=arm64-v8a` leaves the emulator copy out and halves the download, which
+is what the published phone asset uses; the universal APK is still built for testing on an
+emulator.
+
 ### "It signs in but nothing loads"
 
 That is always the same cause: the installed APK has no `libsidetrack_spotify.so`, so the app is

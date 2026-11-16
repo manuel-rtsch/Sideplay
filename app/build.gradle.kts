@@ -42,6 +42,15 @@ val standaloneDemo = providers.gradleProperty("sidetrackStandaloneDemo")
     .map(String::toBoolean)
     .getOrElse(false)
 
+/**
+ * Optional ABI restriction for the published APK. `-PsidetrackAbis=arm64-v8a` leaves the
+ * emulator's x86_64 bridge out; without it the universal APK is built exactly as before.
+ */
+val packagedAbis = providers.gradleProperty("sidetrackAbis")
+    .orElse(providers.environmentVariable("SIDETRACK_ABIS"))
+    .map { value -> value.split(',').map(String::trim).filter(String::isNotEmpty) }
+    .getOrElse(emptyList())
+
 android {
     ndkVersion = "27.1.12297006"
     namespace = "io.github.manuelrtsch.sidetrack"
@@ -76,6 +85,13 @@ android {
         manifestPlaceholders["sidekitAppId"] = "sidetrack"
         manifestPlaceholders["authScheme"] = "sidetrack"
         buildConfigField("String", "AUTH_SCHEME", "\"sidetrack\"")
+
+        // `-PsidetrackAbis=arm64-v8a` packages one ABI. The two native bridges are ~4.5 MB each,
+        // so a phone-only asset is half the download; unset, every built ABI is packaged and the
+        // APK stays installable on an emulator.
+        if (packagedAbis.isNotEmpty()) {
+            ndk { abiFilters.addAll(packagedAbis) }
+        }
     }
 
     signingConfigs {

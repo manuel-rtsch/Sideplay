@@ -166,8 +166,10 @@ fun ShowScreen(
                 rowIndex += 1
             }
             val base = rowIndex
-            itemsIndexed(collection.items, key = { index, item -> "$index:${item.id}" }) { index, item ->
-                val key = "$index:${item.id}"
+            // Keyed by episode id, not position: the list is newest-first, so a newly published
+            // episode prepends and every index shifts.
+            itemsIndexed(collection.items, key = { _, item -> item.id }) { index, item ->
+                val key = item.id
                 val modifier = Modifier.listFade(listState, base + index)
                 if (item is SpotifyEpisode) {
                     EpisodeRow(
@@ -352,27 +354,50 @@ fun NotesScreen(
     onBack: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    // Show notes are plain text with paragraph breaks; one lazy row per paragraph keeps a long
+    // description from being measured in a single pass. A restored stack has no body, which is
+    // what the hint covers instead of an empty screen.
+    val paragraphs = remember(body) {
+        body.split("\n\n").map(String::trim).filter(String::isNotEmpty)
+    }
     SidekitScaffold(
         title = label,
         actions = spotifyBack("Back", onBack)
     ) { padding ->
         SidekitList(padding, state = listState) {
-            item(key = "notes") {
-                SidekitCard(Modifier.fillMaxWidth()) {
+            item(key = "title") {
+                SidekitCard(Modifier.fillMaxWidth().listFade(listState, 0)) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidekitText(
-                            title,
+                            title.ifBlank { label },
                             style = SidekitTheme.typography.headline,
-                            maxLines = Int.MAX_VALUE
-                        )
-                        SidekitText(
-                            body.ifBlank { "No notes for this episode." },
-                            style = SidekitTheme.typography.bodySmall,
-                            color = SidekitTheme.colors.surfaceA6,
-                            maxLines = Int.MAX_VALUE
+                            maxLines = 3
                         )
                     }
                 }
+            }
+            if (paragraphs.isEmpty()) {
+                item(key = "missing") {
+                    SidekitText(
+                        "These notes are no longer available. Open the show again to read them.",
+                        Modifier.padding(horizontal = 18.dp).listFade(listState, 1),
+                        style = SidekitTheme.typography.bodySmall,
+                        color = SidekitTheme.colors.surfaceA6,
+                        maxLines = 3
+                    )
+                }
+            }
+            itemsIndexed(paragraphs, key = { index, _ -> "p$index" }) { index, paragraph ->
+                SidekitText(
+                    paragraph,
+                    Modifier
+                        .padding(horizontal = 18.dp)
+                        .padding(top = if (index == 0) 4.dp else 14.dp)
+                        .listFade(listState, index + 1),
+                    style = SidekitTheme.typography.bodySmall,
+                    color = SidekitTheme.colors.surfaceA6,
+                    maxLines = Int.MAX_VALUE
+                )
             }
             item(key = "end") {
                 // The action bar floats over the list; this lets the last paragraph scroll clear

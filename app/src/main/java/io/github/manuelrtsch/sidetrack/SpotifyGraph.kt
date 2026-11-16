@@ -53,14 +53,14 @@ private val APPEARANCE = "$ROOT/appearance"
 private val KEYBOARD = "$ROOT/keyboard"
 private val ABOUT = "$ROOT/about"
 private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={ratio}"
-private val NOTES = "$ROOT/notes?title={title}&body={body}&label={label}"
+private val NOTES = "$ROOT/notes/{key}"
 
 private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
 private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/${Uri.encode(id)}"
 private fun artistRoute(id: String) = "$ROOT/artist/${Uri.encode(id)}"
 private fun artistRadioRoute(id: String) = "$ROOT/artist-radio/${Uri.encode(id)}"
 private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f) = "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.orEmpty())}&label=${Uri.encode(label)}&ratio=$ratio"
-private fun notesRoute(title: String, body: String, label: String) = "$ROOT/notes?title=${Uri.encode(title)}&body=${Uri.encode(body)}&label=${Uri.encode(label)}"
+private fun notesRoute(key: String) = "$ROOT/notes/${Uri.encode(key)}"
 
 /**
  * Routes whose left action is Back (or a named "Home"/"Library" back). The keypad's Back key uses
@@ -136,17 +136,9 @@ private val collectionArgs = listOf(
 )
 private val artistArgs = listOf(navArgument("id") { type = NavType.StringType })
 private val notesArgs = listOf(
-    navArgument("title") {
+    navArgument("key") {
         type = NavType.StringType
         defaultValue = ""
-    },
-    navArgument("body") {
-        type = NavType.StringType
-        defaultValue = ""
-    },
-    navArgument("label") {
-        type = NavType.StringType
-        defaultValue = "Notes"
     }
 )
 private val artworkArgs = listOf(
@@ -336,12 +328,24 @@ fun NavGraphBuilder.sidetrackGraph(
                     loadingMore = "${type?.route}:$id" in state.collectionMorePending,
                     onShowNotes = {
                         nav.navigate(
-                            notesRoute(collection.title, plainPodcastText(collection.description), "Show notes")
+                            notesRoute(
+                                SidetrackNotes.remember(
+                                    collection.title,
+                                    plainPodcastText(collection.description),
+                                    "Show notes"
+                                )
+                            )
                         )
                     },
                     onEpisodeNotes = { episode ->
                         nav.navigate(
-                            notesRoute(episode.title, plainPodcastText(episode.description), "Episode notes")
+                            notesRoute(
+                                SidetrackNotes.remember(
+                                    episode.title,
+                                    plainPodcastText(episode.description),
+                                    "Episode notes"
+                                )
+                            )
                         )
                     },
                     onDismissNotice = vm::dismissNotice,
@@ -475,10 +479,13 @@ fun NavGraphBuilder.sidetrackGraph(
             )
         }
         composable(NOTES, arguments = notesArgs) { entry ->
+            // The body travels through the registry instead of the route: the back stack is part
+            // of the saved instance state, and show notes are unbounded text.
+            val note = SidetrackNotes.get(entry.arguments?.getString("key"))
             NotesScreen(
-                title = entry.arguments?.getString("title").orEmpty(),
-                body = entry.arguments?.getString("body").orEmpty(),
-                label = entry.arguments?.getString("label").orEmpty().ifBlank { "Notes" },
+                title = note?.title.orEmpty(),
+                body = note?.body.orEmpty(),
+                label = note?.label.orEmpty().ifBlank { "Notes" },
                 onBack = { nav.popBackStack() }
             )
         }
@@ -520,7 +527,13 @@ fun NavGraphBuilder.sidetrackGraph(
                 onEpisodeNotes = {
                     (state.current as? SpotifyEpisode)?.let { episode ->
                         nav.navigate(
-                            notesRoute(episode.title, plainPodcastText(episode.description), "Episode notes")
+                            notesRoute(
+                                SidetrackNotes.remember(
+                                    episode.title,
+                                    plainPodcastText(episode.description),
+                                    "Episode notes"
+                                )
+                            )
                         )
                     }
                 },
@@ -812,6 +825,7 @@ private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyV
                         queue = session.queue,
                         history = session.history,
                         episodeProgressRepository = session.episodeProgress,
+                        episodeMetaRepository = session.episodeMeta,
                         session = session,
                         openBrowser = openBrowser,
                         clearArtworkCache = { RemoteArtwork.clear(context) }

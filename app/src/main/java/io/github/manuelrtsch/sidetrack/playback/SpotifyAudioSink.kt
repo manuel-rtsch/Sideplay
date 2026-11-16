@@ -55,6 +55,8 @@ class SpotifyAudioSink(
      */
     var onFailure: (Throwable) -> Unit = {}
 ) {
+    /** Written by the lifecycle operations, read by the UI and the service on other threads. */
+    @Volatile
     private var track: AudioTrack? = null
     private var drain: Job? = null
 
@@ -181,11 +183,17 @@ class SpotifyAudioSink(
      */
     fun currentPositionMs(): Long? {
         val output = track ?: return null
-        val head = runCatching { output.playbackHeadPosition.toLong() }.getOrNull() ?: return null
-        if (head < lastHeadFrames) headWrapOffset += 1L shl 32
-        lastHeadFrames = head
-        val frames = head + headWrapOffset - startHeadFrames
-        return startPositionMs + frames * 1_000L / output.sampleRate
+        // A release racing this read makes both the head and the sample rate throw; the position
+        // is advisory for the UI, so a lost sample just means "no clock right now".
+        return runCatching {
+            val head = output.playbackHeadPosition.toLong()
+            val sampleRate = output.sampleRate
+            if (sampleRate <= 0) return@runCatching null
+            if (head < lastHeadFrames) headWrapOffset += 1L shl 32
+            lastHeadFrames = head
+            val frames = head + headWrapOffset - startHeadFrames
+            startPositionMs + frames * 1_000L / sampleRate
+        }.getOrNull()
     }
 
     /** Re-bases the playback-head clock after a seek without recreating the AudioTrack. */
