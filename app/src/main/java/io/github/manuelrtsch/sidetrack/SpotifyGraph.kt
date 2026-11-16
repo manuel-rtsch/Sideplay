@@ -61,6 +61,43 @@ private fun artistRadioRoute(id: String) = "$ROOT/artist-radio/${Uri.encode(id)}
 private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f) = "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.orEmpty())}&label=${Uri.encode(label)}&ratio=$ratio"
 
 /**
+ * Routes whose left action is Back (or a named "Home"/"Library" back). The keypad's Back key uses
+ * the same set, so it must not pop a screen that has no back action: Home, Sign in and Welcome
+ * leave the press to the system.
+ */
+private val KEYPAD_BACK_ROUTES = setOf(
+    HISTORY,
+    LIBRARY,
+    LIBRARY_FILTER,
+    COLLECTION,
+    ARTIST,
+    SEARCH,
+    SEARCH_SCOPES,
+    NOW_PLAYING,
+    QUEUE,
+    RADIO,
+    ARTIST_RADIO,
+    SLEEP_TIMER,
+    SETTINGS,
+    AUDIO_QUALITY,
+    APPEARANCE,
+    KEYBOARD,
+    ABOUT,
+    ARTWORK
+)
+
+internal fun keypadBackIsLeftAction(route: String?, canPop: Boolean): Boolean =
+    canPop && route in KEYPAD_BACK_ROUTES
+
+/** The keypad Back key is the touch/keypad equivalent of the screen's left action. */
+internal fun NavHostController.keypadBack(): Boolean {
+    if (!keypadBackIsLeftAction(currentDestination?.route, previousBackStackEntry != null)) {
+        return false
+    }
+    return popBackStack()
+}
+
+/**
  * A tap on the playback notification opens Sidetrack at Now Playing instead of the launcher.
  * The activity records the request here; the nav host consumes it once it is composed.
  */
@@ -119,21 +156,6 @@ private fun NavHostController.openNowPlaying(vm: SpotifyViewModel) {
     }
 }
 
-/**
- * A track row's Album and Artist actions. Both ids come from the row itself, so a browsed track
- * reaches its pages without being started first; a fixture or a broken payload reports instead of
- * navigating to a route that would fail verification.
- */
-private fun NavHostController.openTrackAlbum(vm: SpotifyViewModel, track: SpotifyTrack) {
-    track.albumId.spotifyIdOrNull()?.let { navigate(collectionRoute(SpotifyCollectionType.Album, it)) }
-        ?: vm.notice("This track has no album page")
-}
-
-private fun NavHostController.openTrackArtist(vm: SpotifyViewModel, track: SpotifyTrack) {
-    track.artistId.spotifyIdOrNull()?.let { navigate(artistRoute(it)) }
-        ?: vm.notice("This track has no artist page")
-}
-
 /** A tap on the already-playing item opens Now Playing instead of restarting or toggling it. */
 private fun NavHostController.openTrack(
     vm: SpotifyViewModel,
@@ -152,7 +174,8 @@ private fun NavHostController.openTrack(
 fun NavGraphBuilder.sidetrackGraph(
     nav: NavHostController,
     startDestination: String = HOME,
-    hostBacked: Boolean = false
+    hostBacked: Boolean = false,
+    onKeypadBackOverride: ((() -> Boolean)?) -> Unit = {}
 ) {
     navigation(startDestination = startDestination, route = ROOT) {
         composable(HOME) { entry ->
@@ -171,10 +194,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 onPlay = { item -> nav.openTrack(vm, item) { vm.playRecent(item) } },
                 onQueue = { nav.navigate(QUEUE) },
                 onQueueTrack = vm::addToQueue,
-                onSaveTrack = { vm.toggleSaved(it) },
-                onArtistTrack = { nav.openTrackArtist(vm, it) },
-                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
-                onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
+                onRemoveHistory = vm::removeHistory,
                 onHistory = { nav.navigate(HISTORY) },
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
@@ -212,8 +232,6 @@ fun NavGraphBuilder.sidetrackGraph(
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onSaveTrack = { vm.toggleSaved(it) },
-                onArtistTrack = { nav.openTrackArtist(vm, it) },
-                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                 onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onRetry = vm::refreshLibrary,
@@ -241,8 +259,6 @@ fun NavGraphBuilder.sidetrackGraph(
                 onArtist = { nav.navigate(artistRoute(it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onSaveTrack = { vm.toggleSaved(it) },
-                onArtistTrack = { nav.openTrackArtist(vm, it) },
-                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                 onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onLoadMore = vm::loadMoreLibrary,
                 onNowPlaying = { nav.openNowPlaying(vm) },
@@ -299,8 +315,6 @@ fun NavGraphBuilder.sidetrackGraph(
                     onQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
                     onSaveTrack = { vm.toggleSaved(it) },
-                    onArtistTrack = { nav.openTrackArtist(vm, it) },
-                    onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                     onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = {
@@ -344,8 +358,6 @@ fun NavGraphBuilder.sidetrackGraph(
                     onQueue = vm::addToQueue,
                     onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
                     onSaveTrack = { vm.toggleSaved(it) },
-                    onArtistTrack = { nav.openTrackArtist(vm, it) },
-                    onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                     onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onFollow = { vm.toggleFollow(artist) },
                     onRadio = { nav.navigate(artistRadioRoute(artist.id)) },
@@ -379,8 +391,6 @@ fun NavGraphBuilder.sidetrackGraph(
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
                 onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
                 onSaveTrack = { vm.toggleSaved(it) },
-                onArtistTrack = { nav.openTrackArtist(vm, it) },
-                onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                 onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onLoadMore = vm::loadMoreSearch,
                 onRetry = vm::retrySearch,
@@ -498,8 +508,6 @@ fun NavGraphBuilder.sidetrackGraph(
                     onQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
                     onSaveTrack = { vm.toggleSaved(it) },
-                    onArtistTrack = { nav.openTrackArtist(vm, it) },
-                    onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                     onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = { nav.openNowPlaying(vm) },
@@ -558,8 +566,6 @@ fun NavGraphBuilder.sidetrackGraph(
                         onQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
                         onQueueItem = vm::addToQueue,
                         onSaveTrack = { vm.toggleSaved(it) },
-                        onArtistTrack = { nav.openTrackArtist(vm, it) },
-                        onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                         onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                         onNowPlaying = { nav.openNowPlaying(vm) },
                         onArtwork = { nav.navigate(artworkRoute(artist.artRes, artist.artUrl, artist.name)) },
@@ -578,6 +584,7 @@ fun NavGraphBuilder.sidetrackGraph(
             QueueScreen(
                 state,
                 onBack = { nav.popBackStack() },
+                onKeypadBackOverride = onKeypadBackOverride,
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onJump = vm::jumpTo,
                 onMoveUpcoming = vm::moveUpcoming,
@@ -662,7 +669,7 @@ fun NavGraphBuilder.sidetrackGraph(
             val context = LocalContext.current
             LaunchedEffect(state.signedIn) {
                 if (state.signedIn) {
-                    val next = if (SidetrackLocalSettings(context).hasSeenOnboarding()) HOME else ONBOARDING
+                    val next = if (SidetrackLocalSettings(context).needsOnboarding(hostBacked)) HOME else ONBOARDING
                     nav.navigate(next) {
                         popUpTo(ROOT) { inclusive = false }
                         launchSingleTop = true

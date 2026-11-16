@@ -83,10 +83,18 @@ far are that run plus this one.
 ## Keypad
 
 - [ ] **Manual:** after signing in, Welcome shows the selected keypad, cycles modules on a
-      standalone install, and opens About from Options. **Get started** goes Home and a relaunch
-      does not show Welcome again.
-- [ ] **Manual:** upgrading a signed-in install shows Welcome once. With Sidekit installed, the
-      keyboard row shows the host module without offering a switch.
+      standalone install, shows **Keypad Back key** with its On/Off state, and opens About from
+      Options. Tapping the row opens Android Accessibility; enabling Sidetrack keypad and
+      returning changes the row to On. **Get started** goes Home and a relaunch does not show
+      Welcome again.
+- [ ] **Manual:** upgrading a signed-in standalone install with no keypad accessibility access
+      shows Welcome once so the row can be granted. With Sidekit installed, the keyboard row shows
+      the host module without offering a switch and no keypad access row appears.
+- [ ] **Manual:** with **Keypad Back key** enabled, press the top-left key and confirm it does what
+      the left action does: Library returns Home, an album returns to the Library (or whichever
+      screen opened it), and Home exits the app. Hold it to open the dialer.
+- [ ] **Manual:** open Queue, start Reorder, and press **Keypad Back key**: it cancels the lift and
+      remains on Queue. Do the same for Clear confirmation; it closes the prompt, not the screen.
 - [ ] **Manual:** T9 typing and suggestions.
 - [ ] **Manual:** mini QWERTY navigation with T / D / B / J, Enter, Back, and Options.
 - [ ] **Manual:** switch T9 → mini QWERTY while Sidetrack is backgrounded, return, and confirm the
@@ -104,25 +112,29 @@ far are that run plus this one.
 - [ ] **Manual:** Search opens **Search in** and toggling a category changes results without
       opening Options.
 - [ ] **Manual:** Home shows five recently played items and **See more history** when more exist;
-      the Options menu's **History** opens the full list, a focused row reveals Add to queue and
-      Remove squares, and left swipe still offers Add to queue.
+      a focused Recently played or History row reveals Add to queue and Remove from history, not
+      Save, and a long press reveals the same pair on touch.
 - [x] **Manual:** focus a track row in Search, Library, an album or a playlist and confirm a
-      two-square gutter appears after the focus settles: Save/Unsave and Artist. Start nothing,
-      press Save, and confirm the track lands in Liked Songs in another Spotify client while the
-      playing track continues. Press Artist and confirm that artist page opens.
-- [x] **Manual:** on a focused track row, open Options and confirm **Open album** is offered and
-      that it disappears on the album's own page. Confirm a row that has never played shows a
-      hollow bookmark before the saved-state read lands, and the filled one after.
+      two-square gutter appears after the focus settles: Save/Unsave and Add to queue. Start
+      nothing, press Save, and confirm the track lands in Liked Songs in another Spotify client
+      while the playing track continues. Press Add to queue and confirm the track joins the queue.
+- [x] **Manual:** on a focused track row, open Options and confirm there are no row-specific
+      navigation actions: the two actions stay in the gutter. Confirm a row that has never played
+      shows a hollow bookmark before the saved-state read lands, and the filled one after.
 - [x] **Manual:** confirm Right from a focused track row reaches its gutter squares without the
       gutter closing, and that holding Up/Down through a list never flashes a gutter.
-- [x] **Touch:** long-press a track row and confirm the same two squares appear (after a haptic
+- [x] **Touch:** long-press a track row and confirm Save and Add to queue appear (after a haptic
       tick) without the row ever taking focus, that holding the same row and scrolling still
-      scrolls, and that a short tap still plays. Tap the row while the squares are up and confirm
-      they close and the track does not start; tap a square and confirm the action runs and the
-      squares close.
-- [x] **Touch:** long-press a History row and confirm Queue and Remove appear, that a tap closes
-      them without playing the entry, and that swiping the same row left still reveals Add to
-      queue. Confirm the queue screen's rows keep their swipe and drag only.
+      scrolls, and that a short tap still plays. Start a swipe or scroll from a row and confirm no
+      gutter appears. Tap the row while the squares are up and confirm they close and the track
+      does not start; tap a square and confirm the action runs and the squares close.
+- [x] **Touch:** long-press a History row and confirm Queue and Remove appear, and that a tap
+      closes them without playing the entry. Confirm the queue screen's rows keep their swipe and
+      drag only.
+- [ ] **Manual:** in Liked songs, focus a row and confirm exactly two gutter actions (Remove from
+      Liked Songs and Add to queue) and no additional row navigation in Options.
+- [ ] **Manual:** with nothing playing, add a track to the queue. Confirm the bar says it was
+      added, the Queue screen lists it under **Up next**, and playback can start from it.
 - [ ] **Touch:** long-press one row, then move the keypad with Up/Down, and confirm the held row's
       squares close as the focus lands on another row. Repeat the other way round: open a gutter
       with the keypad, then long-press a different row. Two rows must never show squares at once,

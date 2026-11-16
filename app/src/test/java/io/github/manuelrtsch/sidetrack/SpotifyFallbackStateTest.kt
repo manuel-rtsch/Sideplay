@@ -96,6 +96,17 @@ class SpotifyFallbackStateTest {
         assertNull(vm.state.value.radioError)
     }
 
+    @Test fun `adding to queue before playback keeps the item and confirms it`() = runTest(dispatcher) {
+        val vm = viewModel(MockSpotifyDataSource)
+        val track = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
+
+        vm.addToQueue(track)
+
+        assertNull(vm.state.value.current)
+        assertEquals(listOf(track.id), vm.state.value.upcoming.map { it.id })
+        assertEquals("Added ${track.title} to queue", vm.state.value.notice)
+    }
+
     @Test fun `a late song radio response does not overwrite queue edits`() = runTest(dispatcher) {
         val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
         val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)

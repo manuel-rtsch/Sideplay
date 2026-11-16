@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -294,7 +295,8 @@ fun QueueScreen(
     onRestoreUpcoming: (List<SpotifyMediaItem>) -> Unit,
     onShuffle: () -> Unit,
     onDismissNotice: () -> Unit,
-    onDismissNowPlaying: () -> Unit
+    onDismissNowPlaying: () -> Unit,
+    onKeypadBackOverride: ((() -> Boolean)?) -> Unit = {}
 ) {
     var pendingUndo by remember { mutableStateOf<QueueUndo?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
@@ -312,12 +314,14 @@ fun QueueScreen(
     // keypad move can dismiss an open swipe instead of leaving two Remove buttons on screen.
     val swipes = rememberSwipeRevealGroup()
     val hasUpcoming = state.upcoming.isNotEmpty()
+    val hasCurrent = state.current != null
     val canReorder = state.upcoming.size > 1
     // Current row, then the "Up next" header when there is a tail. The header is the visible home
     // of shuffle state, so the mode no longer exists only in an icon's content description. Its own
     // top padding is the separation from the now-playing row: no extra spacer is needed.
+    val currentRow = if (hasCurrent) 1 else 0
     val queueHeader = if (hasUpcoming) 1 else 0
-    val firstQueueItem = 1 + queueHeader
+    val firstQueueItem = currentRow + queueHeader
     // Keys are the track's identity, not its position: a row that moves keeps its node, so it
     // keeps focus and never blinks out and back in. Duplicates get an occurrence suffix because
     // the queue may legitimately hold the same track twice.
@@ -333,6 +337,7 @@ fun QueueScreen(
     var clearFocusPending by remember { mutableStateOf(false) }
     val rowFocus = remember { FocusRequester() }
     val currentFocus = remember { FocusRequester() }
+    val firstUpcomingFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     // The focused row owns the gutter, but only once focus has settled: holding Up/Down through
     // the queue must not flash a button on every row it passes.
@@ -352,7 +357,11 @@ fun QueueScreen(
         }
     }
     LaunchedEffect(Unit) {
-        if (state.current != null) runCatching { currentFocus.requestFocus() }
+        if (state.current != null) {
+            runCatching { currentFocus.requestFocus() }
+        } else if (upcomingKeys.isNotEmpty()) {
+            runCatching { firstUpcomingFocus.requestFocus() }
+        }
     }
     // Put focus back on the row (or the current item) after a remove, a drop or a cancel. A row
     // whose list key changed has to recompose once before it can take focus.
@@ -625,12 +634,30 @@ fun QueueScreen(
                 lastKeptInView = keepInView
             }
         }
+        // A mode's left action is Cancel, not Back. Claim the keypad Back key while either mode
+        // is open so it closes the mode instead of popping the queue.
+        DisposableEffect(reorderMode, confirmClear, onKeypadBackOverride) {
+            when {
+                reorderMode -> onKeypadBackOverride {
+                    cancelReorder()
+                    true
+                }
+
+                confirmClear -> onKeypadBackOverride {
+                    confirmClear = false
+                    true
+                }
+
+                else -> onKeypadBackOverride(null)
+            }
+            onDispose { onKeypadBackOverride(null) }
+        }
         // The keypad lift commits as it steps, so cancelling is a move back to where it started.
         BackHandler(enabled = reorderMode) { cancelReorder() }
         BackHandler(enabled = confirmClear) { confirmClear = false }
         SidekitList(padding, state = listState) {
             val current = state.current
-            if (current == null) {
+            if (current == null && !hasUpcoming) {
                 item(key = "empty") {
                     SpotifyStatusScreen(
                         "Nothing queued",
@@ -639,16 +666,18 @@ fun QueueScreen(
                     )
                 }
             } else {
-                item(key = "current") {
-                    SpotifyMediaRow(
-                        current,
-                        Modifier
-                            .listFade(listState, 0)
-                            .focusRequester(currentFocus)
-                            .onFocusChanged { if (it.isFocused) focusedKey = null },
-                        secondary = "Now playing",
-                        onClick = onNowPlaying
-                    )
+                if (current != null) {
+                    item(key = "current") {
+                        SpotifyMediaRow(
+                            current,
+                            Modifier
+                                .listFade(listState, 0)
+                                .focusRequester(currentFocus)
+                                .onFocusChanged { if (it.isFocused) focusedKey = null },
+                            secondary = "Now playing",
+                            onClick = onNowPlaying
+                        )
+                    }
                 }
                 if (hasUpcoming) {
                     item(key = "queueHeader") {
@@ -748,6 +777,13 @@ fun QueueScreen(
                                             .then(
                                                 if (focusedKey == key) {
                                                     Modifier.focusRequester(rowFocus)
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
+                                            .then(
+                                                if (current == null && index == 0) {
+                                                    Modifier.focusRequester(firstUpcomingFocus)
                                                 } else {
                                                     Modifier
                                                 }

@@ -13,17 +13,13 @@ name: Queue and History Management
       text: "[0-9]+:[0-9]{2}"
       index: 1
     direction: DOWN
-- swipe:
-    from:
-      text: "[0-9]+:[0-9]{2}"
-      index: 0
-    direction: LEFT
+- longPressOn:
+    text: "[0-9]+:[0-9]{2}"
+    index: 0
 - tapOn: "Add .* to queue"
-- swipe:
-    from:
-      text: "[0-9]+:[0-9]{2}"
-      index: 1
-    direction: LEFT
+- longPressOn:
+    text: "[0-9]+:[0-9]{2}"
+    index: 1
 - tapOn: "Add .* to queue"
 
 # 2. Open the queue, remove the first upcoming item, then undo it.

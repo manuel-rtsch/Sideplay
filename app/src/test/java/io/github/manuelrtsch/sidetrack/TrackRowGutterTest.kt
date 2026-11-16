@@ -7,8 +7,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
 import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -20,7 +20,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * A row's gutter has to open once and then stay open, whichever hand opened it. It is the only
- * route to Save and to an artist from a track list, and it is invisible to a screenshot test: the
+ * route to Save and Add to queue from a track list, and it is invisible to a screenshot test: the
  * row renders correctly whether the gutter is open, opening, or blinking shut again.
  *
  * The keypad path drives [TrackRowFocusState] directly rather than through the Compose focus
@@ -38,7 +38,7 @@ class TrackRowGutterTest {
     private val key = track.id
     private val save = "Save ${track.title} to Liked Songs"
     private val longPressHoldMs = 700L
-    private val artist = "Open ${track.artist}"
+    private val queue = "Add ${track.title} to queue"
 
     private fun showRow(
         saved: Boolean = false,
@@ -52,15 +52,13 @@ class TrackRowGutterTest {
                 val state = rememberTrackRows(
                     SpotifyUiState(savedTrackIds = if (saved) setOf(track.id) else emptySet()),
                     onSave = { onSave() },
-                    onArtist = {},
-                    onAlbum = {},
                     onEnsureSaved = {},
                     onQueue = {}
                 )
                 rows = state
                 LazyColumn {
                     item(key = key) {
-                        TrackRow(key, track, state, rememberSwipeRevealGroup(), onClick = onPlay)
+                        TrackRow(key, track, state, onClick = onPlay)
                     }
                 }
             }
@@ -108,7 +106,7 @@ class TrackRowGutterTest {
         settle()
         assertEquals(key, rows().focus.openKey)
         compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(artist).assertExists()
+        compose.onNodeWithContentDescription(queue).assertExists()
     }
 
     @Test
@@ -123,7 +121,7 @@ class TrackRowGutterTest {
         compose.waitForIdle()
         assertEquals(key, rows().focus.openKey)
         compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(artist).assertExists()
+        compose.onNodeWithContentDescription(queue).assertExists()
     }
 
     @Test
@@ -152,9 +150,20 @@ class TrackRowGutterTest {
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
         compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(artist).assertExists()
-        // Save and Artist are the ceiling; anything else the row can do goes to Options.
+        compose.onNodeWithContentDescription(queue).assertExists()
+        // Save and Queue are the ceiling; navigation goes to Options.
+        compose.onNodeWithContentDescription("Open artist").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
+    }
+
+    @Test
+    fun draggingTheRowDoesNotRevealTheGutter() {
+        val rows = showRow()
+        compose.onNodeWithText(track.title).performTouchInput { swipeLeft() }
+        settle()
+        assertNull(rows().focus.touchedKey)
+        assertNull(rows().focus.openKey)
+        compose.onNodeWithContentDescription(save).assertDoesNotExist()
     }
 
     @Test
@@ -164,7 +173,7 @@ class TrackRowGutterTest {
         assertEquals(key, rows().focus.touchedKey)
         assertNull(rows().focus.openKey)
         compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(artist).assertExists()
+        compose.onNodeWithContentDescription(queue).assertExists()
     }
 
     @Test

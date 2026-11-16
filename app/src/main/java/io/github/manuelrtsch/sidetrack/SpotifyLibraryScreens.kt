@@ -33,10 +33,7 @@ import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
-import io.github.manuelrtsch.sidetrack.ui.SidekitSwipeRow
-import io.github.manuelrtsch.sidetrack.ui.SwipeAction
-import io.github.manuelrtsch.sidetrack.ui.SwipeRevealGroup
-import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
+import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
@@ -50,10 +47,7 @@ fun SidetrackHomeScreen(
     onPlay: (SpotifyMediaItem) -> Unit,
     onQueue: () -> Unit,
     onQueueTrack: (SpotifyMediaItem) -> Unit,
-    onSaveTrack: (SpotifyTrack) -> Unit,
-    onArtistTrack: (SpotifyTrack) -> Unit,
-    onAlbumTrack: (SpotifyTrack) -> Unit,
-    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
+    onRemoveHistory: (SpotifyMediaItem) -> Unit,
     onHistory: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
@@ -62,14 +56,7 @@ fun SidetrackHomeScreen(
     // recent rows a new list instance and force them to rebuild.
     val recent = remember(state.recent) { state.recent.take(RECENT_PREVIEW_SIZE) }
     val hasMoreHistory = state.recent.size > RECENT_PREVIEW_SIZE
-    val rows = rememberTrackRows(
-        state,
-        onSaveTrack,
-        onArtistTrack,
-        onAlbumTrack,
-        onEnsureSavedTrack,
-        onQueueTrack
-    )
+    val recentGutters = rememberRowGutterState()
     val bar = spotifyActions(
         state,
         onDismissNotice,
@@ -85,10 +72,9 @@ fun SidetrackHomeScreen(
         actions = bar,
         options = listOf(
             SideAction("settings", "Settings", SidekitIcon.Settings, onClick = onSettings)
-        ) + rows.options()
+        )
     ) { padding ->
         val listState = rememberLazyListState()
-        val swipes = rememberSwipeRevealGroup()
         SidekitList(padding, state = listState) {
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, 0)) {
@@ -108,31 +94,15 @@ fun SidetrackHomeScreen(
             } else {
                 itemsIndexed(recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
                     val key = "$index:${item.id}"
-                    val modifier = Modifier.listFade(listState, index + 2)
-                    if (item is SpotifyTrack) {
-                        TrackRow(
-                            key,
-                            item,
-                            rows,
-                            swipes,
-                            modifier,
-                            onClick = { onPlay(item) }
-                        )
-                    } else {
-                        SidekitSwipeRow(
-                            key = key,
-                            group = swipes,
-                            modifier = modifier,
-                            action = queueAction(item, onQueueTrack)
-                        ) {
-                            SpotifyMediaRow(
-                                item,
-                                Modifier,
-                                secondary = item.creator,
-                                onClick = { onPlay(item) }
-                            )
-                        }
-                    }
+                    HistoryRow(
+                        key,
+                        item,
+                        recentGutters,
+                        Modifier.listFade(listState, index + 2),
+                        onQueue = onQueueTrack,
+                        onRemove = onRemoveHistory,
+                        onClick = { onPlay(item) }
+                    )
                 }
             }
             if (hasMoreHistory) {
@@ -149,15 +119,6 @@ fun SidetrackHomeScreen(
         }
     }
 }
-
-@Composable
-internal fun <T : SpotifyMediaItem> queueAction(item: T, onQueue: (T) -> Unit) = SwipeAction(
-    label = "Add ${item.title} to queue",
-    icon = SidekitIcon.QueueMusic,
-    color = SidekitTheme.colors.successA1,
-    armedColor = SidekitTheme.colors.successA2,
-    onClick = { onQueue(item) }
-)
 
 /**
  * The Library overview: a short preview of every category with a "See more" row, instead of
@@ -176,8 +137,6 @@ fun LibraryScreen(
     onArtist: (SpotifyArtist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
-    onArtistTrack: (SpotifyTrack) -> Unit,
-    onAlbumTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onNowPlaying: () -> Unit,
     onRetry: () -> Unit,
@@ -187,8 +146,6 @@ fun LibraryScreen(
     val rows = rememberTrackRows(
         state,
         onSaveTrack,
-        onArtistTrack,
-        onAlbumTrack,
         onEnsureSavedTrack,
         onQueue
     )
@@ -202,11 +159,9 @@ fun LibraryScreen(
     SidekitScaffold(
         title = "Library",
         actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)) +
-            rows.options()
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
-        val swipes = rememberSwipeRevealGroup()
         val sections = state.librarySections
         val isEmpty = sections.values.all { it.isEmpty() }
         val firstFilter = LibraryFilter.entries.firstOrNull { sections[it].orEmpty().isNotEmpty() }
@@ -261,7 +216,6 @@ fun LibraryScreen(
                         item,
                         modifier,
                         rows,
-                        swipes,
                         onTrack,
                         onPlaylist,
                         onAlbum,
@@ -300,8 +254,6 @@ fun LibraryCategoryScreen(
     onArtist: (SpotifyArtist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
-    onArtistTrack: (SpotifyTrack) -> Unit,
-    onAlbumTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onLoadMore: () -> Unit,
     onNowPlaying: () -> Unit,
@@ -312,8 +264,6 @@ fun LibraryCategoryScreen(
     val rows = rememberTrackRows(
         state,
         onSaveTrack,
-        onArtistTrack,
-        onAlbumTrack,
         onEnsureSavedTrack,
         onQueue
     )
@@ -327,11 +277,9 @@ fun LibraryCategoryScreen(
     SidekitScaffold(
         title = filter.label,
         actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)) +
-            rows.options()
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
-        val swipes = rememberSwipeRevealGroup()
         val first = remember { FocusRequester() }
         LaunchedEffect(filter) { runCatching { first.requestFocus() } }
         val items = state.libraryItems
@@ -371,7 +319,7 @@ fun LibraryCategoryScreen(
             itemsIndexed(items, key = { index, item -> "$index:${libraryKey(item)}" }) { index, item ->
                 val modifier = Modifier.listFade(listState, base + index)
                     .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
-                LibraryRow(item, modifier, rows, swipes, onTrack, onPlaylist, onAlbum, onArtist, onShow)
+                LibraryRow(item, modifier, rows, onTrack, onPlaylist, onAlbum, onArtist, onShow)
             }
             rowIndex += items.size
             if (state.libraryHasMore) {
@@ -389,7 +337,6 @@ private fun LibraryRow(
     item: Any,
     modifier: Modifier,
     rows: TrackRows,
-    swipes: SwipeRevealGroup,
     onTrack: (SpotifyTrack) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
@@ -399,7 +346,7 @@ private fun LibraryRow(
     when (item) {
         // Library rows carry no list index: a track can appear once per category, so its id is
         // already unique here.
-        is SpotifyTrack -> TrackRow(item.id, item, rows, swipes, modifier) { onTrack(item) }
+        is SpotifyTrack -> TrackRow(item.id, item, rows, modifier) { onTrack(item) }
 
         is SpotifyPlaylist -> SpotifyLibraryRow(item.artRes, item.name, playlistSubtitle(item), modifier, artUrl = item.artUrl) { onPlaylist(item) }
 
@@ -432,8 +379,6 @@ fun CollectionScreen(
     onQueue: () -> Unit,
     onQueueItem: (SpotifyMediaItem) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
-    onArtistTrack: (SpotifyTrack) -> Unit,
-    onAlbumTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onNowPlaying: () -> Unit,
     onArtwork: () -> Unit,
@@ -448,8 +393,6 @@ fun CollectionScreen(
     val rows = rememberTrackRows(
         state,
         onSaveTrack,
-        onArtistTrack,
-        onAlbumTrack,
         onEnsureSavedTrack,
         onQueueItem
     )
@@ -467,8 +410,6 @@ fun CollectionScreen(
     val options = buildList {
         collection.items.firstOrNull()?.let { add(SideAction("queue", "Add to queue", SidekitIcon.QueueMusic, onClick = onQueue)) }
         add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
-        // A row on the album's own page has no album to open.
-        addAll(rows.options(currentAlbumId = collection.id.takeIf { collection.type == SpotifyCollectionType.Album }))
     }
     val artist = if (collection.type == SpotifyCollectionType.Album) {
         collection.artistId.spotifyIdOrNull()?.let { collection.subtitle.substringBefore(" · ").takeIf(String::isNotBlank) }
@@ -478,7 +419,6 @@ fun CollectionScreen(
     val details = artist?.let { collection.subtitle.removePrefix(it).trimStart(' ', '·', ' ') }.orEmpty()
     SidekitScaffold(title = collection.title, actions = actions, options = options) { padding ->
         val listState = rememberLazyListState()
-        val swipes = rememberSwipeRevealGroup()
         val playFocus = remember { FocusRequester() }
         val playIds = remember(collection.items) { collection.items.mapTo(mutableSetOf()) { it.id } }
         LaunchedEffect(collection.type, collection.id) { runCatching { playFocus.requestFocus() } }
@@ -544,27 +484,22 @@ fun CollectionScreen(
                         key,
                         item,
                         rows,
-                        swipes,
                         modifier,
                         index = if (showTrackArt) null else index,
                         showArt = showTrackArt
                     ) { onItem(index) }
                 } else {
-                    SidekitSwipeRow(
-                        key = key,
-                        group = swipes,
-                        modifier = modifier,
-                        action = queueAction(item, onQueueItem)
-                    ) {
-                        SpotifyMediaRow(
-                            item,
-                            Modifier,
-                            index = if (showTrackArt) null else index,
-                            showArt = showTrackArt,
-                            secondary = if (item is SpotifyEpisode) formatPublishedDate(item.published) else item.creator,
-                            onClick = { onItem(index) }
-                        )
-                    }
+                    GutterMediaRow(
+                        key,
+                        item,
+                        rows.focus,
+                        modifier,
+                        index = if (showTrackArt) null else index,
+                        showArt = showTrackArt,
+                        secondary = if (item is SpotifyEpisode) formatPublishedDate(item.published) else item.creator,
+                        onQueue = onQueueItem,
+                        onClick = { onItem(index) }
+                    )
                 }
             }
             rowIndex += collection.items.size
@@ -591,8 +526,6 @@ fun ArtistScreen(
     onQueue: (SpotifyTrack) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
-    onArtistTrack: (SpotifyTrack) -> Unit,
-    onAlbumTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onFollow: () -> Unit,
     onRadio: () -> Unit,
@@ -610,8 +543,6 @@ fun ArtistScreen(
     val rows = rememberTrackRows(
         state,
         onSaveTrack,
-        onArtistTrack,
-        onAlbumTrack,
         onEnsureSavedTrack,
         onQueue
     )
@@ -628,10 +559,9 @@ fun ArtistScreen(
         options = listOf(
             SideAction("artistRadio", "Artist radio", SidekitIcon.Explore, onClick = onRadio),
             SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)
-        ) + rows.options()
+        )
     ) { padding ->
         val listState = rememberLazyListState()
-        val swipes = rememberSwipeRevealGroup()
         val playIds = remember(tracks) { tracks.mapTo(mutableSetOf()) { it.id } }
         SidekitList(padding, state = listState) {
             var rowIndex = 0
@@ -671,7 +601,6 @@ fun ArtistScreen(
                     "$index:${track.id}",
                     track,
                     rows,
-                    swipes,
                     Modifier.listFade(listState, tracksBase + index)
                 ) { onTrack(track) }
             }

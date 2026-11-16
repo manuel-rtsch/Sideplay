@@ -260,8 +260,8 @@ Media: music / track.
 - [x] Play a recent track first, using the m:ss-only duration regex so an episode left
       current by an earlier flow cannot make Now Playing lack `Save`.
 - [x] Add two recent tracks to the queue:
-  - [x] Swipe left from m:ss duration regex index `0`, tap `Add .* to queue`.
-  - [x] Swipe left from m:ss duration regex index `1`, tap `Add .* to queue`.
+  - [x] Long-press the m:ss duration regex index `0`, tap `Add .* to queue`.
+  - [x] Long-press the m:ss duration regex index `1`, tap `Add .* to queue`.
 - [x] Tap `Queue`, assert `Queue`.
 - [x] Remove the first upcoming item:
   - [x] Swipe left from the full duration regex index `1` (index `0` is the current row;

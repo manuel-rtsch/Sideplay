@@ -32,9 +32,10 @@ Spotify.
 - **Two squares, then Options.** A row may reveal at most two gutter squares. Anything else the
   row can do belongs in the screen's Options, so a 480 dp row keeps its title.
 - **Every reveal has two hands.** Anything a keypad reaches is reachable by touch and the other way
-  round. A gutter opens on focus (after the focus settles) *and* on a long press; a long press is
-  the touch equivalent of putting the focus on a row, because a touch screen has no focus border
-  to follow. One row shows squares at a time, whichever hand opened them: a long press gives the
+  round. A gutter opens on focus (after the focus settles) *and* on a still long press; a long
+  press is the touch equivalent of putting the focus on a row, because a touch screen has no focus
+  border to follow. Movement past touch slop belongs to scrolling or swiping and never reveals a
+  gutter. One row shows squares at a time, whichever hand opened them: a long press gives the
   focus's gutter up, and moving the focus gives the long press's up.
 - **Content never wears the theme colour.** Play, selection, progress, save/unsave, and
   follow/unfollow use the Library success fill; the case colour belongs to action-bar actions and
@@ -77,9 +78,20 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 
 - Welcome is the one-time onboarding after sign-in. It names the attached keypad, cycles the
   module on a standalone install, explains that Options reveals each screen's extra actions, and
-  shows the keypad guide. Finishing it writes `onboarding_seen` to the local settings file; an
-  existing signed-in install without that key sees it once after updating. A Sidekit host keeps
-  ownership of the keyboard choice, so Welcome shows the module without offering a switch.
+  shows the keypad guide. A standalone install also gets a **Keypad Back key** row: Android's
+  keypad Back action is delivered by the bundled accessibility service, so the row shows whether
+  that service is enabled and opens the system Accessibility settings when tapped. The status
+  refreshes on return. Finishing Welcome writes `onboarding_seen` and
+  `keypad_access_prompted` to the local settings file. An existing signed-in install without
+  `onboarding_seen`, or one that has never been shown the keypad access row, sees Welcome once
+  after updating; declining access does not reopen it on every launch. A Sidekit host keeps
+  ownership of the keyboard choice, so Welcome shows the module without offering a switch and does
+  not ask for Sidetrack's own accessibility service.
+- The keypad Back key is the screen's left action when that action leads back: Library returns
+  Home, an album/artist/playlist returns to the screen that opened it, and so on. It does not pop
+  Home, Sign in or Welcome, so those still leave the app to the system. A list mode claims the key
+  first: Queue reorder cancels the lift and clear confirmation closes the prompt instead of
+  leaving the screen.
 - Library, collection, artist, and grouped search reads use first-party endpoints, avoiding the
   public Web API quota and the old HTTP 429 failures.
 - Native events (`loading`, `playing`, `paused`, `position`, `ended`, `unavailable`) drive Now
@@ -94,10 +106,9 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   collection page is read once, filtered by URI prefix, and cached for two minutes; writes
   invalidate that cache.
 - Home previews five recently played items and ends the section with a compact **See more
-  history** row when more exist. A **History** option in Home's Options menu opens the same full
-  list directly. History is the full local list: tracks and show episodes are both recorded,
-  including when playback advances from the notification. A focused row opens a gutter with Add to
-  queue and Remove squares; left swipe still offers Add to queue.
+  history** row when more exist. History is the full local list: tracks and show episodes are both
+  recorded, including when playback advances from the notification. A focused row opens a gutter
+  with Add to queue and Remove squares; a long press reveals the same pair on touch.
 - The Library overview shows five rows per category with a compact **See more** row. Opening a
   category gives the full paged list. Playlists use the rootlist order and show their folder
   path above the owner. Startup pre-caches only six items per category (five shown plus one to
@@ -186,25 +197,25 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   cap, `OutOfMemoryError` treated as a cache miss. List thumbnails use Sidekit's 24dp artwork
   shape, which matches the item's 36:104 corner ratio at 68dp without cropping the cover into a
   circle.
-- Every track row carries its whole action set without starting the song. A focused row opens a
-  two-square gutter: Save/Unsave (hollow/filled bookmark, the same success fill as every other
-  save control) and the artist page. A long press opens the same gutter on a touch screen, and a
-  tap closes it instead of starting the track, the contract a swiped-open row already has; touch
-  also keeps the left swipe for Add to queue. A swipe and the gutter never share the right edge:
-  whichever arrives second yields. The row's
-  remaining action sits in the screen's Options as **Open album**, omitted on the album's own
-  page. A track that has never played has no known saved state, so the row asks for it when its
-  gutter opens: liking a search result or a playlist track never interrupts what is playing, and
-  unlike works from the Liked Songs list without starting the song first. Episodes keep the plain
-  swipe row — there is no saved-episode endpoint, and a show is reached from Now Playing — and
-  History keeps Queue and Remove in its gutter, because dropping an entry belongs there, and
-  reveals them the same two ways. The queue's own rows do not take a long press: they already swipe
-  to remove and hold to drag-reorder, and a third touch meaning on the same gesture would fight
-  both.
-- Home's action bar opens the queue; track rows across the app expose Add to queue on left swipe.
-  Upcoming rows in the queue swipe left to remove; the queue shows only the current item and what
-  is next, while the full listening history lives on the History screen. Library uses the standard
-  single-line header; Settings has one sign-out action in the bar.
+- Every list row carries at most two context actions, chosen for the list it belongs to. A
+  focused track row opens Save/Unsave (hollow/filled bookmark, the same success fill as every
+  other save control) and Add to queue; a long press opens the same pair on touch, and a tap closes
+  it instead of starting the track. Rows do not add a second row menu to Options: Artist and Album
+  are destinations reached from Now Playing after the track starts, not verbs that belong on every
+  browse row. A track that has never played has no known saved state, so the row asks for it when
+  its gutter opens: liking a search result or a playlist track never interrupts what is playing,
+  and unlike works from the Liked Songs list without starting the song first. Episodes reveal one
+  Add to queue square — there is no saved-episode endpoint, and a show is reached from Now Playing.
+  Recently played and History are the exception: their two actions are Add to queue and Remove
+  from history, because saving belongs to the saved lists and history is where an entry is
+  forgotten. The queue's own rows do not take a long press: they already swipe to remove and hold
+  to drag-reorder, and a third touch meaning on the same gesture would fight both.
+- Home's action bar opens the queue; track rows across the app expose Add to queue in their gutter.
+  Adding to the queue works before anything is playing: the item waits in Up next and the bar
+  confirms it, instead of the queue screen claiming to be empty. Upcoming rows in the queue swipe
+  left to remove; the queue shows the current item and what is next (or just Up next before
+  playback starts), while the full listening history lives on the History screen. Library uses the
+  standard single-line header; Settings has one sign-out action in the bar.
 - The queue has one primary action per row. Enter or a tap on an upcoming track plays it now; the
   current row opens Now Playing. Remove is the single focused-row square and the left swipe; the
   keypad square appears after the focus settles, so holding Up/Down does not flash a button on

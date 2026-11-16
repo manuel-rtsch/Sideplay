@@ -32,7 +32,6 @@ import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
-import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
 
 @Composable
 fun SpotifySearchScreen(
@@ -48,8 +47,6 @@ fun SpotifySearchScreen(
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onShow: (SpotifyShow) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
-    onArtistTrack: (SpotifyTrack) -> Unit,
-    onAlbumTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onLoadMore: (SearchScope) -> Unit,
     onRetry: () -> Unit,
@@ -62,8 +59,6 @@ fun SpotifySearchScreen(
     val rows = rememberTrackRows(
         state,
         onSaveTrack,
-        onArtistTrack,
-        onAlbumTrack,
         onEnsureSavedTrack,
         onQueue
     )
@@ -166,11 +161,9 @@ fun SpotifySearchScreen(
             }
         },
         actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)) +
-            rows.options()
+        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
-        val swipes = rememberSwipeRevealGroup()
         if (state.query.trim().length >= 2 && !state.searchPending && state.searchError != null && results.isEmpty) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 SpotifyStatusScreen(
@@ -251,7 +244,6 @@ fun SpotifySearchScreen(
                                 "t${track.id}",
                                 track,
                                 rows,
-                                swipes,
                                 Modifier.listFade(listState, base + index)
                                     .then(resultModifier(SearchScope.Tracks, index, results.tracks.lastIndex))
                             ) { onTrack(track) }
