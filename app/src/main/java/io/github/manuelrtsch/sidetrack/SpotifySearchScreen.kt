@@ -76,10 +76,14 @@ fun SpotifySearchScreen(
     // overflows is four of five scopes, so name the one that is left out instead of listing four.
     val scopeSummary = when (state.searchScopes.size) {
         SearchScope.entries.size -> "Everything"
+
         0 -> "Nothing"
+
         1 -> SearchScope.entries.first { it in state.searchScopes }.label
+
         SearchScope.entries.size - 1 ->
             "All but " + SearchScope.entries.first { it !in state.searchScopes }.label
+
         else -> SearchScope.entries.filter { it in state.searchScopes }.joinToString(", ") { it.label }
     }
     val searchFocus = remember { FocusRequester() }

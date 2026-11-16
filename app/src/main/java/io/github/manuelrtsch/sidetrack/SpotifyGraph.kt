@@ -86,8 +86,7 @@ private val KEYPAD_BACK_ROUTES = setOf(
     ARTWORK
 )
 
-internal fun keypadBackIsLeftAction(route: String?, canPop: Boolean): Boolean =
-    canPop && route in KEYPAD_BACK_ROUTES
+internal fun keypadBackIsLeftAction(route: String?, canPop: Boolean): Boolean = canPop && route in KEYPAD_BACK_ROUTES
 
 /** The keypad Back key is the touch/keypad equivalent of the screen's left action. */
 internal fun NavHostController.keypadBack(): Boolean {

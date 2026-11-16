@@ -73,17 +73,13 @@ class NativeSpotifyCatalog(
         return SpotifyPage.of(array.tracks(), offset, limit)
     }
 
-    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> =
-        songRadioStation(trackId, limit).tracks
+    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> = songRadioStation(trackId, limit).tracks
 
-    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> =
-        artistRadioStation(artistId, limit).tracks
+    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> = artistRadioStation(artistId, limit).tracks
 
-    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation =
-        parseStation(callText { native.catalogSongRadio(trackId, limit.toLong()) })
+    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = parseStation(callText { native.catalogSongRadio(trackId, limit.toLong()) })
 
-    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation =
-        parseStation(callText { native.catalogArtistRadio(artistId, limit.toLong()) })
+    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation = parseStation(callText { native.catalogArtistRadio(artistId, limit.toLong()) })
 
     override suspend fun search(
         query: String,

@@ -64,12 +64,10 @@ interface SpotifyCatalog {
      * A station seeded by [trackId], including the playlist that backs it when the transport can
      * report one. The default wraps [songRadio], so transports that only return tracks still work.
      */
-    suspend fun songRadioStation(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation =
-        SpotifyStation(songRadio(trackId, limit))
+    suspend fun songRadioStation(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation = SpotifyStation(songRadio(trackId, limit))
 
     /** A station seeded by [artistId]; same contract as [songRadioStation]. */
-    suspend fun artistRadioStation(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation =
-        SpotifyStation(artistRadio(artistId, limit))
+    suspend fun artistRadioStation(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation = SpotifyStation(artistRadio(artistId, limit))
 
     suspend fun search(
         query: String,

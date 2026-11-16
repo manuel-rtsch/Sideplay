@@ -40,9 +40,8 @@ internal class SidetrackLocalSettings(context: Context) {
      * upgrading into this release have [KEY_ONBOARDING_SEEN] set but [KEY_KEYPAD_ACCESS_PROMPTED]
      * absent, so they see it once even though the welcome itself is already done.
      */
-    fun needsOnboarding(hostBacked: Boolean): Boolean =
-        !hasSeenOnboarding() ||
-            (!hostBacked && !SidetrackKeypadAccess.isEnabled(context) && !hasPromptedKeypadAccess())
+    fun needsOnboarding(hostBacked: Boolean): Boolean = !hasSeenOnboarding() ||
+        (!hostBacked && !SidetrackKeypadAccess.isEnabled(context) && !hasPromptedKeypadAccess())
 
     fun markOnboardingSeen() {
         prefs.edit()

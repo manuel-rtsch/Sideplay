@@ -102,8 +102,7 @@ class SpotifyFallbackStateTest {
         val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
         val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation =
-                SpotifyStation(station, playlistId = "37i9dQZF1DXcBWIGoYBM5M")
+            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = SpotifyStation(station, playlistId = "37i9dQZF1DXcBWIGoYBM5M")
         }
         val writes = mutableListOf<Pair<String, Boolean>>()
         val writer = object : SpotifyLibraryWriter {
@@ -216,8 +215,7 @@ class SpotifyFallbackStateTest {
         val station = MockSpotifyDataSource.topTracks(artist, 4)
         val playing = MockSpotifyDataSource.albums.flatMap { it.tracks }.first { it.artistId != artist.id }
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation =
-                SpotifyStation(if (artistId == artist.id) station else emptyList())
+            override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation = SpotifyStation(if (artistId == artist.id) station else emptyList())
         }
         val vm = viewModel(catalog)
         vm.playItem(playing)
