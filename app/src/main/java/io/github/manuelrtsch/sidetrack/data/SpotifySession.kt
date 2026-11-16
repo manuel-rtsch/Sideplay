@@ -109,17 +109,59 @@ class SpotifySession(
 
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val playback: SpotifyPlayback by lazy {
+        val sink = SpotifyAudioSink(NativeBridge, playbackScope)
         SpotifyPlayback(
             gateway = nativeGateway,
             scope = playbackScope,
-            audio = SpotifyAudioSink(NativeBridge, playbackScope),
+            audio = sink,
             context = appContext
         ).also { player ->
+            // A drain that stopped producing audio cannot repair itself: restarting the native
+            // player needs the gateway and a fresh token, and those live here.
+            sink.onFailure = player::onAudioStalled
+            player.onStalled = ::recoverPlayback
             // Adopt transport actions when no ViewModel is attached. The ViewModel installs its
             // own callbacks while it exists and clears them in onCleared().
             player.fallbackNext = { skipNext() }
             player.fallbackPrevious = { skipPrevious() }
             player.onStopped = { queue.stop() }
+        }
+    }
+
+    /** Stall recoveries started inside [STALL_RECOVERY_WINDOW_MS]; main thread only. */
+    private val stallRecoveries = ArrayDeque<Long>()
+
+    /**
+     * Rebuilds playback after the audio pipeline went silent.
+     *
+     * When the access-point connection dies, librespot stops producing PCM and nothing in the
+     * player notices: the app kept reporting a playing track while delivering silence, and only
+     * a manual press of play recovered it. This reloads the item where the user left it, and
+     * gives up (visibly) after a few attempts instead of looping through reconnects.
+     */
+    private fun recoverPlayback(positionMs: Long) {
+        val item = playback.current ?: return
+        val uri = item.uri ?: return
+        val now = SystemClock.elapsedRealtime()
+        while (stallRecoveries.isNotEmpty() && now - stallRecoveries.first() > STALL_RECOVERY_WINDOW_MS) {
+            stallRecoveries.removeFirst()
+        }
+        if (stallRecoveries.size >= STALL_RECOVERY_LIMIT) {
+            SidetrackDebug.log("recoverPlayback giving up after ${stallRecoveries.size} attempts")
+            playback.pause()
+            playback.emitNotice("Playback stopped — check the connection")
+            return
+        }
+        stallRecoveries.addLast(now)
+        SidetrackDebug.log("recoverPlayback uri=$uri positionMs=$positionMs attempt=${stallRecoveries.size}")
+        playbackScope.launch {
+            runCatching { play(uri, positionMs.coerceAtLeast(0L)) }
+                .onSuccess { playback.emitNotice(null) }
+                .onFailure {
+                    SidetrackDebug.log("recoverPlayback failed", it)
+                    playback.pause()
+                    playback.emitNotice("Playback stopped — check the connection")
+                }
         }
     }
 
@@ -387,6 +429,12 @@ class SpotifySession(
 
         /** How long a close-path "stopped" event may still be waiting in the player queue. */
         const val HALT_STOP_GRACE_MS = 15_000L
+
+        /** Stall recoveries allowed inside the window before playback gives up and says so. */
+        const val STALL_RECOVERY_LIMIT = 3
+
+        /** Window for [STALL_RECOVERY_LIMIT]; a one-off hiccup must not lock the user out. */
+        const val STALL_RECOVERY_WINDOW_MS = 5 * 60_000L
     }
 
     private object NoopCredentialStore : io.github.manuelrtsch.sidetrack.auth.SpotifyCredentialStore {

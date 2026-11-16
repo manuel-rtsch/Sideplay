@@ -207,6 +207,16 @@ class SpotifyViewModel(
             it.playback.onNext = nextHandler
             it.playback.onPrevious = previousHandler
             it.playback.onSeek = seekHandler
+            // Playback upkeep (a stall that had to reconnect) has to reach the user: from the
+            // outside it looked like the player was running while nothing was audible.
+            viewModelScope.launch {
+                it.playback.notice.collect { text ->
+                    if (text != null) {
+                        notice(text)
+                        it.playback.emitNotice(null)
+                    }
+                }
+            }
             // Starting offline leaves the library empty. Retry as soon as a network appears, so
             // the user does not have to restart the app or hunt for a refresh action.
             it.network?.let { network ->

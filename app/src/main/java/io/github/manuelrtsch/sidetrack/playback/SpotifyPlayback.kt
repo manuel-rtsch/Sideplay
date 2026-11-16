@@ -41,9 +41,9 @@ class SpotifyPlayback(
     private val elapsedTime: () -> Long = { SystemClock.elapsedRealtime() }
 ) : MediaSessionOwner {
     override val sessionId = "sidetrack"
-    override val notificationChannelId = "sidetrack"
-    override val notificationChannelName = "Sidetrack playback"
-    override val notificationId = 0x6D76
+    override val notificationChannelId = SpotifyPlaybackService.CHANNEL_ID
+    override val notificationChannelName = SpotifyPlaybackService.CHANNEL_NAME
+    override val notificationId = SpotifyPlaybackService.NOTIFICATION_ID
 
     @Volatile
     private var playing = false
@@ -56,6 +56,14 @@ class SpotifyPlayback(
         private set
 
     val position: Long get() = positionMs
+
+    private val _notice = MutableStateFlow<String?>(null)
+
+    /**
+     * Transient message the UI should surface about playback upkeep ("Reconnecting…" after a
+     * stall). Latest wins; there is nothing to queue.
+     */
+    val notice: StateFlow<String?> = _notice.asStateFlow()
 
     private val _sleepTimer = MutableStateFlow<SleepTimerState>(SleepTimerState.Off)
 
@@ -86,6 +94,13 @@ class SpotifyPlayback(
     var onSeek: ((Long) -> Unit)? = null
     var fallbackNext: (() -> Unit)? = null
     var fallbackPrevious: (() -> Unit)? = null
+
+    /**
+     * Recovery for an audio pipeline that went silent, installed by the session that owns the
+     * native player. The sink cannot restart a dead librespot session; only the gateway owner
+     * can reconnect and reload.
+     */
+    var onStalled: ((Long) -> Unit)? = null
 
     /** Lets the process owner clear queue state whenever playback is stopped from any control. */
     var onStopped: (() -> Unit)? = null
@@ -147,6 +162,38 @@ class SpotifyPlayback(
 
     /** Registers once so starting local Music can pause this owner even before the first track. */
     fun register() = registry.register(this)
+
+    fun emitNotice(text: String?) {
+        _notice.value = text
+    }
+
+    /**
+     * Called by the audio sink on its drain thread when no PCM arrived for the stall budget.
+     * Hops to the main thread: the player's state and the platform media session are
+     * main-thread only.
+     */
+    internal fun onAudioStalled(error: Throwable) {
+        SidetrackDebug.log("audio stalled", error)
+        scope.launch { handleAudioStalled() }
+    }
+
+    /**
+     * A drain that produced no audio is indistinguishable from playback in the media session, so
+     * the session has to be marked paused and handed back for a reconnect. Without this the app
+     * shows a running player and delivers silence until the user presses play again.
+     */
+    private fun handleAudioStalled() {
+        if (!playing) return
+        playing = false
+        publish()
+        emitNotice("Reconnecting…")
+        val recover = onStalled
+        if (recover != null) {
+            recover(positionMs)
+        } else {
+            scope.launch { runCatching { audio?.stop() } }
+        }
+    }
 
     /** Replaces any running timer with a fresh countdown. */
     fun setSleepTimer(minutes: Int) {
@@ -278,11 +325,12 @@ class SpotifyPlayback(
         registry.activate(this)
         playing = true
         this.positionMs = positionMs
-        // Release the previous AudioTrack and drain the native channel before loading the next
-        // item. Draining also unblocks a player thread that may still be waiting in
-        // PcmSink::write, so the load command can be processed.
+        // Drop the previous item's audio before loading the next one. Draining also unblocks a
+        // player thread that may still be waiting in PcmSink::write, so the load command can be
+        // processed. The AudioTrack itself is kept for the next item: recreating it re-configures
+        // the output route, which is audible as a gap on Bluetooth.
         val sinkKept = keepAudioSink && audio?.isRunning == true
-        if (!sinkKept) audio?.stop()
+        if (!sinkKept) audio?.reset()
         if (generation != pauseGeneration) return
         publish()
         try {

@@ -26,13 +26,15 @@ class SpotifyPlaybackService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = this
-        val playback = SpotifySessions.get(this).playback
+        // Only the channel here, and deliberately without resolving SpotifySessions: building the
+        // session constructs the native library, reads the encrypted credential store and touches
+        // disk, none of which may sit inside the five second foreground-service deadline.
         val manager = getSystemService(NotificationManager::class.java)
-        if (manager.getNotificationChannel(playback.notificationChannelId) == null) {
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             manager.createNotificationChannel(
                 NotificationChannel(
-                    playback.notificationChannelId,
-                    playback.notificationChannelName,
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
                     NotificationManager.IMPORTANCE_LOW
                 ).apply { setShowBadge(false) }
             )
@@ -40,13 +42,17 @@ class SpotifyPlaybackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val session = SpotifySessions.get(this)
-        val playback = session.playback
+        // Promote before anything that can block. The deadline runs from the
+        // startForegroundService() call, so a cold process that spends seconds in SpotifySessions
+        // would otherwise die with ForegroundServiceDidNotStartInTimeException — which is exactly
+        // how playback used to crash on the first track of a fresh process.
         startForeground(
-            playback.notificationId,
-            notification(playback, playing = playback.isActive),
+            NOTIFICATION_ID,
+            placeholderNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
         )
+        val session = SpotifySessions.get(this)
+        val playback = session.playback
         when (intent?.action) {
             ACTION_PLAY_PAUSE -> session.togglePlayback()
             ACTION_NEXT -> playback.requestNext()
@@ -94,6 +100,20 @@ class SpotifyPlaybackService : Service() {
         }
     }
 
+    /**
+     * Notification posted the instant the service starts, before the player state is available.
+     * It only has to satisfy the foreground requirement; [update] replaces it right after.
+     */
+    private fun placeholderNotification(): Notification = Notification.Builder(this, CHANNEL_ID)
+        .setSmallIcon(SidekitIcon.MusicNote2.drawable)
+        .setContentTitle("Sidetrack")
+        .setContentIntent(openIntent())
+        .setOngoing(true)
+        .setShowWhen(false)
+        .setOnlyAlertOnce(true)
+        .setVisibility(Notification.VISIBILITY_PUBLIC)
+        .build()
+
     private fun notification(playback: SpotifyPlayback, playing: Boolean): Notification {
         val timer = playback.sleepTimer.value
         val timerSuffix = timer.notificationSuffix()
@@ -105,21 +125,13 @@ class SpotifyPlaybackService : Service() {
                 append(timerSuffix)
             }
         }
-        val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, SidetrackActivity::class.java)
-                .setAction(SidetrackLinks.ACTION_OPEN_NOW_PLAYING)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE
-        )
         return Notification.Builder(this, playback.notificationChannelId)
             .setSmallIcon(SidekitIcon.MusicNote2.drawable)
             .setContentTitle(playback.current?.title ?: "Sidetrack")
             .setContentText(contentText)
             .setSubText(if (timerSuffix != null) "Sleep timer" else null)
             .setLargeIcon(playback.notificationArt)
-            .setContentIntent(open)
+            .setContentIntent(openIntent())
             .setDeleteIntent(action(ACTION_STOP))
             .setOngoing(playing)
             .setShowWhen(false)
@@ -157,6 +169,15 @@ class SpotifyPlaybackService : Service() {
             .build()
     }
 
+    private fun openIntent(): PendingIntent = PendingIntent.getActivity(
+        this,
+        0,
+        Intent(this, SidetrackActivity::class.java)
+            .setAction(SidetrackLinks.ACTION_OPEN_NOW_PLAYING)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_IMMUTABLE
+    )
+
     private fun action(action: String): PendingIntent = PendingIntent.getForegroundService(
         this,
         action.hashCode(),
@@ -165,6 +186,14 @@ class SpotifyPlaybackService : Service() {
     )
 
     companion object {
+        /**
+         * Channel and id live here so the placeholder can be posted without a player, and
+         * [SpotifyPlayback] reads them from here so the two cannot drift apart.
+         */
+        const val CHANNEL_ID = "sidetrack"
+        const val CHANNEL_NAME = "Sidetrack playback"
+        const val NOTIFICATION_ID = 0x6D76
+
         private const val ACTION_PLAY_PAUSE = "io.github.manuelrtsch.sidetrack.PLAY_PAUSE"
         private const val ACTION_NEXT = "io.github.manuelrtsch.sidetrack.NEXT"
         private const val ACTION_PREVIOUS = "io.github.manuelrtsch.sidetrack.PREVIOUS"

@@ -3,17 +3,21 @@ package io.github.manuelrtsch.sidetrack.playback
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.os.SystemClock
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
 import io.github.manuelrtsch.sidetrack.bridge.NativeBridge
 import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
 /**
@@ -28,14 +32,41 @@ import org.json.JSONObject
  * Pause keeps the [AudioTrack] alive and captures the PCM still queued in the native channel.
  * On resume the track's own buffer plays first, then the captured PCM, then new PCM from the
  * player. Nothing is discarded, so the audio continues exactly where it stopped.
+ *
+ * Three rules keep item changes from turning into audible gaps, each of them a failure seen on
+ * a device:
+ *  - A track is primed before it plays. Starting one empty underruns as soon as the first PCM
+ *    takes longer than the buffer length to arrive, which Android then reports as "disabled due
+ *    to previous underrun, restarting" and the listener hears as a hole at the start.
+ *  - A track is reused across items of the same format. Releasing and recreating it per item
+ *    tears down the AudioFlinger track and re-configures the output route, which costs a few
+ *    hundred milliseconds of silence on Bluetooth and showed up as repeated create/stop cycles
+ *    that never wrote a single frame.
+ *  - Writes never block inside the HAL. `WRITE_BLOCKING` on a paused or stuck track cannot be
+ *    interrupted, and joining that write to change track froze the caller — which is a
+ *    foreground-service start with nowhere left to run.
  */
 class SpotifyAudioSink(
     private val native: SpotifyNative = NativeBridge,
     private val scope: CoroutineScope,
-    private val onFailure: (Throwable) -> Unit = {}
+    /**
+     * Reports a drain that stopped making progress. Reassigned by the session that owns the
+     * native player: a dead librespot session can only be restarted there, not from the sink.
+     */
+    var onFailure: (Throwable) -> Unit = {}
 ) {
     private var track: AudioTrack? = null
     private var drain: Job? = null
+
+    /**
+     * Set when the current track must not be reused: a failed write left it in an unknown state.
+     * Written by the drain coroutine, read by the next start on whichever thread calls it.
+     */
+    @Volatile
+    private var trackStale = false
+
+    /** Size of the current AudioTrack's buffer in bytes. `AudioTrack` does not expose it publicly. */
+    private var trackBufferBytes = 0
 
     /**
      * Serializes track lifecycle operations. The drain job writes to the AudioTrack on its own
@@ -63,26 +94,34 @@ class SpotifyAudioSink(
     private suspend fun startLocked(positionMs: Long) {
         stopDrain()
         pendingPcm.clear()
-        releaseTrack()
         // Unblock a player thread that may still be waiting in PcmSink::write for the previous
         // track. The load command cannot be processed until that thread is free.
         native.drainAudio()
 
         val format = readFormat()
         SidetrackDebug.log("audio.start format=${format.sampleRate}Hz channels=${format.channels}")
-        val output = createTrack(format)
-        if (output == null) {
-            SidetrackDebug.log("audio.start aborted: AudioTrack creation failed")
-            return
+        val reused = track?.takeIf { canReuse(it, format) }
+        val output = if (reused != null) {
+            // Same PCM format: keep the AudioTrack. Flushed because the next item starts at a
+            // position that has nothing to do with what is still buffered here.
+            runCatching { reused.pause() }
+            runCatching { reused.flush() }
+            reused
+        } else {
+            releaseTrack()
+            createTrack(format) ?: return
         }
         track = output
+        trackStale = false
         startPositionMs = positionMs
         startHeadFrames = 0L
         lastHeadFrames = 0L
         headWrapOffset = 0L
-        output.play()
-        SidetrackDebug.log("audio.start AudioTrack playing positionMs=$positionMs")
-        startDrain(output)
+        SidetrackDebug.log(
+            "audio.start reused=${reused != null} bufferFrames=${trackBufferBytes / BYTES_PER_FRAME} positionMs=$positionMs"
+        )
+        // Playback starts inside the drain, once the track actually holds audio.
+        startDrain(output, startWhenPrefilled = true)
     }
 
     /**
@@ -98,8 +137,9 @@ class SpotifyAudioSink(
             return@withLock false
         }
         SidetrackDebug.log("audio.resume pending=${pendingPcm.size}")
-        output.play()
-        startDrain(output)
+        // The track still holds the audio it was paused with, so it can start immediately.
+        runCatching { output.play() }
+        startDrain(output, startWhenPrefilled = false)
         true
     }
 
@@ -114,7 +154,20 @@ class SpotifyAudioSink(
         SidetrackDebug.log("audio.pause pending=${pendingPcm.size}")
     }
 
-    /** Stops and releases the track. Used when changing tracks or stopping playback. */
+    /**
+     * Drops the current item's audio but keeps the AudioTrack, so the next item can start on a
+     * track that is already wired into AudioFlinger and its output route.
+     */
+    suspend fun reset() = lock.withLock {
+        stopDrain()
+        pendingPcm.clear()
+        native.drainAudio()
+        runCatching { track?.pause() }
+        runCatching { track?.flush() }
+        SidetrackDebug.log("audio.reset stale=$trackStale hasTrack=${track != null}")
+    }
+
+    /** Stops and releases the track. Used when stopping playback or tearing the player down. */
     suspend fun stop() = lock.withLock {
         stopDrain()
         pendingPcm.clear()
@@ -152,56 +205,117 @@ class SpotifyAudioSink(
         lastHeadFrames = head
         headWrapOffset = 0L
         if (wasPlaying) {
-            output.play()
-            startDrain(output)
+            // The flushed track is empty again, so it waits for the new position's audio.
+            startDrain(output, startWhenPrefilled = true)
         }
     }
 
-    private suspend fun startDrain(output: AudioTrack) {
+    private suspend fun startDrain(output: AudioTrack, startWhenPrefilled: Boolean) {
         stopDrain()
+        val policy = DrainPolicy(
+            prefillBytes = prefillBytes(),
+            prefillTimeoutMs = PREPLAY_TIMEOUT_MS,
+            starveTimeoutMs = STARVE_TIMEOUT_MS
+        ).apply { begin(SystemClock.elapsedRealtime(), playing = !startWhenPrefilled) }
         drain = scope.launch(Dispatchers.IO) {
             var reads = 0
             var bytes = 0L
+            var buffered = 0L
+            var playing = !startWhenPrefilled
+            var underruns = underrunCount(output)
+            var lastUnderrunCheck = SystemClock.elapsedRealtime()
             try {
                 // Replay PCM captured at pause before reading anything new from the player.
                 while (pendingPcm.isNotEmpty()) {
                     val pcm = pendingPcm.removeFirst()
-                    writeBlocking(output, pcm)
+                    write(output, pcm)
                     reads++
                     bytes += pcm.size
+                    buffered += pcm.size
+                    policy.onData(pcm.size, SystemClock.elapsedRealtime())
                 }
                 while (isActive) {
-                    val pcm = native.readAudio(READ_TIMEOUT_MS) ?: continue
-                    if (pcm.isEmpty()) continue
-                    if (!isActive) {
-                        // Cancellation raced with the read. Keep this buffer for the next resume
-                        // instead of losing it.
-                        pendingPcm.addFirst(pcm)
-                        break
+                    val pcm = native.readAudio(READ_TIMEOUT_MS)
+                    val now = SystemClock.elapsedRealtime()
+                    if (pcm != null && pcm.isNotEmpty()) {
+                        write(output, pcm)
+                        reads++
+                        bytes += pcm.size
+                        buffered += pcm.size
+                        policy.onData(pcm.size, now)
+                        if (reads == 1) SidetrackDebug.log("audio first PCM read bytes=${pcm.size}")
+                        if (reads % 100 == 0) SidetrackDebug.log("audio drained reads=$reads bytes=$bytes")
                     }
-                    if (reads == 0) SidetrackDebug.log("audio first PCM read bytes=${pcm.size}")
-                    writeBlocking(output, pcm)
-                    reads++
-                    bytes += pcm.size
-                    if (reads % 100 == 0) SidetrackDebug.log("audio drained reads=$reads bytes=$bytes")
+                    if (!playing && policy.mayPlay(now)) {
+                        playing = true
+                        runCatching { output.play() }
+                        SidetrackDebug.log(
+                            "audio.play bufferedBytes=$buffered bufferFrames=${trackBufferBytes / BYTES_PER_FRAME}"
+                        )
+                    }
+                    if (policy.starved(now)) {
+                        throw AudioStalledException(
+                            "no PCM for ${STARVE_TIMEOUT_MS}ms after $reads reads/$bytes bytes"
+                        )
+                    }
+                    if (now - lastUnderrunCheck >= UNDERRUN_CHECK_MS) {
+                        lastUnderrunCheck = now
+                        val counted = underrunCount(output)
+                        if (counted > underruns) {
+                            SidetrackDebug.log("audio underrun underruns=$counted reads=$reads")
+                        }
+                        underruns = counted
+                    }
                 }
             } catch (t: Throwable) {
-                SidetrackDebug.log("audio drain failed reads=$reads bytes=$bytes", t)
-                if (isActive) onFailure(t)
-            } finally {
-                SidetrackDebug.log("audio drain ended reads=$reads bytes=$bytes")
+                if (isActive) {
+                    SidetrackDebug.log("audio drain failed reads=$reads bytes=$bytes", t)
+                    onFailure(t)
+                } else {
+                    SidetrackDebug.log("audio drain cancelled reads=$reads bytes=$bytes")
+                }
             }
         }
     }
 
-    private fun writeBlocking(output: AudioTrack, pcm: ByteArray) {
-        val written = output.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
-        if (written < 0) throw IllegalStateException("AudioTrack write failed: $written")
+    /**
+     * Writes the whole buffer without ever blocking inside the HAL.
+     *
+     * `WRITE_BLOCKING` waits for the track to drain, and that wait is not interruptible: a pause
+     * or track change would then sit in `cancelAndJoin` until the audio HAL felt like returning,
+     * which is how a playback action blocked the main thread past the foreground-service
+     * deadline. A full buffer simply means the consumer is the clock, so this sleeps and retries.
+     */
+    private suspend fun write(output: AudioTrack, pcm: ByteArray) {
+        var offset = 0
+        while (offset < pcm.size) {
+            currentCoroutineContext().ensureActive()
+            val written = output.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_NON_BLOCKING)
+            if (written < 0) {
+                // ERROR_DEAD_OBJECT (route lost) or ERROR_INVALID_OPERATION. The track cannot be
+                // reused; the next start builds a new one.
+                trackStale = true
+                throw IllegalStateException("AudioTrack write failed: $written")
+            }
+            if (written == 0) {
+                delay(WRITE_RETRY_MS)
+                continue
+            }
+            offset += written
+        }
     }
 
     private suspend fun stopDrain() {
-        drain?.cancelAndJoin()
+        val job = drain ?: return
         drain = null
+        job.cancel()
+        // The write loop checks for cancellation between retries, so this returns in a few
+        // milliseconds. The bound is a safety net for a track that refuses to come back: the
+        // caller must never be left waiting on the audio HAL.
+        if (withTimeoutOrNull(DRAIN_JOIN_TIMEOUT_MS) { job.join() } == null) {
+            SidetrackDebug.log("audio drain ignored cancellation; abandoning track")
+            trackStale = true
+        }
     }
 
     private fun capturePendingPcm() {
@@ -218,7 +332,18 @@ class SpotifyAudioSink(
             runCatching { it.release() }
         }
         track = null
+        trackStale = false
+        trackBufferBytes = 0
     }
+
+    /** A track may only be reused for the format it was built for, and only if it still works. */
+    private fun canReuse(output: AudioTrack, format: Format): Boolean = !trackStale &&
+        runCatching { output.sampleRate == format.sampleRate && output.channelCount == format.channels }
+            .getOrDefault(false)
+
+    private fun prefillBytes(): Int = (trackBufferBytes / PREFILL_FRACTION).coerceAtLeast(MIN_PREFILL_BYTES)
+
+    private fun underrunCount(output: AudioTrack): Int = runCatching { output.underrunCount }.getOrDefault(0)
 
     private fun readFormat(): Format {
         val raw = native.audioFormat() ?: return Format()
@@ -264,12 +389,40 @@ class SpotifyAudioSink(
                 .setBufferSizeInBytes(minBuffer * 2)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
-        }.onFailure(onFailure).getOrNull()
+        }.onFailure(onFailure).getOrNull()?.also { trackBufferBytes = minBuffer * 2 }
     }
 
     private data class Format(val sampleRate: Int = 44_100, val channels: Int = 2)
 
     private companion object {
+        /** How long a read may wait for PCM before the loop re-checks its own state. */
         const val READ_TIMEOUT_MS = 100L
+
+        /** Retry interval for a full AudioTrack buffer. Short enough that cancel stays responsive. */
+        const val WRITE_RETRY_MS = 5L
+
+        /** S16LE stereo: 4 bytes per frame. */
+        const val BYTES_PER_FRAME = 4
+
+        /** Start playing once half the track buffer holds audio. */
+        const val PREFILL_FRACTION = 2
+
+        /** Floor for the prefill target, so a small track still starts with something queued. */
+        const val MIN_PREFILL_BYTES = 8 * 1024
+
+        /** Never keep a track silently unplayed for longer than this waiting for the first PCM. */
+        const val PREPLAY_TIMEOUT_MS = 1_500L
+
+        /** No PCM at all for this long means the pipeline is dead, not merely buffering. */
+        const val STARVE_TIMEOUT_MS = 15_000L
+
+        /** How often the AudioTrack underrun counter is compared (cheap, but a binder call). */
+        const val UNDERRUN_CHECK_MS = 1_000L
+
+        /** How long a cancelled drain may take before its track is abandoned instead. */
+        const val DRAIN_JOIN_TIMEOUT_MS = 1_000L
     }
 }
+
+/** The native player produced no PCM for long enough that playback must be rebuilt. */
+internal class AudioStalledException(message: String) : IllegalStateException(message)
