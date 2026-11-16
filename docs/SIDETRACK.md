@@ -361,10 +361,40 @@ declared in `bridge/NativeBridge.kt`.
 
 **Licensing.** Sidekit and librespot are MIT; librespot's notice and `Cargo.lock` are retained.
 Sidespot is GPLv3 and remains reference-only at the untracked `.sidespot/` path: never committed,
-linked, vendored, or used as a build dependency. No Sidespot source, identifiers, comments,
-assets, or documentation enter Sidekit.
+linked, vendored, or used as a build dependency.
 
-**Clean-room boundary.** The implementation was written from Sidekit's design system, public
-Spotify/librespot documentation, and observable behaviour. Before merge, run the similarity
-review: no `sidespot` identifiers in committed code, no copied strings/assets/symbols, and no
-structure that only matches the reference implementation. Record the reviewer and date here.
+**Client id provenance.** `65b708073fc0480ea92a077233ca87bd` is not a Sidetrack registration and
+not a Sidespot one either. It is librespot's `KEYMASTER_CLIENT_ID` (upstream `core/src/config.rs`,
+MIT), Spotify's desktop/"keymaster" OAuth client, which every librespot-based client on a
+non-Android platform string presents — `jtaekman/librespot` carries it unchanged from upstream.
+Sidetrack reuses it because the stored credential has to match the client id librespot presents at
+login5. It is a public identifier: no secret, no credential, nothing to attribute. The real cost of
+using it is the one already in the README — Spotify has not sanctioned third-party clients.
+
+**Provenance review (2026-11-16).** Recorded after a similarity pass against `jtaekman/sidespot`. Findings:
+
+- `native/vendor/librespot-core/src/config.rs`: `OS = "linux"` is the same patch as
+  `jtaekman/librespot` `core/src/config.rs:14`. Upstream is MIT and the change is one constant, so
+  there is no license question; the overlap is noted only because the patch is not novel.
+- `auth/SpotifyAuth.kt` and `auth/SpotifyPkce.kt` were written with `com.sidespot.auth.AuthManager`
+  (GPLv3) open as a reference. Verbatim overlap: the `SCOPES` list (same content and order, minus
+  `user-read-recently-played`) and four user-facing strings — `Sign-in was cancelled`,
+  `Spotify rejected the sign-in: $error`, `Sign-in timed out — please try again`,
+  `Waiting for Spotify…`. Structural overlap: single-shot loopback listener on `/login`,
+  cancellation by closing the socket from `invokeOnCompletion`, `code_challenge_method=S256`, the
+  same parameter set. The rest is refactored (pure `SpotifyPkce` object, sealed `Callback`,
+  Sidetrack's own landing page), but a refactor does not change the derivation.
+- Consequence: the auth path as committed is a derivative of GPLv3 code, so it cannot be described
+  as clean-room, and the repository's MIT grant is qualified for that package. Nothing else in the
+  app is affected.
+
+**Unresolved.** Either rewrite `auth/` from Spotify's OAuth 2.0 documentation and RFC 7636 alone
+(no reference open, scope list and strings regenerated), after which MIT holds again, or mark
+`auth/` GPLv3 and carry a NOTICE naming Sidespot. Until one of those lands, do not repeat the
+clean-room claim for this package.
+
+**Clean-room boundary (new work).** Applies going forward, not retroactively to `auth/`: write
+from Sidekit's design system, public Spotify/librespot documentation, and observable behaviour,
+with the reference checkout closed. Before merge, run the similarity review: no `sidespot`
+identifiers in committed code, no copied strings or scope lists, and no structure that only matches
+the reference implementation. Record the reviewer and date here.
