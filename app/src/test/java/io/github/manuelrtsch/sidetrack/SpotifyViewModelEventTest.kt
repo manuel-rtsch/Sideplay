@@ -178,6 +178,39 @@ class SpotifyViewModelEventTest {
         assertEquals(episode.id, vm.state.value.recent.firstOrNull()?.id)
     }
 
+    @Test fun `a show episode plays alone and ends on itself`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val episode = MockSpotifyDataSource.shows.first().episodes.first()
+
+        vm.playEpisode(episode)
+
+        assertEquals(episode.id, vm.state.value.current?.id)
+        // A show's list is newest-first, so the row after this one is an older episode: queueing the
+        // list would autoplay backwards through the archive. Lining up more is Add to queue.
+        assertTrue(vm.state.value.upcoming.isEmpty())
+
+        vm.handlePlaybackEvent("""{"type":"ended"}""")
+
+        // Autoplay only extends a track's queue, so nothing else is pulled in behind an episode.
+        assertEquals(episode.id, vm.state.value.current?.id)
+        assertTrue(vm.state.value.upcoming.isEmpty())
+        assertFalse(vm.state.value.isPlaying)
+    }
+
+    @Test fun `a repeat mode left over from songs does not loop a finished episode`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val episode = MockSpotifyDataSource.shows.first().episodes.first()
+        vm.playEpisode(episode)
+        vm.cycleRepeat()
+        assertEquals(RepeatMode.Context, vm.state.value.repeat)
+
+        vm.handlePlaybackEvent("""{"type":"ended"}""")
+
+        // Episodes have no repeat control, so the leftover mode must not replay it forever.
+        assertFalse(vm.state.value.isPlaying)
+        assertEquals(episode.id, vm.state.value.current?.id)
+    }
+
     @Test fun `event for another uri does not change the current item`() = runTest(dispatcher) {
         val vm = viewModel()
         val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:ns1")

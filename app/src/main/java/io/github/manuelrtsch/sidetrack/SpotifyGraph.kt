@@ -310,12 +310,13 @@ fun NavGraphBuilder.sidetrackGraph(
                     state,
                     episodeProgress,
                     onBack = { nav.popBackStack() },
-                    onPlay = { vm.playCollection(collection, 0) },
+                    onPlay = {
+                        (collection.items.firstOrNull() as? SpotifyEpisode)?.let(vm::playEpisode)
+                    },
                     onPlayPause = vm::togglePlayPause,
                     onItem = { index ->
-                        collection.items.getOrNull(index)?.let { item ->
-                            nav.openTrack(vm, item) { vm.playCollection(collection, index) }
-                        }
+                        val episode = collection.items.getOrNull(index) as? SpotifyEpisode
+                        if (episode != null) nav.openTrack(vm, episode) { vm.playEpisode(episode) }
                     },
                     onSave = { vm.toggleSaved(collection) },
                     onQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },

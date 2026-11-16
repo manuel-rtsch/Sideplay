@@ -611,6 +611,14 @@ class SpotifyViewModel(
     fun playItem(item: SpotifyMediaItem) = play(listOf(item), 0)
 
     /**
+     * Plays one episode from a show page. A show is not a setlist: its list is newest-first, so
+     * [playCollection] would queue the whole archive behind the tapped episode, autoplay backwards
+     * through it, and fetch every page before the first second of audio. Lining up more is the
+     * row's Add to queue square, so this stays a single-item queue.
+     */
+    fun playEpisode(episode: SpotifyEpisode) = playItem(episode)
+
+    /**
      * Builds a station from the current track, queues it behind the still-playing seed, and makes
      * it available to the Song radio screen. Revisiting the same seed is a no-op.
      */
@@ -1929,6 +1937,7 @@ class SpotifyViewModel(
             _state.update { it.copy(isPlaying = false) }
             return
         }
+        if (endOfEpisode(current)) return
         if (snapshot.repeat == RepeatMode.Track) {
             _playbackPositionMs.value = 0L
             _state.update { it.copy(isPlaying = true) }
@@ -1936,6 +1945,17 @@ class SpotifyViewModel(
         } else {
             advance(auto = true, forceContextLoop = snapshot.repeat == RepeatMode.Context)
         }
+    }
+
+    /**
+     * Ends a finished episode. Episodes carry no shuffle or repeat control, so a mode left over
+     * from a song must not rewind the show or loop the episode forever: with nothing queued behind
+     * it or added to the queue, the queue stops.
+     */
+    private fun endOfEpisode(current: SpotifyMediaItem): Boolean {
+        if (current !is SpotifyEpisode) return false
+        advance(auto = true, forceContextLoop = false)
+        return true
     }
 
     private data class ResumeAnchor(val trackId: String, val positionMs: Long, val atMs: Long)
@@ -1978,7 +1998,7 @@ class SpotifyViewModel(
         if (nextPosition < current.durationMs) {
             _playbackPositionMs.value = nextPosition
             recordEpisodeProgress()
-        } else {
+        } else if (!endOfEpisode(current)) {
             when (s.repeat) {
                 RepeatMode.Track -> _playbackPositionMs.value = 0L
                 RepeatMode.Context -> advance(auto = true, forceContextLoop = true)
