@@ -44,6 +44,7 @@ private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
 private val RADIO = "$ROOT/song-radio"
+private val ARTIST_RADIO = "$ROOT/artist-radio/{id}"
 private val SLEEP_TIMER = "$ROOT/sleep-timer"
 private val SETTINGS = "$ROOT/settings"
 private val AUDIO_QUALITY = "$ROOT/audio-quality"
@@ -56,6 +57,7 @@ private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={rat
 private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
 private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/${Uri.encode(id)}"
 private fun artistRoute(id: String) = "$ROOT/artist/${Uri.encode(id)}"
+private fun artistRadioRoute(id: String) = "$ROOT/artist-radio/${Uri.encode(id)}"
 private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f) = "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.orEmpty())}&label=${Uri.encode(label)}&ratio=$ratio"
 
 /**
@@ -346,6 +348,7 @@ fun NavGraphBuilder.sidetrackGraph(
                     onAlbumTrack = { nav.openTrackAlbum(vm, it) },
                     onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onFollow = { vm.toggleFollow(artist) },
+                    onRadio = { nav.navigate(artistRadioRoute(artist.id)) },
                     onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = {
                         nav.navigate(artworkRoute(artist.artRes, artist.artUrl, artist.name))
@@ -506,6 +509,67 @@ fun NavGraphBuilder.sidetrackGraph(
                     onDismissNowPlaying = vm::dismissNowPlayingNotice,
                     showSave = false
                 )
+            }
+        }
+        composable(ARTIST_RADIO, arguments = artistArgs) { entry ->
+            val vm = entry.spotifyViewModel(nav)
+            val state by vm.state.collectAsStateWithLifecycle()
+            val artistId = entry.arguments?.getString("id").orEmpty()
+            LaunchedEffect(artistId) { vm.ensureArtist(artistId) }
+            val artist = vm.artist(artistId)
+            if (artist == null) {
+                MissingCollectionScreen(
+                    onBack = { nav.popBackStack() },
+                    title = "Artist radio",
+                    loading = artistId in state.pendingArtists,
+                    loadingTitle = "Loading artist",
+                    error = state.artistErrors[artistId],
+                    errorTitle = "Couldn't load this artist",
+                    missingTitle = "This artist isn't available",
+                    onRetry = { vm.retryArtist(artistId) }
+                )
+            } else {
+                LaunchedEffect(artist.id) { vm.ensureArtistRadio(artist) }
+                // A station built for another artist is not this screen's station, even before the
+                // request above has reset the state.
+                val radio = state.artistRadio?.takeIf { state.artistRadioArtistId == artist.id }
+                if (radio == null) {
+                    MissingCollectionScreen(
+                        onBack = { nav.popBackStack() },
+                        title = "Artist radio",
+                        // Before the LaunchedEffect runs there is no request state yet.
+                        loading = state.artistRadioPending || state.artistRadioError == null,
+                        loadingTitle = "Starting radio",
+                        error = state.artistRadioError,
+                        errorTitle = "Couldn't start artist radio",
+                        missingTitle = "No radio for this artist",
+                        onRetry = { vm.retryArtistRadio(artist) }
+                    )
+                } else {
+                    CollectionScreen(
+                        radio,
+                        state,
+                        onBack = { nav.popBackStack() },
+                        onPlay = { vm.playArtistRadio(0) },
+                        onPlayPause = vm::togglePlayPause,
+                        onItem = { vm.playArtistRadio(it) },
+                        onSave = {},
+                        onArtist = {},
+                        onQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
+                        onQueueItem = vm::addToQueue,
+                        onSaveTrack = { vm.toggleSaved(it) },
+                        onArtistTrack = { nav.openTrackArtist(vm, it) },
+                        onAlbumTrack = { nav.openTrackAlbum(vm, it) },
+                        onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
+                        onNowPlaying = { nav.openNowPlaying(vm) },
+                        onArtwork = { nav.navigate(artworkRoute(artist.artRes, artist.artUrl, artist.name)) },
+                        onLoadMore = {},
+                        loadingMore = false,
+                        onDismissNotice = vm::dismissNotice,
+                        onDismissNowPlaying = vm::dismissNowPlayingNotice,
+                        showSave = false
+                    )
+                }
             }
         }
         composable(QUEUE) { entry ->

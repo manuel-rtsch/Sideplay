@@ -223,6 +223,19 @@ class NativeSpotifyCatalogTest {
         assertEquals(50L, native.radioLimit)
     }
 
+    @Test fun `artist radio parses tracks and forwards the limit`() = runTest {
+        val native = FakeNative().apply {
+            artistRadioResult = """[{"id":"t3","title":"Station","artist":"Artist","durationMs":3000}]"""
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val tracks = catalog.artistRadio("a1", 40)
+
+        assertEquals(1, tracks.size)
+        assertEquals("Station", tracks.first().title)
+        assertEquals(40L, native.artistRadioLimit)
+    }
+
     @Test fun `failed write surfaces a network failure`() = runTest {
         val native = FakeNative().apply { writeOk = false }
         val catalog = NativeSpotifyCatalog(native) {}
@@ -254,6 +267,8 @@ class NativeSpotifyCatalogTest {
         var topTracksResult: String? = "[]"
         var songRadioResult: String? = "[]"
         var radioLimit = -1L
+        var artistRadioResult: String? = "[]"
+        var artistRadioLimit = -1L
         var searchResult: String? = "{}"
         var searchOffset = -1L
         var searchLimit = -1L
@@ -292,6 +307,10 @@ class NativeSpotifyCatalogTest {
         override fun catalogSongRadio(id: String, limit: Long): String? {
             radioLimit = limit
             return songRadioResult
+        }
+        override fun catalogArtistRadio(id: String, limit: Long): String? {
+            artistRadioLimit = limit
+            return artistRadioResult
         }
         override fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String? {
             searchOffset = offset

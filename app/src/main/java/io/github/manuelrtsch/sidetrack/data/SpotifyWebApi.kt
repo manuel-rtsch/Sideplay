@@ -127,6 +127,14 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         return json.optJSONArray("tracks").tracks()
     }
 
+    suspend fun artistRadio(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> {
+        val json = get(
+            "$RECOMMENDATIONS?seed_artists=${enc(artistId)}&limit=${limit.coerceIn(1, 100)}&market=from_token",
+            token()
+        )
+        return json.optJSONArray("tracks").tracks()
+    }
+
     /** Visible for tests: maps Spotify's search envelope without touching the network. */
     internal fun parseSearchTracks(json: JSONObject): List<SpotifyTrack> = json.optJSONObject("tracks")?.optJSONArray("items").tracks()
 

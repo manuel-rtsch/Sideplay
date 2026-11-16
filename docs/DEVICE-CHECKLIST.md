@@ -63,6 +63,13 @@ far are that run plus this one.
 - [ ] **Manual:** start Song radio on a slow connection, add or remove a queue track while it
       loads, and confirm the late station does not overwrite that edit. Reopen Song radio and
       confirm it is ready to play.
+- [ ] **Manual:** on an artist page whose track list still shows **See more tracks**, press the play
+      tile and confirm every top track is queued, the list on the page shows them all afterwards,
+      and the tile turns into Pause. Then play something by another artist and confirm the tile is
+      a Play arrow again.
+- [ ] **Manual:** with something playing, open the artist page's Options and choose **Artist
+      radio**. Confirm the station screen opens without interrupting playback, that its play tile
+      starts the station, and that a failed station read offers **Try again**.
 - [ ] **Manual:** close Sidetrack mid-track, reopen it, and confirm the position and queue are
       preserved. Then resume the same track and press stop from the notification within a few
       seconds; confirm the UI and queue clear normally instead of the stop being swallowed.

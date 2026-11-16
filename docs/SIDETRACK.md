@@ -128,6 +128,16 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   or shuffle made while it loaded is never overwritten. Episodes have no song radio, so the button
   is omitted for them. The Web API fallback uses `/recommendations` when the native bridge is
   absent.
+- Artist radio lives in the artist page's Options menu rather than behind its play tile. The play
+  tile keeps one meaning everywhere: it queues the list on screen, so it loads the artist's
+  remaining top-track pages first and then plays the whole list in order (a page with no tracks
+  reports **No top tracks for this artist** instead of doing nothing). Artist radio is the seeded
+  station instead: an artist-seeded read through the same first-party radio endpoint (the seed
+  endpoint accepts any Spotify URI; the Web API fallback seeds `/recommendations` with
+  `seed_artists`), shown on the collection screen as **{artist} radio**. Opening it never touches
+  the queue — it only builds the station, and the user starts it from the station's own play tile
+  — so browsing an artist cannot interrupt what is playing. Revisiting the same artist reuses the
+  station; a failed read offers **Try again**.
 - Starting a new item shows a transient now-playing confirmation in the action bar: artwork, an
   animated playing indicator, the title, and a right arrow to Now Playing. It replaces the normal
   actions for four seconds, can be dismissed immediately with its X, and never auto-navigates.
@@ -229,7 +239,9 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   the lift no longer owns.
 - Library category and collection lists page in 50-row chunks and load the next page as their
   footer becomes visible. Search and artist surfaces start with five items per section and show
-  a pressable **See more** row; the next page is fetched only when that row is pressed.
+  a pressable **See more** row; the next page is fetched only when that row is pressed. The artist
+  page's play tile fetches the remaining top-track pages itself before playing, so the queue
+  always matches the list the page ends up showing.
 - Album and show collections use a position number in the row's left column; playlist rows use
   per-track artwork instead, since playlist tracks usually come from different albums.
 - Search categories live behind the **Search in** row on the Search screen, not in Options.

@@ -381,6 +381,13 @@ object RealPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         return (sameArtist + all).distinctBy { it.id }.filter { it.id != trackId }.take(limit)
     }
 
+    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> {
+        val artist = artistList.firstOrNull { it.id == artistId } ?: return emptyList()
+        val own = albumList.filter { it.id in artist.albumIds }.flatMap { it.tracks }
+        val rest = albumList.filterNot { it.id in artist.albumIds }.flatMap { it.tracks }
+        return (own + rest).distinctBy { it.id }.take(limit)
+    }
+
     override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<Any> {
         val all: List<Any> = when (filter) {
             LibraryFilter.LikedSongs -> likedTracks

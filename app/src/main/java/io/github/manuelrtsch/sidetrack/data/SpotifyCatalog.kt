@@ -53,6 +53,12 @@ interface SpotifyCatalog {
      */
     suspend fun songRadio(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> = emptyList()
 
+    /**
+     * Tracks for a station seeded by [artistId]. Same contract as [songRadio]: transports that
+     * cannot build a station return an empty list rather than inventing tracks.
+     */
+    suspend fun artistRadio(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> = emptyList()
+
     suspend fun search(
         query: String,
         scopes: Set<SearchScope>,

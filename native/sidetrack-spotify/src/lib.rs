@@ -362,6 +362,22 @@ pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_
 }
 
 #[no_mangle]
+pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_nativeCatalogArtistRadio(
+    mut env: JNIEnv,
+    _this: JObject,
+    id: JString,
+    limit: jlong,
+) -> jni::sys::jstring {
+    let Some(id) = string(&mut env, &id) else {
+        return std::ptr::null_mut();
+    };
+    let result = engine::with_session_and_token(|session, token| {
+        engine::run(catalog::artist_radio(session, token, &id, limit.max(1) as usize))
+    });
+    catalog_result(&mut env, result)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_nativeCatalogSearch(
     mut env: JNIEnv,
     _this: JObject,

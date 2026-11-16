@@ -596,6 +596,7 @@ fun ArtistScreen(
     onAlbumTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onFollow: () -> Unit,
+    onRadio: () -> Unit,
     onNowPlaying: () -> Unit,
     onArtwork: () -> Unit,
     onLoadMoreAlbums: () -> Unit,
@@ -626,6 +627,7 @@ fun ArtistScreen(
         title = artist.name,
         actions = actions,
         options = listOf(
+            SideAction("artistRadio", "Artist radio", SidekitIcon.Explore, onClick = onRadio),
             SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)
         ) + rows.options()
     ) { padding ->

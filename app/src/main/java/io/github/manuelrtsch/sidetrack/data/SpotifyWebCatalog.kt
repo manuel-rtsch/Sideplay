@@ -41,6 +41,8 @@ class SpotifyWebCatalog(private val api: SpotifyWebApi) : SpotifyCatalog {
 
     override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> = api.songRadio(trackId, limit)
 
+    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> = api.artistRadio(artistId, limit)
+
     override suspend fun search(
         query: String,
         scopes: Set<SearchScope>,

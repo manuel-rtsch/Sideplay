@@ -210,6 +210,7 @@ class SidetrackScreenshotTest {
             onAlbumTrack = {},
             onEnsureSavedTrack = {},
             onFollow = {},
+            onRadio = {},
             onNowPlaying = {},
             onArtwork = {},
             onLoadMoreAlbums = {},

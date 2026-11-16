@@ -32,6 +32,7 @@ interface SpotifyNative {
     fun catalogAlbumsBy(id: String, offset: Long, limit: Long): String?
     fun catalogTopTracks(id: String, offset: Long, limit: Long): String?
     fun catalogSongRadio(id: String, limit: Long): String?
+    fun catalogArtistRadio(id: String, limit: Long): String?
     fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String?
 
     fun collectionContains(set: String, uris: String): String?

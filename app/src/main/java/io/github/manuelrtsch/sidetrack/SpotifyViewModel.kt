@@ -107,7 +107,13 @@ data class SpotifyUiState(
     /** Which track seeded [radio], so revisiting the same song does not refetch it. */
     val radioSeedId: String? = null,
     val radioPending: Boolean = false,
-    val radioError: String? = null
+    val radioError: String? = null,
+    /** The station built from an artist, shown by the Artist radio screen. */
+    val artistRadio: SpotifyCollection? = null,
+    /** Which artist seeded [artistRadio], so revisiting the same artist does not refetch it. */
+    val artistRadioArtistId: String? = null,
+    val artistRadioPending: Boolean = false,
+    val artistRadioError: String? = null
 ) {
     val savedCurrent: Boolean get() = current?.let { it.id in savedTrackIds } ?: false
 }
@@ -148,6 +154,7 @@ class SpotifyViewModel(
     private var searchJob: Job? = null
     private var autoplayJob: Job? = null
     private var radioJob: Job? = null
+    private var artistRadioJob: Job? = null
     private var nowPlayingNoticeJob: Job? = null
     private var librarySectionsJob: Job? = null
     private var libraryJob: Job? = null
@@ -593,6 +600,74 @@ class SpotifyViewModel(
         play(radio.items, index)
     }
 
+    /**
+     * Builds the artist's station for the Artist radio screen. Revisiting the same artist is a
+     * no-op, and unlike song radio the station never touches the queue on its own: the user starts
+     * it from the station screen, so opening the screen cannot interrupt what is playing.
+     */
+    fun ensureArtistRadio(artist: SpotifyArtist) {
+        val id = artist.id
+        val snapshot = _state.value
+        if (artistRadioJob?.isActive == true && snapshot.artistRadioArtistId == id) return
+        if (snapshot.artistRadioArtistId == id && snapshot.artistRadio != null) return
+        loadArtistRadio(artist)
+    }
+
+    fun retryArtistRadio(artist: SpotifyArtist) {
+        artistRadioJob?.cancel()
+        _state.update { it.copy(artistRadio = null, artistRadioArtistId = null, artistRadioError = null) }
+        ensureArtistRadio(artist)
+    }
+
+    fun playArtistRadio(index: Int) {
+        val station = _state.value.artistRadio ?: return
+        play(station.items, index)
+    }
+
+    private fun loadArtistRadio(artist: SpotifyArtist) {
+        artistRadioJob?.cancel()
+        val id = artist.id
+        _state.update {
+            it.copy(artistRadio = null, artistRadioArtistId = id, artistRadioPending = true, artistRadioError = null)
+        }
+        artistRadioJob = viewModelScope.launch {
+            try {
+                val tracks = catalog.artistRadio(id, SPOTIFY_PAGE_SIZE)
+                    .filter { it.playable }
+                    .distinctBy { it.id }
+                // A station the user navigated away from must not overwrite the next artist's.
+                if (_state.value.artistRadioArtistId != id) return@launch
+                if (tracks.isEmpty()) {
+                    _state.update {
+                        it.copy(artistRadioPending = false, artistRadioError = "No similar tracks found")
+                    }
+                    return@launch
+                }
+                val station = SpotifyCollection(
+                    type = SpotifyCollectionType.Playlist,
+                    id = "artistradio:$id",
+                    title = "${artist.name} radio",
+                    subtitle = "Based on ${artist.name} · ${tracks.size} tracks",
+                    artRes = artist.artRes,
+                    items = tracks,
+                    artUrl = artist.artUrl,
+                    totalItems = tracks.size
+                )
+                _state.update {
+                    it.copy(artistRadio = station, artistRadioPending = false, artistRadioError = null)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (_state.value.artistRadioArtistId == id) {
+                    _state.update {
+                        it.copy(artistRadioPending = false, artistRadioError = playbackNotice(e))
+                    }
+                }
+            }
+        }
+    }
+
     private fun loadRadio(seed: SpotifyTrack) {
         radioJob?.cancel()
         // The station request can take seconds. Remember the queue it was started from so a late
@@ -684,7 +759,52 @@ class SpotifyViewModel(
         }
     }
 
-    fun playArtist(artist: SpotifyArtist) = play(topTracks(artist), 0)
+    /**
+     * Plays the artist's whole top-tracks list. Pages still behind "See more tracks" are fetched
+     * first so the queue always matches the list the page shows, instead of whichever page the
+     * user happened to have expanded when they pressed play.
+     */
+    fun playArtist(artist: SpotifyArtist) {
+        val id = artist.id
+        if (id in _state.value.artistMorePending) return
+        _state.update { it.copy(artistMorePending = it.artistMorePending + id) }
+        viewModelScope.launch {
+            try {
+                val tracks = loadAllArtistTracks(artist)
+                if (tracks.isEmpty()) {
+                    notice("No top tracks for this artist")
+                    return@launch
+                }
+                play(tracks, 0)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(notice = playbackNotice(e)) }
+            } finally {
+                _state.update { it.copy(artistMorePending = it.artistMorePending - id) }
+            }
+        }
+    }
+
+    private suspend fun loadAllArtistTracks(artist: SpotifyArtist): List<SpotifyTrack> {
+        val id = artist.id
+        var tracks = topTracks(artist)
+        var hasMore = _state.value.artistTrackHasMore[id] == true
+        while (hasMore) {
+            val page = catalog.topTracks(artist, tracks.size, SPOTIFY_ARTIST_PAGE_SIZE)
+            tracks = (tracks + page.items).distinctBy { track -> track.id }
+            hasMore = page.hasMore
+            val updated = tracks
+            val more = hasMore
+            _state.update {
+                it.copy(
+                    artistTracks = it.artistTracks + (id to updated),
+                    artistTrackHasMore = it.artistTrackHasMore + (id to more)
+                )
+            }
+        }
+        return tracks
+    }
 
     /** Play a recent item in context, so the rest of the history follows it in the queue. */
     fun playRecent(item: SpotifyMediaItem) {

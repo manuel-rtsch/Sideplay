@@ -1851,7 +1851,28 @@ pub async fn radio(
     id: &str,
     limit: usize,
 ) -> Result<String, String> {
-    let seed = spotify_uri(id, "track")?;
+    station(session, token, spotify_uri(id, "track")?, limit).await
+}
+
+/// Reads an artist-seeded station. The first-party seed endpoint takes a Spotify URI of any type
+/// (librespot's wrapper is only named after tracks), so an artist URI yields the same playlist
+/// envelope a track seed does. The seed artist itself is dropped from the resolved station.
+pub async fn artist_radio(
+    session: &Session,
+    token: &str,
+    id: &str,
+    limit: usize,
+) -> Result<String, String> {
+    station(session, token, spotify_uri(id, "artist")?, limit).await
+}
+
+/// Resolves a seed URI to the station's playlist tracks, shared by song and artist radio.
+async fn station(
+    session: &Session,
+    token: &str,
+    seed: SpotifyUri,
+    limit: usize,
+) -> Result<String, String> {
     let seed_uri = seed.to_uri().map_err(|e| e.to_string())?;
     let response = session
         .spclient()
