@@ -84,7 +84,6 @@ fun SidetrackHomeScreen(
         title = "Sidetrack",
         actions = bar,
         options = listOf(
-            SideAction("history", "History", SidekitIcon.Undo, motion = ActionMotion.Forward, onClick = onHistory),
             SideAction("settings", "Settings", SidekitIcon.Settings, onClick = onSettings)
         ) + rows.options()
     ) { padding ->
