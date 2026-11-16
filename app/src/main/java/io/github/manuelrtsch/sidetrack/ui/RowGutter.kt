@@ -1,7 +1,15 @@
 package io.github.manuelrtsch.sidetrack.ui
 
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -11,10 +19,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
+import hrln.interactive.sidekit.design.theme.SidekitTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 
@@ -93,6 +108,87 @@ fun rememberRowGutterState(): RowGutterState {
 }
 
 /**
+ * The shared row shell for a focus/long-press gutter. It owns the slide animation, the long-press
+ * reveal and the tap-to-dismiss overlay; callers provide the row content and the squares.
+ */
+@Composable
+fun GutterRow(
+    key: Any,
+    state: RowGutterState,
+    squares: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable (gutterVisible: Boolean) -> Unit,
+    actions: @Composable () -> Unit
+) {
+    val square = SidekitTheme.spacing.itemHeight
+    val open = state.isOpen(key)
+    val targetGutter = if (open) square * squares + GutterGap * (squares - 1) else 0.dp
+    val gutter by animateDpAsState(targetGutter, tween(GUTTER_ANIM_MS), label = "rowGutter")
+    val gutterAlpha by animateFloatAsState(
+        if (targetGutter > 0.dp) 1f else 0f,
+        tween(GUTTER_ANIM_MS),
+        label = "rowGutterAlpha"
+    )
+    val gutterPx = with(LocalDensity.current) { gutter.toPx() }
+    val view = LocalView.current
+    Box(modifier) {
+        Box(
+            Modifier
+                .graphicsLayer { translationX = -gutterPx }
+                .rowLongPress {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    state.reveal(key)
+                }
+        ) {
+            content(gutter > 0.dp)
+        }
+        // While a long press holds the gutter open, a tap on the row closes it rather than
+        // starting the item — the same contract a swiped-open row had.
+        if (state.touchedKey == key && gutter > 0.dp) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(key) {
+                        detectTapGestures { state.touchDismissed(key) }
+                    }
+            )
+        }
+        // Composed only while the gutter has width, so a faded-out square can never be tapped.
+        if (gutter > 0.dp) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .graphicsLayer {
+                        alpha = gutterAlpha
+                        translationX = (1f - gutterAlpha) * GUTTER_SLIDE.toPx()
+                    }
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(GutterGap)) { actions() }
+            }
+        }
+    }
+}
+
+/**
+ * Keeps the gutter open while the keypad is inside one of its squares. The first "not focused"
+ * event a freshly attached square reports must not be mistaken for the row losing focus.
+ */
+@Composable
+fun rememberGutterSquareFocus(key: Any, state: RowGutterState): Modifier {
+    var squareHadFocus by remember(key) { mutableStateOf(false) }
+    return Modifier.onFocusChanged { focus ->
+        when {
+            focus.isFocused -> {
+                squareHadFocus = true
+                state.rowFocused(key)
+            }
+
+            squareHadFocus -> state.rowUnfocused(key)
+        }
+    }
+}
+
+/**
  * Debounces the focus into the gutter. Scrubbing Up/Down through a list must not flash a pair of
  * buttons on every row it passes.
  */
@@ -138,6 +234,7 @@ private suspend fun PointerInputScope.listen(longPress: () -> Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val timeout = viewConfiguration.longPressTimeoutMillis
+        val touchSlop = viewConfiguration.touchSlop
         var held = false
         // True once the press released or a drag took it over; false while it is still down.
         var released = false
@@ -153,6 +250,13 @@ private suspend fun PointerInputScope.listen(longPress: () -> Unit) {
                 when {
                     // The pointer is gone: the gesture ended under us.
                     change == null -> pressed = false
+
+                    // A long press is a still hold. Once the finger travels past touch slop,
+                    // this belongs to the list's scroll or swipe, not to the gutter.
+                    (change.position - down.position).getDistance() > touchSlop -> {
+                        pressed = false
+                        released = true
+                    }
 
                     // A drag (the swipe) or the row's own click took the gesture over.
                     change.isConsumed -> {
