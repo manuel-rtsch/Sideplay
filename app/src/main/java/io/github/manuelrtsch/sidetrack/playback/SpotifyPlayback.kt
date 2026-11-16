@@ -92,8 +92,17 @@ class SpotifyPlayback(
     var onNext: (() -> Unit)? = null
     var onPrevious: (() -> Unit)? = null
     var onSeek: ((Long) -> Unit)? = null
+
+    /**
+     * A play command arrived with nothing loaded, so there is no source to resume. The owner has
+     * to start the current item instead; the player cannot invent one.
+     */
+    var onResumeWithoutSource: (() -> Unit)? = null
     var fallbackNext: (() -> Unit)? = null
     var fallbackPrevious: (() -> Unit)? = null
+
+    /** [onResumeWithoutSource] for a process with no ViewModel attached. */
+    var fallbackResume: (() -> Unit)? = null
 
     /**
      * Recovery for an audio pipeline that went silent, installed by the session that owns the
@@ -355,6 +364,16 @@ class SpotifyPlayback(
 
     suspend fun resume(): Boolean {
         SidetrackDebug.log("resume audio=${audio != null}")
+        if (current == null) {
+            // A cold process restores the queue but not the native player, so a play command from
+            // a headset or the notification would resume a player that has no source at all and
+            // deliver silence until the sink's stall watchdog noticed. Starting the item is the
+            // queue owner's job; this only reports whether anyone could do it.
+            val start = onResumeWithoutSource ?: fallbackResume
+            SidetrackDebug.log("resume without source restarted=${start != null}")
+            start?.invoke()
+            return start != null
+        }
         val generation = ++pauseGeneration
         lastCommandWasPause = false
         lastCommandAt = SystemClock.elapsedRealtime()

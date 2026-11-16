@@ -52,6 +52,38 @@ class SpotifyPlaybackTest {
         assertSame(other, registry.active)
     }
 
+    @Test fun `play with nothing loaded asks the owner to start the item`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
+        var restarts = 0
+        playback.onResumeWithoutSource = { restarts++ }
+
+        assertTrue(playback.resume())
+
+        // A cold process has no source: asking the player to play would deliver silence.
+        assertEquals(1, restarts)
+        assertEquals(0, gateway.plays)
+    }
+
+    @Test fun `play with nothing loaded falls back when no ViewModel is attached`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
+        var restarts = 0
+        playback.fallbackResume = { restarts++ }
+
+        assertTrue(playback.resume())
+
+        assertEquals(1, restarts)
+    }
+
+    @Test fun `play with nothing loaded and nobody to start it reports failure`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
+
+        assertFalse(playback.resume())
+        assertEquals(0, gateway.plays)
+    }
+
     @Test fun `failed load releases the session`() = runTest {
         val gateway = FakeGateway(failLoad = true)
         val registry = MediaSessionRegistry()
@@ -241,6 +273,7 @@ class SpotifyPlaybackTest {
         var stopped = false
         var recreated = false
         var loads = 0
+        var plays = 0
 
         override suspend fun connect(accessToken: String) = Unit
         override suspend fun disconnect() = Unit
@@ -257,7 +290,9 @@ class SpotifyPlaybackTest {
             this.autoplay = autoplay
         }
 
-        override suspend fun play() = Unit
+        override suspend fun play() {
+            plays++
+        }
         override suspend fun pause() {
             paused = true
         }

@@ -124,12 +124,34 @@ class SpotifySession(
             // own callbacks while it exists and clears them in onCleared().
             player.fallbackNext = { skipNext() }
             player.fallbackPrevious = { skipPrevious() }
+            player.fallbackResume = { startRestoredItem() }
             player.onStopped = { queue.stop() }
         }
     }
 
     /** Stall recoveries started inside [STALL_RECOVERY_WINDOW_MS]; main thread only. */
     private val stallRecoveries = ArrayDeque<Long>()
+
+    /**
+     * Starts the queue's current item when a play command arrives with nothing loaded.
+     *
+     * The queue survives process death but the native player does not, so after a restart there is
+     * no source to resume. Used when no ViewModel is attached; a ViewModel installs the accurate
+     * path via [SpotifyPlayback.onResumeWithoutSource], because only it knows the saved offsets.
+     */
+    private fun startRestoredItem() {
+        val item = queue.snapshot.current ?: return
+        val uri = item.uri ?: return
+        val positionMs = playback.position
+        SidetrackDebug.log("startRestoredItem uri=$uri positionMs=$positionMs")
+        playbackScope.launch {
+            runCatching { play(uri, positionMs.coerceAtLeast(0L)) }
+                .onFailure {
+                    SidetrackDebug.log("startRestoredItem failed", it)
+                    playback.pause()
+                }
+        }
+    }
 
     /**
      * Rebuilds playback after the audio pipeline went silent.

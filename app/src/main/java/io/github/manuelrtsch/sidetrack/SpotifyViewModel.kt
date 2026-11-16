@@ -207,6 +207,17 @@ class SpotifyViewModel(
             it.playback.onNext = nextHandler
             it.playback.onPrevious = previousHandler
             it.playback.onSeek = seekHandler
+            // A play command from a headset or the notification can arrive before anything is
+            // loaded: a cold process restores the queue but not the native player, so resuming
+            // would only deliver silence. Restore already anchored the saved offset here.
+            it.playback.onResumeWithoutSource = {
+                val item = _state.value.current
+                if (item?.uri != null) {
+                    val resume = _playbackPositionMs.value
+                    _state.update { state -> state.copy(isPlaying = true) }
+                    startRemote(item, resume, resuming = resume > 0L)
+                }
+            }
             // Playback upkeep (a stall that had to reconnect) has to reach the user: from the
             // outside it looked like the player was running while nothing was audible.
             viewModelScope.launch {
