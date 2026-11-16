@@ -46,10 +46,10 @@ name: History & Settings
           text: ".* removed from history"
           waitToSettleTimeoutMs: 200
 - extendedWaitUntil:
-    visible: "Sidetrack"
+    visible: "Home"
     timeout: 3000
 - tapOn:
-    text: "Sidetrack"
+    text: "Home"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Sidetrack"
 

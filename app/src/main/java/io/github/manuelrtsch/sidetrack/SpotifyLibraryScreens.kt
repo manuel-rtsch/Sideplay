@@ -161,7 +161,7 @@ fun LibraryScreen(
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        listOf(spotifyBack("Sidetrack", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
+        listOf(spotifyBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     )
     SidekitScaffold(
         title = "Library",

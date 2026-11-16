@@ -5,5 +5,5 @@ name: Home -> Library -> Home
 - assertVisible: "Sidetrack"
 - tapOn: "Library"
 - assertVisible: "Library"
-- tapOn: "Sidetrack"
+- tapOn: "Home"
 - assertVisible: "Sidetrack"

@@ -44,5 +44,5 @@ name: Home -> Library -> Artist -> Now Playing -> Home
 - assertVisible: "TOP TRACKS"
 - tapOn: "Back"
 - assertVisible: "Library"
-- tapOn: "Sidetrack"
+- tapOn: "Home"
 - assertVisible: "Sidetrack"

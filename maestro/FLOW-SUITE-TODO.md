@@ -124,7 +124,7 @@ Without this fixture, Flows 3 and 4 remain order-dependent and cannot guarantee 
 - [x] Every flow starts with `launchApp` and `assertVisible: "Sidetrack"`.
 - [x] Do not hardcode artist/track/show titles unless the fixture explicitly guarantees them.
 - [x] Use stable chrome labels: `Library`, `TOP TRACKS`, `Albums`, `Save`, `Saved`, `Follow`,
-      `Following`, `Queue`, `History`, `Settings`, `Back`, `Sidetrack`.
+      `Following`, `Queue`, `History`, `Settings`, `Back`, `Home`.
 - [x] Use duration regex `[0-9]+:[0-9]{2}(:[0-9]{2})?` plus `index` to target track/episode rows.
 - [x] Use `index` on `Artist` / `Album` / `Show` row subtitles rather than titles.
 - [x] Use generated action labels:
@@ -178,7 +178,7 @@ Media: music, artist, album.
 - [x] Back to the artist and play another top track, then open Now Playing with the same guard,
       so the suite adds a history entry before flow 4 removes one.
 - [x] Navigate back: Now Playing → artist → Library → Home.
-      Artist back uses `Back`; Library → Home uses `Sidetrack`.
+      Artist back uses `Back`; Library → Home uses `Home`.
 - [x] Assert Home.
 
 ### Notes
@@ -317,7 +317,7 @@ Media: whatever the fixture’s history contains; no additional requirement.
   - [x] Tap `Remove .* from history` index `0`.
   - [x] Assert the history screen remains and the entry is gone (or count/list changed).
   - [x] Do not use the app’s Clear history confirmation for this step.
-- [x] Tap `Sidetrack` to return Home.
+- [x] Tap `Home` to return Home.
 - [x] Open `pressKey: Remote Menu` → `Settings`; assert `Settings`.
 - [x] Toggle `Autoplay` once.
 - [x] Toggle `Normalize volume` once.

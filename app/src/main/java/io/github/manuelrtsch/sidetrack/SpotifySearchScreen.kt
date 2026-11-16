@@ -67,9 +67,14 @@ fun SpotifySearchScreen(
             if (state.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
         }
     )
+    // The right side of the "Search in" row must stay on one line. The only selection that
+    // overflows is four of five scopes, so name the one that is left out instead of listing four.
     val scopeSummary = when (state.searchScopes.size) {
         SearchScope.entries.size -> "Everything"
         0 -> "Nothing"
+        1 -> SearchScope.entries.first { it in state.searchScopes }.label
+        SearchScope.entries.size - 1 ->
+            "All but " + SearchScope.entries.first { it !in state.searchScopes }.label
         else -> SearchScope.entries.filter { it in state.searchScopes }.joinToString(", ") { it.label }
     }
     val searchFocus = remember { FocusRequester() }
@@ -185,9 +190,8 @@ fun SpotifySearchScreen(
                     val index = rowIndex
                     item(key = "idle") {
                         EmptyMessage(
-                            "Search Spotify",
-                            Modifier.listFade(listState, index),
-                            hint = "Tracks, artists, albums and more"
+                            "Type at least two letters",
+                            Modifier.listFade(listState, index)
                         )
                     }
                 }
@@ -197,8 +201,7 @@ fun SpotifySearchScreen(
                     item(key = "short") {
                         EmptyMessage(
                             "Keep typing",
-                            Modifier.listFade(listState, index),
-                            hint = "Type at least two letters to search"
+                            Modifier.listFade(listState, index)
                         )
                     }
                 }
@@ -209,7 +212,7 @@ fun SpotifySearchScreen(
                         EmptyMessage(
                             "Searching…",
                             Modifier.listFade(listState, index),
-                            hint = "Spotify is looking for matches"
+                            hint = "Looking on Spotify"
                         )
                     }
                 }

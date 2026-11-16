@@ -40,7 +40,7 @@ name: Queue and History Management
 - assertNotVisible: "Undo"
 
 # 3. Back to Home.
-- tapOn: "Sidetrack"
+- tapOn: "Back"
 - assertVisible: "Sidetrack"
 - assertVisible: "RECENTLY PLAYED"
 

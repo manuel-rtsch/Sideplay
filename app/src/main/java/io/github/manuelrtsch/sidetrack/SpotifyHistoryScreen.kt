@@ -52,7 +52,7 @@ fun HistoryScreen(
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        listOf(spotifyBack("Sidetrack", onBack).first())
+        listOf(spotifyBack("Home", onBack).first())
     )
     SidekitScaffold(
         title = "History",
