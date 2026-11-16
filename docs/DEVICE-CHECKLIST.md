@@ -5,7 +5,7 @@ Items marked **manual** need a second Spotify client, a waiting period, or hardw
 driven from `adb`.
 
 **Device:** `SP0100260901847` (SP01_FE_US, 480 × 640, Android 12)  
-**Last run:** 2026-11-16, Sidetrack 0.3.1 (`versionCode=89`)
+**Last run:** 2026-11-16, Sidetrack 0.3.3 (`versionCode=109`, arm64 asset)
 
 The row gutter and the touch long press were validated separately on 2026-11-16 on the
 `Sidephone_SP-01` emulator (480 × 640, Android 12, `versionCode=96`); the items below marked ✔︎ so
