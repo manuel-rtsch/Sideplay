@@ -162,7 +162,9 @@ Sidekit itself.
 
 The `profile` build is signed with the local debug key and is meant for trying Sidetrack on a real
 device. The `dev` build installs alongside the normal app as
-`io.github.manuelrtsch.sidetrack.dev`.
+`io.github.manuelrtsch.sidetrack.dev`, labelled **Sidetrack Dev**: it shares the `sidetrack://auth`
+redirect with the release app, so signing in opens a chooser and the two entries have to be told
+apart.
 
 More technical notes live in [docs/SIDETRACK.md](docs/SIDETRACK.md).
 

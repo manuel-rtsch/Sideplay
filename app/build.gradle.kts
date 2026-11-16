@@ -102,10 +102,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
         }
+        // Installs next to the release app, so it has to be labelled apart from it: both packages
+        // declare the same `sidetrack://auth` redirect, and the OAuth hand-off opens a chooser in
+        // which two entries reading "Sidetrack" would be indistinguishable.
         create("dev") {
             initWith(getByName("profile"))
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+            manifestPlaceholders["appLabel"] = "Sidetrack Dev"
             matchingFallbacks += listOf("release")
         }
         // Promo/demo builds. Same application id and signing as release on purpose: Sidetrack is
