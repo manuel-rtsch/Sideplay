@@ -152,6 +152,7 @@ class SpotifyViewModel(
     val sleepTimer: StateFlow<SleepTimerState> = session?.playback?.sleepTimer ?: offlineSleepTimer
 
     private var searchJob: Job? = null
+    private var signInJob: Job? = null
     private var autoplayJob: Job? = null
     private var radioJob: Job? = null
     private var artistRadioJob: Job? = null
@@ -1201,9 +1202,12 @@ class SpotifyViewModel(
             _state.update { it.copy(notice = "Sign-in is unavailable in this build") }
             return
         }
-        if (_state.value.authPending) return
+        // A previous attempt can still be waiting on the loopback listener after the user
+        // closed the browser. Supersede it so every press opens a fresh sign-in page instead of
+        // being ignored until the old listener times out.
+        signInJob?.cancel()
         _state.update { it.copy(authPending = true, notice = null) }
-        viewModelScope.launch {
+        signInJob = viewModelScope.launch {
             try {
                 session.signIn(openBrowser)
                 _state.update { it.copy(signedIn = true, authPending = false) }
