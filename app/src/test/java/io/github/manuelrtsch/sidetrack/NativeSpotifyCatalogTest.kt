@@ -223,6 +223,18 @@ class NativeSpotifyCatalogTest {
         assertEquals(50L, native.radioLimit)
     }
 
+    @Test fun `song radio keeps the station playlist id`() = runTest {
+        val native = FakeNative().apply {
+            songRadioResult = """{"playlistId":"37i9dQZF1DXcBWIGoYBM5M","tracks":[{"id":"t2","title":"Similar","artist":"Artist","durationMs":2000}]}"""
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val station = catalog.songRadioStation("t1", 50)
+
+        assertEquals("37i9dQZF1DXcBWIGoYBM5M", station.playlistId)
+        assertEquals(listOf("t2"), station.tracks.map { it.id })
+    }
+
     @Test fun `artist radio parses tracks and forwards the limit`() = runTest {
         val native = FakeNative().apply {
             artistRadioResult = """[{"id":"t3","title":"Station","artist":"Artist","durationMs":3000}]"""

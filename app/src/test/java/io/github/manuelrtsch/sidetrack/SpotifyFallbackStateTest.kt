@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
+import io.github.manuelrtsch.sidetrack.data.SpotifyLibraryWriter
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,6 +21,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -81,7 +83,7 @@ class SpotifyFallbackStateTest {
         val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
         val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> = station
+            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = SpotifyStation(station)
         }
         val vm = viewModel(catalog)
 
@@ -94,6 +96,41 @@ class SpotifyFallbackStateTest {
         assertEquals(station.map { it.id }, vm.state.value.upcoming.map { it.id })
         assertEquals(station.map { it.id }, vm.state.value.radio?.items?.map { it.id })
         assertNull(vm.state.value.radioError)
+    }
+
+    @Test fun `song radio saves its backing playlist`() = runTest(dispatcher) {
+        val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
+        val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)
+        val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
+            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation =
+                SpotifyStation(station, playlistId = "37i9dQZF1DXcBWIGoYBM5M")
+        }
+        val writes = mutableListOf<Pair<String, Boolean>>()
+        val writer = object : SpotifyLibraryWriter {
+            override suspend fun isTrackSaved(id: String): Boolean? = null
+            override suspend fun isSaved(type: SpotifyCollectionType, id: String): Boolean? = false
+            override suspend fun isArtistFollowed(id: String): Boolean? = null
+            override suspend fun setTrackSaved(id: String, saved: Boolean) = Unit
+            override suspend fun setSaved(type: SpotifyCollectionType, id: String, saved: Boolean) {
+                writes += id to saved
+            }
+            override suspend fun setArtistFollowed(id: String, followed: Boolean) = Unit
+        }
+        val vm = SpotifyViewModel(catalog, writer, simulatePlayback = false).also { viewModels += it }
+
+        vm.playItem(seed)
+        advanceUntilIdle()
+        vm.ensureRadio()
+        advanceUntilIdle()
+
+        val radio = vm.state.value.radio!!
+        assertEquals("37i9dQZF1DXcBWIGoYBM5M", radio.id)
+        assertTrue(radio.saveable)
+
+        vm.toggleSaved(radio)
+        advanceUntilIdle()
+
+        assertEquals(listOf("37i9dQZF1DXcBWIGoYBM5M" to true), writes)
     }
 
     @Test fun `adding to queue before playback keeps the item and confirms it`() = runTest(dispatcher) {
@@ -113,9 +150,9 @@ class SpotifyFallbackStateTest {
         val added = MockSpotifyDataSource.playlist("late_night")!!.tracks.last()
         val gate = CompletableDeferred<Unit>()
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> {
+            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation {
                 gate.await()
-                return station
+                return SpotifyStation(station)
             }
         }
         val vm = viewModel(catalog)
@@ -179,8 +216,8 @@ class SpotifyFallbackStateTest {
         val station = MockSpotifyDataSource.topTracks(artist, 4)
         val playing = MockSpotifyDataSource.albums.flatMap { it.tracks }.first { it.artistId != artist.id }
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> =
-                if (artistId == artist.id) station else emptyList()
+            override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation =
+                SpotifyStation(if (artistId == artist.id) station else emptyList())
         }
         val vm = viewModel(catalog)
         vm.playItem(playing)

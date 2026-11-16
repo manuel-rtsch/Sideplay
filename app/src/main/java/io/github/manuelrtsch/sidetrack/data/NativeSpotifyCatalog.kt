@@ -11,6 +11,7 @@ import io.github.manuelrtsch.sidetrack.SpotifyPage
 import io.github.manuelrtsch.sidetrack.SpotifyPlaylist
 import io.github.manuelrtsch.sidetrack.SpotifySearchResults
 import io.github.manuelrtsch.sidetrack.SpotifyShow
+import io.github.manuelrtsch.sidetrack.SpotifyStation
 import io.github.manuelrtsch.sidetrack.SpotifyTrack
 import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
 import io.github.manuelrtsch.sidetrack.spotifyIdOrNull
@@ -72,15 +73,17 @@ class NativeSpotifyCatalog(
         return SpotifyPage.of(array.tracks(), offset, limit)
     }
 
-    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> {
-        val array = parseArray(callText { native.catalogSongRadio(trackId, limit.toLong()) })
-        return array.tracks()
-    }
+    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> =
+        songRadioStation(trackId, limit).tracks
 
-    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> {
-        val array = parseArray(callText { native.catalogArtistRadio(artistId, limit.toLong()) })
-        return array.tracks()
-    }
+    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> =
+        artistRadioStation(artistId, limit).tracks
+
+    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation =
+        parseStation(callText { native.catalogSongRadio(trackId, limit.toLong()) })
+
+    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation =
+        parseStation(callText { native.catalogArtistRadio(artistId, limit.toLong()) })
 
     override suspend fun search(
         query: String,
@@ -178,6 +181,19 @@ class NativeSpotifyCatalog(
 
     private fun parseArray(text: String): JSONArray = runCatching { JSONArray(text) }.getOrElse {
         fail(SpotifyFailure.Unknown, "Spotify returned an unreadable catalog response")
+    }
+
+    /**
+     * The native station response is `{playlistId, tracks}`. A bare array is still accepted so an
+     * older bridge (or a test fixture) keeps working; it simply has no playlist to save.
+     */
+    private fun parseStation(text: String): SpotifyStation {
+        if (!text.trimStart().startsWith("{")) return SpotifyStation(parseArray(text).tracks())
+        val json = parseObject(text)
+        return SpotifyStation(
+            tracks = json.optJSONArray("tracks").tracks(),
+            playlistId = json.optString("playlistId").spotifyIdOrNull()
+        )
     }
 
     private fun parseObject(text: String): JSONObject = runCatching { JSONObject(text) }.getOrElse {

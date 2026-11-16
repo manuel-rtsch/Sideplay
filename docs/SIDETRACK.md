@@ -138,7 +138,9 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   itself if the queue is still the one the request started from, so an add, remove, clear, reorder
   or shuffle made while it loaded is never overwritten. Episodes have no song radio, so the button
   is omitted for them. The Web API fallback uses `/recommendations` when the native bridge is
-  absent.
+  absent. The station's backing playlist id travels with the tracks, so the collection header's
+  save tile adds that playlist to the user's library through the same rootlist write used for any
+  other playlist; a station without a backing playlist (the Web API fallback) hides the tile.
 - Artist radio lives in the artist page's Options menu rather than behind its play tile. The play
   tile keeps one meaning everywhere: it queues the list on screen, so it loads the artist's
   remaining top-track pages first and then plays the whole list in order (a page with no tracks
@@ -148,7 +150,8 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   `seed_artists`), shown on the collection screen as **{artist} radio**. Opening it never touches
   the queue — it only builds the station, and the user starts it from the station's own play tile
   — so browsing an artist cannot interrupt what is playing. Revisiting the same artist reuses the
-  station; a failed read offers **Try again**.
+  station; a failed read offers **Try again**. Like song radio, the station can be saved to the
+  library when the native bridge reports its backing playlist.
 - Starting a new item shows a transient now-playing confirmation in the action bar: artwork, an
   animated playing indicator, the title, and a right arrow to Now Playing. It replaces the normal
   actions for four seconds, can be dismissed immediately with its X, and never auto-navigates.

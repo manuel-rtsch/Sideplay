@@ -128,7 +128,18 @@ data class SpotifyCollection(
     val artistId: String? = null,
     val artUrl: String? = null,
     val totalItems: Int = items.size,
-    val hasMore: Boolean = false
+    val hasMore: Boolean = false,
+    /** False for generated pages (a station without a backing playlist) that cannot be saved. */
+    val saveable: Boolean = true
+)
+
+/**
+ * A radio station: its resolved tracks and, when the transport can report it, the playlist that
+ * backs the station. Saving that playlist is how a station becomes a library playlist.
+ */
+data class SpotifyStation(
+    val tracks: List<SpotifyTrack>,
+    val playlistId: String? = null
 )
 
 /** How many rows a catalog request asks for. Kept small for the Sidephone's weak CPU. */

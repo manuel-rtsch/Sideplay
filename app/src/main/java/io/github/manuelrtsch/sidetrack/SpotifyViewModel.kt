@@ -633,7 +633,8 @@ class SpotifyViewModel(
         }
         artistRadioJob = viewModelScope.launch {
             try {
-                val tracks = catalog.artistRadio(id, SPOTIFY_PAGE_SIZE)
+                val result = catalog.artistRadioStation(id, SPOTIFY_PAGE_SIZE)
+                val tracks = result.tracks
                     .filter { it.playable }
                     .distinctBy { it.id }
                 // A station the user navigated away from must not overwrite the next artist's.
@@ -646,16 +647,30 @@ class SpotifyViewModel(
                 }
                 val station = SpotifyCollection(
                     type = SpotifyCollectionType.Playlist,
-                    id = "artistradio:$id",
+                    id = result.playlistId ?: "artistradio:$id",
                     title = "${artist.name} radio",
                     subtitle = "Based on ${artist.name} · ${tracks.size} tracks",
                     artRes = artist.artRes,
                     items = tracks,
                     artUrl = artist.artUrl,
-                    totalItems = tracks.size
+                    totalItems = tracks.size,
+                    saveable = result.playlistId != null
                 )
+                val saved = result.playlistId?.let {
+                    runCatching { writer?.isSaved(SpotifyCollectionType.Playlist, it) }.getOrNull()
+                }
                 _state.update {
-                    it.copy(artistRadio = station, artistRadioPending = false, artistRadioError = null)
+                    val keys = it.savedCollectionKeys.toMutableSet()
+                    val key = collectionKey(SpotifyCollectionType.Playlist, station.id)
+                    if (saved != null && key !in savedCollectionTouched) {
+                        if (saved) keys.add(key) else keys.remove(key)
+                    }
+                    it.copy(
+                        artistRadio = station,
+                        artistRadioPending = false,
+                        artistRadioError = null,
+                        savedCollectionKeys = keys
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -679,7 +694,8 @@ class SpotifyViewModel(
         }
         radioJob = viewModelScope.launch {
             try {
-                val tracks = catalog.songRadio(seed.id, SPOTIFY_PAGE_SIZE)
+                val result = catalog.songRadioStation(seed.id, SPOTIFY_PAGE_SIZE)
+                val tracks = result.tracks
                     .filter { it.playable && it.id != seed.id }
                     .distinctBy { it.id }
                 if (_state.value.current?.id != seed.id) {
@@ -694,20 +710,30 @@ class SpotifyViewModel(
                 }
                 val station = SpotifyCollection(
                     type = SpotifyCollectionType.Playlist,
-                    id = "radio:${seed.id}",
+                    id = result.playlistId ?: "radio:${seed.id}",
                     title = "Song radio",
                     subtitle = "Based on ${seed.title} · ${tracks.size} tracks",
                     artRes = seed.artRes,
                     items = tracks,
                     artUrl = seed.artUrl,
-                    totalItems = tracks.size
+                    totalItems = tracks.size,
+                    saveable = result.playlistId != null
                 )
+                val saved = result.playlistId?.let {
+                    runCatching { writer?.isSaved(SpotifyCollectionType.Playlist, it) }.getOrNull()
+                }
                 _state.update {
+                    val keys = it.savedCollectionKeys.toMutableSet()
+                    val key = collectionKey(SpotifyCollectionType.Playlist, station.id)
+                    if (saved != null && key !in savedCollectionTouched) {
+                        if (saved) keys.add(key) else keys.remove(key)
+                    }
                     it.copy(
                         radio = station,
                         radioSeedId = seed.id,
                         radioPending = false,
-                        radioError = null
+                        radioError = null,
+                        savedCollectionKeys = keys
                     )
                 }
                 // The seed keeps playing; the station becomes what follows it. Only do that if

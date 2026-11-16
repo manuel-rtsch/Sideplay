@@ -55,6 +55,15 @@ struct TrackJson {
     art_url: Option<String>,
 }
 
+/// A station's tracks plus the playlist that backs it. The playlist id lets the app save the
+/// station to the user's library with the same rootlist write it uses for any other playlist.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StationJson {
+    playlist_id: Option<String>,
+    tracks: Vec<TrackJson>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AlbumJson {
@@ -1882,8 +1891,9 @@ async fn station(
     let json: Value = serde_json::from_slice(&response).map_err(|e| e.to_string())?;
     let Some(playlist_uri) = radio_playlist_uri(&json) else {
         log::warn!("radio for {seed_uri} returned no playlist");
-        return Ok("[]".to_string());
+        return station_json(None, Vec::new());
     };
+    let playlist_id = playlist_id_of(&playlist_uri);
     let playlist = playlist_get(
         session,
         token,
@@ -1896,10 +1906,26 @@ async fn station(
         uris.len()
     );
     if uris.is_empty() {
-        return Ok("[]".to_string());
+        return station_json(playlist_id, Vec::new());
     }
     let tracks = fetch_tracks(session, token, &uris, uris.len()).await;
-    Ok(serde_json::to_string(&tracks).map_err(|e| e.to_string())?)
+    station_json(playlist_id, tracks)
+}
+
+fn station_json(playlist_id: Option<String>, tracks: Vec<TrackJson>) -> Result<String, String> {
+    serde_json::to_string(&StationJson {
+        playlist_id,
+        tracks,
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// The base62 id of a playlist URI, which is what the rootlist write expects.
+fn playlist_id_of(uri: &str) -> Option<String> {
+    match SpotifyUri::from_uri(uri).ok()? {
+        SpotifyUri::Playlist { id, .. } => id.to_base62().ok(),
+        _ => None,
+    }
 }
 
 pub async fn artist(session: &Session, token: &str, id: &str) -> Result<String, String> {
@@ -1962,8 +1988,8 @@ pub async fn top_tracks(
 #[cfg(test)]
 mod tests {
     use super::{
-        library_page, owner_display, percent_decode, radio_playlist_uri, radio_track_uris,
-        rootlist_folder_name, sort_newest_first, CollectionItem,
+        library_page, owner_display, percent_decode, playlist_id_of, radio_playlist_uri,
+        radio_track_uris, rootlist_folder_name, sort_newest_first, CollectionItem,
     };
     use librespot_core::SpotifyUri;
     use serde_json::json;
@@ -1981,6 +2007,15 @@ mod tests {
             radio_playlist_uri(&response).as_deref(),
             Some("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M")
         );
+    }
+
+    #[test]
+    fn playlist_id_of_extracts_the_base62_id() {
+        assert_eq!(
+            playlist_id_of("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M").as_deref(),
+            Some("37i9dQZF1DXcBWIGoYBM5M")
+        );
+        assert_eq!(playlist_id_of("spotify:track:4uLU6hMCjMI75M1A2tKUQC"), None);
     }
 
     #[test]

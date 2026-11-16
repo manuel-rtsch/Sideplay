@@ -503,7 +503,7 @@ fun NavGraphBuilder.sidetrackGraph(
                     onPlay = { vm.playRadio(0) },
                     onPlayPause = vm::togglePlayPause,
                     onItem = { vm.playRadio(it) },
-                    onSave = {},
+                    onSave = { vm.toggleSaved(radio) },
                     onArtist = {},
                     onQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
                     onQueueItem = vm::addToQueue,
@@ -515,7 +515,7 @@ fun NavGraphBuilder.sidetrackGraph(
                     loadingMore = false,
                     onDismissNotice = vm::dismissNotice,
                     onDismissNowPlaying = vm::dismissNowPlayingNotice,
-                    showSave = false
+                    showSave = radio.saveable
                 )
             }
         }
@@ -561,7 +561,7 @@ fun NavGraphBuilder.sidetrackGraph(
                         onPlay = { vm.playArtistRadio(0) },
                         onPlayPause = vm::togglePlayPause,
                         onItem = { vm.playArtistRadio(it) },
-                        onSave = {},
+                        onSave = { vm.toggleSaved(radio) },
                         onArtist = {},
                         onQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
                         onQueueItem = vm::addToQueue,
@@ -573,7 +573,7 @@ fun NavGraphBuilder.sidetrackGraph(
                         loadingMore = false,
                         onDismissNotice = vm::dismissNotice,
                         onDismissNowPlaying = vm::dismissNowPlayingNotice,
-                        showSave = false
+                        showSave = radio.saveable
                     )
                 }
             }

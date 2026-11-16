@@ -9,6 +9,7 @@ import io.github.manuelrtsch.sidetrack.SpotifyCollection
 import io.github.manuelrtsch.sidetrack.SpotifyCollectionType
 import io.github.manuelrtsch.sidetrack.SpotifyPage
 import io.github.manuelrtsch.sidetrack.SpotifySearchResults
+import io.github.manuelrtsch.sidetrack.SpotifyStation
 import io.github.manuelrtsch.sidetrack.SpotifyTrack
 
 /**
@@ -58,6 +59,17 @@ interface SpotifyCatalog {
      * cannot build a station return an empty list rather than inventing tracks.
      */
     suspend fun artistRadio(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> = emptyList()
+
+    /**
+     * A station seeded by [trackId], including the playlist that backs it when the transport can
+     * report one. The default wraps [songRadio], so transports that only return tracks still work.
+     */
+    suspend fun songRadioStation(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation =
+        SpotifyStation(songRadio(trackId, limit))
+
+    /** A station seeded by [artistId]; same contract as [songRadioStation]. */
+    suspend fun artistRadioStation(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation =
+        SpotifyStation(artistRadio(artistId, limit))
 
     suspend fun search(
         query: String,
