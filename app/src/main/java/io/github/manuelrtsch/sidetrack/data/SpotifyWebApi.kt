@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.SPOTIFY_PAGE_SIZE
 import io.github.manuelrtsch.sidetrack.SearchScope
@@ -32,8 +33,8 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         filter: LibraryFilter,
         offset: Int = 0,
         limit: Int = SPOTIFY_PAGE_SIZE
-    ): SpotifyPage<Any> {
-        val page = { items: List<Any>, total: Int? -> SpotifyPage.of(items, offset, limit, total) }
+    ): SpotifyPage<LibraryEntry> {
+        val page = { items: List<LibraryEntry>, total: Int? -> SpotifyPage.of(items, offset, limit, total) }
         return when (filter) {
             LibraryFilter.LikedSongs -> {
                 val json = get("$ME_TRACKS?limit=$limit&offset=$offset", token())
@@ -147,7 +148,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         }
     }
 
-    private suspend fun savedAlbums(offset: Int, limit: Int): SpotifyPage<Any> {
+    private suspend fun savedAlbums(offset: Int, limit: Int): SpotifyPage<LibraryEntry> {
         val json = get("$ME_ALBUMS?limit=$limit&offset=$offset", token())
         val items = json.optJSONArray("items") ?: JSONArray()
         val albums = buildList(items.length()) {
@@ -158,14 +159,14 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         return SpotifyPage.of(albums, offset, limit, json.optInt("total").takeIf { it > 0 })
     }
 
-    private suspend fun followedArtists(offset: Int, limit: Int): SpotifyPage<Any> {
+    private suspend fun followedArtists(offset: Int, limit: Int): SpotifyPage<LibraryEntry> {
         val json = get("$ME_FOLLOWING?type=artist&limit=$limit&offset=$offset", token())
         val page = json.optJSONObject("artists")
         val artists = page?.optJSONArray("items").artists().orEmpty()
         return SpotifyPage.of(artists, offset, limit, page?.optInt("total")?.takeIf { it > 0 })
     }
 
-    private suspend fun savedShows(offset: Int, limit: Int): SpotifyPage<Any> {
+    private suspend fun savedShows(offset: Int, limit: Int): SpotifyPage<LibraryEntry> {
         val json = get("$ME_SHOWS?limit=$limit&offset=$offset", token())
         val items = json.optJSONArray("items") ?: JSONArray()
         val shows = buildList(items.length()) {

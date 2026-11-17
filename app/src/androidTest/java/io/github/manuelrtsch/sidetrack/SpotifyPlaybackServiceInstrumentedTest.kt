@@ -12,7 +12,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.manuelrtsch.sidetrack.data.SpotifySessions
+import io.github.manuelrtsch.sidetrack.data.AppSessions
 import io.github.manuelrtsch.sidetrack.playback.SpotifyPlaybackService
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -26,7 +26,7 @@ import org.junit.runner.RunWith
 class SpotifyPlaybackServiceInstrumentedTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val session get() = SpotifySessions.get(context)
+    private val session get() = AppSessions.get(context).spotify
     private val manager get() = context.getSystemService(NotificationManager::class.java)
     private val notificationId get() = session.playback.notificationId
 

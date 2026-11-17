@@ -292,6 +292,52 @@ class SpotifyQueueRepositoryTest {
         assertTrue(queue.snapshot.upcoming.isEmpty())
     }
 
+    @Test fun `stop clears the current item, upcoming, history and context`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(tracks, 0)
+        queue.next(auto = false)
+
+        queue.stop()
+
+        assertNull(queue.snapshot.current)
+        assertTrue(queue.snapshot.upcoming.isEmpty())
+        assertTrue(queue.snapshot.history.isEmpty())
+        assertTrue(queue.snapshot.context.isEmpty())
+        assertNull(queue.snapshot.shuffleBackup)
+    }
+
+    @Test fun `previous at the first item restarts instead of rewinding`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(tracks, 0)
+
+        queue.previous(1_000L)
+
+        assertEquals("a", queue.snapshot.current?.id)
+        assertEquals(listOf("b", "c", "d"), queue.snapshot.upcoming.map { it.id })
+        assertTrue(queue.snapshot.history.isEmpty())
+    }
+
+    @Test fun `an unplayable item does not replace the queue`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(tracks, 0)
+        val before = queue.snapshot
+
+        queue.play(listOf(track("x").copy(playable = false)), 0)
+
+        assertEquals(before, queue.snapshot)
+    }
+
+    @Test fun `history is bounded to the most recent twenty items`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        val many = (1..25).map { track("t$it") }
+        queue.play(many, 0)
+
+        repeat(24) { queue.next(auto = false) }
+
+        assertEquals(20, queue.snapshot.history.size)
+        assertEquals("t5", queue.snapshot.history.last().id)
+    }
+
     @Test fun `clearing upcoming leaves shuffle off`() {
         val queue = SpotifyQueueRepository(Random(7))
         queue.play(tracks, 0)

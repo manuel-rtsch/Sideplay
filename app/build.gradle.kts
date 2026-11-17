@@ -274,6 +274,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
+    // HTTP playback engine for Jellyfin/Navidrome. Spotify keeps librespot; Media3 is not used
+    // by the Spotify path. Added in migration phase 0 so the dependency is accepted up front.
+    implementation(libs.androidx.media3.exoplayer)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 

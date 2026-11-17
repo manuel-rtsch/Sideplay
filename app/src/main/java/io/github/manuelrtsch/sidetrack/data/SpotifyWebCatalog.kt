@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.SpotifyAlbum
@@ -16,7 +17,7 @@ class SpotifyWebCatalog(private val api: SpotifyWebApi) : SpotifyCatalog {
         filter: LibraryFilter,
         offset: Int,
         limit: Int
-    ): SpotifyPage<Any> = api.library(filter, offset, limit)
+    ): SpotifyPage<LibraryEntry> = api.library(filter, offset, limit)
 
     override suspend fun collection(
         type: SpotifyCollectionType,

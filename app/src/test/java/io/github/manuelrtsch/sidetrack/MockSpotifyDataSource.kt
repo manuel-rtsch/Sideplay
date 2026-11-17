@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
+import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.R
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
 
@@ -237,8 +238,8 @@ object MockSpotifyDataSource : SpotifyCatalog {
         return SpotifyPage.of(all.drop(offset).take(limit), offset, limit, all.size)
     }
 
-    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<Any> {
-        val all: List<Any> = when (filter) {
+    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<LibraryEntry> {
+        val all: List<LibraryEntry> = when (filter) {
             LibraryFilter.LikedSongs -> liked
             LibraryFilter.Playlists -> playlists
             LibraryFilter.Albums -> albums

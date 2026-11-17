@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-only: the Media3 playback instrumented test serves a WAV over http://127.0.0.1.
+    Release builds keep Android's default (cleartext blocked). Phase 5 replaces this with a
+    scoped network security config for user-entered Navidrome hosts.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>

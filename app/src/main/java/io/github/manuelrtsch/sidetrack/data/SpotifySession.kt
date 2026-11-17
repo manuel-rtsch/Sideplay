@@ -5,15 +5,19 @@ import android.os.SystemClock
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.DemoContentSource
+import io.github.manuelrtsch.sidetrack.MediaItem
+import io.github.manuelrtsch.sidetrack.MediaKey
+import io.github.manuelrtsch.sidetrack.ServiceCapabilities
+import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
 import io.github.manuelrtsch.sidetrack.SpotifyEpisode
 import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 import io.github.manuelrtsch.sidetrack.SpotifyTrack
-import io.github.manuelrtsch.sidetrack.auth.EncryptedSpotifyCredentialStore
 import io.github.manuelrtsch.sidetrack.auth.SpotifyAuth
 import io.github.manuelrtsch.sidetrack.bridge.NativeBridge
+import io.github.manuelrtsch.sidetrack.playback.LibrespotPlaybackEngine
+import io.github.manuelrtsch.sidetrack.playback.PlaybackController
 import io.github.manuelrtsch.sidetrack.playback.SpotifyAudioSink
-import io.github.manuelrtsch.sidetrack.playback.SpotifyPlayback
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,17 +38,20 @@ class SpotifySession(
     private val auth: SpotifyAuth = SpotifyAuth(NoopCredentialStore),
     private val tmpDir: String? = null,
     context: Context? = null
-) {
+) : ServiceRuntime {
+    override val service: ServiceId = ServiceId.Spotify
+    override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
+
     private val _signedIn = MutableStateFlow(auth.hasCredentials())
-    val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
+    override val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
 
     private val appContext = context?.applicationContext
     private val audioCacheDir = appContext?.let { File(it.cacheDir, "spotify-audio") }
-    private val settingsStore = appContext?.let { SpotifySettingsStore(it) }
+    private val settingsStore = appContext?.let { PlaybackSettingsStore(it) }
 
     /** Null in tests and other context-free sessions; those are treated as online. */
-    val network: NetworkMonitor? = appContext?.let(::NetworkMonitor)
-    val isOnline: Boolean get() = network?.isOnline ?: true
+    override val network: NetworkMonitor? = appContext?.let(::NetworkMonitor)
+    override val isOnline: Boolean get() = network?.isOnline ?: true
 
     // Legacy file names kept so existing dev installs keep their queue and history.
     private val queueStore = appContext?.let { FileSpotifyQueueStore(File(it.filesDir, "sidetracks-queue.bin")) }
@@ -61,26 +68,26 @@ class SpotifySession(
     private val storageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Where the last session stopped: the item and the offset, so reopening resumes it. */
-    @Volatile var resumePoint: SpotifyResumePoint? = positionStore?.read()
+    @Volatile override var resumePoint: SpotifyResumePoint? = positionStore?.read()
         private set
 
     /** Per-episode podcast offsets, independent of the single-session resume point. */
-    val episodeProgress = SpotifyEpisodeProgressRepository(
+    override val episodeProgress = SpotifyEpisodeProgressRepository(
         load = { episodeProgressStore?.read().orEmpty() },
         save = { episodeProgressStore?.write(it) },
         saveScope = storageScope
     )
 
     /** Notes and identity for the episode a restored session puts back on the player. */
-    val episodeMeta = SpotifyEpisodeMetaRepository(
+    override val episodeMeta = SpotifyEpisodeMetaRepository(
         load = { episodeMetaStore?.read().orEmpty() },
         save = { episodeMetaStore?.write(it) },
         saveScope = storageScope
     )
-    private val _settings = MutableStateFlow(settingsStore?.read() ?: SpotifySettings())
-    val settings: StateFlow<SpotifySettings> = _settings.asStateFlow()
+    private val _settings = MutableStateFlow(settingsStore?.read() ?: PlaybackSettings())
+    override val settings: StateFlow<PlaybackSettings> = _settings.asStateFlow()
 
-    val nativeAvailable: Boolean get() = NativeBridge.isAvailable
+    override val nativeAvailable: Boolean get() = NativeBridge.isAvailable
 
     private val nativeGateway by lazy {
         NativeSpotifyGateway(NativeBridge, { _settings.value }, { isOnline }, { accessToken() })
@@ -88,7 +95,7 @@ class SpotifySession(
     val gateway: SpotifyGateway get() = nativeGateway
 
     private val webApi by lazy { SpotifyWebApi { accessToken() } }
-    val catalog: SpotifyCatalog by lazy {
+    val spotifyCatalog: SpotifyCatalog by lazy {
         // The demo build type serves a fixed catalog; playback still goes through the real
         // account and librespot, so only the read/write side is replaced.
         DemoContentSource.current?.catalog()
@@ -98,10 +105,13 @@ class SpotifySession(
                 SpotifyWebCatalog(webApi)
             }
     }
-    val writer: SpotifyLibraryWriter? get() = catalog as? SpotifyLibraryWriter
+    val spotifyWriter: SpotifyLibraryWriter? get() = spotifyCatalog as? SpotifyLibraryWriter
+
+    override val catalog: MediaCatalog by lazy { SpotifyMediaCatalog(spotifyCatalog) }
+    override val writer: MediaLibraryWriter? get() = spotifyWriter?.let(::SpotifyMediaLibraryWriter)
 
     /** Process-wide queue and history so leaving Sidetrack does not forget what is playing. */
-    val queue = SpotifyQueueRepository(
+    override val queue = SpotifyQueueRepository(
         // The queue file holds the whole upcoming list, so an episode reaches Now Playing without
         // its notes and publishing number; the metadata cache has them.
         load = { queueStore?.read()?.let(episodeMeta::hydrate) ?: SpotifyQueueRepository.Snapshot() },
@@ -113,7 +123,7 @@ class SpotifySession(
      * background thread, so a "stopped" event arriving after the app-close path could otherwise
      * clear the queue that path deliberately keeps.
      */
-    @Volatile var halting = false
+    @Volatile override var halting = false
         private set
 
     /**
@@ -128,23 +138,26 @@ class SpotifySession(
 
     @Volatile private var currentPlayRequestUri: String? = null
 
-    val history = SpotifyHistoryRepository(
+    override val history = SpotifyHistoryRepository(
         load = { historyStore?.read().orEmpty() },
         save = { historyStore?.write(it) }
     )
 
     private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    val playback: SpotifyPlayback by lazy {
+    override val playback: PlaybackController by lazy {
         val sink = SpotifyAudioSink(NativeBridge, playbackScope)
-        SpotifyPlayback(
+        val engine = LibrespotPlaybackEngine(
             gateway = nativeGateway,
-            scope = playbackScope,
             audio = sink,
+            eventSource = { if (nativeAvailable) NativeBridge.pollEvent() else null }
+        )
+        PlaybackController(
+            engine = engine,
+            scope = playbackScope,
             context = appContext
         ).also { player ->
             // A drain that stopped producing audio cannot repair itself: restarting the native
             // player needs the gateway and a fresh token, and those live here.
-            sink.onFailure = player::onAudioStalled
             player.onStalled = ::recoverPlayback
             // Adopt transport actions when no ViewModel is attached. The ViewModel installs its
             // own callbacks while it exists and clears them in onCleared().
@@ -163,7 +176,7 @@ class SpotifySession(
      *
      * The queue survives process death but the native player does not, so after a restart there is
      * no source to resume. Used when no ViewModel is attached; a ViewModel installs the accurate
-     * path via [SpotifyPlayback.onResumeWithoutSource], because only it knows the saved offsets.
+     * path via [PlaybackController.onResumeWithoutSource], because only it knows the saved offsets.
      */
     private fun startRestoredItem() {
         val item = queue.snapshot.current ?: return
@@ -173,7 +186,7 @@ class SpotifySession(
         playbackScope.launch {
             // Nothing is loaded, so this is a cold start or a recovery: a fresh connection is
             // cheaper than discovering a dead one after the first load fails.
-            runCatching { play(uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
+            runCatching { play(item.key, uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
                 .onFailure {
                     SidetrackDebug.log("startRestoredItem failed", it)
                     playback.pause()
@@ -208,7 +221,7 @@ class SpotifySession(
             // A stall usually means the access-point connection is dead even when librespot has
             // not marked the session invalid yet, so rebuild it instead of reloading on the same
             // connection and stalling again.
-            runCatching { play(uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
+            runCatching { play(item.key, uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
                 .onSuccess { playback.emitNotice(null) }
                 .onFailure {
                     SidetrackDebug.log("recoverPlayback failed", it)
@@ -227,12 +240,12 @@ class SpotifySession(
         }
     }
 
-    suspend fun signIn(openBrowser: suspend (String) -> Unit) {
+    override suspend fun signIn(openBrowser: suspend (String) -> Unit) {
         auth.signIn(openBrowser)
         _signedIn.value = true
     }
 
-    fun signOut() {
+    override fun signOut() {
         rememberPosition(clear = true)
         queue.stop()
         history.clear()
@@ -274,21 +287,28 @@ class SpotifySession(
     }
 
     suspend fun play(
+        key: MediaKey,
         uri: String,
         positionMs: Long = 0L,
         gapless: Boolean = false,
         forceReconnect: Boolean = false
     ) {
-        SidetrackDebug.log("session.play begin uri=$uri positionMs=$positionMs gapless=$gapless forceReconnect=$forceReconnect")
+        SidetrackDebug.log("session.play begin key=${key.encode()} uri=$uri positionMs=$positionMs gapless=$gapless forceReconnect=$forceReconnect")
         // A new start supersedes the close path, even when the old player's stopped event is
         // still queued behind it.
         halting = false
         connectForPlayback(forceReconnect)
         SidetrackDebug.log("session.play connected; starting playback")
         val keepAudioSink = gapless && _settings.value.gapless && positionMs == 0L
-        withContext(Dispatchers.Main.immediate) { playback.start(uri, positionMs, keepAudioSink) }
+        withContext(Dispatchers.Main.immediate) { playback.start(key, uri, positionMs, keepAudioSink) }
         preloadNext()
         SidetrackDebug.log("session.play returned")
+    }
+
+    /** [ServiceRuntime] entry point: the item's URI is the Spotify playback detail. */
+    override suspend fun play(item: MediaItem, positionMs: Long, gapless: Boolean) {
+        val uri = item.uri ?: throw IllegalStateException("Spotify item ${item.key.encode()} has no URI")
+        play(item.key, uri, positionMs, gapless)
     }
 
     /** Warms the next queue item so the automatic transition does not have to fetch it cold. */
@@ -300,51 +320,52 @@ class SpotifySession(
         }
     }
 
-    suspend fun resume(): Boolean {
+    override suspend fun resume(): Boolean {
         halting = false
         val rebuilt = connectForPlayback()
         // A rebuilt session starts from an empty native player. Reload the current item instead of
         // asking the player to resume a track it no longer has.
-        val uri = playback.current?.uri
-        return if (rebuilt && uri != null) {
-            withContext(Dispatchers.Main.immediate) { playback.start(uri, playback.position) }
+        val current = playback.current
+        val uri = current?.uri
+        return if (rebuilt && current != null && uri != null) {
+            withContext(Dispatchers.Main.immediate) { playback.start(current.key, uri, playback.position) }
             true
         } else {
             withContext(Dispatchers.Main.immediate) { playback.resume() }
         }
     }
 
-    suspend fun seek(positionMs: Long) = playback.seek(positionMs)
+    override suspend fun seek(positionMs: Long) = playback.seek(positionMs)
 
-    fun pause() {
+    override fun pause() {
         rememberPosition()
         playback.pause()
     }
 
     suspend fun accessToken(): String? = auth.accessToken()
 
-    fun setAudioQuality(quality: AudioQuality) {
+    override fun setAudioQuality(quality: AudioQuality) {
         if (quality == _settings.value.audioQuality) return
         _settings.update { it.copy(audioQuality = quality) }
         settingsStore?.write(_settings.value)
         applyAudioSettings()
     }
 
-    fun setNormalization(enabled: Boolean) {
+    override fun setNormalization(enabled: Boolean) {
         if (enabled == _settings.value.normalization) return
         _settings.update { it.copy(normalization = enabled) }
         settingsStore?.write(_settings.value)
         applyAudioSettings()
     }
 
-    fun setGapless(enabled: Boolean) {
+    override fun setGapless(enabled: Boolean) {
         if (enabled == _settings.value.gapless) return
         _settings.update { it.copy(gapless = enabled) }
         settingsStore?.write(_settings.value)
         applyAudioSettings()
     }
 
-    fun setAutoplay(enabled: Boolean) {
+    override fun setAutoplay(enabled: Boolean) {
         _settings.update { it.copy(autoplay = enabled) }
         settingsStore?.write(_settings.value)
     }
@@ -362,7 +383,7 @@ class SpotifySession(
         }
     }
 
-    fun togglePlayback() {
+    override fun togglePlayback() {
         if (playback.isActive) {
             playback.pause()
         } else {
@@ -370,7 +391,7 @@ class SpotifySession(
         }
     }
 
-    fun stopPlayback() {
+    override fun stopPlayback() {
         halting = false
         rememberEpisodeProgress()
         rememberPosition(clear = true)
@@ -386,7 +407,7 @@ class SpotifySession(
         val point = if (clear) {
             null
         } else {
-            playback.current?.let { SpotifyResumePoint(it.id, playback.position.coerceAtLeast(0L)) }
+            playback.current?.let { SpotifyResumePoint(it.key, playback.position.coerceAtLeast(0L)) }
         }
         positionStore?.write(point)
         resumePoint = point
@@ -397,7 +418,7 @@ class SpotifySession(
      * the queue, the history and the selected track are persisted by [queue], so the next launch
      * finds them again. [halting] tells a late "stopped" event not to clear that queue.
      */
-    fun haltPlayback() {
+    override fun haltPlayback() {
         halting = true
         rememberEpisodeProgress()
         val uri = playback.current?.uri
@@ -416,7 +437,7 @@ class SpotifySession(
     }
 
     /** Remembers the player generation currently reporting events and, when present, its track. */
-    fun notePlayRequest(id: Long, uri: String?) {
+    override fun notePlayRequest(id: Long, uri: String?) {
         if (id < 0L) return
         currentPlayRequestId = id
         if (uri != null) currentPlayRequestUri = uri
@@ -426,7 +447,7 @@ class SpotifySession(
      * Consumes the "stopped" event produced by [haltPlayback]. Returns true when the event belongs
      * to that halted player, so the caller can ignore an echo from the generation that was closed.
      */
-    fun consumeHaltStop(uri: String?, playRequestId: Long): Boolean = haltStop.consume(uri, playRequestId, SystemClock.elapsedRealtime())
+    override fun consumeHaltStop(uri: String?, playRequestId: Long): Boolean = haltStop.consume(uri, playRequestId, SystemClock.elapsedRealtime())
 
     /**
      * Advances the queue when the notification/lock screen has no ViewModel to call back into.
@@ -459,29 +480,26 @@ class SpotifySession(
         playback.setNowPlaying(item, 0L)
         val uri = item.uri ?: return
         playbackScope.launch {
-            runCatching { play(uri, 0L) }.onFailure {
+            runCatching { play(item.key, uri, 0L) }.onFailure {
                 playback.pause()
                 playback.updateState(false, 0L)
             }
         }
     }
 
-    /** One librespot player event, or null when nothing has happened since the last poll. */
-    fun pollPlaybackEvent(): String? = if (nativeAvailable) NativeBridge.pollEvent() else null
-
     /** Drops the on-disk audio cache. librespot re-fetches anything it still needs. */
-    fun clearAudioCache() {
+    override fun clearAudioCache() {
         audioCacheDir?.deleteRecursively()
     }
 
     /** Artwork and audio bytes currently held on disk. */
-    fun cacheSizeBytes(): Long {
+    override fun cacheSizeBytes(): Long {
         val artwork = appContext?.let { File(it.cacheDir, "artwork") }
         return listOfNotNull(artwork, audioCacheDir).sumOf { it.sizeBytes() }
     }
 
     /** Sign-out and the Settings action both drop artwork and audio; credentials are separate. */
-    fun clearCaches() {
+    override fun clearCaches() {
         appContext?.let(RemoteArtwork::clear)
         clearAudioCache()
     }
@@ -509,19 +527,5 @@ class SpotifySession(
         override fun read(): io.github.manuelrtsch.sidetrack.auth.SpotifyCredentials? = null
         override fun save(credentials: io.github.manuelrtsch.sidetrack.auth.SpotifyCredentials) = Unit
         override fun clear() = Unit
-    }
-}
-
-/** Lazily creates the one session for the process, matching how Sidekit owns local playback. */
-object SpotifySessions {
-    @Volatile
-    private var instance: SpotifySession? = null
-
-    fun get(context: Context): SpotifySession = instance ?: synchronized(this) {
-        instance ?: SpotifySession(
-            SpotifyAuth(EncryptedSpotifyCredentialStore(context.applicationContext)),
-            context.applicationContext.cacheDir.absolutePath,
-            context.applicationContext
-        ).also { instance = it }
     }
 }

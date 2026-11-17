@@ -51,7 +51,7 @@ class SpotifyQueueRepository(
             snapshot.copy(
                 current = item,
                 upcoming = nextUpcoming,
-                history = if (previous == null || previous.id == item.id) {
+                history = if (previous == null || previous.key == item.key) {
                     snapshot.history
                 } else {
                     (listOf(previous) + snapshot.history).take(HISTORY_LIMIT)
@@ -100,11 +100,11 @@ class SpotifyQueueRepository(
 
     fun clearHistory(): Snapshot = commit(snapshot.copy(history = emptyList()))
 
-    fun removeHistory(item: SpotifyMediaItem): Snapshot = commit(snapshot.copy(history = snapshot.history.filterNot { it.id == item.id }))
+    fun removeHistory(item: SpotifyMediaItem): Snapshot = commit(snapshot.copy(history = snapshot.history.filterNot { it.key == item.key }))
 
     /** Puts a removed history entry back at its old position, unless it is already there again. */
     fun restoreHistory(index: Int, item: SpotifyMediaItem): Snapshot {
-        if (snapshot.history.any { it.id == item.id }) return snapshot
+        if (snapshot.history.any { it.key == item.key }) return snapshot
         val history = snapshot.history.toMutableList()
         history.add(index.coerceIn(0, history.size), item)
         return commit(snapshot.copy(history = history))
@@ -176,9 +176,9 @@ class SpotifyQueueRepository(
      * duplicated; the first match is enough because the queue UI has no id-based Play next.
      */
     fun playNext(item: SpotifyMediaItem): Snapshot {
-        if (item.id == snapshot.current?.id) return snapshot
+        if (item.key == snapshot.current?.key) return snapshot
         val upcoming = snapshot.upcoming.toMutableList()
-        val at = upcoming.indexOfFirst { it.id == item.id }
+        val at = upcoming.indexOfFirst { it.key == item.key }
         if (at >= 0) upcoming.removeAt(at)
         upcoming.add(0, item)
         return commit(snapshot.copy(upcoming = upcoming))

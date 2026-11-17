@@ -76,6 +76,29 @@ class SpotifyHistoryRepositoryTest {
         assertEquals(listOf("c", "b", "a"), history.items().map { it.id })
     }
 
+    @Test fun `removing an unknown item returns null and leaves history alone`() {
+        val history = SpotifyHistoryRepository()
+        history.record(track("a"), 1)
+
+        val removed = history.removeEntry(track("missing"))
+
+        assertEquals(null, removed)
+        assertEquals(listOf("a"), history.items().map { it.id })
+    }
+
+    @Test fun `restoring an item played again does not duplicate it`() {
+        val history = SpotifyHistoryRepository()
+        history.record(track("a"), 1)
+        history.record(track("b"), 2)
+        val removed = history.removeEntry(track("a"))!!
+
+        history.record(track("a"), 3)
+        history.restore(removed)
+
+        assertEquals(listOf("a", "b"), history.items().map { it.id })
+        assertEquals(3, history.snapshot().first().playedAtMs)
+    }
+
     @Test fun `load seeds the repository in order`() {
         val stored = listOf(
             SpotifyHistoryEntry(track("a"), 2),

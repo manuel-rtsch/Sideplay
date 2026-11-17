@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.SpotifyAlbum
@@ -31,7 +32,7 @@ class NativeSpotifyCatalog(
     private val ensureSession: suspend () -> Unit
 ) : SpotifyCatalog,
     SpotifyLibraryWriter {
-    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<Any> {
+    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<LibraryEntry> {
         val text = callText { native.catalogLibrary(filter.name, offset.toLong(), limit.toLong()) }
         // The native catalog answers with `{items, total}` so paging does not have to guess from
         // how many entries survived metadata hydration. A bare array is still accepted.

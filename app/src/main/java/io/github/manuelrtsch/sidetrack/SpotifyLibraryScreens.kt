@@ -421,7 +421,7 @@ fun CollectionScreen(
         onEnsureSavedTrack,
         onAddItemToQueue
     )
-    val savedCollection = "${collection.type.route}:${collection.id}" in saved.savedCollectionKeys
+    val savedCollection = collection.key.encode() in saved.savedCollectionKeys
     val back = remember { spotifyBack("Back", onBack).first() }
     val actions = rowActionBarActions(
         rows.bar,
@@ -570,6 +570,8 @@ fun ArtistScreen(
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onFollow: () -> Unit,
     onRadio: () -> Unit,
+    canFollow: Boolean = true,
+    canRadio: Boolean = true,
     onNowPlaying: () -> Unit,
     onArtwork: () -> Unit,
     onLoadMoreAlbums: () -> Unit,
@@ -580,7 +582,7 @@ fun ArtistScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
-    val followed = artist.id in saved.followedArtistIds
+    val followed = artist.key.encode() in saved.followedArtistIds
     val rows = rememberTrackRows(
         saved,
         onSaveTrack,
@@ -602,10 +604,10 @@ fun ArtistScreen(
         title = artist.name,
         modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
         actions = actions,
-        options = listOf(
-            SideAction("artistRadio", "Artist radio", SidekitIcon.Explore, onClick = onRadio),
-            SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying)
-        )
+        options = buildList {
+            if (canRadio) add(SideAction("artistRadio", "Artist radio", SidekitIcon.Explore, onClick = onRadio))
+            add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        }
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
@@ -629,12 +631,14 @@ fun ArtistScreen(
                         artist.artUrl,
                         onClick = onArtwork
                     )
-                    SpotifyIconTile(
-                        if (followed) SidekitIcon.Artist else SidekitIcon.ArtistBorder,
-                        if (followed) "Following" else "Follow",
-                        onFollow,
-                        tone = if (followed) SpotifyTileTone.Library else SpotifyTileTone.Neutral
-                    )
+                    if (canFollow) {
+                        SpotifyIconTile(
+                            if (followed) SidekitIcon.Artist else SidekitIcon.ArtistBorder,
+                            if (followed) "Following" else "Follow",
+                            onFollow,
+                            tone = if (followed) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                        )
+                    }
                 }
             }
             rowIndex += 1

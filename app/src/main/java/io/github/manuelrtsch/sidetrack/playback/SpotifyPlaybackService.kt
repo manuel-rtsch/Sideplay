@@ -13,10 +13,10 @@ import android.os.IBinder
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import io.github.manuelrtsch.sidetrack.SidetrackActivity
 import io.github.manuelrtsch.sidetrack.SidetrackLinks
-import io.github.manuelrtsch.sidetrack.data.SpotifySessions
+import io.github.manuelrtsch.sidetrack.data.AppSessions
 
 /**
- * Keeps Sidetrack playing when SideKit is not in front. It mirrors [SpotifyPlayback]'s media
+ * Keeps Sidetrack playing when SideKit is not in front. It mirrors [PlaybackController]'s media
  * session in a platform media-style notification and forwards transport actions back to the
  * process-wide player.
  */
@@ -26,7 +26,7 @@ class SpotifyPlaybackService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = this
-        // Only the channel here, and deliberately without resolving SpotifySessions: building the
+        // Only the channel here, and deliberately without resolving AppSessions: building the
         // session constructs the native library, reads the encrypted credential store and touches
         // disk, none of which may sit inside the five second foreground-service deadline.
         val manager = getSystemService(NotificationManager::class.java)
@@ -46,7 +46,7 @@ class SpotifyPlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Promote before anything that can block. The deadline runs from the
-        // startForegroundService() call, so a cold process that spends seconds in SpotifySessions
+        // startForegroundService() call, so a cold process that spends seconds in AppSessions
         // would otherwise die with ForegroundServiceDidNotStartInTimeException — which is exactly
         // how playback used to crash on the first track of a fresh process. Every transport action
         // from the notification starts the service again, so only do this when it is not already
@@ -59,7 +59,7 @@ class SpotifyPlaybackService : Service() {
             )
             foreground = true
         }
-        val session = SpotifySessions.get(this)
+        val session = AppSessions.get(this)
         val playback = session.playback
         when (intent?.action) {
             ACTION_PLAY_PAUSE -> session.togglePlayback()
@@ -78,7 +78,7 @@ class SpotifyPlaybackService : Service() {
      * background is not a close, so the notification keeps playing there.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        SpotifySessions.get(this).haltPlayback()
+        AppSessions.get(this).haltPlayback()
         super.onTaskRemoved(rootIntent)
     }
 
@@ -88,7 +88,7 @@ class SpotifyPlaybackService : Service() {
         super.onDestroy()
     }
 
-    private fun update(playback: SpotifyPlayback) {
+    private fun update(playback: PlaybackController) {
         when {
             playback.current == null -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -128,7 +128,7 @@ class SpotifyPlaybackService : Service() {
         .setVisibility(Notification.VISIBILITY_PUBLIC)
         .build()
 
-    private fun notification(playback: SpotifyPlayback, playing: Boolean): Notification {
+    private fun notification(playback: PlaybackController, playing: Boolean): Notification {
         val timer = playback.sleepTimer.value
         val timerSuffix = timer.notificationSuffix()
         val creator = playback.current?.creator.orEmpty()
@@ -202,7 +202,7 @@ class SpotifyPlaybackService : Service() {
     companion object {
         /**
          * Channel and id live here so the placeholder can be posted without a player, and
-         * [SpotifyPlayback] reads them from here so the two cannot drift apart.
+         * [PlaybackController] reads them from here so the two cannot drift apart.
          */
         const val CHANNEL_ID = "sidetrack"
         const val CHANNEL_NAME = "Sidetrack playback"
@@ -216,12 +216,12 @@ class SpotifyPlaybackService : Service() {
         private var running: SpotifyPlaybackService? = null
 
         /** Rebuilds the notification for a state-only change, such as a sleep-timer minute tick. */
-        fun refresh(context: Context, playback: SpotifyPlayback) {
+        fun refresh(context: Context, playback: PlaybackController) {
             running?.update(playback)
         }
 
         /** Brings the service in line with the player. Main thread only, like the player. */
-        fun sync(context: Context, playback: SpotifyPlayback) {
+        fun sync(context: Context, playback: PlaybackController) {
             val service = running
             if (service != null) {
                 service.update(playback)

@@ -25,7 +25,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
-import io.github.manuelrtsch.sidetrack.data.SpotifySessions
+import io.github.manuelrtsch.sidetrack.data.AppSessions
 import kotlinx.coroutines.flow.MutableStateFlow
 
 const val SIDE_PLAY_ROOT = "sidetrack"
@@ -39,16 +39,17 @@ private const val ONBOARDING = SIDE_PLAY_ONBOARDING
 private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
 private val LIBRARY_FILTER = "$ROOT/library/{filter}"
-private val COLLECTION = "$ROOT/collection/{type}/{id}"
-private val ARTIST = "$ROOT/artist/{id}"
+private val COLLECTION = "$ROOT/collection/{key}"
+private val ARTIST = "$ROOT/artist/{key}"
 private val SEARCH = SIDE_PLAY_SEARCH
 private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
 private val QUEUE = "$ROOT/queue"
 private val RADIO = "$ROOT/song-radio"
-private val ARTIST_RADIO = "$ROOT/artist-radio/{id}"
+private val ARTIST_RADIO = "$ROOT/artist-radio/{key}"
 private val SLEEP_TIMER = "$ROOT/sleep-timer"
 private val SETTINGS = "$ROOT/settings"
+private val SERVICE_PICKER = "$ROOT/service"
 private val AUDIO_QUALITY = "$ROOT/audio-quality"
 private val SIGN_IN = SIDE_PLAY_SIGN_IN
 private val APPEARANCE = "$ROOT/appearance"
@@ -58,9 +59,10 @@ private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={rat
 private val NOTES = "$ROOT/notes/{key}"
 
 private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
-private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/${Uri.encode(id)}"
-private fun artistRoute(id: String) = "$ROOT/artist/${Uri.encode(id)}"
-private fun artistRadioRoute(id: String) = "$ROOT/artist-radio/${Uri.encode(id)}"
+private fun collectionRoute(key: MediaKey) = "$ROOT/collection/${Uri.encode(key.encode())}"
+private fun artistRoute(key: MediaKey) = "$ROOT/artist/${Uri.encode(key.encode())}"
+private fun artistRadioRoute(key: MediaKey) = "$ROOT/artist-radio/${Uri.encode(key.encode())}"
+private fun MediaKey.with(type: MediaType, id: String) = MediaKey(service, type, id)
 private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f) = "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.orEmpty())}&label=${Uri.encode(label)}&ratio=$ratio"
 private fun notesRoute(key: String) = "$ROOT/notes/${Uri.encode(key)}"
 
@@ -132,11 +134,15 @@ object SidetrackLinks {
     }
 }
 
-private val collectionArgs = listOf(
-    navArgument("type") { type = NavType.StringType },
-    navArgument("id") { type = NavType.StringType }
-)
-private val artistArgs = listOf(navArgument("id") { type = NavType.StringType })
+private val collectionArgs = listOf(navArgument("key") { type = NavType.StringType })
+private val artistArgs = listOf(navArgument("key") { type = NavType.StringType })
+
+private fun MediaType.toCollectionType(): SpotifyCollectionType? = when (this) {
+    MediaType.Album -> SpotifyCollectionType.Album
+    MediaType.Playlist -> SpotifyCollectionType.Playlist
+    MediaType.Show -> SpotifyCollectionType.Show
+    else -> null
+}
 private val notesArgs = listOf(
     navArgument("key") {
         type = NavType.StringType
@@ -246,10 +252,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onSeeMore = { nav.navigate(libraryFilterRoute(it)) },
                 onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onAddToQueue = vm::addToQueue,
-                onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
-                onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
-                onArtist = { nav.navigate(artistRoute(it.id)) },
-                onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onPlaylist = { nav.navigate(collectionRoute(it.key)) },
+                onAlbum = { nav.navigate(collectionRoute(it.key)) },
+                onArtist = { nav.navigate(artistRoute(it.key)) },
+                onShow = { nav.navigate(collectionRoute(it.key)) },
                 onSaveTrack = { vm.toggleSaved(it) },
                 onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onNowPlaying = { nav.openNowPlaying(vm) },
@@ -277,10 +283,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onBack = { nav.popBackStack() },
                 onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onAddToQueue = vm::addToQueue,
-                onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
-                onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
-                onArtist = { nav.navigate(artistRoute(it.id)) },
-                onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onPlaylist = { nav.navigate(collectionRoute(it.key)) },
+                onAlbum = { nav.navigate(collectionRoute(it.key)) },
+                onArtist = { nav.navigate(artistRoute(it.key)) },
+                onShow = { nav.navigate(collectionRoute(it.key)) },
                 onSaveTrack = { vm.toggleSaved(it) },
                 onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onLoadMore = vm::loadMoreLibrary,
@@ -297,12 +303,13 @@ fun NavGraphBuilder.sidetrackGraph(
             val playback by vm.playbackState.collectAsStateWithLifecycle()
             val chrome by vm.chromeState.collectAsStateWithLifecycle()
             val episodeProgress by vm.episodeProgress.collectAsStateWithLifecycle()
-            val type = SpotifyCollectionType.entries.firstOrNull { it.route == entry.arguments?.getString("type") }
-            val id = entry.arguments?.getString("id").orEmpty()
-            LaunchedEffect(type, id) { type?.let { vm.ensureCollection(it, id) } }
-            val collection = type?.let { vm.collection(it, id) }
+            val mediaKey = MediaKey.decode(entry.arguments?.getString("key").orEmpty())
+            val type = mediaKey?.type?.toCollectionType()
+            val id = mediaKey?.id.orEmpty()
+            LaunchedEffect(mediaKey) { mediaKey?.let { vm.ensureCollection(it) } }
+            val collection = mediaKey?.let { vm.collection(it) }
             if (collection == null) {
-                val key = type?.let { "${it.route}:$id" }
+                val key = mediaKey?.encode()
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
                     loading = key != null && key in library.pendingCollections,
@@ -320,7 +327,7 @@ fun NavGraphBuilder.sidetrackGraph(
                         null -> "Couldn't load this collection"
                     },
                     missingTitle = "This collection isn't available",
-                    onRetry = { if (type != null) vm.retryCollection(type, id) }
+                    onRetry = { mediaKey?.let { vm.retryCollection(it) } }
                 )
             } else if (collection.type == SpotifyCollectionType.Show) {
                 ShowScreen(
@@ -345,8 +352,8 @@ fun NavGraphBuilder.sidetrackGraph(
                     onArtwork = {
                         nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
                     },
-                    onLoadMore = { type?.let { vm.loadMoreCollection(it, id) } },
-                    loadingMore = "${type?.route}:$id" in library.collectionMorePending,
+                    onLoadMore = { mediaKey?.let { vm.loadMoreCollection(it) } },
+                    loadingMore = mediaKey?.encode() in library.collectionMorePending,
                     onShowNotes = {
                         nav.navigate(
                             notesRoute(
@@ -388,7 +395,7 @@ fun NavGraphBuilder.sidetrackGraph(
                     },
                     onSave = { vm.toggleSaved(collection) },
                     onArtist = {
-                        collection.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
+                        collection.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(collection.key.with(MediaType.Artist, it))) }
                             ?: vm.notice("This collection has no artist page")
                     },
                     onAddToQueue = { vm.queueCollection(collection) },
@@ -399,8 +406,8 @@ fun NavGraphBuilder.sidetrackGraph(
                     onArtwork = {
                         nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
                     },
-                    onLoadMore = { type?.let { vm.loadMoreCollection(it, id) } },
-                    loadingMore = "${type?.route}:$id" in library.collectionMorePending,
+                    onLoadMore = { mediaKey?.let { vm.loadMoreCollection(it) } },
+                    loadingMore = mediaKey?.encode() in library.collectionMorePending,
                     onDismissNotice = vm::dismissNotice,
                     onDismissNowPlaying = vm::dismissNowPlayingNotice
                 )
@@ -412,9 +419,10 @@ fun NavGraphBuilder.sidetrackGraph(
             val saved by vm.savedState.collectAsStateWithLifecycle()
             val playback by vm.playbackState.collectAsStateWithLifecycle()
             val chrome by vm.chromeState.collectAsStateWithLifecycle()
-            val artistId = entry.arguments?.getString("id").orEmpty()
-            LaunchedEffect(artistId) { vm.ensureArtist(artistId) }
-            val artist = vm.artist(artistId)
+            val artistKey = MediaKey.decode(entry.arguments?.getString("key").orEmpty())
+            val artistId = artistKey?.id.orEmpty()
+            LaunchedEffect(artistKey) { artistKey?.let { vm.ensureArtist(it.id) } }
+            val artist = artistKey?.let { vm.artist(it.id) }
             if (artist == null) {
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
@@ -440,11 +448,13 @@ fun NavGraphBuilder.sidetrackGraph(
                     onPlayPause = vm::togglePlayPause,
                     onTrack = { track -> nav.openTrack(vm, track) { vm.play(tracks, tracks.indexOf(track)) } },
                     onAddToQueue = vm::addToQueue,
-                    onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
+                    onAlbum = { nav.navigate(collectionRoute(it.key)) },
                     onSaveTrack = { vm.toggleSaved(it) },
                     onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                     onFollow = { vm.toggleFollow(artist) },
-                    onRadio = { nav.navigate(artistRadioRoute(artist.id)) },
+                    onRadio = { nav.navigate(artistRadioRoute(artist.key)) },
+                    canFollow = vm.capabilities.supportsFollowArtist,
+                    canRadio = vm.capabilities.supportsRadio,
                     onNowPlaying = { nav.openNowPlaying(vm) },
                     onArtwork = {
                         nav.navigate(artworkRoute(artist.artRes, artist.artUrl, artist.name))
@@ -474,10 +484,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onToggleScope = vm::toggleScope,
                 onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onAddToQueue = vm::addToQueue,
-                onArtist = { nav.navigate(artistRoute(it.id)) },
-                onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
-                onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
-                onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
+                onArtist = { nav.navigate(artistRoute(it.key)) },
+                onAlbum = { nav.navigate(collectionRoute(it.key)) },
+                onPlaylist = { nav.navigate(collectionRoute(it.key)) },
+                onShow = { nav.navigate(collectionRoute(it.key)) },
                 onSaveTrack = { vm.toggleSaved(it) },
                 onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
                 onLoadMore = vm::loadMoreSearch,
@@ -550,16 +560,16 @@ fun NavGraphBuilder.sidetrackGraph(
                 onRadio = { nav.navigate(RADIO) },
                 onAlbum = {
                     (playback.current as? SpotifyTrack)?.albumId?.spotifyIdOrNull()?.let { id ->
-                        nav.navigate(collectionRoute(SpotifyCollectionType.Album, id))
+                        nav.navigate(collectionRoute(playback.current!!.key.with(MediaType.Album, id)))
                     }
                 },
                 onShow = {
                     (playback.current as? SpotifyEpisode)?.showId?.spotifyIdOrNull()?.let { id ->
-                        nav.navigate(collectionRoute(SpotifyCollectionType.Show, id))
+                        nav.navigate(collectionRoute(playback.current!!.key.with(MediaType.Show, id)))
                     }
                 },
                 onArtist = {
-                    playback.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
+                    playback.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(playback.current!!.key.with(MediaType.Artist, it))) }
                 },
                 onSleepTimer = { nav.navigate(SLEEP_TIMER) },
                 onEpisodeNotes = {
@@ -651,9 +661,10 @@ fun NavGraphBuilder.sidetrackGraph(
             val saved by vm.savedState.collectAsStateWithLifecycle()
             val playback by vm.playbackState.collectAsStateWithLifecycle()
             val chrome by vm.chromeState.collectAsStateWithLifecycle()
-            val artistId = entry.arguments?.getString("id").orEmpty()
-            LaunchedEffect(artistId) { vm.ensureArtist(artistId) }
-            val artist = vm.artist(artistId)
+            val artistKey = MediaKey.decode(entry.arguments?.getString("key").orEmpty())
+            val artistId = artistKey?.id.orEmpty()
+            LaunchedEffect(artistKey) { artistKey?.let { vm.ensureArtist(it.id) } }
+            val artist = artistKey?.let { vm.artist(it.id) }
             if (artist == null) {
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
@@ -738,11 +749,17 @@ fun NavGraphBuilder.sidetrackGraph(
             val chrome by vm.chromeState.collectAsStateWithLifecycle()
             val playback by vm.playbackState.collectAsStateWithLifecycle()
             val context = LocalContext.current
+            val appSession = remember(context) { AppSessions.get(context) }
+            val activeService by appSession.registry.active.collectAsStateWithLifecycle()
+            val activeProvider = appSession.availableServices.firstOrNull { it.id == activeService }
             LaunchedEffect(Unit) { vm.refreshCacheSize() }
             SpotifySettingsScreen(
                 account,
                 chrome,
                 playback.recent.size,
+                serviceName = activeProvider?.displayName ?: "Spotify",
+                capabilities = vm.capabilities,
+                onService = { nav.navigate(SERVICE_PICKER) },
                 onBack = { nav.popBackStack() },
                 onAudioQuality = { nav.navigate(AUDIO_QUALITY) },
                 onNormalization = vm::toggleNormalization,
@@ -761,6 +778,20 @@ fun NavGraphBuilder.sidetrackGraph(
                 onAppearance = if (hostBacked) null else ({ nav.navigate(APPEARANCE) }),
                 onKeyboard = if (hostBacked) null else ({ nav.navigate(KEYBOARD) }),
                 onAbout = { nav.navigate(ABOUT) }
+            )
+        }
+        composable(SERVICE_PICKER) {
+            val context = LocalContext.current
+            val appSession = remember(context) { AppSessions.get(context) }
+            val activeService by appSession.registry.active.collectAsStateWithLifecycle()
+            ServicePickerScreen(
+                services = appSession.availableServices,
+                active = activeService,
+                onBack = { nav.popBackStack() },
+                onSelect = { id ->
+                    appSession.switchService(id)
+                    nav.popBackStack()
+                }
             )
         }
         composable(AUDIO_QUALITY) { entry ->
@@ -877,7 +908,10 @@ private fun MissingCollectionScreen(
 private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyViewModel {
     val parent = remember(this) { nav.getBackStackEntry(ROOT) }
     val context = LocalContext.current.applicationContext
-    val session = remember(context) { SpotifySessions.get(context) }
+    val appSession = remember(context) { AppSessions.get(context) }
+    // Observe the active service so switching it recreates the ViewModel for the new runtime.
+    appSession.registry.active.collectAsStateWithLifecycle()
+    val runtime = appSession.runtime
     val openBrowser: suspend (String) -> Unit = remember(context) {
         { url ->
             context.startActivity(
@@ -887,17 +921,18 @@ private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyV
     }
     val vm = viewModel<SpotifyViewModel>(
         parent,
-        factory = remember(session, openBrowser, context) {
+        key = "sidetrack-${runtime.service.value}",
+        factory = remember(runtime, openBrowser, context) {
             viewModelFactory {
                 initializer {
                     SpotifyViewModel(
-                        catalog = session.catalog,
-                        writer = session.writer,
-                        queue = session.queue,
-                        history = session.history,
-                        episodeProgressRepository = session.episodeProgress,
-                        episodeMetaRepository = session.episodeMeta,
-                        session = session,
+                        catalog = runtime.catalog,
+                        writer = runtime.writer,
+                        queue = runtime.queue,
+                        history = runtime.history,
+                        episodeProgressRepository = runtime.episodeProgress,
+                        episodeMetaRepository = runtime.episodeMeta,
+                        session = runtime,
                         openBrowser = openBrowser,
                         clearArtworkCache = { RemoteArtwork.clear(context) }
                     )

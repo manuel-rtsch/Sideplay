@@ -13,17 +13,22 @@ import androidx.annotation.DrawableRes
 internal fun String?.spotifyIdOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
 
 /** A saved album, playlist or show. Collections share one screen, so they share one shape. */
-enum class SpotifyCollectionType(val route: String) {
-    Album("album"),
-    Playlist("playlist"),
-    Show("show")
+enum class CollectionType(val route: String, val mediaType: MediaType) {
+    Album("album", MediaType.Album),
+    Playlist("playlist", MediaType.Playlist),
+    Show("show", MediaType.Show)
 }
 
 /**
- * Everything that can be played. Albums and playlists hold [TrackItem]s, shows hold
- * [EpisodeItem]s; the queue and Now Playing never need to know which screen it came from.
+ * Everything that can be played. Albums and playlists hold [Track]s, shows hold [Episode]s; the
+ * queue and Now Playing never need to know which screen it came from.
+ *
+ * [key] is the identity. [id] and [uri] are service details kept for the Spotify adapter and the
+ * existing UI; new code should compare and persist [key].
  */
-sealed interface SpotifyMediaItem {
+sealed interface MediaItem : LibraryEntry {
+    override val key: MediaKey
+    val service: ServiceId
     val id: String
     val title: String
     val creator: String
@@ -40,7 +45,7 @@ sealed interface SpotifyMediaItem {
     val artUrl: String? get() = null
 }
 
-data class SpotifyTrack(
+data class Track(
     override val id: String,
     override val title: String,
     val artist: String,
@@ -51,12 +56,14 @@ data class SpotifyTrack(
     override val explicit: Boolean = false,
     override val playable: Boolean = true,
     override val uri: String? = null,
-    override val artUrl: String? = null
-) : SpotifyMediaItem {
+    override val artUrl: String? = null,
+    override val service: ServiceId = ServiceId.Spotify
+) : MediaItem {
     override val creator: String get() = artist
+    override val key: MediaKey get() = MediaKey(service, MediaType.Track, id)
 }
 
-data class SpotifyEpisode(
+data class Episode(
     override val id: String,
     override val title: String,
     val show: String,
@@ -71,67 +78,81 @@ data class SpotifyEpisode(
     val description: String = "",
     /** Spotify's publishing number, when the native metadata carries one. */
     val episodeNumber: Int? = null,
-    override val explicit: Boolean = false
-) : SpotifyMediaItem {
+    override val explicit: Boolean = false,
+    override val service: ServiceId = ServiceId.Spotify
+) : MediaItem {
     override val creator: String get() = show
     override val artistId: String? get() = null
     override val playable: Boolean get() = !video
+    override val key: MediaKey get() = MediaKey(service, MediaType.Episode, id)
 }
 
-data class SpotifyAlbum(
+data class Album(
     val id: String,
     val title: String,
     val artist: String,
     val artistId: String,
     val year: Int,
     @param:DrawableRes val artRes: Int,
-    val tracks: List<SpotifyTrack>,
+    val tracks: List<Track>,
     val artUrl: String? = null,
-    val trackCount: Int = tracks.size
-)
+    val trackCount: Int = tracks.size,
+    val service: ServiceId = ServiceId.Spotify
+) : LibraryEntry {
+    override val key: MediaKey get() = MediaKey(service, MediaType.Album, id)
+}
 
-data class SpotifyPlaylist(
+data class Playlist(
     val id: String,
     val name: String,
     val owner: String,
     val ownerId: String?,
     @param:DrawableRes val artRes: Int,
-    val tracks: List<SpotifyTrack>,
+    val tracks: List<Track>,
     val artUrl: String? = null,
     val trackCount: Int = tracks.size,
     /** Whether the signed-in user may add or remove items. The add-to-playlist picker filters on it. */
     val editable: Boolean = false,
-    val folder: String? = null
-)
+    val folder: String? = null,
+    val service: ServiceId = ServiceId.Spotify
+) : LibraryEntry {
+    override val key: MediaKey get() = MediaKey(service, MediaType.Playlist, id)
+}
 
-data class SpotifyShow(
+data class Show(
     val id: String,
     val name: String,
     val publisher: String,
     @param:DrawableRes val artRes: Int,
-    val episodes: List<SpotifyEpisode>,
+    val episodes: List<Episode>,
     val artUrl: String? = null,
     val episodeCount: Int = episodes.size,
-    val description: String = ""
-)
+    val description: String = "",
+    val service: ServiceId = ServiceId.Spotify
+) : LibraryEntry {
+    override val key: MediaKey get() = MediaKey(service, MediaType.Show, id)
+}
 
-data class SpotifyArtist(
+data class Artist(
     val id: String,
     val name: String,
     @param:DrawableRes val artRes: Int,
     val albumIds: List<String>,
     val artUrl: String? = null,
-    val albumCount: Int = albumIds.size
-)
+    val albumCount: Int = albumIds.size,
+    val service: ServiceId = ServiceId.Spotify
+) : LibraryEntry {
+    override val key: MediaKey get() = MediaKey(service, MediaType.Artist, id)
+}
 
 /** One screen's worth of a collection, already resolved by the gateway. */
-data class SpotifyCollection(
-    val type: SpotifyCollectionType,
+data class Collection(
+    val type: CollectionType,
     val id: String,
     val title: String,
     val subtitle: String,
     val artRes: Int,
-    val items: List<SpotifyMediaItem>,
+    val items: List<MediaItem>,
     val artistId: String? = null,
     val artUrl: String? = null,
     val totalItems: Int = items.size,
@@ -139,15 +160,19 @@ data class SpotifyCollection(
     /** False for generated pages (a station without a backing playlist) that cannot be saved. */
     val saveable: Boolean = true,
     /** Show notes for a podcast collection; the other collection kinds do not have any. */
-    val description: String = ""
-)
+    val description: String = "",
+    val service: ServiceId = ServiceId.Spotify
+) {
+    val key: MediaKey get() = MediaKey(service, type.mediaType, id)
+    val kind: MediaType get() = type.mediaType
+}
 
 /**
  * A radio station: its resolved tracks and, when the transport can report it, the playlist that
  * backs the station. Saving that playlist is how a station becomes a library playlist.
  */
-data class SpotifyStation(
-    val tracks: List<SpotifyTrack>,
+data class Station(
+    val tracks: List<Track>,
     val playlistId: String? = null
 )
 
@@ -163,13 +188,13 @@ const val RECENT_PREVIEW_SIZE = 5
 const val SPOTIFY_ARTIST_PAGE_SIZE = 5
 
 /** One page of a catalog list. [total] is null when the endpoint doesn't report it. */
-data class SpotifyPage<T>(
+data class Page<T>(
     val items: List<T> = emptyList(),
     val total: Int? = null,
     val hasMore: Boolean = false
 ) {
     companion object {
-        fun <T> of(items: List<T>, offset: Int, limit: Int, total: Int? = null): SpotifyPage<T> = SpotifyPage(
+        fun <T> of(items: List<T>, offset: Int, limit: Int, total: Int? = null): Page<T> = Page(
             items = items,
             total = total,
             hasMore = if (total != null) offset + items.size < total else items.size >= limit
@@ -177,12 +202,12 @@ data class SpotifyPage<T>(
     }
 }
 
-data class SpotifySearchResults(
-    val tracks: List<SpotifyTrack> = emptyList(),
-    val artists: List<SpotifyArtist> = emptyList(),
-    val albums: List<SpotifyAlbum> = emptyList(),
-    val playlists: List<SpotifyPlaylist> = emptyList(),
-    val shows: List<SpotifyShow> = emptyList()
+data class SearchResults(
+    val tracks: List<Track> = emptyList(),
+    val artists: List<Artist> = emptyList(),
+    val albums: List<Album> = emptyList(),
+    val playlists: List<Playlist> = emptyList(),
+    val shows: List<Show> = emptyList()
 ) {
     val isEmpty: Boolean get() = tracks.isEmpty() && artists.isEmpty() && albums.isEmpty() && playlists.isEmpty() && shows.isEmpty()
 }
@@ -225,13 +250,13 @@ enum class AudioQuality(val label: String, val bitrateKbps: Int) {
     fun next(): AudioQuality = entries[(ordinal + 1) % entries.size]
 }
 
-data class SpotifyQueueItem(
-    val item: SpotifyMediaItem,
+data class QueueItem(
+    val item: MediaItem,
     val isCurrent: Boolean = false
 )
 
 /** Playlist subtitle, prefixed with its library folder when the rootlist places it in one. */
-fun playlistSubtitle(item: SpotifyPlaylist): String = buildString {
+fun playlistSubtitle(item: Playlist): String = buildString {
     item.folder?.takeIf { it.isNotBlank() }?.let { append(it).append(" · ") }
     append(item.owner).append(" · ").append(item.trackCount).append(" tracks")
 }
@@ -244,3 +269,22 @@ fun formatPublishedDate(value: String): String {
         java.time.LocalDate.parse(date).format(java.time.format.DateTimeFormatter.ofPattern("d MMM uuuu"))
     }.getOrDefault(value)
 }
+
+// ---------------------------------------------------------------------------------------------
+// Migration bridge. The Spotify adapter and the existing UI still use these names; new code
+// should use the neutral types above. Remove the aliases once the rename is complete.
+// ---------------------------------------------------------------------------------------------
+
+typealias SpotifyMediaItem = MediaItem
+typealias SpotifyTrack = Track
+typealias SpotifyEpisode = Episode
+typealias SpotifyAlbum = Album
+typealias SpotifyPlaylist = Playlist
+typealias SpotifyShow = Show
+typealias SpotifyArtist = Artist
+typealias SpotifyCollection = Collection
+typealias SpotifyCollectionType = CollectionType
+typealias SpotifyStation = Station
+typealias SpotifyPage<T> = Page<T>
+typealias SpotifySearchResults = SearchResults
+typealias SpotifyQueueItem = QueueItem

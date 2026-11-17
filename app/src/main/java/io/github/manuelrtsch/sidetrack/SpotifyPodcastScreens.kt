@@ -74,7 +74,7 @@ fun ShowScreen(
     onDismissNowPlaying: () -> Unit
 ) {
     val colors = SidekitTheme.colors
-    val savedCollection = "${SpotifyCollectionType.Show.route}:${collection.id}" in saved.savedCollectionKeys
+    val savedCollection = collection.key.encode() in saved.savedCollectionKeys
     val back = remember { spotifyBack("Back", onBack).first() }
     val rowActions = rememberRowActionBarState()
     val actions = rowActionBarActions(

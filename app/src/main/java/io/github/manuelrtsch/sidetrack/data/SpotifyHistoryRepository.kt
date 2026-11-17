@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.MediaKey
 import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 
 /** A played item and when it last started. Timestamps are local and never uploaded. */
@@ -25,9 +26,9 @@ class SpotifyHistoryRepository(
     init {
         // Older builds could persist the same item more than once. Home renders this list with
         // the item id as its LazyColumn key, so a duplicate would crash the draw pass.
-        val seen = HashSet<String>()
+        val seen = HashSet<MediaKey>()
         load().asSequence()
-            .filter { seen.add(it.item.id) }
+            .filter { seen.add(it.item.key) }
             .take(limit)
             .forEach(entries::addLast)
     }
@@ -38,7 +39,7 @@ class SpotifyHistoryRepository(
 
     /** Marks [item] as most recently played and persists the new bounded list. */
     fun record(item: SpotifyMediaItem, playedAtMs: Long): List<SpotifyHistoryEntry> {
-        entries.removeAll { it.item.id == item.id }
+        entries.removeAll { it.item.key == item.key }
         entries.addFirst(SpotifyHistoryEntry(item, playedAtMs))
         while (entries.size > limit) entries.removeLast()
         save(entries.toList())
@@ -47,7 +48,7 @@ class SpotifyHistoryRepository(
 
     /** Removes one entry and returns it with its position, so the caller can offer Undo. */
     fun removeEntry(item: SpotifyMediaItem): Removed? {
-        val index = entries.indexOfFirst { it.item.id == item.id }
+        val index = entries.indexOfFirst { it.item.key == item.key }
         if (index < 0) return null
         val entry = entries.removeAt(index)
         save(entries.toList())
@@ -61,7 +62,7 @@ class SpotifyHistoryRepository(
 
     /** Puts a removed entry back where it was, unless it has already been played again. */
     fun restore(removed: Removed): List<SpotifyHistoryEntry> {
-        if (entries.any { it.item.id == removed.entry.item.id }) return snapshot()
+        if (entries.any { it.item.key == removed.entry.item.key }) return snapshot()
         entries.add(removed.index.coerceIn(0, entries.size), removed.entry)
         save(entries.toList())
         return snapshot()
@@ -83,8 +84,8 @@ class SpotifyHistoryRepository(
      */
     fun restoreAll(removed: List<SpotifyHistoryEntry>): List<SpotifyHistoryEntry> {
         if (removed.isEmpty()) return snapshot()
-        val present = entries.map { it.item.id }.toSet()
-        entries.addAll(removed.filterNot { it.item.id in present })
+        val present = entries.map { it.item.key }.toSet()
+        entries.addAll(removed.filterNot { it.item.key in present })
         save(entries.toList())
         return snapshot()
     }

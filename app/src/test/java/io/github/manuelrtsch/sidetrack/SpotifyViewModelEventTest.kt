@@ -3,7 +3,11 @@ package io.github.manuelrtsch.sidetrack
 import androidx.lifecycle.viewModelScope
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgressRepository
+import io.github.manuelrtsch.sidetrack.data.SpotifyMediaCatalog
+import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
+import io.github.manuelrtsch.sidetrack.data.SpotifyResumePoint
 import io.github.manuelrtsch.sidetrack.data.SpotifySession
+import io.github.manuelrtsch.sidetrack.playback.PlaybackEvent
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,7 +47,7 @@ class SpotifyViewModelEventTest {
         vm.playItem(track)
         assertTrue(vm.state.value.current != null)
 
-        vm.handlePlaybackEvent("""{"type":"stopped"}""")
+        vm.handlePlaybackEvent(event("""{"type":"stopped"}"""))
 
         assertNull(vm.state.value.current)
         assertTrue(vm.state.value.upcoming.isEmpty())
@@ -55,7 +59,7 @@ class SpotifyViewModelEventTest {
         val track = MockSpotifyDataSource.recentlyPlayed.first()
         vm.playItem(track)
 
-        vm.handlePlaybackEvent("""{"type":"unavailable"}""")
+        vm.handlePlaybackEvent(event("""{"type":"unavailable"}"""))
 
         assertFalse(vm.state.value.isPlaying)
         assertEquals("This track isn't available", vm.state.value.notice)
@@ -65,7 +69,7 @@ class SpotifyViewModelEventTest {
         val progress = SpotifyEpisodeProgressRepository(now = { 1_000L })
         progress.record("lw5", 1_200_000L, 2_529_000L)
         val vm = SpotifyViewModel(
-            MockSpotifyDataSource,
+            SpotifyMediaCatalog(MockSpotifyDataSource),
             episodeProgressRepository = progress,
             simulatePlayback = false
         ).also { viewModels += it }
@@ -79,7 +83,7 @@ class SpotifyViewModelEventTest {
     @Test fun `seeking an episode saves the new local offset`() = runTest(dispatcher) {
         val progress = SpotifyEpisodeProgressRepository(now = { 1_000L })
         val vm = SpotifyViewModel(
-            MockSpotifyDataSource,
+            SpotifyMediaCatalog(MockSpotifyDataSource),
             episodeProgressRepository = progress,
             simulatePlayback = false
         ).also { viewModels += it }
@@ -94,8 +98,8 @@ class SpotifyViewModelEventTest {
     @Test fun `shuffle and repeat events are adopted from the native player`() = runTest(dispatcher) {
         val vm = viewModel()
 
-        vm.handlePlaybackEvent("""{"type":"shuffle","shuffle":true}""")
-        vm.handlePlaybackEvent("""{"type":"repeat","track":true}""")
+        vm.handlePlaybackEvent(event("""{"type":"shuffle","shuffle":true}"""))
+        vm.handlePlaybackEvent(event("""{"type":"repeat","track":true}"""))
 
         assertTrue(vm.state.value.shuffle)
         assertEquals(RepeatMode.Track, vm.state.value.repeat)
@@ -106,7 +110,7 @@ class SpotifyViewModelEventTest {
         val items = MockSpotifyDataSource.recentlyPlayed.take(2)
         vm.play(items, 0)
 
-        vm.handlePlaybackEvent("""{"type":"ended"}""")
+        vm.handlePlaybackEvent(event("""{"type":"ended"}"""))
 
         assertEquals(items[1].id, vm.state.value.current?.id)
     }
@@ -114,7 +118,7 @@ class SpotifyViewModelEventTest {
     @Test fun `end of track timer stops before advancing`() = runTest(dispatcher) {
         val session = SpotifySession()
         val vm = SpotifyViewModel(
-            MockSpotifyDataSource,
+            SpotifyMediaCatalog(MockSpotifyDataSource),
             session = session,
             simulatePlayback = false
         ).also { viewModels += it }
@@ -122,7 +126,7 @@ class SpotifyViewModelEventTest {
         vm.play(items, 0)
         vm.setSleepTimerEndOfTrack()
 
-        vm.handlePlaybackEvent("""{"type":"ended"}""")
+        vm.handlePlaybackEvent(event("""{"type":"ended"}"""))
 
         assertEquals(items[0].id, vm.state.value.current?.id)
         assertFalse(vm.state.value.isPlaying)
@@ -189,7 +193,7 @@ class SpotifyViewModelEventTest {
         // list would autoplay backwards through the archive. Lining up more is Add to queue.
         assertTrue(vm.state.value.upcoming.isEmpty())
 
-        vm.handlePlaybackEvent("""{"type":"ended"}""")
+        vm.handlePlaybackEvent(event("""{"type":"ended"}"""))
 
         // Autoplay only extends a track's queue, so nothing else is pulled in behind an episode.
         assertEquals(episode.id, vm.state.value.current?.id)
@@ -204,7 +208,7 @@ class SpotifyViewModelEventTest {
         vm.cycleRepeat()
         assertEquals(RepeatMode.Context, vm.state.value.repeat)
 
-        vm.handlePlaybackEvent("""{"type":"ended"}""")
+        vm.handlePlaybackEvent(event("""{"type":"ended"}"""))
 
         // Episodes have no repeat control, so the leftover mode must not replay it forever.
         assertFalse(vm.state.value.isPlaying)
@@ -217,7 +221,7 @@ class SpotifyViewModelEventTest {
         vm.playItem(track)
         vm.seekTo(120_000L)
 
-        vm.handlePlaybackEvent("""{"type":"loading","uri":"spotify:track:seek1","positionMs":10000}""")
+        vm.handlePlaybackEvent(event("""{"type":"loading","uri":"spotify:track:seek1","positionMs":10000}"""))
 
         assertEquals(120_000L, vm.playbackPositionMs.value)
         assertEquals(track.id, vm.state.value.current?.id)
@@ -229,7 +233,7 @@ class SpotifyViewModelEventTest {
         vm.playItem(track)
         vm.seekTo(120_000L)
 
-        vm.handlePlaybackEvent("""{"type":"seeked","positionMs":120000}""")
+        vm.handlePlaybackEvent(event("""{"type":"seeked","positionMs":120000}"""))
 
         assertEquals(120_000L, vm.playbackPositionMs.value)
     }
@@ -240,7 +244,7 @@ class SpotifyViewModelEventTest {
         vm.playItem(track)
         vm.seekTo(120_000L)
 
-        vm.handlePlaybackEvent("""{"type":"position","positionMs":121500}""")
+        vm.handlePlaybackEvent(event("""{"type":"position","positionMs":121500}"""))
 
         assertEquals(120_000L, vm.playbackPositionMs.value)
     }
@@ -251,7 +255,7 @@ class SpotifyViewModelEventTest {
         vm.playItem(track)
         vm.seekTo(120_000L)
 
-        vm.handlePlaybackEvent("""{"type":"position","positionMs":10000}""")
+        vm.handlePlaybackEvent(event("""{"type":"position","positionMs":10000}"""))
 
         assertEquals(120_000L, vm.playbackPositionMs.value)
     }
@@ -261,10 +265,173 @@ class SpotifyViewModelEventTest {
         val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:ns1")
         vm.playItem(track)
 
-        vm.handlePlaybackEvent("""{"type":"stopped","uri":"spotify:track:someone-else"}""")
+        vm.handlePlaybackEvent(event("""{"type":"stopped","uri":"spotify:track:someone-else"}"""))
 
         assertEquals(track.id, vm.state.value.current?.id)
     }
 
-    private fun viewModel() = SpotifyViewModel(MockSpotifyDataSource, simulatePlayback = false).also { viewModels += it }
+    @Test fun `a restored queue resumes the matching track at its saved offset`() = runTest(dispatcher) {
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(
+            id = "resume-a",
+            uri = "spotify:track:resume-a"
+        )
+        val session = SpotifySession()
+        SpotifySession::class.java.getDeclaredField("resumePoint").apply {
+            isAccessible = true
+            set(session, SpotifyResumePoint(track.id, 42_000L))
+        }
+        val queue = SpotifyQueueRepository(load = { SpotifyQueueRepository.Snapshot(current = track) })
+
+        val vm = SpotifyViewModel(
+            SpotifyMediaCatalog(MockSpotifyDataSource),
+            queue = queue,
+            session = session,
+            simulatePlayback = false
+        ).also { viewModels += it }
+
+        assertEquals(track.id, vm.state.value.current?.id)
+        assertEquals(42_000L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `a resume point for another track does not move the restored item`() = runTest(dispatcher) {
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(
+            id = "resume-b",
+            uri = "spotify:track:resume-b"
+        )
+        val session = SpotifySession()
+        SpotifySession::class.java.getDeclaredField("resumePoint").apply {
+            isAccessible = true
+            set(session, SpotifyResumePoint("someone-else", 42_000L))
+        }
+        val queue = SpotifyQueueRepository(load = { SpotifyQueueRepository.Snapshot(current = track) })
+
+        val vm = SpotifyViewModel(
+            SpotifyMediaCatalog(MockSpotifyDataSource),
+            queue = queue,
+            session = session,
+            simulatePlayback = false
+        ).also { viewModels += it }
+
+        assertEquals(track.id, vm.state.value.current?.id)
+        assertEquals(0L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `loading event adopts the position the player will start at`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:load1")
+        vm.playItem(track)
+
+        vm.handlePlaybackEvent(event("""{"type":"loading","uri":"spotify:track:load1","positionMs":5000}"""))
+
+        assertEquals(5_000L, vm.playbackPositionMs.value)
+        assertTrue(vm.state.value.isPlaying)
+    }
+
+    @Test fun `loading event for another item is ignored`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:load2")
+        vm.playItem(track)
+
+        vm.handlePlaybackEvent(event("""{"type":"loading","uri":"spotify:track:other","positionMs":5000}"""))
+
+        assertEquals(0L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `playing event keeps the UI clock instead of the decoder lead`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:play1")
+        vm.playItem(track)
+        vm.seekTo(120_000L)
+
+        vm.handlePlaybackEvent(event("""{"type":"playing","uri":"spotify:track:play1","positionMs":150000}"""))
+
+        assertEquals(120_000L, vm.playbackPositionMs.value)
+        assertTrue(vm.state.value.isPlaying)
+    }
+
+    @Test fun `paused event stops the transport`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:pause1")
+        vm.playItem(track)
+
+        vm.handlePlaybackEvent(event("""{"type":"paused","uri":"spotify:track:pause1"}"""))
+
+        assertFalse(vm.state.value.isPlaying)
+    }
+
+    @Test fun `positionCorrection adopts the confirmed position`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:correction1")
+        vm.playItem(track)
+
+        vm.handlePlaybackEvent(event("""{"type":"positionCorrection","positionMs":42000}"""))
+
+        assertEquals(42_000L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `a distant position event is adopted as a seek from another client`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:jump1")
+        vm.playItem(track)
+
+        vm.handlePlaybackEvent(event("""{"type":"position","positionMs":90000}"""))
+
+        assertEquals(90_000L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `a nearby position event does not move the bar`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:jump2")
+        vm.playItem(track)
+
+        vm.handlePlaybackEvent(event("""{"type":"position","positionMs":2000}"""))
+
+        assertEquals(0L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `repeat events adopt context and off`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.handlePlaybackEvent(event("""{"type":"repeat","context":true}"""))
+        assertEquals(RepeatMode.Context, vm.state.value.repeat)
+
+        vm.handlePlaybackEvent(event("""{"type":"repeat"}"""))
+        assertEquals(RepeatMode.Off, vm.state.value.repeat)
+    }
+
+    @Test fun `shuffle off event turns shuffle off`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.toggleShuffle()
+        assertTrue(vm.state.value.shuffle)
+
+        vm.handlePlaybackEvent(event("""{"type":"shuffle","shuffle":false}"""))
+
+        assertFalse(vm.state.value.shuffle)
+    }
+
+    @Test fun `ended event for another item does not advance the queue`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val items = MockSpotifyDataSource.recentlyPlayed.take(2)
+            .mapIndexed { index, item -> item.copy(uri = "spotify:track:ended$index") }
+        vm.play(items, 0)
+
+        vm.handlePlaybackEvent(event("""{"type":"ended","uri":"spotify:track:someone-else"}"""))
+
+        assertEquals(items[0].id, vm.state.value.current?.id)
+    }
+
+    @Test fun `unavailable event for another item does not pause`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:unavailable1")
+        vm.playItem(track)
+
+        vm.handlePlaybackEvent(event("""{"type":"unavailable","uri":"spotify:track:someone-else"}"""))
+
+        assertTrue(vm.state.value.isPlaying)
+        assertNull(vm.state.value.notice)
+    }
+
+    private fun event(raw: String): PlaybackEvent = PlaybackEvent.fromJson(raw)
+
+    private fun viewModel() = SpotifyViewModel(SpotifyMediaCatalog(MockSpotifyDataSource), simulatePlayback = false).also { viewModels += it }
 }

@@ -57,7 +57,7 @@ class TrackRowGutterTest {
         compose.setContent {
             SidekitPreviewFrame {
                 val state = rememberTrackRows(
-                    SavedUiState(savedTrackIds = if (saved) setOf(track.id) else emptySet()),
+                    SavedUiState(savedTrackIds = if (saved) setOf(track.key.encode()) else emptySet()),
                     onSave = { onSave() },
                     onEnsureSaved = {},
                     onAddToQueue = {}

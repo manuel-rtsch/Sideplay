@@ -12,6 +12,7 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState as SessionState
 import android.os.SystemClock
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
+import io.github.manuelrtsch.sidetrack.MediaKey
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
 import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 import io.github.manuelrtsch.sidetrack.data.SpotifyGateway
@@ -22,24 +23,43 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Process-scoped playback owner. The activity and screens may come and go; this object holds the
- * native player lifetime, the platform media session and the foreground notification.
+ * platform media session, the foreground notification, audio focus and the sleep timer.
  *
- * Main-thread only, like [MediaSessionOwner]. Long-running gateway work is moved onto [scope].
+ * The audio pipeline and player commands live behind [PlaybackEngine]. This controller is
+ * engine-agnostic: librespot and the future Media3 engine both plug in here.
+ *
+ * Main-thread only, like [MediaSessionOwner]. Long-running engine work is moved onto [scope].
  */
-class SpotifyPlayback(
-    private val gateway: SpotifyGateway,
+class PlaybackController(
+    val engine: PlaybackEngine,
     private val scope: CoroutineScope,
     private val registry: MediaSessionRegistry = MediaSessions,
-    private val audio: SpotifyAudioSink? = null,
     private val context: Context? = null,
     /** Monotonic clock seam: the sleep timer's deadline math is the only consumer. */
     private val elapsedTime: () -> Long = { SystemClock.elapsedRealtime() }
 ) : MediaSessionOwner {
+    /**
+     * Migration bridge for the existing tests and call sites: builds the librespot engine from
+     * the gateway and sink. New code should pass a [PlaybackEngine] directly.
+     */
+    constructor(
+        gateway: SpotifyGateway,
+        scope: CoroutineScope,
+        registry: MediaSessionRegistry = MediaSessions,
+        audio: SpotifyAudioSink? = null,
+        context: Context? = null,
+        elapsedTime: () -> Long = { SystemClock.elapsedRealtime() }
+    ) : this(
+        engine = LibrespotPlaybackEngine(gateway, audio),
+        scope = scope,
+        registry = registry,
+        context = context,
+        elapsedTime = elapsedTime
+    )
+
     override val sessionId = "sidetrack"
     override val notificationChannelId = SpotifyPlaybackService.CHANNEL_ID
     override val notificationChannelName = SpotifyPlaybackService.CHANNEL_NAME
@@ -55,6 +75,14 @@ class SpotifyPlayback(
     var current: SpotifyMediaItem? = null
         private set
 
+    /**
+     * The resolved source for [current]. HTTP services keep their stream URL and auth headers
+     * here; Spotify's source is just its URI. [reconfigure] reloads this, not the item's URI.
+     */
+    @Volatile
+    var currentSource: PlaybackSource? = null
+        private set
+
     val position: Long get() = positionMs
 
     private val _notice = MutableStateFlow<String?>(null)
@@ -67,7 +95,7 @@ class SpotifyPlayback(
 
     private val _buffering = MutableStateFlow(false)
 
-    /** True while the drain has no PCM for the current position. */
+    /** True while the engine has no audio for the current position. */
     val buffering: StateFlow<Boolean> = _buffering.asStateFlow()
 
     private val _sleepTimer = MutableStateFlow<SleepTimerState>(SleepTimerState.Off)
@@ -79,10 +107,6 @@ class SpotifyPlayback(
     val sleepTimer: StateFlow<SleepTimerState> = _sleepTimer.asStateFlow()
 
     private var sleepTimerJob: Job? = null
-
-    init {
-        audio?.onBuffering = { _buffering.value = it }
-    }
 
     @Volatile
     var notificationArt: Bitmap? = null
@@ -115,7 +139,7 @@ class SpotifyPlayback(
 
     /**
      * Recovery for an audio pipeline that went silent, installed by the session that owns the
-     * native player. The sink cannot restart a dead librespot session; only the gateway owner
+     * native player. The engine cannot restart a dead librespot session; only the gateway owner
      * can reconnect and reload.
      */
     var onStalled: ((Long) -> Unit)? = null
@@ -126,16 +150,8 @@ class SpotifyPlayback(
     private var mediaSession: MediaSession? = null
     private var artJob: Job? = null
 
-    /** Serializes player rebuilds so a rapid pair of setting toggles cannot install an old config last. */
-    private val reconfigureLock = Mutex()
     private var lastSessionUpdate = 0L
     private var noisyRegistered = false
-
-    /**
-     * Invalidates a pending command that is still waiting for the player to acknowledge it. A
-     * newer play/pause/start/stop bumps this so an older coroutine cannot apply its result.
-     */
-    private var pauseGeneration = 0
 
     /**
      * The last play/pause intent. librespot events can arrive out of order after rapid taps;
@@ -169,11 +185,15 @@ class SpotifyPlayback(
     val sessionToken: MediaSession.Token? get() = session()?.sessionToken
 
     init {
+        engine.onFailure = ::onAudioStalled
+        scope.launch {
+            engine.state.collect { state -> _buffering.value = state.isBuffering }
+        }
         // A minute tick only needs the notification text rebuilt, not the media session
         // republished. The service refresh path deliberately does not call publish().
         if (context != null) {
             scope.launch {
-                _sleepTimer.collect { SpotifyPlaybackService.refresh(context, this@SpotifyPlayback) }
+                _sleepTimer.collect { SpotifyPlaybackService.refresh(context, this@PlaybackController) }
             }
         }
     }
@@ -186,7 +206,7 @@ class SpotifyPlayback(
     }
 
     /**
-     * Called by the audio sink on its drain thread when no PCM arrived for the stall budget.
+     * Called by the engine on its drain thread when no PCM arrived for the stall budget.
      * Hops to the main thread: the player's state and the platform media session are
      * main-thread only.
      */
@@ -209,7 +229,7 @@ class SpotifyPlayback(
         if (recover != null) {
             recover(positionMs)
         } else {
-            scope.launch { runCatching { audio?.stop() } }
+            scope.launch { runCatching { engine.stop() } }
         }
     }
 
@@ -281,9 +301,15 @@ class SpotifyPlayback(
         if (playing) pause()
     }
 
-    fun setNowPlaying(item: SpotifyMediaItem?, position: Long = 0L) {
+    fun setNowPlaying(
+        item: SpotifyMediaItem?,
+        position: Long = 0L,
+        source: PlaybackSource? = null
+    ) {
         current = item
+        currentSource = source ?: item?.uri?.let { PlaybackSource(item.key.encode(), it) }
         positionMs = position
+        engine.updatePosition(position)
         artJob?.cancel()
         notificationArt = null
         if (context != null) updateMetadata()
@@ -305,12 +331,14 @@ class SpotifyPlayback(
     fun updateState(isPlaying: Boolean, position: Long) {
         playing = isPlaying
         positionMs = position
+        engine.updateState(isPlaying, position)
         publish()
     }
 
     /** Keeps the playback owner's position in step with the UI clock without publishing. */
     fun updatePosition(position: Long) {
         positionMs = position
+        engine.updatePosition(position)
     }
 
     /**
@@ -329,9 +357,16 @@ class SpotifyPlayback(
      * already pre-buffered the track and its sink is still open, so tearing down the AudioTrack
      * here would introduce the very gap the setting is meant to remove.
      */
-    suspend fun start(uri: String, positionMs: Long, keepAudioSink: Boolean = false) {
-        SidetrackDebug.log("start uri=$uri positionMs=$positionMs audio=${audio != null} keepAudioSink=$keepAudioSink")
-        val generation = ++pauseGeneration
+    suspend fun start(
+        key: MediaKey,
+        uri: String,
+        positionMs: Long,
+        keepAudioSink: Boolean = false,
+        headers: Map<String, String> = emptyMap()
+    ) {
+        SidetrackDebug.log("start key=${key.encode()} uri=$uri positionMs=$positionMs keepAudioSink=$keepAudioSink")
+        val source = PlaybackSource(id = key.encode(), uri = uri, headers = headers)
+        currentSource = source
         lastCommandWasPause = false
         lastCommandAt = SystemClock.elapsedRealtime()
         register()
@@ -339,31 +374,15 @@ class SpotifyPlayback(
             SidetrackDebug.log("start aborted: audio focus denied")
             return
         }
-        if (generation != pauseGeneration) return
         registry.activate(this)
         playing = true
         this.positionMs = positionMs
-        // Drop the previous item's audio before loading the next one. Draining also unblocks a
-        // player thread that may still be waiting in PcmSink::write, so the load command can be
-        // processed. The AudioTrack itself is kept for the next item: recreating it re-configures
-        // the output route, which is audible as a gap on Bluetooth.
-        val sinkKept = keepAudioSink && audio?.isRunning == true
-        if (!sinkKept) audio?.reset()
-        if (generation != pauseGeneration) return
         publish()
         try {
-            SidetrackDebug.log("start calling gateway.load")
-            gateway.load(uri, positionMs, autoplay = true)
-            if (generation != pauseGeneration) return
-            if (!sinkKept) {
-                SidetrackDebug.log("start gateway.load returned; starting audio sink")
-                audio?.start(positionMs)
-            }
-            SidetrackDebug.log("start audio sink started")
+            engine.start(source, positionMs, keepAudioSink)
         } catch (t: Throwable) {
             SidetrackDebug.log("start failed", t)
             playing = false
-            audio?.stop()
             focus?.abandon()
             registry.deactivate(this)
             publish()
@@ -372,7 +391,7 @@ class SpotifyPlayback(
     }
 
     suspend fun resume(): Boolean {
-        SidetrackDebug.log("resume audio=${audio != null}")
+        SidetrackDebug.log("resume")
         if (current == null) {
             // A cold process restores the queue but not the native player, so a play command from
             // a headset or the notification would resume a player that has no source at all and
@@ -383,7 +402,6 @@ class SpotifyPlayback(
             start?.invoke()
             return start != null
         }
-        val generation = ++pauseGeneration
         lastCommandWasPause = false
         lastCommandAt = SystemClock.elapsedRealtime()
         register()
@@ -391,23 +409,15 @@ class SpotifyPlayback(
             SidetrackDebug.log("resume aborted: audio focus denied")
             return false
         }
-        if (generation != pauseGeneration) return false
         registry.activate(this)
         playing = true
-        val reused = audio?.resume(positionMs) ?: false
-        if (generation != pauseGeneration) return false
         publish()
-        if (!reused) {
-            // The AudioTrack buffer was lost (for example after a long pause). Realign the
-            // player with the UI position before playing, otherwise it resumes from its decoder
-            // position and skips the buffered audio.
-            SidetrackDebug.log("resume audio buffer lost; seeking to $positionMs")
-            runCatching { gateway.seek(positionMs) }
+        val started = engine.resume(positionMs)
+        if (!started) {
+            playing = false
+            publish()
+            return false
         }
-        if (generation != pauseGeneration) return false
-        SidetrackDebug.log("resume calling gateway.play")
-        gateway.play()
-        SidetrackDebug.log("resume gateway.play returned")
         return true
     }
 
@@ -432,24 +442,14 @@ class SpotifyPlayback(
         if (abandonFocus) focus?.abandon()
         registry.deactivate(this)
         publish()
-        val generation = ++pauseGeneration
-        scope.launch {
-            // Queue the native pause while the AudioTrack drain is still running. The drain is
-            // the real-time clock and also unblocks a player thread waiting in PcmSink::write,
-            // so the player can process the pause command. Stopping the drain first would wedge
-            // that thread and leave the UI showing a stale playing state.
-            if (generation != pauseGeneration) return@launch
-            runCatching { gateway.pause() }
-            delay(PAUSE_DRAIN_GRACE_MS)
-            if (generation == pauseGeneration && !playing) audio?.pause()
-        }
+        engine.invalidateCommands()
+        scope.launch { runCatching { engine.pause() } }
     }
 
     suspend fun seek(positionMs: Long) {
         this.positionMs = positionMs
         publish()
-        gateway.seek(positionMs)
-        audio?.seek(positionMs)
+        engine.seek(positionMs)
     }
 
     fun requestSeek(positionMs: Long) {
@@ -462,33 +462,20 @@ class SpotifyPlayback(
     fun requestPrevious() = (onPrevious ?: fallbackPrevious)?.invoke()
 
     /**
-     * Rebuilds the native player after an audio-setting change. The current item is reloaded at
-     * the same position and the pause/play state is preserved.
+     * Rebuilds the player after an audio-setting change. The current item is reloaded at the
+     * same position and the pause/play state is preserved.
      */
     suspend fun reconfigure() {
-        reconfigureLock.withLock {
-            val item = current
-            val uri = item?.uri
-            val position = positionMs
-            val wasPlaying = playing
-            val generation = ++pauseGeneration
-            SidetrackDebug.log("reconfigure uri=$uri positionMs=$position wasPlaying=$wasPlaying")
-            audio?.stop()
-            try {
-                // No native player yet: the next connect picks the new settings up.
-                if (!gateway.recreatePlayer()) return@withLock
-                if (uri != null) gateway.load(uri, position, autoplay = wasPlaying)
-            } catch (t: Throwable) {
-                SidetrackDebug.log("reconfigure failed", t)
-                playing = false
-                publish()
-                throw t
-            }
-            if (generation != pauseGeneration) return@withLock
-            playing = wasPlaying
-            if (wasPlaying && uri != null) audio?.start(position)
-            publish()
-        }
+        val item = current
+        val source = currentSource
+            ?: item?.uri?.let { PlaybackSource(id = item.key.encode(), uri = it) }
+        val position = positionMs
+        val wasPlaying = playing
+        SidetrackDebug.log("reconfigure uri=${source?.uri} positionMs=$position wasPlaying=$wasPlaying")
+        val rebuilt = engine.reconfigure(source, position, wasPlaying)
+        if (!rebuilt) return
+        playing = wasPlaying
+        publish()
     }
 
     /**
@@ -501,15 +488,10 @@ class SpotifyPlayback(
         _buffering.value = false
         lastCommandWasPause = true
         lastCommandAt = SystemClock.elapsedRealtime()
-        val generation = ++pauseGeneration
         focus?.abandon()
         registry.deactivate(this)
-        // Same ordering as pause: let the player process stop while the drain is still alive.
-        if (generation != pauseGeneration) return
-        runCatching { gateway.stop() }
-        delay(PAUSE_DRAIN_GRACE_MS)
-        if (generation != pauseGeneration) return
-        audio?.stop()
+        engine.invalidateCommands()
+        engine.stop()
         mediaSession?.let {
             it.setPlaybackState(
                 SessionState.Builder()
@@ -518,6 +500,7 @@ class SpotifyPlayback(
             )
         }
         current = null
+        currentSource = null
         notificationArt = null
         artJob?.cancel()
         if (!keepQueue) onStopped?.invoke()
@@ -526,10 +509,13 @@ class SpotifyPlayback(
 
     suspend fun disconnect() {
         stop()
-        gateway.disconnect()
+        engine.disconnect()
         mediaSession?.release()
         mediaSession = null
     }
+
+    /** One engine event, or null when nothing has happened since the last poll. */
+    suspend fun pollEvent(): PlaybackEvent? = engine.pollEvent()
 
     private fun publish() {
         SidetrackDebug.log { "publish playing=$playing positionMs=$positionMs current=${current?.uri}" }
@@ -625,13 +611,6 @@ class SpotifyPlayback(
 
     private companion object {
         const val ART_PX = 256
-
-        /**
-         * How long the AudioTrack drain keeps running after a pause/stop is queued. One PCM
-         * buffer is ~23 ms, so this is enough for a player thread blocked in PcmSink::write to
-         * wake, process the command, and stop producing audio.
-         */
-        const val PAUSE_DRAIN_GRACE_MS = 60L
 
         /** How long after a command a contradicting native event is treated as stale. */
         const val COMMAND_EVENT_WINDOW_MS = 2_000L

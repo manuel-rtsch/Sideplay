@@ -6,6 +6,8 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
 import io.github.manuelrtsch.sidetrack.data.SpotifyLibraryWriter
+import io.github.manuelrtsch.sidetrack.data.SpotifyMediaCatalog
+import io.github.manuelrtsch.sidetrack.data.SpotifyMediaLibraryWriter
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,14 +51,14 @@ class SpotifyFallbackStateTest {
         vm.ensureCollection(type, id)
         advanceUntilIdle()
 
-        assertEquals("Couldn't reach Spotify", vm.state.value.collectionErrors["${type.route}:$id"])
+        assertEquals("Couldn't reach Spotify", vm.state.value.collectionErrors["spotify:${type.route}:$id"])
         assertNull(vm.collection(type, id))
 
         catalog.failing = false
         vm.retryCollection(type, id)
         advanceUntilIdle()
 
-        assertNull(vm.state.value.collectionErrors["${type.route}:$id"])
+        assertNull(vm.state.value.collectionErrors["spotify:${type.route}:$id"])
         assertNotNull(vm.collection(type, id))
     }
 
@@ -115,7 +117,7 @@ class SpotifyFallbackStateTest {
             }
             override suspend fun setArtistFollowed(id: String, followed: Boolean) = Unit
         }
-        val vm = SpotifyViewModel(catalog, writer, simulatePlayback = false).also { viewModels += it }
+        val vm = SpotifyViewModel(SpotifyMediaCatalog(catalog), SpotifyMediaLibraryWriter(writer), simulatePlayback = false).also { viewModels += it }
 
         vm.playItem(seed)
         advanceUntilIdle()
@@ -197,7 +199,7 @@ class SpotifyFallbackStateTest {
         advanceUntilIdle()
 
         assertEquals(all.map { it.id }, vm.state.value.upcoming.map { it.id })
-        assertFalse(vm.state.value.collectionMorePending.contains("${type.route}:$id"))
+        assertFalse(vm.state.value.collectionMorePending.contains("spotify:${type.route}:$id"))
         assertEquals("Added ${all.size} tracks to queue", vm.state.value.notice)
     }
 
@@ -235,7 +237,7 @@ class SpotifyFallbackStateTest {
 
         assertTrue(vm.state.value.upcoming.isEmpty())
         assertEquals("Couldn't reach Spotify", vm.state.value.notice)
-        assertFalse(vm.state.value.collectionMorePending.contains("${type.route}:$id"))
+        assertFalse(vm.state.value.collectionMorePending.contains("spotify:${type.route}:$id"))
     }
 
     @Test fun `a late song radio response does not overwrite queue edits`() = runTest(dispatcher) {
@@ -331,7 +333,7 @@ class SpotifyFallbackStateTest {
         assertEquals(station.drop(2).map { it.id }, vm.state.value.upcoming.map { it.id })
     }
 
-    private fun viewModel(catalog: SpotifyCatalog) = SpotifyViewModel(catalog, simulatePlayback = false).also { viewModels += it }
+    private fun viewModel(catalog: SpotifyCatalog) = SpotifyViewModel(SpotifyMediaCatalog(catalog), simulatePlayback = false).also { viewModels += it }
 
     private class FlakyCatalog : SpotifyCatalog by MockSpotifyDataSource {
         var failing = true

@@ -129,7 +129,7 @@ fun SpotifyNowPlayingScreen(
     onDismissNotice: () -> Unit
 ) {
     val current = playback.current
-    val savedCurrent = current?.let { it.id in saved.savedTrackIds } ?: false
+    val savedCurrent = current?.let { it.key.encode() in saved.savedTrackIds } ?: false
     val backdrop = rememberArtworkBackdropSetting()
     val backdropped = current is SpotifyTrack && backdrop.enabled
     val timer by sleepTimer.collectAsStateWithLifecycle()

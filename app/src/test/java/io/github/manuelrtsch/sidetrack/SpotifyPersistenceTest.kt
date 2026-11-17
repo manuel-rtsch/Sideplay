@@ -8,6 +8,8 @@ import io.github.manuelrtsch.sidetrack.data.FileSpotifyQueueStore
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyResumePoint
+import java.io.BufferedOutputStream
+import java.io.DataOutputStream
 import java.io.File
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
@@ -42,6 +44,31 @@ class SpotifyPersistenceTest {
         assertTrue(second.snapshot.shuffle)
         assertEquals(listOf("c", "d", "e"), second.snapshot.shuffleBackup?.map { it.id })
         assertTrue(second.snapshot.upcoming.last() is SpotifyEpisode)
+    }
+
+    @Test fun `queue keeps repeat and its original context across a restart`() {
+        val store = FileSpotifyQueueStore(tempFile("queue-context"))
+        val first = SpotifyQueueRepository(Random(1), load = store::read, save = store::write)
+        first.play(tracks, 1)
+        first.setRepeat(RepeatMode.Context)
+
+        val second = SpotifyQueueRepository(Random(2), load = store::read, save = store::write)
+
+        assertEquals(RepeatMode.Context, second.snapshot.repeat)
+        assertEquals(tracks.map { it.id }, second.snapshot.context.map { it.id })
+        assertEquals("b", second.snapshot.current?.id)
+    }
+
+    @Test fun `a queue file from an unknown version falls back to an empty queue`() {
+        val file = tempFile("queue-version")
+        val store = FileSpotifyQueueStore(file)
+        store.write(SpotifyQueueRepository.Snapshot(current = track("a")))
+        val bytes = file.readBytes()
+        // MAGIC is the first int; the version follows it. Bump it to a version this build cannot read.
+        bytes[7] = 99
+        file.writeBytes(bytes)
+
+        assertEquals(SpotifyQueueRepository.Snapshot(), FileSpotifyQueueStore(file).read())
     }
 
     @Test fun `recently played history survives a process restart`() {
@@ -96,6 +123,109 @@ class SpotifyPersistenceTest {
         file.writeBytes(byteArrayOf(1, 2, 3, 4, 5))
 
         assertEquals(null, FileSpotifyPositionStore(file).read())
+    }
+
+    @Test fun `a version 1 queue file is read as Spotify and rewritten as version 2`() {
+        val file = tempFile("queue-v1")
+        writeV1Queue(file, listOf("a", "b"), current = "b")
+
+        val store = FileSpotifyQueueStore(file)
+        val snapshot = store.read()
+
+        assertEquals("b", snapshot.current?.id)
+        assertEquals(ServiceId.Spotify, snapshot.current?.service)
+        assertEquals(listOf("a", "b"), snapshot.upcoming.map { it.id })
+        assertEquals(MediaKey.spotify(MediaType.Track, "b"), snapshot.current?.key)
+
+        // The next save upgrades the file; reading it back must still produce the same queue.
+        store.write(snapshot)
+        assertEquals(snapshot, FileSpotifyQueueStore(file).read())
+    }
+
+    @Test fun `a version 1 history file is read as Spotify`() {
+        val file = tempFile("history-v1")
+        writeV1History(file, listOf("a", "b"))
+
+        val entries = FileSpotifyHistoryStore(file).read()
+
+        assertEquals(listOf("a", "b"), entries.map { it.item.id })
+        assertTrue(entries.all { it.item.service == ServiceId.Spotify })
+    }
+
+    @Test fun `a version 1 resume point is read as a Spotify track`() {
+        val file = tempFile("resume-v1")
+        DataOutputStream(BufferedOutputStream(file.outputStream())).use { out ->
+            out.writeInt(0x534B5452)
+            out.writeInt(1)
+            out.writeUTF("b")
+            out.writeLong(42_500L)
+        }
+
+        assertEquals(SpotifyResumePoint("b", 42_500L), FileSpotifyPositionStore(file).read())
+    }
+
+    @Test fun `a version 2 queue keeps the service of each item`() {
+        val file = tempFile("queue-service")
+        val navidrome = track("a").copy(service = ServiceId.Navidrome)
+        FileSpotifyQueueStore(file).write(SpotifyQueueRepository.Snapshot(current = navidrome))
+
+        val read = FileSpotifyQueueStore(file).read()
+
+        assertEquals(ServiceId.Navidrome, read.current?.service)
+        assertEquals(MediaKey(ServiceId.Navidrome, MediaType.Track, "a"), read.current?.key)
+    }
+
+    @Test fun `media keys keep equal ids from different services apart`() {
+        val spotify = MediaKey(ServiceId.Spotify, MediaType.Track, "same")
+        val navidrome = MediaKey(ServiceId.Navidrome, MediaType.Track, "same")
+
+        assertEquals(spotify, MediaKey.decode(spotify.encode()))
+        assertEquals(navidrome, MediaKey.decode(navidrome.encode()))
+        assertTrue(spotify != navidrome)
+        assertEquals(null, MediaKey.decode("not-a-key"))
+    }
+
+    private fun writeV1Queue(file: File, ids: List<String>, current: String?) {
+        DataOutputStream(BufferedOutputStream(file.outputStream())).use { out ->
+            out.writeInt(0x534B5451)
+            out.writeInt(1)
+            out.writeBoolean(false)
+            out.writeInt(RepeatMode.Off.ordinal)
+            out.writeBoolean(current != null)
+            current?.let { writeV1Track(out, it) }
+            out.writeInt(ids.size)
+            ids.forEach { writeV1Track(out, it) }
+            out.writeInt(0)
+            out.writeInt(0)
+            out.writeBoolean(false)
+        }
+    }
+
+    private fun writeV1History(file: File, ids: List<String>) {
+        DataOutputStream(BufferedOutputStream(file.outputStream())).use { out ->
+            out.writeInt(0x534B5448)
+            out.writeInt(1)
+            out.writeInt(ids.size)
+            ids.forEachIndexed { index, id ->
+                writeV1Track(out, id)
+                out.writeLong(index.toLong())
+            }
+        }
+    }
+
+    private fun writeV1Track(out: DataOutputStream, id: String) {
+        out.writeByte(1)
+        out.writeUTF(id)
+        out.writeUTF("Track $id")
+        out.writeUTF("Artist")
+        out.writeUTF("artist")
+        out.writeUTF("album")
+        out.writeInt(0)
+        out.writeLong(180_000L)
+        out.writeBoolean(false)
+        out.writeBoolean(true)
+        out.writeBoolean(false)
+        out.writeBoolean(false)
     }
 
     private fun tempFile(name: String) = File(context.cacheDir, "sidetrack-$name-${System.nanoTime()}.bin").also { it.delete() }

@@ -5,7 +5,7 @@ import hrln.interactive.sidekit.sdk.crypto.EncryptedFileStore
 import io.github.manuelrtsch.sidetrack.AudioQuality
 
 /** User preferences that survive process death and apply before the native player is created. */
-data class SpotifySettings(
+data class PlaybackSettings(
     val audioQuality: AudioQuality = AudioQuality.High,
     /** Apply Spotify's per-track loudness data so tracks play back at a similar level. */
     val normalization: Boolean = false,
@@ -21,7 +21,7 @@ data class SpotifySettings(
  * Settings live in the same encrypted, atomic store as credentials. They are not secrets, but the
  * store already exists, needs no extra dependency and keeps all Sidetrack state in one place.
  */
-class SpotifySettingsStore(
+class PlaybackSettingsStore(
     context: Context,
     // Legacy name kept so existing dev installs keep their audio-quality setting.
     name: String = "sidetracks_settings"
@@ -29,12 +29,12 @@ class SpotifySettingsStore(
     private val settings = EncryptedFileStore(context.applicationContext, name)
 
     @Synchronized
-    fun read(): SpotifySettings {
+    fun read(): PlaybackSettings {
         val value = settings.read()
         val quality = AudioQuality.entries
             .firstOrNull { it.name == value.optString(KEY_QUALITY) }
             ?: AudioQuality.High
-        return SpotifySettings(
+        return PlaybackSettings(
             audioQuality = quality,
             normalization = value.optBoolean(KEY_NORMALIZATION, false),
             gapless = value.optBoolean(KEY_GAPLESS, true),
@@ -43,7 +43,7 @@ class SpotifySettingsStore(
     }
 
     @Synchronized
-    fun write(value: SpotifySettings) {
+    fun write(value: PlaybackSettings) {
         settings.write(
             org.json.JSONObject()
                 .put(KEY_QUALITY, value.audioQuality.name)
@@ -60,3 +60,7 @@ class SpotifySettingsStore(
         const val KEY_AUTOPLAY = "autoplay"
     }
 }
+
+/** Migration bridge: the settings are generic playback preferences, not Spotify's. */
+typealias SpotifySettings = PlaybackSettings
+typealias SpotifySettingsStore = PlaybackSettingsStore

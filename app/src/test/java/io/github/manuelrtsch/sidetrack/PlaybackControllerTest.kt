@@ -5,8 +5,8 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyGateway
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
 import io.github.manuelrtsch.sidetrack.playback.MediaSessionOwner
 import io.github.manuelrtsch.sidetrack.playback.MediaSessionRegistry
+import io.github.manuelrtsch.sidetrack.playback.PlaybackController
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
-import io.github.manuelrtsch.sidetrack.playback.SpotifyPlayback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -20,13 +20,13 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class SpotifyPlaybackTest {
+class PlaybackControllerTest {
     @Test fun `start claims the session and loads the track`() = runTest {
         val gateway = FakeGateway()
         val registry = MediaSessionRegistry()
-        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
+        val playback = PlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
 
-        playback.start("spotify:track:a", 0L)
+        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
 
         assertSame(playback, registry.active)
         assertTrue(playback.isActive)
@@ -39,10 +39,10 @@ class SpotifyPlaybackTest {
     fun `starting another owner pauses Sidetrack`() = runTest {
         val gateway = FakeGateway()
         val registry = MediaSessionRegistry()
-        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
+        val playback = PlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
         val other = FakeOwner()
         registry.register(other)
-        playback.start("spotify:track:a", 0L)
+        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
 
         registry.activate(other)
         runCurrent()
@@ -54,7 +54,7 @@ class SpotifyPlaybackTest {
 
     @Test fun `play with nothing loaded asks the owner to start the item`() = runTest {
         val gateway = FakeGateway()
-        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
+        val playback = PlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
         var restarts = 0
         playback.onResumeWithoutSource = { restarts++ }
 
@@ -67,7 +67,7 @@ class SpotifyPlaybackTest {
 
     @Test fun `play with nothing loaded falls back when no ViewModel is attached`() = runTest {
         val gateway = FakeGateway()
-        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
+        val playback = PlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
         var restarts = 0
         playback.fallbackResume = { restarts++ }
 
@@ -78,7 +78,7 @@ class SpotifyPlaybackTest {
 
     @Test fun `play with nothing loaded and nobody to start it reports failure`() = runTest {
         val gateway = FakeGateway()
-        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
+        val playback = PlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), MediaSessionRegistry())
 
         assertFalse(playback.resume())
         assertEquals(0, gateway.plays)
@@ -87,9 +87,9 @@ class SpotifyPlaybackTest {
     @Test fun `failed load releases the session`() = runTest {
         val gateway = FakeGateway(failLoad = true)
         val registry = MediaSessionRegistry()
-        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
+        val playback = PlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
 
-        runCatching { playback.start("spotify:track:a", 0L) }
+        runCatching { playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L) }
 
         assertFalse(playback.isActive)
         assertNull(registry.active)
@@ -98,10 +98,10 @@ class SpotifyPlaybackTest {
     @Test fun `stop deactivates and tells the gateway`() = runTest {
         val gateway = FakeGateway()
         val registry = MediaSessionRegistry()
-        val playback = SpotifyPlayback(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
+        val playback = PlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
         var stopped = false
         playback.onStopped = { stopped = true }
-        playback.start("spotify:track:a", 0L)
+        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
 
         playback.stop()
 
@@ -113,7 +113,7 @@ class SpotifyPlaybackTest {
 
     @Test fun `reconfigure rebuilds the player and reloads the current item`() = runTest {
         val gateway = FakeGateway()
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             gateway,
             CoroutineScope(StandardTestDispatcher(testScheduler)),
             MediaSessionRegistry()
@@ -131,7 +131,7 @@ class SpotifyPlaybackTest {
             ),
             12_000L
         )
-        playback.start("spotify:track:a", 12_000L)
+        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 12_000L)
 
         playback.reconfigure()
 
@@ -142,7 +142,7 @@ class SpotifyPlaybackTest {
     }
 
     @Test fun `requestNext prefers the attached UI owner`() {
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             FakeGateway(),
             CoroutineScope(StandardTestDispatcher()),
             MediaSessionRegistry()
@@ -159,7 +159,7 @@ class SpotifyPlaybackTest {
     }
 
     @Test fun `requestNext falls back when the UI owner is gone`() {
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             FakeGateway(),
             CoroutineScope(StandardTestDispatcher()),
             MediaSessionRegistry()
@@ -175,7 +175,7 @@ class SpotifyPlaybackTest {
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `sleep timer counts down once per minute`() = runTest {
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             FakeGateway(),
             CoroutineScope(StandardTestDispatcher(testScheduler)),
             MediaSessionRegistry(),
@@ -194,13 +194,13 @@ class SpotifyPlaybackTest {
     @Test
     fun `sleep timer pauses at the deadline`() = runTest {
         val gateway = FakeGateway()
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             gateway,
             CoroutineScope(StandardTestDispatcher(testScheduler)),
             MediaSessionRegistry(),
             elapsedTime = { testScheduler.currentTime }
         )
-        playback.start("spotify:track:a", 0L)
+        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
 
         playback.setSleepTimer(5)
         advanceTimeBy(5 * 60_000L + 1)
@@ -214,7 +214,7 @@ class SpotifyPlaybackTest {
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `a new duration replaces the old deadline`() = runTest {
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             FakeGateway(),
             CoroutineScope(StandardTestDispatcher(testScheduler)),
             MediaSessionRegistry(),
@@ -235,13 +235,13 @@ class SpotifyPlaybackTest {
     @Test
     fun `clearing the timer cancels expiry`() = runTest {
         val gateway = FakeGateway()
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             gateway,
             CoroutineScope(StandardTestDispatcher(testScheduler)),
             MediaSessionRegistry(),
             elapsedTime = { testScheduler.currentTime }
         )
-        playback.start("spotify:track:a", 0L)
+        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
 
         playback.setSleepTimer(5)
         playback.clearSleepTimer()
@@ -254,7 +254,7 @@ class SpotifyPlaybackTest {
     }
 
     @Test fun `end of track timer is consumed once`() {
-        val playback = SpotifyPlayback(
+        val playback = PlaybackController(
             FakeGateway(),
             CoroutineScope(StandardTestDispatcher()),
             MediaSessionRegistry()

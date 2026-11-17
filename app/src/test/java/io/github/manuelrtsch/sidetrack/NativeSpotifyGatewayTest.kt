@@ -2,9 +2,9 @@ package io.github.manuelrtsch.sidetrack
 
 import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
 import io.github.manuelrtsch.sidetrack.data.NativeSpotifyGateway
+import io.github.manuelrtsch.sidetrack.data.PlaybackSettings
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
-import io.github.manuelrtsch.sidetrack.data.SpotifySettings
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -122,7 +122,7 @@ class NativeSpotifyGatewayTest {
         val native = FakeNative()
         val gateway = NativeSpotifyGateway(
             native,
-            { SpotifySettings(audioQuality = io.github.manuelrtsch.sidetrack.AudioQuality.Normal) }
+            { PlaybackSettings(audioQuality = io.github.manuelrtsch.sidetrack.AudioQuality.Normal) }
         ) { "token" }
 
         gateway.connect("token")
@@ -134,7 +134,7 @@ class NativeSpotifyGatewayTest {
         val native = FakeNative()
         val gateway = NativeSpotifyGateway(
             native,
-            { SpotifySettings(normalization = true, gapless = false) }
+            { PlaybackSettings(normalization = true, gapless = false) }
         ) { "token" }
 
         gateway.connect("token")
@@ -145,7 +145,7 @@ class NativeSpotifyGatewayTest {
 
     @Test fun `recreate player applies the current settings`() = runTest {
         val native = FakeNative()
-        var settings = SpotifySettings()
+        var settings = PlaybackSettings()
         val gateway = NativeSpotifyGateway(native, { settings }) { "token" }
         gateway.connect("token")
         settings = settings.copy(normalization = true)

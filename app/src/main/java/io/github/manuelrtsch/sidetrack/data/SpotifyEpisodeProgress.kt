@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack.data
 
 import androidx.core.util.AtomicFile
+import io.github.manuelrtsch.sidetrack.ServiceId
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -18,7 +19,8 @@ data class SpotifyEpisodeProgress(
     val positionMs: Long,
     val durationMs: Long,
     val updatedAtMs: Long,
-    val completed: Boolean
+    val completed: Boolean,
+    val service: ServiceId = ServiceId.Spotify
 ) {
     /** How much of the episode is behind the listener, clamped for the row's progress line. */
     fun fraction(): Float {
@@ -178,18 +180,21 @@ class FileSpotifyEpisodeProgressStore(file: File) : SpotifyEpisodeProgressStore 
         }
         return try {
             DataInputStream(BufferedInputStream(stream)).use { input ->
-                if (input.readInt() != MAGIC || input.readInt() != VERSION) return emptyMap()
+                if (input.readInt() != MAGIC) return emptyMap()
+                val version = input.readInt()
+                if (version != VERSION_1 && version != VERSION_2) return emptyMap()
                 val count = input.readInt()
                 if (count !in 0..MAX_ENTRIES) throw IOException("Invalid episode progress count $count")
                 buildMap {
                     repeat(count) {
+                        val service = if (version >= VERSION_2) ServiceId(input.readUTF()) else ServiceId.Spotify
                         val id = input.readUTF()
                         val position = input.readLong().coerceAtLeast(0L)
                         val duration = input.readLong().coerceAtLeast(0L)
                         val updated = input.readLong()
                         val completed = input.readBoolean()
                         if (id.isNotEmpty()) {
-                            put(id, SpotifyEpisodeProgress(id, position, duration, updated, completed))
+                            put(id, SpotifyEpisodeProgress(id, position, duration, updated, completed, service))
                         }
                     }
                 }
@@ -204,10 +209,11 @@ class FileSpotifyEpisodeProgressStore(file: File) : SpotifyEpisodeProgressStore 
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
             data.writeInt(MAGIC)
-            data.writeInt(VERSION)
+            data.writeInt(VERSION_2)
             val values = entries.values.sortedByDescending { it.updatedAtMs }.take(MAX_ENTRIES)
             data.writeInt(values.size)
             values.forEach { entry ->
+                data.writeUTF(entry.service.value)
                 data.writeUTF(entry.episodeId)
                 data.writeLong(entry.positionMs)
                 data.writeLong(entry.durationMs)
@@ -224,7 +230,8 @@ class FileSpotifyEpisodeProgressStore(file: File) : SpotifyEpisodeProgressStore 
 
     private companion object {
         const val MAGIC = 0x534B5450 // "SKTP"
-        const val VERSION = 1
+        const val VERSION_1 = 1
+        const val VERSION_2 = 2
         const val MAX_ENTRIES = 20_000
     }
 }

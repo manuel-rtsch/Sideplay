@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack.data
 
 import androidx.core.util.AtomicFile
+import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.SpotifyEpisode
 import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 import java.io.BufferedInputStream
@@ -24,7 +25,8 @@ data class SpotifyEpisodeMeta(
     val description: String,
     val episodeNumber: Int?,
     val explicit: Boolean,
-    val updatedAtMs: Long
+    val updatedAtMs: Long,
+    val service: ServiceId = ServiceId.Spotify
 )
 
 /** Persists [SpotifyEpisodeMeta] by episode id. */
@@ -67,7 +69,8 @@ class SpotifyEpisodeMetaRepository(
                 description = episode.description.take(MAX_DESCRIPTION_CHARS),
                 episodeNumber = episode.episodeNumber,
                 explicit = episode.explicit,
-                updatedAtMs = now()
+                updatedAtMs = now(),
+                service = episode.service
             )
             )
         entries = prune(next)
@@ -127,18 +130,21 @@ class FileSpotifyEpisodeMetaStore(file: File) : SpotifyEpisodeMetaStore {
         }
         return try {
             DataInputStream(BufferedInputStream(stream)).use { input ->
-                if (input.readInt() != MAGIC || input.readInt() != VERSION) return emptyMap()
+                if (input.readInt() != MAGIC) return emptyMap()
+                val version = input.readInt()
+                if (version != VERSION_1 && version != VERSION_2) return emptyMap()
                 val count = input.readInt()
                 if (count !in 0..MAX_ENTRIES) throw IOException("Invalid episode metadata count $count")
                 buildMap {
                     repeat(count) {
+                        val service = if (version >= VERSION_2) ServiceId(input.readUTF()) else ServiceId.Spotify
                         val id = input.readUTF()
                         val description = readNullableString(input)
                         val number = input.readInt().takeIf { it > 0 }
                         val explicit = input.readBoolean()
                         val updated = input.readLong()
                         if (id.isNotEmpty()) {
-                            put(id, SpotifyEpisodeMeta(id, description, number, explicit, updated))
+                            put(id, SpotifyEpisodeMeta(id, description, number, explicit, updated, service))
                         }
                     }
                 }
@@ -153,10 +159,11 @@ class FileSpotifyEpisodeMetaStore(file: File) : SpotifyEpisodeMetaStore {
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
             data.writeInt(MAGIC)
-            data.writeInt(VERSION)
+            data.writeInt(VERSION_2)
             val values = entries.values.sortedByDescending { it.updatedAtMs }.take(MAX_ENTRIES)
             data.writeInt(values.size)
             values.forEach { entry ->
+                data.writeUTF(entry.service.value)
                 data.writeUTF(entry.episodeId)
                 writeNullableString(data, entry.description)
                 data.writeInt(entry.episodeNumber ?: 0)
@@ -180,7 +187,8 @@ class FileSpotifyEpisodeMetaStore(file: File) : SpotifyEpisodeMetaStore {
 
     private companion object {
         const val MAGIC = 0x534B544D // "SKTM"
-        const val VERSION = 1
+        const val VERSION_1 = 1
+        const val VERSION_2 = 2
         const val MAX_ENTRIES = 20_000
     }
 }

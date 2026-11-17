@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.SPOTIFY_PAGE_SIZE
 import io.github.manuelrtsch.sidetrack.SearchScope
@@ -26,7 +27,7 @@ interface SpotifyCatalog {
         filter: LibraryFilter,
         offset: Int = 0,
         limit: Int = SPOTIFY_PAGE_SIZE
-    ): SpotifyPage<Any>
+    ): SpotifyPage<LibraryEntry>
 
     suspend fun collection(
         type: SpotifyCollectionType,

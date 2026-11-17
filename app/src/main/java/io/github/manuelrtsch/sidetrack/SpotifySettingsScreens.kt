@@ -33,6 +33,7 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
+import io.github.manuelrtsch.sidetrack.data.MusicServiceProvider
 
 private enum class SettingsConfirmation { SignOut }
 
@@ -41,6 +42,9 @@ fun SpotifySettingsScreen(
     account: AccountUiState,
     chrome: ChromeUiState,
     recentCount: Int,
+    serviceName: String = "Spotify",
+    capabilities: ServiceCapabilities = ServiceCapabilities.Spotify,
+    onService: () -> Unit = {},
     onBack: () -> Unit,
     onAudioQuality: () -> Unit,
     onNormalization: () -> Unit,
@@ -110,16 +114,29 @@ fun SpotifySettingsScreen(
                     }
                 )
             }
-            item(key = "quality") {
+            item(key = "service") {
                 SidetrackItem(
-                    "Audio quality",
-                    Modifier.listFade(listState, 1),
-                    secondary = account.audioQuality.label,
+                    "Service",
+                    Modifier.listFade(listState, 10),
+                    secondary = serviceName,
                     secondaryToEnd = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,
-                    onClick = onAudioQuality
+                    onClick = onService
                 )
+            }
+            if (capabilities.supportsQualitySelection) {
+                item(key = "quality") {
+                    SidetrackItem(
+                        "Audio quality",
+                        Modifier.listFade(listState, 1),
+                        secondary = account.audioQuality.label,
+                        secondaryToEnd = true,
+                        showLinkArrow = true,
+                        showLinkArrowWithSecondary = true,
+                        onClick = onAudioQuality
+                    )
+                }
             }
             item(key = "autoplay") {
                 SidetrackItem(
@@ -131,25 +148,29 @@ fun SpotifySettingsScreen(
                     onClick = onAutoplay
                 )
             }
-            item(key = "normalization") {
-                SidetrackItem(
-                    "Normalize volume",
-                    Modifier.listFade(listState, 3),
-                    secondary = if (account.normalization) "On" else "Off",
-                    secondaryToEnd = true,
-                    toggleable = account.normalization,
-                    onClick = onNormalization
-                )
+            if (capabilities.supportsNormalization) {
+                item(key = "normalization") {
+                    SidetrackItem(
+                        "Normalize volume",
+                        Modifier.listFade(listState, 3),
+                        secondary = if (account.normalization) "On" else "Off",
+                        secondaryToEnd = true,
+                        toggleable = account.normalization,
+                        onClick = onNormalization
+                    )
+                }
             }
-            item(key = "gapless") {
-                SidetrackItem(
-                    "Gapless playback",
-                    Modifier.listFade(listState, 4),
-                    secondary = if (account.gapless) "On" else "Off",
-                    secondaryToEnd = true,
-                    toggleable = account.gapless,
-                    onClick = onGapless
-                )
+            if (capabilities.supportsGapless) {
+                item(key = "gapless") {
+                    SidetrackItem(
+                        "Gapless playback",
+                        Modifier.listFade(listState, 4),
+                        secondary = if (account.gapless) "On" else "Off",
+                        secondaryToEnd = true,
+                        toggleable = account.gapless,
+                        onClick = onGapless
+                    )
+                }
             }
             item(key = "cache") {
                 SidetrackItem(
@@ -201,6 +222,45 @@ fun SpotifySettingsScreen(
                         showLinkArrow = true,
                         showLinkArrowWithSecondary = true,
                         onClick = onKeyboard
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ServicePickerScreen(
+    services: List<MusicServiceProvider>,
+    active: ServiceId,
+    onBack: () -> Unit,
+    onSelect: (ServiceId) -> Unit
+) {
+    val baseActions = remember { listOf(SideAction.back("back", "Settings", onBack)) }
+    SidekitScaffold(
+        title = "Service",
+        actions = baseActions
+    ) { padding ->
+        val listState = rememberLazyListState()
+        val first = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+        SidekitList(padding, modifier = Modifier.selectableGroup(), state = listState) {
+            services.forEachIndexed { index, provider ->
+                val selected = provider.id == active
+                item(key = provider.id.value) {
+                    SidetrackItem(
+                        provider.displayName,
+                        Modifier.listFade(listState, index).then(
+                            if (index == 0) Modifier.focusRequester(first) else Modifier
+                        ),
+                        secondary = if (selected) "Active" else null,
+                        secondaryToEnd = true,
+                        icon = if (selected) SidekitIcon.Check else null,
+                        containerColor = if (selected) SidekitTheme.colors.successA1 else null,
+                        secondaryColor = if (selected) SidekitTheme.colors.light else null,
+                        selected = selected,
+                        selectionRole = Role.RadioButton,
+                        onClick = { onSelect(provider.id) }
                     )
                 }
             }

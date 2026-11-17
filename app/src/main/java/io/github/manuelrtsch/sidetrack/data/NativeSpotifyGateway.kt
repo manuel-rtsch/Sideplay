@@ -11,7 +11,7 @@ import kotlinx.coroutines.withContext
  */
 class NativeSpotifyGateway(
     private val native: SpotifyNative,
-    private val settings: () -> SpotifySettings = { SpotifySettings() },
+    private val settings: () -> PlaybackSettings = { PlaybackSettings() },
     private val networkAvailable: () -> Boolean = { true },
     private val accessToken: suspend () -> String?
 ) : SpotifyGateway {

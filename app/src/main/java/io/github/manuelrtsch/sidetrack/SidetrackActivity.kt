@@ -17,7 +17,7 @@ import hrln.interactive.sidekit.sdk.app.SidekitActivity
 import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
 import hrln.interactive.sidekit.sdk.input.applyInputMode
 import hrln.interactive.sidekit.sdk.system.KeypadSystemBack
-import io.github.manuelrtsch.sidetrack.data.SpotifySessions
+import io.github.manuelrtsch.sidetrack.data.AppSessions
 
 /**
  * The Sidetrack shell. It reads Sidekit's configuration when a compatible host is installed and
@@ -99,7 +99,7 @@ class SidetrackActivity : SidekitActivity() {
         // Home for a frame and then replaces it with Sign in. A signed-in install that has not
         // finished the welcome yet starts there once; that includes existing users after an update.
         val start = remember(context) {
-            val signedIn = SpotifySessions.get(context).signedIn.value
+            val signedIn = AppSessions.get(context).signedIn.value
             when {
                 !signedIn -> SIDE_PLAY_SIGN_IN
                 SidetrackLocalSettings(context).needsOnboarding() -> SIDE_PLAY_ONBOARDING

@@ -1,10 +1,13 @@
 package io.github.manuelrtsch.sidetrack.data
 
 import androidx.core.util.AtomicFile
+import io.github.manuelrtsch.sidetrack.Episode
+import io.github.manuelrtsch.sidetrack.MediaItem
+import io.github.manuelrtsch.sidetrack.MediaKey
+import io.github.manuelrtsch.sidetrack.MediaType
 import io.github.manuelrtsch.sidetrack.RepeatMode
-import io.github.manuelrtsch.sidetrack.SpotifyEpisode
-import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
-import io.github.manuelrtsch.sidetrack.SpotifyTrack
+import io.github.manuelrtsch.sidetrack.ServiceId
+import io.github.manuelrtsch.sidetrack.Track
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -27,6 +30,9 @@ interface SpotifyHistoryStore {
 /**
  * Small binary files replaced atomically ([AtomicFile]), matching playlists, reminders and
  * Sidenotes. A corrupt or missing file falls back to an empty state instead of blocking startup.
+ *
+ * Version 2 adds a service id to every record. Version 1 files are read as Spotify and rewritten
+ * as version 2 on the next save, so an existing install keeps its queue and history.
  */
 class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
     private val file = AtomicFile(file)
@@ -39,18 +45,12 @@ class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
         }
         return try {
             DataInputStream(BufferedInputStream(stream)).use { input ->
-                if (input.readInt() != MAGIC || input.readInt() != VERSION) return SpotifyQueueRepository.Snapshot()
-                val shuffle = input.readBoolean()
-                val repeat = RepeatMode.entries.getOrNull(input.readInt()) ?: RepeatMode.Off
-                SpotifyQueueRepository.Snapshot(
-                    current = input.readItemOrNull(),
-                    upcoming = input.readItems(),
-                    history = input.readItems(),
-                    shuffle = shuffle,
-                    repeat = repeat,
-                    context = input.readItems(),
-                    shuffleBackup = input.readItemsOrNull()
-                )
+                if (input.readInt() != MAGIC) return SpotifyQueueRepository.Snapshot()
+                when (input.readInt()) {
+                    VERSION_1 -> input.readQueue(service = ServiceId.Spotify, versioned = false)
+                    VERSION_2 -> input.readQueue(service = null, versioned = true)
+                    else -> SpotifyQueueRepository.Snapshot()
+                }
             }
         } catch (_: Exception) {
             SpotifyQueueRepository.Snapshot()
@@ -62,14 +62,14 @@ class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
             data.writeInt(MAGIC)
-            data.writeInt(VERSION)
+            data.writeInt(VERSION_2)
             data.writeBoolean(snapshot.shuffle)
             data.writeInt(snapshot.repeat.ordinal)
-            data.writeItemOrNull(snapshot.current)
-            data.writeItems(snapshot.upcoming)
-            data.writeItems(snapshot.history)
-            data.writeItems(snapshot.context)
-            data.writeItemsOrNull(snapshot.shuffleBackup)
+            data.writeItemOrNull(snapshot.current, versioned = true)
+            data.writeItems(snapshot.upcoming, versioned = true)
+            data.writeItems(snapshot.history, versioned = true)
+            data.writeItems(snapshot.context, versioned = true)
+            data.writeItemsOrNull(snapshot.shuffleBackup, versioned = true)
             data.flush()
             file.finishWrite(out)
         } catch (e: Exception) {
@@ -78,9 +78,24 @@ class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
         }
     }
 
+    private fun DataInputStream.readQueue(service: ServiceId?, versioned: Boolean): SpotifyQueueRepository.Snapshot {
+        val shuffle = readBoolean()
+        val repeat = RepeatMode.entries.getOrNull(readInt()) ?: RepeatMode.Off
+        return SpotifyQueueRepository.Snapshot(
+            current = readItemOrNull(service, versioned),
+            upcoming = readItems(service, versioned),
+            history = readItems(service, versioned),
+            shuffle = shuffle,
+            repeat = repeat,
+            context = readItems(service, versioned),
+            shuffleBackup = readItemsOrNull(service, versioned)
+        )
+    }
+
     private companion object {
         const val MAGIC = 0x534B5451 // "SKTQ"
-        const val VERSION = 1
+        const val VERSION_1 = 1
+        const val VERSION_2 = 2
     }
 }
 
@@ -88,7 +103,16 @@ class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
  * Where the last session left off: the item that was playing and the offset it had reached, so
  * reopening Sidetrack can pick the same track up at the same second instead of starting at 0:00.
  */
-data class SpotifyResumePoint(val trackId: String, val positionMs: Long)
+data class SpotifyResumePoint(val key: MediaKey, val positionMs: Long) {
+    /** Legacy accessor for the Spotify adapter and the existing UI. */
+    val trackId: String get() = key.id
+
+    /** Legacy constructor: a bare id is a Spotify track. */
+    constructor(trackId: String, positionMs: Long) : this(
+        MediaKey(ServiceId.Spotify, MediaType.Track, trackId),
+        positionMs
+    )
+}
 
 /** Persists the resume point. A missing or unreadable file simply means "start at the beginning". */
 interface SpotifyPositionStore {
@@ -107,10 +131,23 @@ class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
         }
         return try {
             DataInputStream(BufferedInputStream(stream)).use { input ->
-                if (input.readInt() != MAGIC || input.readInt() != VERSION) return null
-                val id = input.readUTF()
-                val position = input.readLong()
-                if (id.isEmpty()) null else SpotifyResumePoint(id, position.coerceAtLeast(0L))
+                if (input.readInt() != MAGIC) return null
+                when (input.readInt()) {
+                    VERSION_1 -> {
+                        val id = input.readUTF()
+                        val position = input.readLong()
+                        if (id.isEmpty()) null else SpotifyResumePoint(id, position.coerceAtLeast(0L))
+                    }
+
+                    VERSION_2 -> {
+                        val encoded = input.readUTF()
+                        val position = input.readLong()
+                        val key = MediaKey.decode(encoded) ?: return null
+                        SpotifyResumePoint(key, position.coerceAtLeast(0L))
+                    }
+
+                    else -> null
+                }
             }
         } catch (_: Exception) {
             null
@@ -122,8 +159,8 @@ class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
             data.writeInt(MAGIC)
-            data.writeInt(VERSION)
-            data.writeUTF(point?.trackId.orEmpty())
+            data.writeInt(VERSION_2)
+            data.writeUTF(point?.key?.encode().orEmpty())
             data.writeLong(point?.positionMs ?: 0L)
             data.flush()
             file.finishWrite(out)
@@ -135,7 +172,8 @@ class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
 
     private companion object {
         const val MAGIC = 0x534B5452 // "SKTR"
-        const val VERSION = 1
+        const val VERSION_1 = 1
+        const val VERSION_2 = 2
     }
 }
 
@@ -150,9 +188,11 @@ class FileSpotifyHistoryStore(file: File) : SpotifyHistoryStore {
         }
         return try {
             DataInputStream(BufferedInputStream(stream)).use { input ->
-                if (input.readInt() != MAGIC || input.readInt() != VERSION) return emptyList()
-                List(input.readCount(MAX_HISTORY)) {
-                    SpotifyHistoryEntry(input.readItem(), input.readLong())
+                if (input.readInt() != MAGIC) return emptyList()
+                when (input.readInt()) {
+                    VERSION_1 -> input.readHistory(service = ServiceId.Spotify, versioned = false)
+                    VERSION_2 -> input.readHistory(service = null, versioned = true)
+                    else -> emptyList()
                 }
             }
         } catch (_: Exception) {
@@ -165,10 +205,10 @@ class FileSpotifyHistoryStore(file: File) : SpotifyHistoryStore {
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
             data.writeInt(MAGIC)
-            data.writeInt(VERSION)
+            data.writeInt(VERSION_2)
             data.writeInt(entries.size)
             entries.forEach { entry ->
-                data.writeItem(entry.item)
+                data.writeItem(entry.item, versioned = true)
                 data.writeLong(entry.playedAtMs)
             }
             data.flush()
@@ -179,9 +219,14 @@ class FileSpotifyHistoryStore(file: File) : SpotifyHistoryStore {
         }
     }
 
+    private fun DataInputStream.readHistory(service: ServiceId?, versioned: Boolean): List<SpotifyHistoryEntry> = List(readCount(MAX_HISTORY)) {
+        SpotifyHistoryEntry(readItem(service, versioned), readLong())
+    }
+
     private companion object {
         const val MAGIC = 0x534B5448 // "SKTH"
-        const val VERSION = 1
+        const val VERSION_1 = 1
+        const val VERSION_2 = 2
         const val MAX_HISTORY = 10_000
     }
 }
@@ -190,24 +235,25 @@ private const val TYPE_TRACK = 1
 private const val TYPE_EPISODE = 2
 private const val MAX_ITEMS = 100_000
 
-private fun DataOutputStream.writeItems(items: List<SpotifyMediaItem>) {
+private fun DataOutputStream.writeItems(items: List<MediaItem>, versioned: Boolean) {
     writeInt(items.size)
-    items.forEach(::writeItem)
+    items.forEach { writeItem(it, versioned) }
 }
 
-private fun DataOutputStream.writeItemsOrNull(items: List<SpotifyMediaItem>?) {
+private fun DataOutputStream.writeItemsOrNull(items: List<MediaItem>?, versioned: Boolean) {
     writeBoolean(items != null)
-    items?.let(::writeItems)
+    items?.let { writeItems(it, versioned) }
 }
 
-private fun DataOutputStream.writeItemOrNull(item: SpotifyMediaItem?) {
+private fun DataOutputStream.writeItemOrNull(item: MediaItem?, versioned: Boolean) {
     writeBoolean(item != null)
-    item?.let(::writeItem)
+    item?.let { writeItem(it, versioned) }
 }
 
-private fun DataOutputStream.writeItem(item: SpotifyMediaItem) {
+private fun DataOutputStream.writeItem(item: MediaItem, versioned: Boolean) {
+    if (versioned) writeUTF(item.service.value)
     when (item) {
-        is SpotifyTrack -> {
+        is Track -> {
             writeByte(TYPE_TRACK)
             writeUTF(item.id)
             writeUTF(item.title)
@@ -222,7 +268,7 @@ private fun DataOutputStream.writeItem(item: SpotifyMediaItem) {
             writeNullableString(item.artUrl)
         }
 
-        is SpotifyEpisode -> {
+        is Episode -> {
             writeByte(TYPE_EPISODE)
             writeUTF(item.id)
             writeUTF(item.title)
@@ -238,41 +284,46 @@ private fun DataOutputStream.writeItem(item: SpotifyMediaItem) {
     }
 }
 
-private fun DataInputStream.readItems(): List<SpotifyMediaItem> = List(readCount(MAX_ITEMS)) { readItem() }
+private fun DataInputStream.readItems(service: ServiceId?, versioned: Boolean): List<MediaItem> = List(readCount(MAX_ITEMS)) { readItem(service, versioned) }
 
-private fun DataInputStream.readItemsOrNull(): List<SpotifyMediaItem>? = if (readBoolean()) readItems() else null
+private fun DataInputStream.readItemsOrNull(service: ServiceId?, versioned: Boolean): List<MediaItem>? = if (readBoolean()) readItems(service, versioned) else null
 
-private fun DataInputStream.readItemOrNull(): SpotifyMediaItem? = if (readBoolean()) readItem() else null
+private fun DataInputStream.readItemOrNull(service: ServiceId?, versioned: Boolean): MediaItem? = if (readBoolean()) readItem(service, versioned) else null
 
-private fun DataInputStream.readItem(): SpotifyMediaItem = when (val type = readUnsignedByte()) {
-    TYPE_TRACK -> SpotifyTrack(
-        id = readUTF(),
-        title = readUTF(),
-        artist = readUTF(),
-        artistId = readUTF(),
-        albumId = readUTF(),
-        artRes = readInt(),
-        durationMs = readLong(),
-        explicit = readBoolean(),
-        playable = readBoolean(),
-        uri = readNullableString(),
-        artUrl = readNullableString()
-    )
+private fun DataInputStream.readItem(service: ServiceId?, versioned: Boolean): MediaItem {
+    val itemService = if (versioned) ServiceId(readUTF()) else service ?: ServiceId.Spotify
+    return when (val type = readUnsignedByte()) {
+        TYPE_TRACK -> Track(
+            id = readUTF(),
+            title = readUTF(),
+            artist = readUTF(),
+            artistId = readUTF(),
+            albumId = readUTF(),
+            artRes = readInt(),
+            durationMs = readLong(),
+            explicit = readBoolean(),
+            playable = readBoolean(),
+            uri = readNullableString(),
+            artUrl = readNullableString(),
+            service = itemService
+        )
 
-    TYPE_EPISODE -> SpotifyEpisode(
-        id = readUTF(),
-        title = readUTF(),
-        show = readUTF(),
-        showId = readUTF(),
-        published = readUTF(),
-        artRes = readInt(),
-        durationMs = readLong(),
-        video = readBoolean(),
-        uri = readNullableString(),
-        artUrl = readNullableString()
-    )
+        TYPE_EPISODE -> Episode(
+            id = readUTF(),
+            title = readUTF(),
+            show = readUTF(),
+            showId = readUTF(),
+            published = readUTF(),
+            artRes = readInt(),
+            durationMs = readLong(),
+            video = readBoolean(),
+            uri = readNullableString(),
+            artUrl = readNullableString(),
+            service = itemService
+        )
 
-    else -> throw IOException("Unknown Sidetrack media item type $type")
+        else -> throw IOException("Unknown Sidetrack media item type $type")
+    }
 }
 
 private fun DataInputStream.readCount(max: Int): Int {

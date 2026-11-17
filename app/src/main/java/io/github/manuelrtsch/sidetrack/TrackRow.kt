@@ -39,7 +39,7 @@ class TrackRows(
     val onEnsureSaved: (SpotifyTrack) -> Unit,
     val onAddToQueue: (SpotifyTrack) -> Unit
 ) {
-    fun saved(track: SpotifyTrack): Boolean = track.id in savedIds
+    fun saved(track: SpotifyTrack): Boolean = track.key.encode() in savedIds
 }
 
 /** Remembers the list's gutter state and settles it once focus stops moving. */

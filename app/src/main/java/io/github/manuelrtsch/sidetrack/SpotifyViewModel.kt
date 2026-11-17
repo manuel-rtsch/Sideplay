@@ -4,7 +4,9 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import hrln.interactive.sidekit.design.action.NoticeKind
-import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
+import io.github.manuelrtsch.sidetrack.data.MediaCatalog
+import io.github.manuelrtsch.sidetrack.data.MediaLibraryWriter
+import io.github.manuelrtsch.sidetrack.data.ServiceRuntime
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeMetaRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgressRepository
@@ -12,9 +14,8 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryEntry
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
-import io.github.manuelrtsch.sidetrack.data.SpotifyLibraryWriter
 import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
-import io.github.manuelrtsch.sidetrack.data.SpotifySession
+import io.github.manuelrtsch.sidetrack.playback.PlaybackEvent
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
@@ -33,7 +34,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 
 /** How long the now-playing confirmation owns the action bar before the normal actions return. */
 const val NOW_PLAYING_NOTICE_MS = 4_000L
@@ -144,7 +144,7 @@ data class SpotifyUiState(
     val artistRadioPending: Boolean = false,
     val artistRadioError: String? = null
 ) {
-    val savedCurrent: Boolean get() = current?.let { it.id in savedTrackIds } ?: false
+    val savedCurrent: Boolean get() = current?.let { it.key.encode() in savedTrackIds } ?: false
 }
 
 /**
@@ -153,20 +153,36 @@ data class SpotifyUiState(
  * implements the optimistic save/follow behaviour the action bars expect.
  */
 class SpotifyViewModel(
-    private val catalog: SpotifyCatalog,
-    private val writer: SpotifyLibraryWriter? = null,
+    private val catalog: MediaCatalog,
+    private val writer: MediaLibraryWriter? = null,
     private val queue: SpotifyQueueRepository = SpotifyQueueRepository(),
     private val history: SpotifyHistoryRepository = SpotifyHistoryRepository(),
     /** The entries the last Clear history removed, kept only while Undo is offered. */
     private var clearedHistory: List<SpotifyHistoryEntry> = emptyList(),
     private val episodeProgressRepository: SpotifyEpisodeProgressRepository = SpotifyEpisodeProgressRepository(),
     private val episodeMetaRepository: SpotifyEpisodeMetaRepository = SpotifyEpisodeMetaRepository(),
-    private val session: SpotifySession? = null,
+    private val session: ServiceRuntime? = null,
     private val openBrowser: (suspend (String) -> Unit)? = null,
     private val clearArtworkCache: () -> Unit = {},
     private val simulatePlayback: Boolean = true
 ) : ViewModel() {
-    private val _state = MutableStateFlow(SpotifyUiState(signedIn = session?.signedIn?.value ?: false))
+    /** The active service's identity; fixtures without a runtime are Spotify. */
+    private val service: ServiceId get() = session?.service ?: ServiceId.Spotify
+
+    /** What the active service can do. The UI asks this instead of asking which service it is. */
+    val capabilities: ServiceCapabilities get() = session?.capabilities ?: ServiceCapabilities.Spotify
+
+    private val supportedFilters: List<LibraryFilter>
+        get() = LibraryFilter.entries.filter { it.section() in capabilities.librarySections }
+
+    private val supportedScopes: Set<SearchScope>
+        get() = SearchScope.entries.filter { it in capabilities.searchScopes }.toSet()
+    private val _state = MutableStateFlow(
+        SpotifyUiState(
+            signedIn = session?.signedIn?.value ?: false,
+            searchScopes = supportedScopes
+        )
+    )
     val state: StateFlow<SpotifyUiState> = _state.asStateFlow()
 
     /**
@@ -365,8 +381,8 @@ class SpotifyViewModel(
                 // off to a slow heartbeat when idle so this does not run forever on the main path.
                 while (true) {
                     delay(if (_state.value.isPlaying) 300L else 3_000L)
-                    val raw = withContext(Dispatchers.IO) { session.pollPlaybackEvent() } ?: continue
-                    handlePlaybackEvent(raw)
+                    val event = withContext(Dispatchers.IO) { session.playback.pollEvent() } ?: continue
+                    handlePlaybackEvent(event)
                 }
             }
             viewModelScope.launch {
@@ -458,7 +474,9 @@ class SpotifyViewModel(
         loadLibrary(_state.value.filter)
     }
 
-    fun collection(type: SpotifyCollectionType, id: String): SpotifyCollection? = _state.value.collections[collectionKey(type, id)]
+    fun collection(type: SpotifyCollectionType, id: String): SpotifyCollection? = collection(mediaKey(type, id))
+
+    fun collection(key: MediaKey): SpotifyCollection? = _state.value.collections[key.encode()]
 
     fun artist(id: String): SpotifyArtist? = _state.value.artists[id]
 
@@ -466,41 +484,43 @@ class SpotifyViewModel(
 
     fun topTracks(artist: SpotifyArtist): List<SpotifyTrack> = _state.value.artistTracks[artist.id].orEmpty()
 
-    fun ensureCollection(type: SpotifyCollectionType, id: String) {
-        val key = collectionKey(type, id)
+    fun ensureCollection(type: SpotifyCollectionType, id: String) = ensureCollection(mediaKey(type, id))
+
+    fun ensureCollection(key: MediaKey) {
+        val cacheKey = key.encode()
         val snapshot = _state.value
-        if (key in snapshot.collections || key in snapshot.pendingCollections) return
-        _state.update { it.copy(pendingCollections = it.pendingCollections + key) }
+        if (cacheKey in snapshot.collections || cacheKey in snapshot.pendingCollections) return
+        _state.update { it.copy(pendingCollections = it.pendingCollections + cacheKey) }
         viewModelScope.launch {
             try {
-                val collection = catalog.collection(type, id, 0, SPOTIFY_PAGE_SIZE)
+                val collection = catalog.collection(key, 0, SPOTIFY_PAGE_SIZE)
                 val saved = if (collection == null) {
                     null
                 } else {
-                    runCatching { writer?.isSaved(type, id) }
-                        .onFailure { SidetrackDebug.log("viewModel.ensureCollection key=$key saved lookup failed", it) }
+                    runCatching { writer?.isSaved(key) }
+                        .onFailure { SidetrackDebug.log("viewModel.ensureCollection key=$cacheKey saved lookup failed", it) }
                         .getOrNull()
                 }
                 _state.update {
                     val keys = it.savedCollectionKeys.toMutableSet()
-                    if (saved != null && key !in savedCollectionTouched) {
-                        if (saved) keys.add(key) else keys.remove(key)
+                    if (saved != null && cacheKey !in savedCollectionTouched) {
+                        if (saved) keys.add(cacheKey) else keys.remove(cacheKey)
                     }
                     it.copy(
-                        collections = if (collection == null) it.collections else it.collections + (key to collection),
+                        collections = if (collection == null) it.collections else it.collections + (cacheKey to collection),
                         savedCollectionKeys = keys,
-                        pendingCollections = it.pendingCollections - key,
-                        collectionErrors = it.collectionErrors - key
+                        pendingCollections = it.pendingCollections - cacheKey,
+                        collectionErrors = it.collectionErrors - cacheKey
                     )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                SidetrackDebug.log("viewModel.ensureCollection key=$key failed", e)
+                SidetrackDebug.log("viewModel.ensureCollection key=$cacheKey failed", e)
                 _state.update {
                     it.copy(
-                        pendingCollections = it.pendingCollections - key,
-                        collectionErrors = it.collectionErrors + (key to playbackNotice(e))
+                        pendingCollections = it.pendingCollections - cacheKey,
+                        collectionErrors = it.collectionErrors + (cacheKey to playbackNotice(e))
                     )
                 }
             }
@@ -508,33 +528,37 @@ class SpotifyViewModel(
     }
 
     /** Retries a collection that failed to load, keeping the screen on its fallback until it lands. */
-    fun retryCollection(type: SpotifyCollectionType, id: String) {
-        val key = collectionKey(type, id)
-        if (key in _state.value.pendingCollections) return
-        _state.update { it.copy(collectionErrors = it.collectionErrors - key) }
-        ensureCollection(type, id)
+    fun retryCollection(type: SpotifyCollectionType, id: String) = retryCollection(mediaKey(type, id))
+
+    fun retryCollection(key: MediaKey) {
+        val cacheKey = key.encode()
+        if (cacheKey in _state.value.pendingCollections) return
+        _state.update { it.copy(collectionErrors = it.collectionErrors - cacheKey) }
+        ensureCollection(key)
     }
 
-    fun loadMoreCollection(type: SpotifyCollectionType, id: String) {
-        val key = collectionKey(type, id)
+    fun loadMoreCollection(type: SpotifyCollectionType, id: String) = loadMoreCollection(mediaKey(type, id))
+
+    fun loadMoreCollection(key: MediaKey) {
+        val cacheKey = key.encode()
         val snapshot = _state.value
-        val collection = snapshot.collections[key] ?: return
-        if (!collection.hasMore || key in snapshot.collectionMorePending) return
-        _state.update { it.copy(collectionMorePending = it.collectionMorePending + key) }
+        val collection = snapshot.collections[cacheKey] ?: return
+        if (!collection.hasMore || cacheKey in snapshot.collectionMorePending) return
+        _state.update { it.copy(collectionMorePending = it.collectionMorePending + cacheKey) }
         viewModelScope.launch {
             try {
-                val next = catalog.collection(type, id, collection.items.size, SPOTIFY_PAGE_SIZE)
+                val next = catalog.collection(key, collection.items.size, SPOTIFY_PAGE_SIZE)
                 _state.update { state ->
-                    val current = state.collections[key] ?: return@update state
+                    val current = state.collections[cacheKey] ?: return@update state
                     if (next == null) {
                         state.copy(
-                            collectionMorePending = state.collectionMorePending - key,
-                            collections = state.collections + (key to current.copy(hasMore = false))
+                            collectionMorePending = state.collectionMorePending - cacheKey,
+                            collections = state.collections + (cacheKey to current.copy(hasMore = false))
                         )
                     } else {
                         state.copy(
-                            collectionMorePending = state.collectionMorePending - key,
-                            collections = state.collections + (key to current.append(next))
+                            collectionMorePending = state.collectionMorePending - cacheKey,
+                            collections = state.collections + (cacheKey to current.append(next))
                         )
                     }
                 }
@@ -542,10 +566,10 @@ class SpotifyViewModel(
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    val current = it.collections[key]
+                    val current = it.collections[cacheKey]
                     it.copy(
-                        collectionMorePending = it.collectionMorePending - key,
-                        collections = if (current == null) it.collections else it.collections + (key to current.copy(hasMore = false))
+                        collectionMorePending = it.collectionMorePending - cacheKey,
+                        collections = if (current == null) it.collections else it.collections + (cacheKey to current.copy(hasMore = false))
                     ).say(playbackNotice(e))
                 }
             }
@@ -559,7 +583,7 @@ class SpotifyViewModel(
         _state.update { it.copy(artistMorePending = it.artistMorePending + id) }
         viewModelScope.launch {
             try {
-                val page = catalog.albumsBy(artist, snapshot.artistAlbums[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
+                val page = catalog.albums(artist.key, snapshot.artistAlbums[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
                 _state.update {
                     it.copy(
                         artistAlbums = it.artistAlbums + (id to (it.artistAlbums[id].orEmpty() + page.items).distinctBy { album -> album.id }),
@@ -587,7 +611,7 @@ class SpotifyViewModel(
         _state.update { it.copy(artistMorePending = it.artistMorePending + id) }
         viewModelScope.launch {
             try {
-                val page = catalog.topTracks(artist, snapshot.artistTracks[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
+                val page = catalog.topTracks(artist.key, snapshot.artistTracks[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
                 _state.update {
                     it.copy(
                         artistTracks = it.artistTracks + (id to (it.artistTracks[id].orEmpty() + page.items).distinctBy { track -> track.id }),
@@ -611,7 +635,7 @@ class SpotifyViewModel(
     private suspend fun loadAllCollection(collection: SpotifyCollection): SpotifyCollection {
         var current = collection
         while (current.hasMore) {
-            val next = catalog.collection(current.type, current.id, current.items.size, SPOTIFY_PAGE_SIZE) ?: break
+            val next = catalog.collection(mediaKey(current.type, current.id), current.items.size, SPOTIFY_PAGE_SIZE) ?: break
             current = current.append(next)
             _state.update {
                 it.copy(collections = it.collections + (collectionKey(current.type, current.id) to current))
@@ -632,14 +656,14 @@ class SpotifyViewModel(
         _state.update { it.copy(pendingArtists = it.pendingArtists + id) }
         viewModelScope.launch {
             try {
-                val artist = catalog.artist(id)
+                val artist = catalog.artist(artistKey(id))
                 if (artist == null) {
                     _state.update { it.copy(pendingArtists = it.pendingArtists - id) }
                     return@launch
                 }
-                val albums = catalog.albumsBy(artist, 0, SPOTIFY_ARTIST_PAGE_SIZE)
-                val tracks = catalog.topTracks(artist, 0, SPOTIFY_ARTIST_PAGE_SIZE)
-                val followed = runCatching { writer?.isArtistFollowed(id) }
+                val albums = catalog.albums(artist.key, 0, SPOTIFY_ARTIST_PAGE_SIZE)
+                val tracks = catalog.topTracks(artist.key, 0, SPOTIFY_ARTIST_PAGE_SIZE)
+                val followed = runCatching { writer?.isFollowed(artistKey(id)) }
                     .onFailure { SidetrackDebug.log("viewModel.ensureArtist id=$id followed lookup failed", it) }
                     .getOrNull()
                 _state.update {
@@ -788,7 +812,7 @@ class SpotifyViewModel(
         }
         artistRadioJob = viewModelScope.launch {
             try {
-                val result = catalog.artistRadioStation(id, SPOTIFY_PAGE_SIZE)
+                val result = catalog.radioStation(artistKey(id), SPOTIFY_PAGE_SIZE)
                 val tracks = result.tracks
                     .filter { it.playable }
                     .distinctBy { it.id }
@@ -812,7 +836,7 @@ class SpotifyViewModel(
                     saveable = result.playlistId != null
                 )
                 val saved = result.playlistId?.let {
-                    runCatching { writer?.isSaved(SpotifyCollectionType.Playlist, it) }.getOrNull()
+                    runCatching { writer?.isSaved(mediaKey(SpotifyCollectionType.Playlist, it)) }.getOrNull()
                 }
                 _state.update {
                     it.copy(
@@ -843,7 +867,7 @@ class SpotifyViewModel(
         }
         radioJob = viewModelScope.launch {
             try {
-                val result = catalog.songRadioStation(seed.id, SPOTIFY_PAGE_SIZE)
+                val result = catalog.radioStation(trackKey(seed.id), SPOTIFY_PAGE_SIZE)
                 val tracks = result.tracks
                     .filter { it.playable && it.id != seed.id }
                     .distinctBy { it.id }
@@ -869,7 +893,7 @@ class SpotifyViewModel(
                     saveable = result.playlistId != null
                 )
                 val saved = result.playlistId?.let {
-                    runCatching { writer?.isSaved(SpotifyCollectionType.Playlist, it) }.getOrNull()
+                    runCatching { writer?.isSaved(mediaKey(SpotifyCollectionType.Playlist, it)) }.getOrNull()
                 }
                 _state.update {
                     it.copy(
@@ -961,7 +985,7 @@ class SpotifyViewModel(
         var tracks = topTracks(artist)
         var hasMore = _state.value.artistTrackHasMore[id] == true
         while (hasMore) {
-            val page = catalog.topTracks(artist, tracks.size, SPOTIFY_ARTIST_PAGE_SIZE)
+            val page = catalog.topTracks(artist.key, tracks.size, SPOTIFY_ARTIST_PAGE_SIZE)
             tracks = (tracks + page.items).distinctBy { track -> track.id }
             hasMore = page.hasMore
             val updated = tracks
@@ -1112,12 +1136,13 @@ class SpotifyViewModel(
         id: String,
         track: SpotifyTrack?
     ) {
-        val wasSaved = id in _state.value.savedTrackIds
+        val savedKey = trackKey(id).encode()
+        val wasSaved = savedKey in _state.value.savedTrackIds
         val saved = !wasSaved
-        savedTrackTouched += id
+        savedTrackTouched += savedKey
         _state.update {
             val ids = it.savedTrackIds.toMutableSet()
-            if (saved) ids.add(id) else ids.remove(id)
+            if (saved) ids.add(savedKey) else ids.remove(savedKey)
             var next = it.copy(savedTrackIds = ids)
             next = if (saved) {
                 track?.let { item -> next.withLibraryItemAdded(LibraryFilter.LikedSongs, item) } ?: next
@@ -1129,13 +1154,13 @@ class SpotifyViewModel(
         val writer = writer ?: return
         viewModelScope.launch {
             try {
-                writer.setTrackSaved(id, saved)
+                writer.setSaved(trackKey(id), saved)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update {
                     val ids = it.savedTrackIds.toMutableSet()
-                    if (wasSaved) ids.add(id) else ids.remove(id)
+                    if (wasSaved) ids.add(savedKey) else ids.remove(savedKey)
                     var next = it.copy(savedTrackIds = ids).say(playbackNotice(e))
                     next = if (wasSaved) {
                         track?.let { item -> next.withLibraryItemAdded(LibraryFilter.LikedSongs, item) } ?: next
@@ -1176,7 +1201,7 @@ class SpotifyViewModel(
         val writer = writer ?: return
         viewModelScope.launch {
             try {
-                writer.setSaved(type, id, saved)
+                writer.setSaved(mediaKey(type, id), saved)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1196,16 +1221,17 @@ class SpotifyViewModel(
         }
     }
 
-    fun followed(artist: SpotifyArtist): Boolean = artist.id in _state.value.followedArtistIds
+    fun followed(artist: SpotifyArtist): Boolean = artistKey(artist.id).encode() in _state.value.followedArtistIds
 
     fun toggleFollow(artist: SpotifyArtist) {
         val id = artist.id
-        val wasFollowing = id in _state.value.followedArtistIds
+        val followedKey = artistKey(id).encode()
+        val wasFollowing = followedKey in _state.value.followedArtistIds
         val following = !wasFollowing
-        followedArtistTouched += id
+        followedArtistTouched += followedKey
         _state.update {
             val ids = it.followedArtistIds.toMutableSet()
-            if (following) ids.add(id) else ids.remove(id)
+            if (following) ids.add(followedKey) else ids.remove(followedKey)
             val next = it.copy(followedArtistIds = ids)
             if (following) {
                 next.withLibraryItemAdded(LibraryFilter.Artists, artist)
@@ -1216,13 +1242,13 @@ class SpotifyViewModel(
         val writer = writer ?: return
         viewModelScope.launch {
             try {
-                writer.setArtistFollowed(id, following)
+                writer.setFollowed(artistKey(id), following)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _state.update {
                     val ids = it.followedArtistIds.toMutableSet()
-                    if (wasFollowing) ids.add(id) else ids.remove(id)
+                    if (wasFollowing) ids.add(followedKey) else ids.remove(followedKey)
                     val next = it.copy(followedArtistIds = ids).say(playbackNotice(e))
                     if (wasFollowing) {
                         next.withLibraryItemAdded(LibraryFilter.Artists, artist)
@@ -1240,29 +1266,31 @@ class SpotifyViewModel(
      */
     fun ensureTrackSaved(id: String) {
         val writer = writer ?: return
-        if (id in _state.value.savedTrackIds || id in savedTrackTouched) return
+        val savedKey = trackKey(id).encode()
+        if (savedKey in _state.value.savedTrackIds || savedKey in savedTrackTouched) return
         viewModelScope.launch {
-            val saved = runCatching { writer.isTrackSaved(id) }.getOrNull() ?: return@launch
-            if (saved && id !in savedTrackTouched) {
-                _state.update { it.copy(savedTrackIds = it.savedTrackIds + id) }
+            val saved = runCatching { writer.isSaved(trackKey(id)) }.getOrNull() ?: return@launch
+            if (saved && savedKey !in savedTrackTouched) {
+                _state.update { it.copy(savedTrackIds = it.savedTrackIds + savedKey) }
             }
         }
     }
 
     fun setFilter(filter: LibraryFilter) {
+        val supported = filter.takeIf { it in supportedFilters } ?: supportedFilters.firstOrNull() ?: LibraryFilter.LikedSongs
         _state.update {
             if (it.filter == filter) {
                 it.copy(libraryLoading = true)
             } else {
                 it.copy(
-                    filter = filter,
+                    filter = supported,
                     libraryItems = emptyList(),
                     libraryHasMore = false,
                     libraryLoading = true
                 )
             }
         }
-        loadLibrary(filter)
+        loadLibrary(supported)
     }
 
     fun setQuery(query: String) {
@@ -1518,9 +1546,9 @@ class SpotifyViewModel(
                 val sections = LinkedHashMap<LibraryFilter, List<Any>>()
                 val hasMore = mutableSetOf<LibraryFilter>()
                 var notice: String? = null
-                for (filter in LibraryFilter.entries) {
+                for (filter in supportedFilters) {
                     try {
-                        val page = catalog.library(filter, 0, LIBRARY_SECTION_SIZE + 1)
+                        val page = catalog.library(filter.section(), 0, LIBRARY_SECTION_SIZE + 1)
                         sections[filter] = page.items.take(LIBRARY_SECTION_SIZE)
                         // Prefer the category total over the delivered rows: a catalog may drop an
                         // entry whose metadata failed to load, and an item-based check would then
@@ -1569,7 +1597,7 @@ class SpotifyViewModel(
         _state.update { it.copy(libraryLoading = true, libraryMorePending = false, libraryError = null) }
         libraryJob = viewModelScope.launch {
             try {
-                val page = catalog.library(filter, 0, SPOTIFY_PAGE_SIZE)
+                val page = catalog.library(filter.section(), 0, SPOTIFY_PAGE_SIZE)
                 _state.update {
                     if (it.filter == filter) {
                         it.withLibrarySaved(filter, page.items).copy(
@@ -1606,7 +1634,7 @@ class SpotifyViewModel(
         _state.update { it.copy(libraryMorePending = true) }
         viewModelScope.launch {
             try {
-                val page = catalog.library(filter, offset, SPOTIFY_PAGE_SIZE)
+                val page = catalog.library(filter.section(), offset, SPOTIFY_PAGE_SIZE)
                 _state.update {
                     if (it.filter != filter) {
                         it.copy(libraryMorePending = false)
@@ -1679,7 +1707,7 @@ class SpotifyViewModel(
     /** Adds preview items to the known saved state without discarding items from other pages. */
     private fun SpotifyUiState.withSectionSaved(filter: LibraryFilter, items: List<Any>): SpotifyUiState = when (filter) {
         LibraryFilter.LikedSongs -> copy(
-            savedTrackIds = savedTrackIds + items.filterIsInstance<SpotifyTrack>().map { it.id }
+            savedTrackIds = savedTrackIds + items.filterIsInstance<SpotifyTrack>().map { trackKey(it.id).encode() }
         )
 
         LibraryFilter.Albums -> copy(
@@ -1698,7 +1726,7 @@ class SpotifyViewModel(
         )
 
         LibraryFilter.Artists -> copy(
-            followedArtistIds = followedArtistIds + items.filterIsInstance<SpotifyArtist>().map { it.id }
+            followedArtistIds = followedArtistIds + items.filterIsInstance<SpotifyArtist>().map { artistKey(it.id).encode() }
         )
     }
 
@@ -1846,7 +1874,7 @@ class SpotifyViewModel(
     /** The offset a restored item was stopped at. Tracks still use the single-session resume point. */
     private fun savedPositionFor(item: SpotifyMediaItem): Long = when (item) {
         is SpotifyEpisode -> episodeProgressRepository.resumePosition(item.id)
-        else -> session?.resumePoint?.takeIf { it.trackId == item.id }?.positionMs ?: 0L
+        else -> session?.resumePoint?.takeIf { it.key == item.key }?.positionMs ?: 0L
     }
 
     private fun markEpisodeFinished(item: SpotifyMediaItem) {
@@ -1988,16 +2016,22 @@ class SpotifyViewModel(
      * librespot is the source of truth while it is playing: its position events keep the seek bar
      * honest through buffering and seeks, and EndOfTrack advances the Sidekit queue exactly once.
      */
-    internal fun handlePlaybackEvent(raw: String) {
-        val event = runCatching { JSONObject(raw) }.getOrNull() ?: return
-        val position = event.optLong("positionMs", _playbackPositionMs.value)
-        val playRequestId = event.optLong("playRequestId", -1L)
-        val eventUri = event.opt("uri")?.toString()
-        session?.notePlayRequest(playRequestId, eventUri)
-        val type = event.opt("type")?.toString().orEmpty()
-        SidetrackDebug.log("event type=$type uri=${event.opt("uri")?.toString().orEmpty()} positionMs=$position")
-        when (type) {
-            "loading" -> if (matchesCurrent(event) && !staleResumeEvent(position)) {
+    internal fun handlePlaybackEvent(event: PlaybackEvent) {
+        val position = when (event) {
+            is PlaybackEvent.Loading -> event.positionMs
+            is PlaybackEvent.Playing -> event.positionMs
+            is PlaybackEvent.Paused -> event.positionMs
+            is PlaybackEvent.Position -> event.positionMs
+            is PlaybackEvent.Seeked -> event.positionMs
+            is PlaybackEvent.PositionCorrection -> event.positionMs
+            else -> null
+        } ?: _playbackPositionMs.value
+        session?.notePlayRequest(event.playRequestId, event.uri)
+        SidetrackDebug.log(
+            "event type=${event::class.simpleName} uri=${event.uri.orEmpty()} positionMs=$position"
+        )
+        when (event) {
+            is PlaybackEvent.Loading -> if (matchesCurrent(event.uri) && !staleResumeEvent(position)) {
                 // The player has accepted the new item: the hold can end and the clock may run
                 // from the position the player will actually start at.
                 awaitingPlaybackStart = false
@@ -2010,7 +2044,7 @@ class SpotifyViewModel(
                 // still report the old offset, so keep the bar at the target.
             }
 
-            "playing" -> if (matchesCurrent(event)) {
+            is PlaybackEvent.Playing -> if (matchesCurrent(event.uri)) {
                 val playback = session?.playback
                 // Ignore a playing event that belongs to a command the user already superseded
                 // with a pause. Otherwise rapid taps leave the UI showing play with no sound.
@@ -2026,7 +2060,7 @@ class SpotifyViewModel(
                 }
             }
 
-            "paused" -> if (matchesCurrent(event)) {
+            is PlaybackEvent.Paused -> if (matchesCurrent(event.uri)) {
                 val playback = session?.playback
                 // Ignore a paused event that belongs to a command the user already superseded
                 // with a resume. Otherwise the UI flickers back to paused after a resume.
@@ -2040,7 +2074,7 @@ class SpotifyViewModel(
                 }
             }
 
-            "seeked", "positionCorrection" -> {
+            is PlaybackEvent.Seeked, is PlaybackEvent.PositionCorrection -> {
                 // The player itself confirms where it landed. This is the only event that may
                 // end a local seek hold; a regular position event can still describe the old
                 // clock while the seek is queued behind a slow fetch.
@@ -2054,7 +2088,7 @@ class SpotifyViewModel(
                 recordEpisodeProgress(force = true)
             }
 
-            "position" -> {
+            is PlaybackEvent.Position -> {
                 // Regular decoder updates must not end a pending seek: they can still be from
                 // the generation before the seek, especially on a slow connection.
                 if (activeSeekHold() != null) return
@@ -2075,28 +2109,29 @@ class SpotifyViewModel(
 
             // librespot 0.8 has no shuffle/repeat setters, but it emits these when another
             // client changes the player. Adopt them so the UI does not drift from the service.
-            "shuffle" -> applyQueue(queue.setShuffle(event.optBoolean("shuffle")), syncNowPlaying = false)
+            is PlaybackEvent.Shuffle ->
+                applyQueue(queue.setShuffle(event.enabled), syncNowPlaying = false)
 
-            "repeat" -> {
+            is PlaybackEvent.Repeat -> {
                 val mode = when {
-                    event.optBoolean("track") -> RepeatMode.Track
-                    event.optBoolean("context") -> RepeatMode.Context
+                    event.track -> RepeatMode.Track
+                    event.context -> RepeatMode.Context
                     else -> RepeatMode.Off
                 }
                 applyQueue(queue.setRepeat(mode), syncNowPlaying = false)
             }
 
-            "ended" -> if (matchesCurrent(event)) {
+            is PlaybackEvent.Ended -> if (matchesCurrent(event.uri)) {
                 // A previous generation can report its end while the replacement is still
                 // loading. The queue has already moved on, so this must not advance it again.
                 if (!awaitingPlaybackStart) onPlaybackEnded()
             }
 
-            "stopped" -> if (matchesCurrent(event)) {
+            is PlaybackEvent.Stopped -> if (matchesCurrent(event.uri)) {
                 // Closing the app halts the audio and saves its offset; the player's "stopped"
                 // echo can arrive later, after a recreated ViewModel has restored that offset.
                 // Ignoring it keeps the restored position and leaves the queue untouched.
-                if (session?.consumeHaltStop(eventUri, playRequestId) == true) return
+                if (session?.consumeHaltStop(event.uri, event.playRequestId) == true) return
                 // The old generation's stop can arrive after the user already started the next
                 // item (or the same item again). When the shared queue still has a current item,
                 // the player is being replaced, not stopped: clearing here made Now Playing lose
@@ -2112,16 +2147,18 @@ class SpotifyViewModel(
                 applyQueue(if (halting) queue.snapshot else queue.stop(), positionMs = 0L, playing = false)
             }
 
-            "unavailable" -> if (matchesCurrent(event)) {
+            is PlaybackEvent.Unavailable -> if (matchesCurrent(event.uri)) {
                 awaitingPlaybackStart = false
                 seekHold = null
                 _state.update { it.copy(isPlaying = false).say("This track isn't available") }
             }
+
+            is PlaybackEvent.Unknown -> Unit
         }
     }
 
-    private fun matchesCurrent(event: JSONObject): Boolean {
-        val uri = event.opt("uri")?.toString()?.takeIf { it.isNotEmpty() && it != "null" } ?: return true
+    private fun matchesCurrent(uri: String?): Boolean {
+        if (uri.isNullOrEmpty()) return true
         return _state.value.current?.uri?.equals(uri, ignoreCase = true) ?: true
     }
 
@@ -2262,7 +2299,7 @@ class SpotifyViewModel(
         autoplayJob = viewModelScope.launch {
             try {
                 val artist = SpotifyArtist(artistId, track.artist, 0, emptyList())
-                val page = catalog.topTracks(artist, 0, SPOTIFY_PAGE_SIZE)
+                val page = catalog.topTracks(artist.key, 0, SPOTIFY_PAGE_SIZE)
                 if (_state.value.current?.id != track.id || !_state.value.autoplay) return@launch
                 val known = buildSet {
                     add(track.id)
@@ -2322,7 +2359,7 @@ class SpotifyViewModel(
         session.playback.setNowPlaying(item, positionMs)
         viewModelScope.launch {
             try {
-                session.play(uri, positionMs, gapless)
+                session.play(item, positionMs, gapless)
                 SidetrackDebug.log("viewModel.startRemote returned")
                 if (resuming) releaseResumeHold(item, positionMs)
             } catch (e: CancellationException) {
@@ -2402,7 +2439,21 @@ class SpotifyViewModel(
         SpotifyFailure.Unknown, null -> "Something went wrong — try again"
     }
 
-    private fun collectionKey(type: SpotifyCollectionType, id: String) = "${type.route}:$id"
+    private fun collectionKey(type: SpotifyCollectionType, id: String) = "${service.value}:${type.route}:$id"
+
+    private fun mediaKey(type: SpotifyCollectionType, id: String) = MediaKey(service, type.mediaType, id)
+
+    private fun artistKey(id: String) = MediaKey(service, MediaType.Artist, id)
+
+    private fun trackKey(id: String) = MediaKey(service, MediaType.Track, id)
+
+    private fun LibraryFilter.section(): LibrarySection = when (this) {
+        LibraryFilter.LikedSongs -> LibrarySection.Liked
+        LibraryFilter.Playlists -> LibrarySection.Playlists
+        LibraryFilter.Albums -> LibrarySection.Albums
+        LibraryFilter.Artists -> LibrarySection.Artists
+        LibraryFilter.Shows -> LibrarySection.Shows
+    }
 
     private fun libraryItemKey(item: Any): String = when (item) {
         is SpotifyTrack -> "t${item.id}"
