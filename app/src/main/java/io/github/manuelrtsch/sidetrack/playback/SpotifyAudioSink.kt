@@ -251,8 +251,8 @@ class SpotifyAudioSink(
                         bytes += pcm.size
                         buffered += pcm.size
                         policy.onData(pcm.size, now)
-                        if (reads == 1) SidetrackDebug.log("audio first PCM read bytes=${pcm.size}")
-                        if (reads % 100 == 0) SidetrackDebug.log("audio drained reads=$reads bytes=$bytes")
+                        if (reads == 1) SidetrackDebug.log { "audio first PCM read bytes=${pcm.size}" }
+                        if (reads % 100 == 0) SidetrackDebug.log { "audio drained reads=$reads bytes=$bytes" }
                     }
                     if (!playing && policy.mayPlay(now)) {
                         playing = true

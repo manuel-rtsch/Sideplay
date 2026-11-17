@@ -4,12 +4,14 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -121,7 +123,7 @@ object SidetrackLinks {
 
     @Composable
     fun Follow(nav: NavHostController) {
-        val open by pending.collectAsState()
+        val open by pending.collectAsStateWithLifecycle()
         LaunchedEffect(open) {
             if (!open) return@LaunchedEffect
             pending.value = false
@@ -815,7 +817,7 @@ private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyV
             )
         }
     }
-    return viewModel(
+    val vm = viewModel<SpotifyViewModel>(
         parent,
         factory = remember(session, openBrowser, context) {
             viewModelFactory {
@@ -835,4 +837,19 @@ private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyV
             }
         }
     )
+    // The position tick is only useful while the nav host is on screen. The parent entry's
+    // lifecycle tracks the whole graph, so one observer per destination is enough and the
+    // boolean is idempotent when several destinations are composed during a transition.
+    DisposableEffect(parent, vm) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> vm.setUiVisible(true)
+                Lifecycle.Event.ON_STOP -> vm.setUiVisible(false)
+                else -> Unit
+            }
+        }
+        parent.lifecycle.addObserver(observer)
+        onDispose { parent.lifecycle.removeObserver(observer) }
+    }
+    return vm
 }

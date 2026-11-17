@@ -22,6 +22,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +38,12 @@ private const val PODCAST_SKIP_MS = 30_000L
 
 /** How often a playing episode writes its local resume point. */
 private const val EPISODE_PROGRESS_INTERVAL_MS = 5_000L
+
+/**
+ * How often the seek bar advances while it is on screen. The bar animates between samples, so
+ * 200 ms looks the same as 100 ms while halving the wakeups.
+ */
+private const val POSITION_TICK_MS = 200L
 
 /**
  * A native position event this far from the UI clock is treated as a real seek from another
@@ -148,12 +157,22 @@ class SpotifyViewModel(
     val state: StateFlow<SpotifyUiState> = _state.asStateFlow()
 
     /**
-     * Playback position for the seek bar. Kept on its own flow so the 100 ms position tick does
+     * Playback position for the seek bar. Kept on its own flow so the position tick does
      * not mutate the monolithic [state] (which would invalidate and recompose every screen that
      * collects it). Only the Now Playing seek bar subscribes to this.
      */
     private val _playbackPositionMs = MutableStateFlow(0L)
     val playbackPositionMs: StateFlow<Long> = _playbackPositionMs.asStateFlow()
+
+    /**
+     * True while a Sidetrack destination is started. The position tick only runs when this is set,
+     * so a backgrounded app does not wake the process ten times a second for an invisible bar.
+     */
+    private val uiVisible = MutableStateFlow(false)
+
+    fun setUiVisible(visible: Boolean) {
+        uiVisible.value = visible
+    }
 
     /** Per-episode podcast progress, kept out of [state] so a five-second write does not redraw menus. */
     val episodeProgress: StateFlow<Map<String, SpotifyEpisodeProgress>> = episodeProgressRepository.progress
@@ -264,10 +283,13 @@ class SpotifyViewModel(
             if (simulatePlayback) {
                 // Local fixtures and builds without the native library still need a moving progress bar.
                 viewModelScope.launch {
-                    // Back off when nothing is playing so the loop does not keep waking the main thread.
+                    // Suspend on the playing flag instead of polling: a paused player costs no wakeups.
                     while (true) {
-                        delay(if (_state.value.isPlaying) 1_000L else 2_000L)
-                        tick()
+                        _state.map { it.isPlaying }.first { it }
+                        while (_state.value.isPlaying) {
+                            delay(1_000L)
+                            tick()
+                        }
                     }
                 }
             }
@@ -282,9 +304,14 @@ class SpotifyViewModel(
                 }
             }
             viewModelScope.launch {
+                // The seek bar only needs to advance while it is on screen and playing. When the
+                // app is backgrounded or paused this suspends on the flows instead of waking up.
                 while (true) {
-                    delay(if (_state.value.isPlaying) 100L else 2_000L)
-                    updatePositionTick()
+                    uiVisible.combine(_state) { visible, s -> visible && s.isPlaying }.first { it }
+                    while (uiVisible.value && _state.value.isPlaying) {
+                        delay(POSITION_TICK_MS)
+                        updatePositionTick()
+                    }
                 }
             }
         }
