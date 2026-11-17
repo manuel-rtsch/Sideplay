@@ -458,7 +458,6 @@ class SpotifyViewModel(
         loadLibrary(_state.value.filter)
     }
 
-
     fun collection(type: SpotifyCollectionType, id: String): SpotifyCollection? = _state.value.collections[collectionKey(type, id)]
 
     fun artist(id: String): SpotifyArtist? = _state.value.artists[id]
@@ -2416,5 +2415,4 @@ class SpotifyViewModel(
 }
 
 /** Sets the transient bar message together with the time the bar keeps it. */
-private fun SpotifyUiState.say(text: String, kind: NoticeKind = NoticeKind.Other) =
-    copy(notice = text, noticeKind = kind)
+private fun SpotifyUiState.say(text: String, kind: NoticeKind = NoticeKind.Other) = copy(notice = text, noticeKind = kind)

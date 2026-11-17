@@ -168,6 +168,7 @@ fun SpotifyNowPlayingScreen(
             when (current) {
                 is SpotifyTrack ->
                     add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
+
                 is SpotifyEpisode ->
                     add(SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onEpisodeNotes))
             }
