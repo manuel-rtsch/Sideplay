@@ -31,7 +31,7 @@ import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
-private enum class SettingsConfirmation { SignOut, ClearCache, ClearHistory }
+private enum class SettingsConfirmation { SignOut }
 
 @Composable
 fun SpotifySettingsScreen(
@@ -44,7 +44,8 @@ fun SpotifySettingsScreen(
     onGapless: () -> Unit,
     onAutoplay: () -> Unit,
     onClearCache: () -> Unit,
-    onClearHistory: () -> Unit,
+    onClearHistory: () -> Boolean,
+    onUndoClearHistory: () -> Unit,
     onSignOut: () -> Unit,
     onDismissNotice: () -> Unit,
     onAppearance: (() -> Unit)? = null,
@@ -52,6 +53,8 @@ fun SpotifySettingsScreen(
     onAbout: () -> Unit = {}
 ) {
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
+    // Clearing a list is immediate and reversible, so it offers Undo instead of a second press.
+    var historyCleared by remember { mutableStateOf(false) }
     val backdrop = rememberArtworkBackdropSetting()
     val context = LocalContext.current
     val back = remember { spotifyBack("Back", onBack).first() }
@@ -61,8 +64,21 @@ fun SpotifySettingsScreen(
         onDismissNotice,
         baseActions
     )
-    val actions = when (confirmation) {
-        SettingsConfirmation.SignOut -> listOf(
+    LaunchedEffect(historyCleared) {
+        if (!historyCleared) return@LaunchedEffect
+        kotlinx.coroutines.delay(5_000L)
+        historyCleared = false
+    }
+    val undo = if (historyCleared) {
+        SideAction.undo("undoClearHistory", "Undo", "Undo clear history") {
+            historyCleared = false
+            onUndoClearHistory()
+        }
+    } else {
+        null
+    }
+    val actions = when {
+        confirmation == SettingsConfirmation.SignOut -> listOf(
             SideAction.cancel("cancelSignOut", "Cancel") { confirmation = null },
             SideAction.delete("confirmSignOut", "Sign out", onClick = {
                 confirmation = null
@@ -70,23 +86,9 @@ fun SpotifySettingsScreen(
             })
         )
 
-        SettingsConfirmation.ClearCache -> listOf(
-            SideAction.cancel("cancelClearCache", "Cancel") { confirmation = null },
-            SideAction.delete("confirmClearCache", "Clear", onClick = {
-                confirmation = null
-                onClearCache()
-            })
-        )
+        undo != null -> undoBar(back, undo)
 
-        SettingsConfirmation.ClearHistory -> listOf(
-            SideAction.cancel("cancelClearHistory", "Cancel") { confirmation = null },
-            SideAction.delete("confirmClearHistory", "Clear", onClick = {
-                confirmation = null
-                onClearHistory()
-            })
-        )
-
-        null -> normal
+        else -> normal
     }
     SidekitScaffold(
         title = "Settings",
@@ -156,7 +158,7 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 5),
                     secondary = Formatter.formatShortFileSize(context, account.cacheSizeBytes),
                     secondaryToEnd = true,
-                    onClick = { confirmation = SettingsConfirmation.ClearCache }
+                    onClick = onClearCache
                 )
             }
             item(key = "history") {
@@ -165,7 +167,7 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 6),
                     secondary = recentCount.toString(),
                     secondaryToEnd = true,
-                    onClick = { confirmation = SettingsConfirmation.ClearHistory }
+                    onClick = { historyCleared = onClearHistory() }
                 )
             }
             item(key = "artworkBackdrop") {

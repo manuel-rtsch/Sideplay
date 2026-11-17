@@ -750,6 +750,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 onAutoplay = vm::toggleAutoplay,
                 onClearCache = vm::clearCache,
                 onClearHistory = vm::clearHistory,
+                onUndoClearHistory = vm::undoClearHistory,
                 onSignOut = {
                     vm.signOut()
                     nav.navigate(SIGN_IN) { launchSingleTop = true }

@@ -9,6 +9,7 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgressRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
+import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryEntry
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyLibraryWriter
 import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
@@ -149,6 +150,8 @@ class SpotifyViewModel(
     private val writer: SpotifyLibraryWriter? = null,
     private val queue: SpotifyQueueRepository = SpotifyQueueRepository(),
     private val history: SpotifyHistoryRepository = SpotifyHistoryRepository(),
+    /** The entries the last Clear history removed, kept only while Undo is offered. */
+    private var clearedHistory: List<SpotifyHistoryEntry> = emptyList(),
     private val episodeProgressRepository: SpotifyEpisodeProgressRepository = SpotifyEpisodeProgressRepository(),
     private val episodeMetaRepository: SpotifyEpisodeMetaRepository = SpotifyEpisodeMetaRepository(),
     private val session: SpotifySession? = null,
@@ -1289,11 +1292,20 @@ class SpotifyViewModel(
         session?.setAutoplay(enabled)
     }
 
-    fun clearHistory() {
-        history.clear()
+    fun clearHistory(): Boolean {
+        clearedHistory = history.clear()
         val snapshot = queue.clearHistory()
         applyQueue(snapshot, syncNowPlaying = false)
         _state.update { it.copy(recent = emptyList(), notice = "Listening history cleared") }
+        return clearedHistory.isNotEmpty()
+    }
+
+    /** Puts the last cleared history back, timestamps included, so Undo restores the real order. */
+    fun undoClearHistory() {
+        if (clearedHistory.isEmpty()) return
+        history.restoreAll(clearedHistory)
+        clearedHistory = emptyList()
+        _state.update { it.copy(recent = history.items(), notice = null) }
     }
 
     fun clearCache() {

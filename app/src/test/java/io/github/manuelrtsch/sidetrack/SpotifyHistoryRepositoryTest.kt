@@ -51,6 +51,31 @@ class SpotifyHistoryRepositoryTest {
         assertTrue(saved!!.isEmpty())
     }
 
+    @Test fun `clear returns the removed entries so Undo can restore them`() {
+        val history = SpotifyHistoryRepository()
+        history.record(track("a"), 1)
+        history.record(track("b"), 2)
+
+        val removed = history.clear()
+
+        assertEquals(listOf("b", "a"), removed.map { it.item.id })
+        assertEquals(listOf(2L, 1L), removed.map { it.playedAtMs })
+        history.restoreAll(removed)
+        assertEquals(listOf("b", "a"), history.items().map { it.id })
+    }
+
+    @Test fun `restoreAll keeps an item played after the clear at the front`() {
+        val history = SpotifyHistoryRepository()
+        history.record(track("a"), 1)
+        history.record(track("b"), 2)
+        val removed = history.clear()
+
+        history.record(track("c"), 3)
+        history.restoreAll(removed)
+
+        assertEquals(listOf("c", "b", "a"), history.items().map { it.id })
+    }
+
     @Test fun `load seeds the repository in order`() {
         val stored = listOf(
             SpotifyHistoryEntry(track("a"), 2),

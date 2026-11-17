@@ -70,9 +70,23 @@ class SpotifyHistoryRepository(
     data class Removed(val entry: SpotifyHistoryEntry, val index: Int)
 
     fun clear(): List<SpotifyHistoryEntry> {
+        val removed = entries.toList()
         entries.clear()
         save(emptyList())
-        return emptyList()
+        return removed
+    }
+
+    /**
+     * Puts a cleared list back in the order it had. Entries played again since the clear keep
+     * their new position at the front; the restored ones follow, so Undo never reorders what the
+     * user did in between.
+     */
+    fun restoreAll(removed: List<SpotifyHistoryEntry>): List<SpotifyHistoryEntry> {
+        if (removed.isEmpty()) return snapshot()
+        val present = entries.map { it.item.id }.toSet()
+        entries.addAll(removed.filterNot { it.item.id in present })
+        save(entries.toList())
+        return snapshot()
     }
 
     private companion object {

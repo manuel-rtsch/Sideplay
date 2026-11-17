@@ -407,7 +407,6 @@ fun QueueScreen(
     onKeypadBackOverride: ((() -> Boolean)?) -> Unit = {}
 ) {
     var pendingUndo by remember { mutableStateOf<QueueUndo?>(null) }
-    var confirmClear by remember { mutableStateOf(false) }
     var reorderMode by remember { mutableStateOf(false) }
     // The current item and tail size at the start of a reorder. If either changes (playback moves
     // on, another surface edits the queue, radio loads), the lift no longer describes the row it
@@ -526,7 +525,6 @@ fun QueueScreen(
     val clearUpcoming: () -> Unit = {
         rowActions.close()
         pendingUndo = QueueUndo.Cleared(onClearUpcoming())
-        confirmClear = false
         focusedKey = null
         clearFocusPending = true
     }
@@ -604,7 +602,7 @@ fun QueueScreen(
                                 key = "move",
                                 label = "Move",
                                 contentDescription = "Move ${item.title}",
-                                icon = SidekitIcon.ArrowUpward,
+                                icon = SidekitIcon.SwapVert,
                                 tone = ActionTone.Primary,
                                 onClick = { startReorderAt(index) }
                             )
@@ -623,7 +621,7 @@ fun QueueScreen(
             SidekitIcon.Close,
             tone = ActionTone.Destructive,
             contentDescription = "Clear upcoming",
-            onClick = { confirmClear = true }
+            onClick = clearUpcoming
         )
     } else {
         null
@@ -656,18 +654,6 @@ fun QueueScreen(
                 "Done",
                 contentDescription = "Finish reordering",
                 onClick = finishReorder
-            )
-        )
-
-        confirmClear -> listOf(
-            SideAction.cancel("cancelClear", "Cancel") { confirmClear = false },
-            SideAction(
-                "confirmClear",
-                "Clear",
-                SidekitIcon.DeleteForever,
-                tone = ActionTone.Destructive,
-                contentDescription = "Clear ${playback.upcoming.size} upcoming tracks",
-                onClick = clearUpcoming
             )
         )
 
@@ -774,15 +760,10 @@ fun QueueScreen(
         }
         // A mode's left action is Cancel, not Back. Claim the keypad Back key while either mode
         // is open so it closes the mode instead of popping the queue.
-        DisposableEffect(reorderMode, confirmClear, rowActions.selection, onKeypadBackOverride) {
+        DisposableEffect(reorderMode, rowActions.selection, onKeypadBackOverride) {
             when {
                 reorderMode -> onKeypadBackOverride {
                     cancelReorder()
-                    true
-                }
-
-                confirmClear -> onKeypadBackOverride {
-                    confirmClear = false
                     true
                 }
 
@@ -797,7 +778,6 @@ fun QueueScreen(
         }
         // The keypad lift commits as it steps, so cancelling is a move back to where it started.
         BackHandler(enabled = reorderMode) { cancelReorder() }
-        BackHandler(enabled = confirmClear) { confirmClear = false }
         BackHandler(enabled = rowActions.selection != null) { rowActions.close() }
         SidekitList(padding, state = listState) {
             val current = playback.current
