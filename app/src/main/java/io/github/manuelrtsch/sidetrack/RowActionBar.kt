@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -204,11 +205,18 @@ fun CloseRowActionsWhenDisposed(selected: Boolean, state: RowActionBarState) {
     }
 }
 
-/** Closes the contextual bar as soon as the list starts moving under it. */
+/**
+ * Closes the contextual bar when the user drags the list under it.
+ *
+ * Deliberately keyed on a drag, not on [LazyListState.isScrollInProgress]: opening the bar on a
+ * row near the bottom focuses that row, and the list scrolls it into view. That scroll is the
+ * bar's own doing, so treating it as a dismissal closed the bar in the same frame it opened.
+ */
 @Composable
 fun RowActionBarState.dismissOnScroll(listState: LazyListState) {
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) close(restoreFocus = false)
+    val dragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(dragged) {
+        if (dragged) close(restoreFocus = false)
     }
 }
 
