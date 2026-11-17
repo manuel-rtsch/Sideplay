@@ -1,6 +1,5 @@
 package io.github.manuelrtsch.sidetrack.ui
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.clickable
@@ -171,7 +170,7 @@ fun SidekitSwipeRow(
     }
 
     LaunchedEffect(armed) {
-        if (armed && dragging) view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+        if (armed && dragging) view.armedHaptic()
         arm.animateTo(if (armed) 1f else 0f, SidekitMotion.settle)
     }
     LaunchedEffect(isOpen) {
@@ -263,7 +262,7 @@ fun SidekitSwipeRow(
                     Modifier
                 } else {
                     Modifier.rowLongPress {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        view.longPressHaptic()
                         onLongPress()
                     }
                 }
@@ -326,9 +325,7 @@ fun SidekitSwipeRow(
                         .fillMaxHeight()
                         .onFocusChanged { actionFocused = it.isFocused }
                         .clickable(role = Role.Button, onClickLabel = swipeAction.label) {
-                            view.performHapticFeedback(
-                                if (swipeAction.destructive) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.CONTEXT_CLICK
-                            )
+                            view.actionHaptic(swipeAction.destructive)
                             performAction()
                         }
                         .semantics { contentDescription = swipeAction.label }

@@ -1,6 +1,5 @@
 package io.github.manuelrtsch.sidetrack
 
-import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
@@ -70,6 +69,7 @@ import io.github.manuelrtsch.sidetrack.ui.QueueReorderAutoScroll
 import io.github.manuelrtsch.sidetrack.ui.RowActionSquare
 import io.github.manuelrtsch.sidetrack.ui.SidekitSwipeRow
 import io.github.manuelrtsch.sidetrack.ui.SwipeAction
+import io.github.manuelrtsch.sidetrack.ui.longPressHaptic
 import io.github.manuelrtsch.sidetrack.ui.queueReorder
 import io.github.manuelrtsch.sidetrack.ui.rememberQueueReorderState
 import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
@@ -802,7 +802,7 @@ fun QueueScreen(
                                         key = key,
                                         onPickUp = {
                                             swipes.closeAll()
-                                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                            view.longPressHaptic()
                                         },
                                         onDrop = onMoveUpcoming,
                                         onDropEnd = { if (!reorderMode) onCommitReorder() }

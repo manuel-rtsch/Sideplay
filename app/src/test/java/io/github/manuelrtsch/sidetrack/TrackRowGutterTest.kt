@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.os.Looper
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -12,10 +13,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
@@ -31,6 +34,7 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(shadows = [RecordingHapticShadow::class])
 class TrackRowGutterTest {
     @get:Rule val compose = createComposeRule()
 
@@ -39,6 +43,9 @@ class TrackRowGutterTest {
     private val save = "Save ${track.title} to Liked Songs"
     private val longPressHoldMs = 700L
     private val queue = "Add ${track.title} to queue"
+
+    @Before
+    fun resetHaptics() = RecordingHapticShadow.reset()
 
     private fun showRow(
         saved: Boolean = false,
@@ -220,6 +227,25 @@ class TrackRowGutterTest {
         assertEquals(false, rows().focus.isOpen(key))
         assertEquals(true, rows().focus.isOpen("other-row"))
         compose.onNodeWithContentDescription(save).assertDoesNotExist()
+    }
+
+    @Test
+    fun aLongPressTicksThePhone() {
+        showRow()
+        longPressRow()
+        // The hold is the only feedback a finger gets that the gutter registered.
+        assertEquals(listOf(HapticFeedbackConstants.LONG_PRESS), RecordingHapticShadow.performed.toList())
+    }
+
+    @Test
+    fun theKeypadRevealIsSilent() {
+        val rows = showRow()
+        compose.runOnIdle { rows().focus.rowFocused(key) }
+        settle()
+        compose.onNodeWithContentDescription(save).assertExists()
+        // The tick belongs to the long press, not to the focus landing: a D-pad held through a
+        // list must not buzz once per row it passes.
+        assertEquals(0, RecordingHapticShadow.performed.size)
     }
 
     @Test
