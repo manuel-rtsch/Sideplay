@@ -1,11 +1,14 @@
 package io.github.manuelrtsch.sidetrack
 
+import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.unit.dp
+import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
@@ -20,13 +23,14 @@ import io.github.manuelrtsch.sidetrack.ui.settle
 class TrackRowFocusState : RowGutterState()
 
 /**
- * A track list's shared gutter state, saved set and row actions.
+ * A track list's shared gutter state, contextual action bar and row actions.
  *
- * A row carries at most two actions. Screens do not add a second row menu on top: the gutter is
- * the menu, and the same pair has to make sense for the list it appears in.
+ * A row has one gutter trigger. Pressing it publishes the row's actions to the screen's
+ * contextual bar, so the row itself never grows a second square.
  */
 class TrackRows(
     val focus: TrackRowFocusState,
+    val bar: RowActionBarState,
     val savedIds: Set<String>,
     val onSave: (SpotifyTrack) -> Unit,
     val onEnsureSaved: (SpotifyTrack) -> Unit,
@@ -44,12 +48,14 @@ fun rememberTrackRows(
     onQueue: (SpotifyTrack) -> Unit
 ): TrackRows {
     val focus = remember { TrackRowFocusState() }
+    val bar = rememberRowActionBarState()
     focus.settle()
-    return TrackRows(focus, saved.savedTrackIds, onSave, onEnsureSaved, onQueue)
+    return TrackRows(focus, bar, saved.savedTrackIds, onSave, onEnsureSaved, onQueue)
 }
 
 /**
- * A track row with two context actions: Save/Unsave and Add to queue.
+ * A track row with one gutter trigger. The trigger opens the contextual bar with Save/Unsave and
+ * Add to queue.
  *
  * Those are the two verbs that belong to browsing a track list. Artist and album pages are not
  * row actions: they are destinations, reached from Now Playing when the track is started.
@@ -66,16 +72,25 @@ fun TrackRow(
     onClick: () -> Unit
 ) {
     val saved = rows.saved(track)
-    GutterRow(key, rows.focus, squares = 2, modifier = modifier, content = { gutterVisible ->
+    val selected = rows.bar.selection?.key == key
+    GutterRow(key, rows.focus, squares = 1, modifier = modifier, content = { gutterVisible ->
         SpotifyMediaRow(
             track,
-            Modifier.onFocusChanged { state ->
-                if (state.isFocused) rows.focus.rowFocused(key) else rows.focus.rowUnfocused(key)
-            },
+            Modifier
+                .onFocusChanged { state ->
+                    if (state.isFocused) rows.focus.rowFocused(key) else rows.focus.rowUnfocused(key)
+                }
+                .then(
+                    if (selected) {
+                        Modifier.border(1.dp, SidekitTheme.colors.emphasisA1, SidekitTheme.shapes.item)
+                    } else {
+                        Modifier
+                    }
+                ),
             index = index,
             showArt = showArt,
             secondary = secondary,
-            // The squares get the right edge while they are visible.
+            // The square gets the right edge while it is visible.
             trailing = if (gutterVisible) null else formatDuration(track.durationMs),
             onClick = {
                 rows.focus.touchDismissed(key)
@@ -83,33 +98,44 @@ fun TrackRow(
             }
         )
     }) {
-        // The squares and their focus state only exist while the gutter is open. A long list
+        // The trigger and its focus state only exist while the gutter is open. A long list
         // otherwise pays for a focus modifier and a saved-state request on every row it composes.
         val squareFocus = rememberGutterSquareFocus(key, rows.focus)
         // The saved state of a row that never played is unknown: the gutter is the moment to ask.
         LaunchedEffect(Unit) { rows.onEnsureSaved(track) }
         RowActionSquare(
-            color = SidekitTheme.colors.successA1,
-            icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-            label = if (saved) {
-                "Remove ${track.title} from Liked Songs"
-            } else {
-                "Save ${track.title} to Liked Songs"
-            },
+            color = SidekitTheme.colors.surfaceA4,
+            icon = SidekitIcon.Apps,
+            label = "Actions for ${track.title}",
             modifier = squareFocus,
             onClick = {
                 rows.focus.touchDismissed(key)
-                rows.onSave(track)
-            }
-        )
-        RowActionSquare(
-            color = SidekitTheme.colors.successA1,
-            icon = SidekitIcon.QueueMusic,
-            label = "Add ${track.title} to queue",
-            modifier = squareFocus,
-            onClick = {
-                rows.focus.touchDismissed(key)
-                rows.onQueue(track)
+                rows.bar.show(
+                    RowActionSelection(
+                        key = key,
+                        title = track.title,
+                        actions = listOf(
+                            RowAction(
+                                key = "save",
+                                label = if (saved) {
+                                    "Remove ${track.title} from Liked Songs"
+                                } else {
+                                    "Save ${track.title} to Liked Songs"
+                                },
+                                icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
+                                tone = if (saved) ActionTone.Secondary else ActionTone.Muted,
+                                onClick = { rows.onSave(track) }
+                            ),
+                            RowAction(
+                                key = "queue",
+                                label = "Add ${track.title} to queue",
+                                icon = SidekitIcon.QueueMusic,
+                                tone = ActionTone.Primary,
+                                onClick = { rows.onQueue(track) }
+                            )
+                        )
+                    )
+                )
             }
         )
     }
@@ -163,25 +189,36 @@ fun GutterMediaRow(
 
 /**
  * A Recently played/History row. Saving does not belong to history: that is what the saved lists
- * are for. The two actions here are the ones the context implies — replay it later, or forget it.
+ * are for. Its contextual bar offers the two actions the context implies — replay it later, or
+ * forget it.
  */
 @Composable
 fun HistoryRow(
     key: Any,
     item: SpotifyMediaItem,
     focus: RowGutterState,
+    bar: RowActionBarState,
     modifier: Modifier = Modifier,
     secondary: String = item.creator,
     onQueue: (SpotifyMediaItem) -> Unit,
     onRemove: (SpotifyMediaItem) -> Unit,
     onClick: () -> Unit
 ) {
-    GutterRow(key, focus, squares = 2, modifier = modifier, content = { gutterVisible ->
+    val selected = bar.selection?.key == key
+    GutterRow(key, focus, squares = 1, modifier = modifier, content = { gutterVisible ->
         SpotifyMediaRow(
             item,
-            Modifier.onFocusChanged { state ->
-                if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
-            },
+            Modifier
+                .onFocusChanged { state ->
+                    if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
+                }
+                .then(
+                    if (selected) {
+                        Modifier.border(1.dp, SidekitTheme.colors.emphasisA1, SidekitTheme.shapes.item)
+                    } else {
+                        Modifier
+                    }
+                ),
             secondary = secondary,
             trailing = if (gutterVisible) null else formatDuration(item.durationMs),
             onClick = {
@@ -192,23 +229,34 @@ fun HistoryRow(
     }) {
         val squareFocus = rememberGutterSquareFocus(key, focus)
         RowActionSquare(
-            color = SidekitTheme.colors.successA1,
-            icon = SidekitIcon.QueueMusic,
-            label = "Add ${item.title} to queue",
+            color = SidekitTheme.colors.surfaceA4,
+            icon = SidekitIcon.Apps,
+            label = "Actions for ${item.title}",
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
-                onQueue(item)
-            }
-        )
-        RowActionSquare(
-            color = SidekitTheme.colors.dangerA1,
-            icon = SidekitIcon.DeleteForever,
-            label = "Remove ${item.title} from history",
-            modifier = squareFocus,
-            onClick = {
-                focus.touchDismissed(key)
-                onRemove(item)
+                bar.show(
+                    RowActionSelection(
+                        key = key,
+                        title = item.title,
+                        actions = listOf(
+                            RowAction(
+                                key = "queue",
+                                label = "Add ${item.title} to queue",
+                                icon = SidekitIcon.QueueMusic,
+                                tone = ActionTone.Primary,
+                                onClick = { onQueue(item) }
+                            ),
+                            RowAction(
+                                key = "remove",
+                                label = "Remove ${item.title} from history",
+                                icon = SidekitIcon.DeleteForever,
+                                tone = ActionTone.Destructive,
+                                onClick = { onRemove(item) }
+                            )
+                        )
+                    )
+                )
             }
         )
     }

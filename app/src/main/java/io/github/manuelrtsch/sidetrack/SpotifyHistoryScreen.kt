@@ -29,7 +29,11 @@ fun HistoryScreen(
     onDismissNowPlaying: () -> Unit
 ) {
     val baseActions = remember { listOf(spotifyBack("Home", onBack).first()) }
-    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    val rowActions = rememberRowActionBarState()
+    val actions = rowActionBarActions(
+        rowActions,
+        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    )
     SidekitScaffold(
         title = "History",
         actions = actions,
@@ -51,6 +55,7 @@ fun HistoryScreen(
                     key,
                     item,
                     gutters,
+                    rowActions,
                     Modifier.listFade(listState, index),
                     onQueue = onQueue,
                     onRemove = onRemove,

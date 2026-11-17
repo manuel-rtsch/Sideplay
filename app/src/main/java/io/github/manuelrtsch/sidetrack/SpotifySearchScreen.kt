@@ -70,7 +70,10 @@ fun SpotifySearchScreen(
             if (search.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
         }
     }
-    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    val actions = rowActionBarActions(
+        rows.bar,
+        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    )
     // The right side of the "Search in" row must stay on one line. The only selection that
     // overflows is four of five scopes, so name the one that is left out instead of listing four.
     val scopeSummary = when (search.searchScopes.size) {

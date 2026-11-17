@@ -40,9 +40,8 @@ class TrackRowGutterTest {
 
     private val track = MockSpotifyDataSource.albums.first().tracks.first()
     private val key = track.id
-    private val save = "Save ${track.title} to Liked Songs"
+    private val actions = "Actions for ${track.title}"
     private val longPressHoldMs = 700L
-    private val queue = "Add ${track.title} to queue"
 
     @Before
     fun resetHaptics() = RecordingHapticShadow.reset()
@@ -112,8 +111,7 @@ class TrackRowGutterTest {
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
         assertEquals(key, rows().focus.openKey)
-        compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(queue).assertExists()
+        compose.onNodeWithContentDescription(actions).assertExists()
     }
 
     @Test
@@ -121,14 +119,13 @@ class TrackRowGutterTest {
         val rows = showRow()
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
-        compose.onNodeWithContentDescription(save).assertExists()
-        // The squares are composed now. Their attach-time focus event must not close the gutter.
+        compose.onNodeWithContentDescription(actions).assertExists()
+        // The trigger is composed now. Its attach-time focus event must not close the gutter.
         compose.mainClock.advanceTimeBy(2_000)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_000))
         compose.waitForIdle()
         assertEquals(key, rows().focus.openKey)
-        compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(queue).assertExists()
+        compose.onNodeWithContentDescription(actions).assertExists()
     }
 
     @Test
@@ -136,11 +133,11 @@ class TrackRowGutterTest {
         val rows = showRow()
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
-        compose.onNodeWithContentDescription(save).assertExists()
+        compose.onNodeWithContentDescription(actions).assertExists()
         compose.runOnIdle { rows().focus.rowUnfocused(key) }
         settle()
         assertNull(rows().focus.openKey)
-        compose.onNodeWithContentDescription(save).assertDoesNotExist()
+        compose.onNodeWithContentDescription(actions).assertDoesNotExist()
     }
 
     @Test
@@ -148,17 +145,24 @@ class TrackRowGutterTest {
         val rows = showRow(saved = true)
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
-        compose.onNodeWithContentDescription("Remove ${track.title} from Liked Songs").assertExists()
+        compose.onNodeWithContentDescription(actions).performClick()
+        compose.runOnIdle {
+            assertEquals(
+                listOf("Remove ${track.title} from Liked Songs", "Add ${track.title} to queue"),
+                rows().bar.selection?.actions?.map { it.label }
+            )
+        }
     }
 
     @Test
-    fun gutterCarriesExactlyTwoSquares() {
+    fun gutterCarriesOneTrigger() {
         val rows = showRow()
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
-        compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(queue).assertExists()
-        // Save and Queue are the ceiling; navigation goes to Options.
+        compose.onNodeWithContentDescription(actions).assertExists()
+        // The row itself no longer carries the actions; the contextual bar does.
+        compose.onNodeWithContentDescription("Save ${track.title} to Liked Songs").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add ${track.title} to queue").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open artist").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
     }
@@ -170,7 +174,7 @@ class TrackRowGutterTest {
         settle()
         assertNull(rows().focus.touchedKey)
         assertNull(rows().focus.openKey)
-        compose.onNodeWithContentDescription(save).assertDoesNotExist()
+        compose.onNodeWithContentDescription(actions).assertDoesNotExist()
     }
 
     @Test
@@ -179,17 +183,20 @@ class TrackRowGutterTest {
         longPressRow()
         assertEquals(key, rows().focus.touchedKey)
         assertNull(rows().focus.openKey)
-        compose.onNodeWithContentDescription(save).assertExists()
-        compose.onNodeWithContentDescription(queue).assertExists()
+        compose.onNodeWithContentDescription(actions).assertExists()
     }
 
     @Test
-    fun longPressSquaresAreTappable() {
-        var saves = 0
-        showRow(onSave = { saves++ })
+    fun longPressTriggerOpensTheBar() {
+        val rows = showRow()
         longPressRow()
-        compose.onNodeWithContentDescription(save).performClick()
-        assertEquals(1, saves)
+        compose.onNodeWithContentDescription(actions).performClick()
+        compose.runOnIdle {
+            assertEquals(
+                listOf("Save ${track.title} to Liked Songs", "Add ${track.title} to queue"),
+                rows().bar.selection?.actions?.map { it.label }
+            )
+        }
     }
 
     @Test
@@ -201,7 +208,7 @@ class TrackRowGutterTest {
         compose.runOnIdle { rows().focus.rowFocused("next-row") }
         settle()
         assertNull(rows().focus.touchedKey)
-        compose.onNodeWithContentDescription(save).assertDoesNotExist()
+        compose.onNodeWithContentDescription(actions).assertDoesNotExist()
     }
 
     @Test
@@ -209,12 +216,12 @@ class TrackRowGutterTest {
         val rows = showRow()
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
-        compose.onNodeWithContentDescription(save).assertExists()
+        compose.onNodeWithContentDescription(actions).assertExists()
         // Holding a different row while the keypad still points at this one must not show both.
         compose.runOnIdle { rows().focus.reveal("other-row") }
         settle()
         assertEquals("other-row", rows().focus.touchedKey)
-        compose.onNodeWithContentDescription(save).assertDoesNotExist()
+        compose.onNodeWithContentDescription(actions).assertDoesNotExist()
     }
 
     @Test
@@ -226,7 +233,7 @@ class TrackRowGutterTest {
         settle()
         assertEquals(false, rows().focus.isOpen(key))
         assertEquals(true, rows().focus.isOpen("other-row"))
-        compose.onNodeWithContentDescription(save).assertDoesNotExist()
+        compose.onNodeWithContentDescription(actions).assertDoesNotExist()
     }
 
     @Test
@@ -242,7 +249,7 @@ class TrackRowGutterTest {
         val rows = showRow()
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
-        compose.onNodeWithContentDescription(save).assertExists()
+        compose.onNodeWithContentDescription(actions).assertExists()
         // The tick belongs to the long press, not to the focus landing: a D-pad held through a
         // list must not buzz once per row it passes.
         assertEquals(0, RecordingHapticShadow.performed.size)
@@ -257,6 +264,6 @@ class TrackRowGutterTest {
         settle()
         assertNull(rows().focus.touchedKey)
         assertEquals(0, plays)
-        compose.onNodeWithContentDescription(save).assertDoesNotExist()
+        compose.onNodeWithContentDescription(actions).assertDoesNotExist()
     }
 }

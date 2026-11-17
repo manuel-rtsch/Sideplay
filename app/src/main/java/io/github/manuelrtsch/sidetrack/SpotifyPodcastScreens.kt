@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitCard
 import hrln.interactive.sidekit.design.components.SidekitItemRow
@@ -73,12 +75,16 @@ fun ShowScreen(
     val colors = SidekitTheme.colors
     val savedCollection = "${SpotifyCollectionType.Show.route}:${collection.id}" in saved.savedCollectionKeys
     val back = remember { spotifyBack("Back", onBack).first() }
-    val actions = spotifyBar(
-        chrome,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
-        back
+    val rowActions = rememberRowActionBarState()
+    val actions = rowActionBarActions(
+        rowActions,
+        spotifyBar(
+            chrome,
+            onDismissNotice,
+            onNowPlaying,
+            onDismissNowPlaying,
+            back
+        )
     )
     val showNotes = remember(collection.description) { plainPodcastText(collection.description) }
     val options = buildList {
@@ -184,6 +190,7 @@ fun ShowScreen(
                         item,
                         episodeProgress[item.id],
                         gutters,
+                        rowActions,
                         modifier,
                         onQueue = onQueueItem,
                         onNotes = { onEpisodeNotes(item) },
@@ -214,7 +221,8 @@ fun ShowScreen(
 
 /**
  * An episode row: artwork beside the title and real identity, then the notes and the resume line
- * across the full card width, so neither is squeezed into the column next to the artwork.
+ * across the full card width, so neither is squeezed into the column next to the artwork. Its
+ * single gutter trigger opens the contextual bar with queue and notes.
  */
 @Composable
 private fun EpisodeRow(
@@ -222,6 +230,7 @@ private fun EpisodeRow(
     episode: SpotifyEpisode,
     progress: SpotifyEpisodeProgress?,
     focus: RowGutterState,
+    bar: RowActionBarState,
     modifier: Modifier = Modifier,
     onQueue: (SpotifyMediaItem) -> Unit,
     onNotes: () -> Unit,
@@ -231,7 +240,8 @@ private fun EpisodeRow(
     val squareFocus = rememberGutterSquareFocus(key, focus)
     val notes = remember(episode.description) { plainPodcastText(episode.description) }
     val resume = progress?.takeIf { !it.completed }
-    GutterRow(key, focus, squares = if (notes.isNotBlank()) 2 else 1, modifier = modifier, content = {
+    val selected = bar.selection?.key == key
+    GutterRow(key, focus, squares = 1, modifier = modifier, content = {
         // Free-height card rather than SidekitTile: a podcast row needs the title, its identity,
         // full-width notes and a progress line, which cannot fit the fixed single-item height.
         Box(
@@ -240,6 +250,13 @@ private fun EpisodeRow(
                 .onFocusChanged { state ->
                     if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
                 }
+                .then(
+                    if (selected) {
+                        Modifier.border(1.dp, SidekitTheme.colors.emphasisA1, SidekitTheme.shapes.item)
+                    } else {
+                        Modifier
+                    }
+                )
                 .clip(SidekitTheme.shapes.item)
                 .background(if (episode.playable) colors.surfaceA3 else colors.surfaceA2)
                 .clickable(
@@ -310,27 +327,42 @@ private fun EpisodeRow(
         }
     }) {
         RowActionSquare(
-            color = SidekitTheme.colors.successA1,
-            icon = SidekitIcon.QueueMusic,
-            label = "Add ${episode.title} to queue",
+            color = SidekitTheme.colors.surfaceA4,
+            icon = SidekitIcon.Apps,
+            label = "Actions for ${episode.title}",
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
-                onQueue(episode)
+                bar.show(
+                    RowActionSelection(
+                        key = key,
+                        title = episode.title,
+                        actions = buildList {
+                            add(
+                                RowAction(
+                                    key = "queue",
+                                    label = "Add ${episode.title} to queue",
+                                    icon = SidekitIcon.QueueMusic,
+                                    tone = ActionTone.Primary,
+                                    onClick = { onQueue(episode) }
+                                )
+                            )
+                            if (notes.isNotBlank()) {
+                                add(
+                                    RowAction(
+                                        key = "notes",
+                                        label = "Read notes for ${episode.title}",
+                                        icon = SidekitIcon.Docs,
+                                        tone = ActionTone.Secondary,
+                                        onClick = onNotes
+                                    )
+                                )
+                            }
+                        }
+                    )
+                )
             }
         )
-        if (notes.isNotBlank()) {
-            RowActionSquare(
-                color = SidekitTheme.colors.emphasisA1,
-                icon = SidekitIcon.Docs,
-                label = "Read notes for ${episode.title}",
-                modifier = squareFocus,
-                onClick = {
-                    focus.touchDismissed(key)
-                    onNotes()
-                }
-            )
-        }
     }
 }
 

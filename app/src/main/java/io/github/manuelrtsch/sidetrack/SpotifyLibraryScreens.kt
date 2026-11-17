@@ -58,13 +58,17 @@ fun SidetrackHomeScreen(
     val recent = remember(playback.recent) { playback.recent.take(RECENT_PREVIEW_SIZE) }
     val hasMoreHistory = playback.recent.size > RECENT_PREVIEW_SIZE
     val recentGutters = rememberRowGutterState()
+    val rowActions = rememberRowActionBarState()
     val baseActions = remember {
         listOf(
             SideAction("queue", "Queue", SidekitIcon.QueueMusic, onClick = onQueue),
             SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch)
         )
     }
-    val bar = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    val bar = rowActionBarActions(
+        rowActions,
+        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    )
     SidekitScaffold(
         title = "Sidetrack",
         actions = bar,
@@ -100,6 +104,7 @@ fun SidetrackHomeScreen(
                         key,
                         item,
                         recentGutters,
+                        rowActions,
                         Modifier.listFade(listState, index + 2),
                         onQueue = onQueueTrack,
                         onRemove = onRemoveHistory,
@@ -156,7 +161,10 @@ fun LibraryScreen(
     val baseActions = remember {
         listOf(spotifyBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     }
-    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    val actions = rowActionBarActions(
+        rows.bar,
+        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    )
     SidekitScaffold(
         title = "Library",
         actions = actions,
@@ -275,7 +283,10 @@ fun LibraryCategoryScreen(
         onQueue
     )
     val baseActions = remember { listOf(spotifyBack("Library", onBack).first()) }
-    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    val actions = rowActionBarActions(
+        rows.bar,
+        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    )
     SidekitScaffold(
         title = filter.label,
         actions = actions,
@@ -406,12 +417,15 @@ fun CollectionScreen(
     )
     val savedCollection = "${collection.type.route}:${collection.id}" in saved.savedCollectionKeys
     val back = remember { spotifyBack("Back", onBack).first() }
-    val actions = spotifyBar(
-        chrome,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
-        back
+    val actions = rowActionBarActions(
+        rows.bar,
+        spotifyBar(
+            chrome,
+            onDismissNotice,
+            onNowPlaying,
+            onDismissNowPlaying,
+            back
+        )
     )
     // The header keeps the three primary actions: play, artwork and save. The artist lives in the
     // metadata line below it, so collections keep the same play / image / save-or-follow layout
@@ -562,12 +576,15 @@ fun ArtistScreen(
         onQueue
     )
     val back = remember { spotifyBack("Back", onBack).first() }
-    val actions = spotifyBar(
-        chrome,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
-        back
+    val actions = rowActionBarActions(
+        rows.bar,
+        spotifyBar(
+            chrome,
+            onDismissNotice,
+            onNowPlaying,
+            onDismissNowPlaying,
+            back
+        )
     )
     SidekitScaffold(
         title = artist.name,
