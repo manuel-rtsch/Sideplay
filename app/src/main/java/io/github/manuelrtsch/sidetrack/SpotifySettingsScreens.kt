@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
+import hrln.interactive.sidekit.design.action.withNotice
 import hrln.interactive.sidekit.design.components.ItemColour
 import hrln.interactive.sidekit.design.components.SidekitCard
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -30,6 +31,8 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
+import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
 
 private enum class SettingsConfirmation { SignOut }
 
@@ -55,22 +58,18 @@ fun SpotifySettingsScreen(
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
     // Clearing a list is immediate and reversible, so it offers Undo instead of a second press.
     var historyCleared by remember { mutableStateOf(false) }
+    // The Undo offer is measured in visible time: leaving Settings commits the clear instead of
+    // burning the window in the background.
+    val undoWindow = rememberUndoWindow { historyCleared = false }
+    UndoWindowLifecycle(undoWindow) { historyCleared = false }
     val backdrop = rememberArtworkBackdropSetting()
     val context = LocalContext.current
     val back = remember { spotifyBack("Back", onBack).first() }
     val baseActions = remember(back) { listOf(back, SideAction.forward("about", "About", onClick = onAbout)) }
-    val normal = withNotice(
-        chrome.notice,
-        onDismissNotice,
-        baseActions
-    )
-    LaunchedEffect(historyCleared) {
-        if (!historyCleared) return@LaunchedEffect
-        kotlinx.coroutines.delay(5_000L)
-        historyCleared = false
-    }
+    val normal = withNotice(chrome.notice, onDismissNotice, baseActions, chrome.noticeKind)
     val undo = if (historyCleared) {
         SideAction.undo("undoClearHistory", "Undo", "Undo clear history") {
+            undoWindow.cancel()
             historyCleared = false
             onUndoClearHistory()
         }
@@ -167,7 +166,10 @@ fun SpotifySettingsScreen(
                     Modifier.listFade(listState, 6),
                     secondary = recentCount.toString(),
                     secondaryToEnd = true,
-                    onClick = { historyCleared = onClearHistory() }
+                    onClick = {
+                        historyCleared = onClearHistory()
+                        if (historyCleared) undoWindow.start()
+                    }
                 )
             }
             item(key = "artworkBackdrop") {
@@ -215,11 +217,7 @@ fun SpotifyAudioQualityScreen(
     onDismissNotice: () -> Unit
 ) {
     val baseActions = remember { listOf(SideAction.back("back", "Settings", onBack)) }
-    val actions = withNotice(
-        chrome.notice,
-        onDismissNotice,
-        baseActions
-    )
+    val actions = withNotice(chrome.notice, onDismissNotice, baseActions, chrome.noticeKind)
     SidekitScaffold(
         title = "Audio quality",
         actions = actions
@@ -266,11 +264,7 @@ fun SpotifySignInScreen(
             SideAction.forward("signIn", "Sign in", onSignIn)
         )
     }
-    val actions = withNotice(
-        chrome.notice,
-        onDismissNotice,
-        baseActions
-    )
+    val actions = withNotice(chrome.notice, onDismissNotice, baseActions, chrome.noticeKind)
     SidekitScaffold(
         title = "Sign in",
         actions = actions

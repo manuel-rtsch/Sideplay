@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
+import hrln.interactive.sidekit.design.action.withNotice
 import hrln.interactive.sidekit.design.components.ItemColour
 import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitIconImage
@@ -705,21 +706,6 @@ fun SeeMoreRow(label: String, loading: Boolean, onClick: () -> Unit, modifier: M
     )
 }
 
-fun withNotice(notice: String?, onDismiss: () -> Unit, actions: List<SideAction>): List<SideAction> = if (notice == null) {
-    actions
-} else {
-    listOf(
-        SideAction(
-            "notice",
-            notice,
-            tone = ActionTone.Muted,
-            dense = true,
-            motion = ActionMotion.Up,
-            onClick = onDismiss
-        )
-    )
-}
-
 /**
  * The screen's action bar, with the transient now-playing confirmation taking precedence over the
  * normal actions. A real notice (an error or confirmation) wins over the now-playing confirmation.
@@ -732,7 +718,8 @@ fun spotifyActions(
     actions: List<SideAction>,
     showNowPlayingNotice: Boolean = true
 ): List<SideAction> = when {
-    chrome.notice != null -> withNotice(chrome.notice, onDismissNotice, actions)
+    chrome.notice != null ->
+        withNotice(chrome.notice, onDismissNotice, actions, chrome.noticeKind)
 
     showNowPlayingNotice && chrome.nowPlayingNotice != null ->
         nowPlayingNoticeActions(chrome.nowPlayingNotice, onOpenNowPlaying, onDismissNowPlaying)

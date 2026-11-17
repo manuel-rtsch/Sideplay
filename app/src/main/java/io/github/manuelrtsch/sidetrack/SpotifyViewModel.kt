@@ -3,6 +3,7 @@ package io.github.manuelrtsch.sidetrack
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import hrln.interactive.sidekit.design.action.NoticeKind
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeMetaRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
@@ -122,6 +123,8 @@ data class SpotifyUiState(
     val autoplay: Boolean = true,
     val cacheSizeBytes: Long = 0L,
     val notice: String? = null,
+    /** How long the bar keeps [notice]: a success is short, everything else gets time to be read. */
+    val noticeKind: NoticeKind = NoticeKind.Other,
     /** The item that just started, shown briefly in the action bar as a now-playing confirmation. */
     val nowPlayingNotice: SpotifyMediaItem? = null,
     /** The station built from the current track, shown by the Song radio screen. */
@@ -414,6 +417,9 @@ class SpotifyViewModel(
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
 
+    /** Shows a transient bar message; [kind] decides how long it stays. */
+    fun notice(text: String, kind: NoticeKind = NoticeKind.Other) = _state.update { it.say(text, kind) }
+
     /** Dismisses the transient now-playing confirmation and returns the normal action bar. */
     fun dismissNowPlayingNotice() {
         nowPlayingNoticeJob?.cancel()
@@ -433,7 +439,6 @@ class SpotifyViewModel(
         loadLibrary(_state.value.filter)
     }
 
-    fun notice(text: String) = _state.update { it.copy(notice = text) }
 
     fun collection(type: SpotifyCollectionType, id: String): SpotifyCollection? = _state.value.collections[collectionKey(type, id)]
 
@@ -522,9 +527,8 @@ class SpotifyViewModel(
                     val current = it.collections[key]
                     it.copy(
                         collectionMorePending = it.collectionMorePending - key,
-                        collections = if (current == null) it.collections else it.collections + (key to current.copy(hasMore = false)),
-                        notice = playbackNotice(e)
-                    )
+                        collections = if (current == null) it.collections else it.collections + (key to current.copy(hasMore = false))
+                    ).say(playbackNotice(e))
                 }
             }
         }
@@ -551,9 +555,8 @@ class SpotifyViewModel(
                 _state.update {
                     it.copy(
                         artistAlbumHasMore = it.artistAlbumHasMore + (id to false),
-                        artistMorePending = it.artistMorePending - id,
-                        notice = playbackNotice(e)
-                    )
+                        artistMorePending = it.artistMorePending - id
+                    ).say(playbackNotice(e))
                 }
             }
         }
@@ -580,9 +583,8 @@ class SpotifyViewModel(
                 _state.update {
                     it.copy(
                         artistTrackHasMore = it.artistTrackHasMore + (id to false),
-                        artistMorePending = it.artistMorePending - id,
-                        notice = playbackNotice(e)
-                    )
+                        artistMorePending = it.artistMorePending - id
+                    ).say(playbackNotice(e))
                 }
             }
         }
@@ -902,7 +904,7 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = playbackNotice(e)) }
+                _state.update { it.say(playbackNotice(e)) }
             } finally {
                 _state.update { it.copy(collectionMorePending = it.collectionMorePending - key) }
             }
@@ -929,7 +931,7 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = playbackNotice(e)) }
+                _state.update { it.say(playbackNotice(e)) }
             } finally {
                 _state.update { it.copy(artistMorePending = it.artistMorePending - id) }
             }
@@ -990,7 +992,7 @@ class SpotifyViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(isPlaying = false, notice = playbackNotice(e)) }
+                _state.update { it.copy(isPlaying = false).say(playbackNotice(e)) }
             }
         }
     }
@@ -1112,7 +1114,7 @@ class SpotifyViewModel(
                 _state.update {
                     val ids = it.savedTrackIds.toMutableSet()
                     if (wasSaved) ids.add(id) else ids.remove(id)
-                    var next = it.copy(savedTrackIds = ids, notice = playbackNotice(e))
+                    var next = it.copy(savedTrackIds = ids).say(playbackNotice(e))
                     next = if (wasSaved) {
                         track?.let { item -> next.withLibraryItemAdded(LibraryFilter.LikedSongs, item) } ?: next
                     } else {
@@ -1159,7 +1161,7 @@ class SpotifyViewModel(
                 _state.update {
                     val keys = it.savedCollectionKeys.toMutableSet()
                     if (wasSaved) keys.add(key) else keys.remove(key)
-                    val next = it.copy(savedCollectionKeys = keys, notice = playbackNotice(e))
+                    val next = it.copy(savedCollectionKeys = keys).say(playbackNotice(e))
                     if (wasSaved) {
                         collection?.let { item -> libraryItemFor(item) }?.let { item ->
                             next.withLibraryItemAdded(libraryFilterFor(type), item)
@@ -1199,7 +1201,7 @@ class SpotifyViewModel(
                 _state.update {
                     val ids = it.followedArtistIds.toMutableSet()
                     if (wasFollowing) ids.add(id) else ids.remove(id)
-                    val next = it.copy(followedArtistIds = ids, notice = playbackNotice(e))
+                    val next = it.copy(followedArtistIds = ids).say(playbackNotice(e))
                     if (wasFollowing) {
                         next.withLibraryItemAdded(LibraryFilter.Artists, artist)
                     } else {
@@ -1296,8 +1298,13 @@ class SpotifyViewModel(
         clearedHistory = history.clear()
         val snapshot = queue.clearHistory()
         applyQueue(snapshot, syncNowPlaying = false)
-        _state.update { it.copy(recent = emptyList(), notice = "Listening history cleared") }
-        return clearedHistory.isNotEmpty()
+        val cleared = clearedHistory.isNotEmpty()
+        // A real clear is confirmed by the Undo offer and the dropping count; an empty list would
+        // otherwise look like a dead key.
+        _state.update {
+            if (cleared) it.copy(recent = emptyList()) else it.say("Nothing to clear")
+        }
+        return cleared
     }
 
     /** Puts the last cleared history back, timestamps included, so Undo restores the real order. */
@@ -1312,7 +1319,6 @@ class SpotifyViewModel(
         clearArtworkCache()
         session?.clearAudioCache()
         refreshCacheSize()
-        _state.update { it.copy(notice = "Cache cleared") }
     }
 
     fun refreshCacheSize() {
@@ -1358,7 +1364,7 @@ class SpotifyViewModel(
         applyQueue(queue.addToQueue(item), syncNowPlaying = false)
         // Queueing is silent in the player, so the bar is the only confirmation the action landed
         // — especially before anything is playing, when there is no Now Playing screen to check.
-        _state.update { it.copy(notice = "Added ${item.title} to queue") }
+        _state.update { it.say("Added ${item.title} to queue", NoticeKind.Success) }
     }
 
     /**
@@ -1374,7 +1380,7 @@ class SpotifyViewModel(
         }
         val key = collectionKey(collection.type, collection.id)
         if (key in _state.value.collectionMorePending) {
-            _state.update { it.copy(notice = "This collection is still loading — try again") }
+            _state.update { it.say("This collection is still loading — try again") }
             return
         }
         _state.update { it.copy(collectionMorePending = it.collectionMorePending + key) }
@@ -1382,14 +1388,14 @@ class SpotifyViewModel(
             try {
                 val complete = loadAllCollection(collection)
                 if (complete.hasMore) {
-                    _state.update { it.copy(notice = "Couldn't load the whole collection — nothing added") }
+                    _state.update { it.say("Couldn't load the whole collection — nothing added") }
                     return@launch
                 }
                 addToQueue(complete.items)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = playbackNotice(e)) }
+                _state.update { it.say(playbackNotice(e)) }
             } finally {
                 _state.update { it.copy(collectionMorePending = it.collectionMorePending - key) }
             }
@@ -1399,12 +1405,15 @@ class SpotifyViewModel(
     /** Appends a batch with one queue commit; the collection screen uses this after paging. */
     fun addToQueue(items: List<SpotifyMediaItem>) {
         if (items.isEmpty()) {
-            _state.update { it.copy(notice = "Nothing to queue") }
+            _state.update { it.say("Nothing to queue") }
             return
         }
         applyQueue(queue.addToQueue(items), syncNowPlaying = false)
         _state.update {
-            it.copy(notice = "Added ${items.size} ${if (items.size == 1) "track" else "tracks"} to queue")
+            it.say(
+                "Added ${items.size} ${if (items.size == 1) "track" else "tracks"} to queue",
+                NoticeKind.Success
+            )
         }
     }
 
@@ -1441,7 +1450,7 @@ class SpotifyViewModel(
         val session = session
         val openBrowser = openBrowser
         if (session == null || openBrowser == null) {
-            _state.update { it.copy(notice = "Sign-in is unavailable in this build") }
+            _state.update { it.say("Sign-in is unavailable in this build") }
             return
         }
         // A previous attempt can still be waiting on the loopback listener after the user
@@ -1458,7 +1467,7 @@ class SpotifyViewModel(
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(authPending = false, notice = e.message ?: "Sign-in failed")
+                    it.copy(authPending = false).say(e.message ?: "Sign-in failed")
                 }
             }
         }
@@ -1509,10 +1518,10 @@ class SpotifyViewModel(
                         librarySections = sections,
                         librarySectionHasMore = hasMore,
                         librarySectionsLoading = false,
-                        librarySectionsError = if (allFailed) notice else null,
-                        // A full failure is shown as an error page, not as a transient notice.
-                        notice = if (allFailed) current.notice else notice ?: current.notice
+                        librarySectionsError = if (allFailed) notice else null
                     )
+                    // A full failure is shown as an error page, not as a transient notice.
+                    if (!allFailed && notice != null) next = next.say(notice)
                     for ((filter, items) in sections) {
                         next = next.withSectionSaved(filter, items)
                     }
@@ -1557,11 +1566,11 @@ class SpotifyViewModel(
                 _state.update {
                     val message = playbackNotice(e)
                     val empty = it.libraryItems.isEmpty()
-                    it.copy(
+                    val next = it.copy(
                         libraryLoading = false,
-                        libraryError = if (empty) message else null,
-                        notice = if (empty) it.notice else message
+                        libraryError = if (empty) message else null
                     )
+                    if (empty) next else next.say(message)
                 }
             }
         }
@@ -1592,7 +1601,7 @@ class SpotifyViewModel(
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(libraryMorePending = false, libraryHasMore = false, notice = playbackNotice(e))
+                    it.copy(libraryMorePending = false, libraryHasMore = false).say(playbackNotice(e))
                 }
             }
         }
@@ -1879,15 +1888,15 @@ class SpotifyViewModel(
             _state.update {
                 if (it.query == query && it.searchScopes == scopes) {
                     val empty = results.isEmpty
-                    it.copy(
+                    val next = it.copy(
                         searchResults = results,
                         searchPending = false,
                         searchError = if (empty) failure else null,
-                        // A failed search with old results stays a notice; an empty one becomes
-                        // the screen's fallback so the retry action is visible.
-                        notice = if (empty) it.notice else failure ?: it.notice,
                         searchHasMore = scopes.filterTo(mutableSetOf()) { scope -> results.sizeFor(scope) >= SPOTIFY_SEARCH_PAGE_SIZE }
                     )
+                    // A failed search with old results stays a notice; an empty one becomes the
+                    // screen's fallback so the retry action is visible.
+                    if (empty || failure == null) next else next.say(failure)
                 } else {
                     it
                 }
@@ -1929,7 +1938,7 @@ class SpotifyViewModel(
                 throw e
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(searchMorePending = it.searchMorePending - scope, notice = playbackNotice(e))
+                    it.copy(searchMorePending = it.searchMorePending - scope).say(playbackNotice(e))
                 }
             }
         }
@@ -2048,7 +2057,7 @@ class SpotifyViewModel(
 
             "unavailable" -> if (matchesCurrent(event)) {
                 awaitingPlaybackStart = false
-                _state.update { it.copy(isPlaying = false, notice = "This track isn't available") }
+                _state.update { it.copy(isPlaying = false).say("This track isn't available") }
             }
         }
     }
@@ -2221,7 +2230,10 @@ class SpotifyViewModel(
 
     private fun stopAtQueueEnd(notice: String? = null) {
         _playbackPositionMs.value = 0L
-        _state.update { it.copy(isPlaying = false, notice = notice ?: it.notice) }
+        _state.update {
+            val next = it.copy(isPlaying = false)
+            if (notice == null) next else next.say(notice)
+        }
     }
 
     /** Starts a real Spotify item; local test fixtures have no URI and keep the local simulation. */
@@ -2254,7 +2266,7 @@ class SpotifyViewModel(
                 SidetrackDebug.log("viewModel.startRemote failed", e)
                 awaitingPlaybackStart = false
                 _state.update {
-                    it.copy(isPlaying = false, notice = playbackNotice(e), nowPlayingNotice = null)
+                    it.copy(isPlaying = false, nowPlayingNotice = null).say(playbackNotice(e))
                 }
             }
         }
@@ -2318,3 +2330,7 @@ class SpotifyViewModel(
         else -> item.toString()
     }
 }
+
+/** Sets the transient bar message together with the time the bar keeps it. */
+private fun SpotifyUiState.say(text: String, kind: NoticeKind = NoticeKind.Other) =
+    copy(notice = text, noticeKind = kind)

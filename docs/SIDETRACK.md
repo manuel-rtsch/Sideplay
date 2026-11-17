@@ -106,8 +106,9 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   native is absent.
 - Library write-back is optimistic with rollback: like/unlike, save/remove album and show,
   follow/unfollow artist, add/remove playlist. Saves and follows offer Undo for five visible
-  seconds; queue actions are silent. The open Library section is patched in place, so a save or
-  follow appears immediately and rolls back if the write fails. Save/bookmark and follow states
+  seconds of screen time (`UndoWindow`), shared with queue removal and Clear history. The open
+  Library section is patched in place, so a save or follow appears immediately and rolls back if
+  the write fails. Save/bookmark and follow states
   keep the same success fill in both directions, matching the Home Library tile.
 - Saved songs, albums, artists and shows are ordered by Spotify's `added_at`, newest first. The
   collection page is read once, filtered by URI prefix, and cached for two minutes; writes
@@ -165,6 +166,14 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 - Starting a new item shows a transient now-playing confirmation in the action bar: artwork, an
   animated playing indicator, the title, and a right arrow to Now Playing. It replaces the normal
   actions for four seconds, can be dismissed immediately with its X, and never auto-navigates.
+- Transient feedback has one home and one clock. The bar shows a notice only when the screen does
+  not already say what happened: a success keeps it for two seconds, warnings, errors and playback
+  upkeep ("Reconnecting…") for five. Tapping the notice dismisses it early; it is never allowed to
+  block the normal actions, and leaving the screen no longer strands it on the next one. Saves
+  that change a visible icon (like/unlike, follow/unfollow, queue) stay silent unless they fail,
+  and clearing the cache or the listening history is not announced twice: the cache row's size
+  and the Undo bar already say it. Undo offers all use Sidekit's `UndoWindow`: five seconds of
+  visible time, paused while the app is in the background, committed when the screen goes away.
   Selecting the already-playing item still opens Now Playing directly. The timer lives in
   `SpotifyViewModel`, so the confirmation clears even if the user navigates to a screen that does
   not render it.

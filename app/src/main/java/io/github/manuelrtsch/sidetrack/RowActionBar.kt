@@ -22,7 +22,8 @@ import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.LocalChrome
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.icons.SidekitIcon
-import kotlinx.coroutines.delay
+import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
+import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
 
 /** One action offered by the contextual row bar. */
 data class RowAction(
@@ -120,11 +121,12 @@ fun rememberRowActionBarState(): RowActionBarState {
             if (chrome?.focusActionBar() == true) return@LaunchedEffect
         }
     }
+    // One Undo window for every row action in the app: five seconds of visible time, paused while
+    // the screen is in the background and committed when the screen goes away.
+    val undoWindow = rememberUndoWindow { state.clearUndo() }
+    UndoWindowLifecycle(undoWindow) { state.clearUndo() }
     LaunchedEffect(state.undo) {
-        if (state.undo != null) {
-            delay(5_000L)
-            state.clearUndo()
-        }
+        if (state.undo == null) undoWindow.cancel() else undoWindow.start()
     }
     // The bar has to leave composition before the row can take focus back; requesting it in the
     // same frame as the click leaves the focus owner on the disappearing action bar.

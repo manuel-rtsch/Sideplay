@@ -1,5 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
+import hrln.interactive.sidekit.design.action.NoticeKind
+
 /**
  * Focused views of [SpotifyUiState].
  *
@@ -72,9 +74,16 @@ data class SavedUiState(
     val followedArtistIds: Set<String> = emptySet()
 )
 
-/** The transient action-bar state: a notice or the now-playing confirmation. */
+/**
+ * The transient action-bar state: a notice or the now-playing confirmation.
+ *
+ * [noticeKind] decides how long the notice owns the bar. It travels with [notice] rather than
+ * living in the screen, so the bar's timer is the same on every screen and a later success cannot
+ * inherit an earlier error's duration.
+ */
 data class ChromeUiState(
     val notice: String? = null,
+    val noticeKind: NoticeKind = NoticeKind.Other,
     val nowPlayingNotice: SpotifyMediaItem? = null
 )
 
@@ -144,7 +153,7 @@ val SpotifyUiState.saved: SavedUiState
     get() = SavedUiState(savedTrackIds, savedCollectionKeys, followedArtistIds)
 
 val SpotifyUiState.chrome: ChromeUiState
-    get() = ChromeUiState(notice, nowPlayingNotice)
+    get() = ChromeUiState(notice, noticeKind, nowPlayingNotice)
 
 val SpotifyUiState.radioSlice: RadioUiState
     get() = RadioUiState(

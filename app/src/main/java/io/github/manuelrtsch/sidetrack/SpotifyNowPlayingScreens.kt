@@ -64,6 +64,8 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
+import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
 import io.github.manuelrtsch.sidetrack.R
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
@@ -400,6 +402,9 @@ fun QueueScreen(
     onKeypadBackOverride: ((() -> Boolean)?) -> Unit = {}
 ) {
     var pendingUndo by remember { mutableStateOf<QueueUndo?>(null) }
+    // Removing from the queue offers the same five visible seconds as every other Undo in the app.
+    val undoWindow = rememberUndoWindow { pendingUndo = null }
+    UndoWindowLifecycle(undoWindow) { pendingUndo = null }
     var reorderMode by remember { mutableStateOf(false) }
     // The current item and tail size at the start of a reorder. If either changes (playback moves
     // on, another surface edits the queue, radio loads), the lift no longer describes the row it
@@ -450,12 +455,6 @@ fun QueueScreen(
             gutterKey = null
             delay(GUTTER_DELAY_MS)
             gutterKey = focusedKey
-        }
-    }
-    LaunchedEffect(pendingUndo) {
-        if (pendingUndo != null) {
-            delay(5_000L)
-            pendingUndo = null
         }
     }
     LaunchedEffect(Unit) {
@@ -511,6 +510,7 @@ fun QueueScreen(
         val removed = onRemove(index)
         if (removed >= 0) {
             pendingUndo = QueueUndo.Removed(removed, item)
+            undoWindow.start()
             focusedKey = null
             clearFocusPending = true
         }
@@ -518,6 +518,7 @@ fun QueueScreen(
     val clearUpcoming: () -> Unit = {
         rowActions.close()
         pendingUndo = QueueUndo.Cleared(onClearUpcoming())
+        undoWindow.start()
         focusedKey = null
         clearFocusPending = true
     }
@@ -619,20 +620,25 @@ fun QueueScreen(
     } else {
         null
     }
+    // The queue's own top row is the current item, so the now-playing confirmation would only
+    // repeat it. Errors and confirmations still replace the bar.
     val normal = spotifyActions(
         chrome,
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        listOfNotNull(back, clearAction)
+        listOfNotNull(back, clearAction),
+        showNowPlayingNotice = false
     )
     val undo = when (val pending = pendingUndo) {
         is QueueUndo.Cleared -> SideAction.undo("undoClear", "Undo", "Undo clear upcoming") {
+            undoWindow.cancel()
             onRestoreUpcoming(pending.items)
             pendingUndo = null
         }
 
         is QueueUndo.Removed -> SideAction.undo("undoRemove", "Undo", "Undo remove ${pending.item.title}") {
+            undoWindow.cancel()
             onRestoreRemoved(pending.index, pending.item)
             pendingUndo = null
         }
