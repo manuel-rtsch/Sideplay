@@ -27,6 +27,13 @@ class NativeSpotifyGateway(
     override suspend fun connect(accessToken: String) = onIo {
         requireNative()
         if (connected) return@onIo
+        // A session that is invalid, or was opened with a different OAuth token, must be rebuilt
+        // before a player is attached to it. Otherwise the player would load tracks through a
+        // dead access-point connection and every load would fail.
+        if (sessionConnected && !native.setAccessToken(accessToken)) {
+            sessionConnected = false
+            sessionToken = null
+        }
         connectSession(accessToken)
         createPlayer()
     }
@@ -100,15 +107,29 @@ class NativeSpotifyGateway(
      * `setAccessToken` is called on every attempt, not only when the token changed: librespot can
      * lose its access-point connection while the OAuth token is still valid, and a session that
      * has gone invalid must be rebuilt or playback fails for every track. The native call is a
-     * cheap state update, so the extra round trip on each play is worth the liveness check.
+     * cheap liveness check, so the extra round trip on each play is worth it. It also reports a
+     * changed token as a rejection: the live session holds the access point's reusable stored
+     * credential, which login5 needs, so a refreshed OAuth token must rebuild the session rather
+     * than overwrite that credential.
      */
-    suspend fun ensureConnected(): Boolean {
+    suspend fun ensureConnected(forceReconnect: Boolean = false): Boolean {
         if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
         val token = accessToken() ?: run {
             if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
             fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
         }
-        SidetrackDebug.log("ensureConnected connected=$connected sessionConnected=$sessionConnected tokenLength=${token.length}")
+        SidetrackDebug.log("ensureConnected connected=$connected sessionConnected=$sessionConnected tokenLength=${token.length} forceReconnect=$forceReconnect")
+        if (forceReconnect) {
+            // A stall can leave librespot's access-point connection dead without marking the
+            // session invalid yet. Rebuilding is the only reliable way to get a fresh connection
+            // before the keep-alive timeout would notice.
+            SidetrackDebug.log("ensureConnected: forced reconnect")
+            connected = false
+            sessionConnected = false
+            sessionToken = null
+            connect(token)
+            return true
+        }
         if (!connected) {
             SidetrackDebug.log("ensureConnected: no player, connecting")
             connect(token)
@@ -139,10 +160,16 @@ class NativeSpotifyGateway(
         if (!sessionConnected) {
             connectSession(token)
         } else if (!native.setAccessToken(token)) {
-            // The native session is gone; reconnect from scratch rather than keep a stale token.
-            sessionConnected = false
-            sessionToken = null
-            connectSession(token)
+            // The first call stores the new token. A second call therefore only reports a dead
+            // session, not a token change: a refreshed token must not tear down a live player
+            // from a catalog read, but an invalid session still has to be rebuilt.
+            if (!native.setAccessToken(token)) {
+                sessionConnected = false
+                sessionToken = null
+                connectSession(token)
+            } else {
+                sessionToken = token
+            }
         } else {
             sessionToken = token
         }

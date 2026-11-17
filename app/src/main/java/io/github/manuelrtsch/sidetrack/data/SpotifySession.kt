@@ -171,7 +171,9 @@ class SpotifySession(
         val positionMs = playback.position
         SidetrackDebug.log("startRestoredItem uri=$uri positionMs=$positionMs")
         playbackScope.launch {
-            runCatching { play(uri, positionMs.coerceAtLeast(0L)) }
+            // Nothing is loaded, so this is a cold start or a recovery: a fresh connection is
+            // cheaper than discovering a dead one after the first load fails.
+            runCatching { play(uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
                 .onFailure {
                     SidetrackDebug.log("startRestoredItem failed", it)
                     playback.pause()
@@ -203,7 +205,10 @@ class SpotifySession(
         stallRecoveries.addLast(now)
         SidetrackDebug.log("recoverPlayback uri=$uri positionMs=$positionMs attempt=${stallRecoveries.size}")
         playbackScope.launch {
-            runCatching { play(uri, positionMs.coerceAtLeast(0L)) }
+            // A stall usually means the access-point connection is dead even when librespot has
+            // not marked the session invalid yet, so rebuild it instead of reloading on the same
+            // connection and stalling again.
+            runCatching { play(uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
                 .onSuccess { playback.emitNotice(null) }
                 .onFailure {
                     SidetrackDebug.log("recoverPlayback failed", it)
@@ -257,8 +262,8 @@ class SpotifySession(
     suspend fun ensurePlaybackConnected(): Boolean = nativeGateway.ensureConnected()
 
     /** Bounded so a stalled access-point handshake cannot leave the play button stuck forever. */
-    private suspend fun connectForPlayback(): Boolean {
-        val rebuilt = withTimeoutOrNull(CONNECT_TIMEOUT_MS) { nativeGateway.ensureConnected() }
+    private suspend fun connectForPlayback(forceReconnect: Boolean = false): Boolean {
+        val rebuilt = withTimeoutOrNull(CONNECT_TIMEOUT_MS) { nativeGateway.ensureConnected(forceReconnect) }
         if (rebuilt == null) {
             SidetrackDebug.log("connectForPlayback timed out after ${CONNECT_TIMEOUT_MS}ms")
             if (!isOnline) throw SpotifyGatewayException(SpotifyFailure.Network, "No internet connection")
@@ -268,12 +273,17 @@ class SpotifySession(
         return rebuilt
     }
 
-    suspend fun play(uri: String, positionMs: Long = 0L, gapless: Boolean = false) {
-        SidetrackDebug.log("session.play begin uri=$uri positionMs=$positionMs gapless=$gapless")
+    suspend fun play(
+        uri: String,
+        positionMs: Long = 0L,
+        gapless: Boolean = false,
+        forceReconnect: Boolean = false
+    ) {
+        SidetrackDebug.log("session.play begin uri=$uri positionMs=$positionMs gapless=$gapless forceReconnect=$forceReconnect")
         // A new start supersedes the close path, even when the old player's stopped event is
         // still queued behind it.
         halting = false
-        connectForPlayback()
+        connectForPlayback(forceReconnect)
         SidetrackDebug.log("session.play connected; starting playback")
         val keepAudioSink = gapless && _settings.value.gapless && positionMs == 0L
         withContext(Dispatchers.Main.immediate) { playback.start(uri, positionMs, keepAudioSink) }

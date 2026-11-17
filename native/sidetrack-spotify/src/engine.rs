@@ -175,17 +175,32 @@ pub fn connect(access_token: &str) -> Result<(), String> {
 
 pub fn set_access_token(access_token: &str) -> Result<(), String> {
     let mut guard = state().lock().map_err(|_| "STATE_LOCK".to_string())?;
-    let Some(session) = guard.session.as_ref() else {
-        return Err("SESSION_NOT_CONNECTED".to_string());
+    let (changed, invalid) = {
+        let Some(session) = guard.session.as_ref() else {
+            return Err("SESSION_NOT_CONNECTED".to_string());
+        };
+        (
+            guard.access_token.as_deref() != Some(access_token),
+            session.is_invalid(),
+        )
     };
+    // Catalog calls read this token, so keep it current even when the session has to be rebuilt.
+    guard.access_token = Some(access_token.to_string());
     // librespot marks the session invalid when the access point connection closes or the
     // keep-alive times out. The stored `Session` handle stays usable, so without this check a
     // dead session would accept token updates forever and every later track would load with no
     // audio key. Reporting the invalid state lets the Kotlin side reconnect from scratch.
-    if session.is_invalid() {
+    if invalid {
         return Err("SESSION_INVALID".to_string());
     }
-    guard.access_token = Some(access_token.to_string());
+    // Do not write the OAuth token into the live session. After `connect`, librespot stores the
+    // reusable stored credential returned by the access point in `auth_data`; login5 needs that
+    // blob to mint audio tokens. The OAuth token is not a stored credential, so overwriting it
+    // makes every audio load fail with INVALID_CREDENTIALS. A refreshed token therefore has to
+    // rebuild the session instead: report the change and let the Kotlin side reconnect.
+    if changed {
+        return Err("SESSION_TOKEN_CHANGED".to_string());
+    }
     Ok(())
 }
 
