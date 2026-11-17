@@ -1329,15 +1329,16 @@ class SpotifyViewModel(
         applyQueue(queue.finishReorder(), syncNowPlaying = false)
     }
 
-    fun removeHistory(item: SpotifyMediaItem) {
-        history.remove(item)
-        val snapshot = queue.removeHistory(item)
-        applyQueue(snapshot, syncNowPlaying = false)
-        _state.update {
-            it.copy(
-                recent = history.items(),
-                notice = "${item.title} removed from history"
-            )
+    /** Removes one history entry and returns the action that puts it back, if it was there. */
+    fun removeHistory(item: SpotifyMediaItem): (() -> Unit)? {
+        val removed = history.removeEntry(item) ?: return null
+        val queueIndex = queue.snapshot.history.indexOfFirst { it.id == item.id }
+        applyQueue(queue.removeHistory(item), syncNowPlaying = false)
+        _state.update { it.copy(recent = history.items()) }
+        return {
+            history.restore(removed)
+            applyQueue(queue.restoreHistory(queueIndex, item), syncNowPlaying = false)
+            _state.update { it.copy(recent = history.items()) }
         }
     }
 

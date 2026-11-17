@@ -6,6 +6,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionTone
@@ -13,6 +15,7 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 import io.github.manuelrtsch.sidetrack.ui.GutterRow
+import io.github.manuelrtsch.sidetrack.ui.MeatballIcon
 import io.github.manuelrtsch.sidetrack.ui.RowActionSquare
 import io.github.manuelrtsch.sidetrack.ui.RowGutterState
 import io.github.manuelrtsch.sidetrack.ui.rememberGutterSquareFocus
@@ -73,16 +76,19 @@ fun TrackRow(
 ) {
     val saved = rows.saved(track)
     val selected = rows.bar.selection?.key == key
+    val rowFocus = remember { FocusRequester() }
+    CloseRowActionsWhenDisposed(selected, rows.bar)
     GutterRow(key, rows.focus, squares = 1, modifier = modifier, content = { gutterVisible ->
         SpotifyMediaRow(
             track,
             Modifier
+                .focusRequester(rowFocus)
                 .onFocusChanged { state ->
                     if (state.isFocused) rows.focus.rowFocused(key) else rows.focus.rowUnfocused(key)
                 }
                 .then(
                     if (selected) {
-                        Modifier.border(1.dp, SidekitTheme.colors.emphasisA1, SidekitTheme.shapes.item)
+                        Modifier.border(2.dp, SidekitTheme.colors.light, SidekitTheme.shapes.item)
                     } else {
                         Modifier
                     }
@@ -105,30 +111,44 @@ fun TrackRow(
         LaunchedEffect(Unit) { rows.onEnsureSaved(track) }
         RowActionSquare(
             color = SidekitTheme.colors.surfaceA4,
-            icon = SidekitIcon.Apps,
             label = "Actions for ${track.title}",
+            content = { MeatballIcon() },
             modifier = squareFocus,
             onClick = {
                 rows.focus.touchDismissed(key)
+                rowFocus.requestFocus()
                 rows.bar.show(
                     RowActionSelection(
                         key = key,
                         title = track.title,
+                        focusRequester = rowFocus,
                         actions = listOf(
                             RowAction(
                                 key = "save",
-                                label = if (saved) {
+                                label = if (saved) "Unsave" else "Save",
+                                contentDescription = if (saved) {
                                     "Remove ${track.title} from Liked Songs"
                                 } else {
                                     "Save ${track.title} to Liked Songs"
                                 },
                                 icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-                                tone = if (saved) ActionTone.Secondary else ActionTone.Muted,
-                                onClick = { rows.onSave(track) }
+                                tone = if (saved) ActionTone.Destructive else ActionTone.Primary,
+                                onClick = {
+                                    rows.onSave(track)
+                                    if (saved) {
+                                        rows.bar.showUndo(
+                                            RowActionUndo(
+                                                contentDescription = "Undo remove ${track.title} from Liked Songs",
+                                                onClick = { rows.onSave(track) }
+                                            )
+                                        )
+                                    }
+                                }
                             ),
                             RowAction(
                                 key = "queue",
-                                label = "Add ${track.title} to queue",
+                                label = "Queue",
+                                contentDescription = "Add ${track.title} to queue",
                                 icon = SidekitIcon.QueueMusic,
                                 tone = ActionTone.Primary,
                                 onClick = { rows.onQueue(track) }
@@ -201,20 +221,23 @@ fun HistoryRow(
     modifier: Modifier = Modifier,
     secondary: String = item.creator,
     onQueue: (SpotifyMediaItem) -> Unit,
-    onRemove: (SpotifyMediaItem) -> Unit,
+    onRemove: (SpotifyMediaItem) -> (() -> Unit)?,
     onClick: () -> Unit
 ) {
     val selected = bar.selection?.key == key
+    val rowFocus = remember { FocusRequester() }
+    CloseRowActionsWhenDisposed(selected, bar)
     GutterRow(key, focus, squares = 1, modifier = modifier, content = { gutterVisible ->
         SpotifyMediaRow(
             item,
             Modifier
+                .focusRequester(rowFocus)
                 .onFocusChanged { state ->
                     if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
                 }
                 .then(
                     if (selected) {
-                        Modifier.border(1.dp, SidekitTheme.colors.emphasisA1, SidekitTheme.shapes.item)
+                        Modifier.border(2.dp, SidekitTheme.colors.light, SidekitTheme.shapes.item)
                     } else {
                         Modifier
                     }
@@ -230,29 +253,43 @@ fun HistoryRow(
         val squareFocus = rememberGutterSquareFocus(key, focus)
         RowActionSquare(
             color = SidekitTheme.colors.surfaceA4,
-            icon = SidekitIcon.Apps,
             label = "Actions for ${item.title}",
+            content = { MeatballIcon() },
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
+                rowFocus.requestFocus()
                 bar.show(
                     RowActionSelection(
                         key = key,
                         title = item.title,
+                        focusRequester = rowFocus,
                         actions = listOf(
                             RowAction(
                                 key = "queue",
-                                label = "Add ${item.title} to queue",
+                                label = "Queue",
+                                contentDescription = "Add ${item.title} to queue",
                                 icon = SidekitIcon.QueueMusic,
                                 tone = ActionTone.Primary,
                                 onClick = { onQueue(item) }
                             ),
                             RowAction(
                                 key = "remove",
-                                label = "Remove ${item.title} from history",
+                                label = "Remove",
+                                contentDescription = "Remove ${item.title} from history",
                                 icon = SidekitIcon.DeleteForever,
                                 tone = ActionTone.Destructive,
-                                onClick = { onRemove(item) }
+                                onClick = {
+                                    val undo = onRemove(item)
+                                    if (undo != null) {
+                                        bar.showUndo(
+                                            RowActionUndo(
+                                                contentDescription = "Undo remove ${item.title} from history",
+                                                onClick = undo
+                                            )
+                                        )
+                                    }
+                                }
                             )
                         )
                     )

@@ -58,7 +58,7 @@ class SidetrackScreenshotTest {
             onPlay = {},
             onQueue = {},
             onQueueTrack = {},
-            onRemoveHistory = {},
+            onRemoveHistory = { null },
             onHistory = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}
@@ -77,7 +77,7 @@ class SidetrackScreenshotTest {
             onPlay = {},
             onQueue = {},
             onQueueTrack = {},
-            onRemoveHistory = {},
+            onRemoveHistory = { null },
             onHistory = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}
@@ -96,7 +96,7 @@ class SidetrackScreenshotTest {
             onPlay = {},
             onQueue = {},
             onQueueTrack = {},
-            onRemoveHistory = {},
+            onRemoveHistory = { null },
             onHistory = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}
@@ -111,7 +111,7 @@ class SidetrackScreenshotTest {
             onBack = {},
             onPlay = {},
             onQueue = {},
-            onRemove = { -1 },
+            onRemove = { null },
             onNowPlaying = {},
             onDismissNotice = {},
             onDismissNowPlaying = {}
@@ -359,6 +359,7 @@ class SidetrackScreenshotTest {
             state.chrome,
             onBack = {},
             onNowPlaying = {},
+            onSleepTimer = {},
             onJump = {},
             onMoveUpcoming = { _, _ -> },
             onCommitReorder = {},

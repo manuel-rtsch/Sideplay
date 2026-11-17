@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.ui
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.clickable
@@ -68,6 +69,8 @@ data class SwipeAction(
     val color: Color,
     val armedColor: Color = color,
     val destructive: Boolean = false,
+    /** Overrides [icon] with a drawable that has no Sidekit icon equivalent. */
+    @DrawableRes val iconRes: Int? = null,
     val onClick: () -> Unit
 )
 
@@ -220,7 +223,9 @@ fun SidekitSwipeRow(
         }
     }
 
-    val actionIcon = rememberVectorPainter(ImageVector.vectorResource(swipeAction.icon.drawable))
+    val actionIcon = rememberVectorPainter(
+        ImageVector.vectorResource(swipeAction.iconRes ?: swipeAction.icon.drawable)
+    )
     val tint = remember(colors.light) { ColorFilter.tint(colors.light) }
 
     Box(

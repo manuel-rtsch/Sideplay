@@ -102,6 +102,14 @@ class SpotifyQueueRepository(
 
     fun removeHistory(item: SpotifyMediaItem): Snapshot = commit(snapshot.copy(history = snapshot.history.filterNot { it.id == item.id }))
 
+    /** Puts a removed history entry back at its old position, unless it is already there again. */
+    fun restoreHistory(index: Int, item: SpotifyMediaItem): Snapshot {
+        if (snapshot.history.any { it.id == item.id }) return snapshot
+        val history = snapshot.history.toMutableList()
+        history.add(index.coerceIn(0, history.size), item)
+        return commit(snapshot.copy(history = history))
+    }
+
     fun cycleRepeat(): Snapshot = commit(snapshot.copy(repeat = snapshot.repeat.next()))
 
     fun setRepeat(mode: RepeatMode): Snapshot = commit(snapshot.copy(repeat = mode))

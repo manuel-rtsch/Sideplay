@@ -9,7 +9,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import hrln.interactive.sidekit.design.action.ActionTone
 import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -30,7 +32,7 @@ import org.robolectric.annotation.GraphicsMode
  * system, because the failure it guards against is an event-ordering one: a control that appears
  * *inside* an open gutter reports `isFocused = false` once when it is attached, and treating that
  * as "the row lost focus" closes the gutter on the frame it opened. On a device that reads as a
- * flash. The touch path goes through a real long press, since that is the gesture being added.
+ * flash. The touch path goes through a real left swipe, since that is the gesture being added.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -41,7 +43,6 @@ class TrackRowGutterTest {
     private val track = MockSpotifyDataSource.albums.first().tracks.first()
     private val key = track.id
     private val actions = "Actions for ${track.title}"
-    private val longPressHoldMs = 700L
 
     @Before
     fun resetHaptics() = RecordingHapticShadow.reset()
@@ -86,21 +87,9 @@ class TrackRowGutterTest {
         }
     }
 
-    /**
-     * Holds the row for the platform's long-press timeout, as a finger on a touch screen would.
-     *
-     * The press is split around the wait on purpose: [rowLongPress] times the hold with a
-     * coroutine timeout, so the looper has to run while the finger is still down. A single
-     * injected `longClick()` only moves the events' timestamps, which satisfies the framework's
-     * timestamp-based detectors but not this one.
-     */
-    private fun longPressRow() {
-        compose.onNodeWithText(track.title).performTouchInput {
-            down(center)
-            // Hold past the platform's long-press timeout, then release.
-            advanceEventTime(longPressHoldMs)
-            up()
-        }
+    /** Swipes the row left, the touch route to its gutter. */
+    private fun swipeRow() {
+        compose.onNodeWithText(track.title).performTouchInput { swipeLeft() }
         settle()
     }
 
@@ -149,9 +138,34 @@ class TrackRowGutterTest {
         compose.runOnIdle {
             assertEquals(
                 listOf("Remove ${track.title} from Liked Songs", "Add ${track.title} to queue"),
-                rows().bar.selection?.actions?.map { it.label }
+                rows().bar.selection?.actions?.map { it.contentDescription }
             )
         }
+    }
+
+    @Test
+    fun unsavingOffersUndoInTheBar() {
+        var saves = 0
+        val rows = showRow(saved = true, onSave = { saves++ })
+        compose.runOnIdle { rows().focus.rowFocused(key) }
+        settle()
+        compose.onNodeWithContentDescription(actions).performClick()
+        compose.runOnIdle {
+            val unsave = rows().bar.selection?.actions?.first()
+            assertEquals(ActionTone.Destructive, unsave?.tone)
+            unsave?.onClick?.invoke()
+        }
+        compose.waitForIdle()
+
+        assertEquals(1, saves)
+        compose.runOnIdle {
+            assertEquals(
+                "Undo remove ${track.title} from Liked Songs",
+                rows().bar.undo?.contentDescription
+            )
+            rows().bar.undo?.onClick?.invoke()
+        }
+        assertEquals(2, saves)
     }
 
     @Test
@@ -168,9 +182,18 @@ class TrackRowGutterTest {
     }
 
     @Test
-    fun draggingTheRowDoesNotRevealTheGutter() {
+    fun swipingTheRowRevealsTheGutter() {
         val rows = showRow()
-        compose.onNodeWithText(track.title).performTouchInput { swipeLeft() }
+        swipeRow()
+        assertEquals(key, rows().focus.touchedKey)
+        assertNull(rows().focus.openKey)
+        compose.onNodeWithContentDescription(actions).assertExists()
+    }
+
+    @Test
+    fun scrollingTheRowDoesNotRevealTheGutter() {
+        val rows = showRow()
+        compose.onNodeWithText(track.title).performTouchInput { swipeUp() }
         settle()
         assertNull(rows().focus.touchedKey)
         assertNull(rows().focus.openKey)
@@ -178,23 +201,14 @@ class TrackRowGutterTest {
     }
 
     @Test
-    fun longPressRevealsTheGutterWithoutAnyFocus() {
+    fun swipeTriggerOpensTheBar() {
         val rows = showRow()
-        longPressRow()
-        assertEquals(key, rows().focus.touchedKey)
-        assertNull(rows().focus.openKey)
-        compose.onNodeWithContentDescription(actions).assertExists()
-    }
-
-    @Test
-    fun longPressTriggerOpensTheBar() {
-        val rows = showRow()
-        longPressRow()
+        swipeRow()
         compose.onNodeWithContentDescription(actions).performClick()
         compose.runOnIdle {
             assertEquals(
                 listOf("Save ${track.title} to Liked Songs", "Add ${track.title} to queue"),
-                rows().bar.selection?.actions?.map { it.label }
+                rows().bar.selection?.actions?.map { it.contentDescription }
             )
         }
     }
@@ -202,9 +216,9 @@ class TrackRowGutterTest {
     @Test
     fun keypadFocusDropsATouchReveal() {
         val rows = showRow()
-        longPressRow()
+        swipeRow()
         assertEquals(key, rows().focus.touchedKey)
-        // Down on the keypad: the focus lands on another row, so the held row gives its squares up.
+        // Down on the keypad: the focus lands on another row, so the swiped row gives its squares up.
         compose.runOnIdle { rows().focus.rowFocused("next-row") }
         settle()
         assertNull(rows().focus.touchedKey)
@@ -217,7 +231,7 @@ class TrackRowGutterTest {
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
         compose.onNodeWithContentDescription(actions).assertExists()
-        // Holding a different row while the keypad still points at this one must not show both.
+        // Swiping a different row while the keypad still points at this one must not show both.
         compose.runOnIdle { rows().focus.reveal("other-row") }
         settle()
         assertEquals("other-row", rows().focus.touchedKey)
@@ -228,7 +242,7 @@ class TrackRowGutterTest {
     fun aTouchRevealBeforeTheFocusSettlesStillLeavesOneGutter() {
         val rows = showRow()
         compose.runOnIdle { rows().focus.rowFocused(key) }
-        // Long-pressed before the 250 ms settle fires, so the pending settle would open this row.
+        // Swiped before the 250 ms settle fires, so the pending settle would open this row.
         compose.runOnIdle { rows().focus.reveal("other-row") }
         settle()
         assertEquals(false, rows().focus.isOpen(key))
@@ -237,11 +251,11 @@ class TrackRowGutterTest {
     }
 
     @Test
-    fun aLongPressTicksThePhone() {
+    fun aSwipeTicksThePhone() {
         showRow()
-        longPressRow()
-        // The hold is the only feedback a finger gets that the gutter registered.
-        assertEquals(listOf(HapticFeedbackConstants.LONG_PRESS), RecordingHapticShadow.performed.toList())
+        swipeRow()
+        // The swipe is the only feedback a finger gets that the gutter registered.
+        assertEquals(listOf(HapticFeedbackConstants.CONTEXT_CLICK), RecordingHapticShadow.performed.toList())
     }
 
     @Test
@@ -250,8 +264,8 @@ class TrackRowGutterTest {
         compose.runOnIdle { rows().focus.rowFocused(key) }
         settle()
         compose.onNodeWithContentDescription(actions).assertExists()
-        // The tick belongs to the long press, not to the focus landing: a D-pad held through a
-        // list must not buzz once per row it passes.
+        // The tick belongs to the swipe, not to the focus landing: a D-pad held through a list
+        // must not buzz once per row it passes.
         assertEquals(0, RecordingHapticShadow.performed.size)
     }
 
@@ -259,7 +273,7 @@ class TrackRowGutterTest {
     fun tappingARevealedRowClosesItInsteadOfPlaying() {
         var plays = 0
         val rows = showRow(onPlay = { plays++ })
-        longPressRow()
+        swipeRow()
         compose.onNodeWithText(track.title).performClick()
         settle()
         assertNull(rows().focus.touchedKey)

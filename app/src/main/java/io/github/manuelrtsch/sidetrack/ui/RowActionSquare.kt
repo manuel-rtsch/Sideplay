@@ -1,13 +1,17 @@
 package io.github.manuelrtsch.sidetrack.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -45,7 +49,8 @@ fun RowActionSquare(
 ) {
     Box(
         modifier
-            .size(SidekitTheme.spacing.itemHeight)
+            .width(SidekitTheme.spacing.itemHeight)
+            .fillMaxHeight()
             .clip(SidekitTheme.shapes.item)
             .background(color)
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
@@ -57,5 +62,20 @@ fun RowActionSquare(
         } else if (icon != null) {
             SidekitIconImage(icon, tint = SidekitTheme.colors.light, contentDescription = null)
         }
+    }
+}
+
+/** The horizontal three-dot "more" glyph used by the row action gutter. */
+@Composable
+fun MeatballIcon(modifier: Modifier = Modifier) {
+    val color = SidekitTheme.colors.light
+    Canvas(modifier.size(SidekitTheme.spacing.iconSize)) {
+        val radius = size.minDimension * 0.09f
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val gap = size.width * 0.24f
+        drawCircle(color, radius, Offset(cx - gap, cy))
+        drawCircle(color, radius, Offset(cx, cy))
+        drawCircle(color, radius, Offset(cx + gap, cy))
     }
 }

@@ -45,10 +45,29 @@ class SpotifyHistoryRepository(
         return snapshot()
     }
 
+    /** Removes one entry and returns it with its position, so the caller can offer Undo. */
+    fun removeEntry(item: SpotifyMediaItem): Removed? {
+        val index = entries.indexOfFirst { it.item.id == item.id }
+        if (index < 0) return null
+        val entry = entries.removeAt(index)
+        save(entries.toList())
+        return Removed(entry, index)
+    }
+
     fun remove(item: SpotifyMediaItem): List<SpotifyHistoryEntry> {
-        if (entries.removeAll { it.item.id == item.id }) save(entries.toList())
+        removeEntry(item)
         return snapshot()
     }
+
+    /** Puts a removed entry back where it was, unless it has already been played again. */
+    fun restore(removed: Removed): List<SpotifyHistoryEntry> {
+        if (entries.any { it.item.id == removed.entry.item.id }) return snapshot()
+        entries.add(removed.index.coerceIn(0, entries.size), removed.entry)
+        save(entries.toList())
+        return snapshot()
+    }
+
+    data class Removed(val entry: SpotifyHistoryEntry, val index: Int)
 
     fun clear(): List<SpotifyHistoryEntry> {
         entries.clear()

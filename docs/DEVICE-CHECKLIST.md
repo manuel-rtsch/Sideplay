@@ -7,7 +7,7 @@ driven from `adb`.
 **Device:** `SP0100260901847` (SP01_FE_US, 480 × 640, Android 12)  
 **Last run:** 2026-11-16, Sidetrack 0.3.3 (`versionCode=109`, arm64 asset)
 
-The row gutter and the touch long press were validated separately on 2026-11-16 on the
+The row gutter and the touch swipe were validated separately on 2026-11-16 on the
 `Sidephone_SP-01` emulator (480 × 640, Android 12, `versionCode=96`); the items below marked ✔︎ so
 far are that run plus this one.
 
@@ -39,14 +39,15 @@ far are that run plus this one.
 - [x] The queue advances exactly once at the end of a track.
 - [ ] **Manual:** long-press an upcoming track, drag it above and below its neighbours, and
       release. Confirm the order sticks after reopening the queue, that a drag past the bottom
-      edge auto-scrolls, and that swipe-to-remove still works on a row that was not picked up.
+      edge auto-scrolls, and that swipe-to-open-actions still works on a row that was not picked
+      up.
 - [ ] **Manual:** focus an upcoming track and confirm Enter plays it now. Focus the current row
       and confirm Enter opens Now Playing.
-- [ ] **Manual:** on a focused upcoming row, confirm one full-height red Remove square appears
-      after the focus settles. Press it and confirm that track is removed, the bar offers Undo,
-      and Undo puts it back at the same index.
+- [ ] **Manual:** on a focused upcoming row, confirm one full-height actions trigger appears
+      after the focus settles. Press it and confirm the contextual bar offers Delete and Reorder;
+      Delete removes the track, the bar offers Undo, and Undo puts it back at the same index.
 - [ ] **Manual:** swipe a focused row open, then press Down. Confirm the swipe closes as the
-      focus moves and that only the next row's gutter can appear, never both at once.
+      focus moves and that only the next row's trigger can appear, never both at once.
 - [ ] **Manual:** open Options, choose **Reorder**, then Up/Down to step the lifted track. Confirm
       it stays in view, Confirm drops it, and Cancel returns it to where it started without leaving
       the queue. Confirm the bar shows Cancel + Done while reordering.
@@ -118,7 +119,7 @@ far are that run plus this one.
       opening Options.
 - [ ] **Manual:** Home shows five recently played items and **See more history** when more exist;
       a focused Recently played or History row reveals Add to queue and Remove from history, not
-      Save, and a long press reveals the same pair on touch.
+      Save, and a left swipe reveals the same pair on touch.
 - [x] **Manual:** focus a track row in Search, Library, an album or a playlist and confirm a
       two-square gutter appears after the focus settles: Save/Unsave and Add to queue. Start
       nothing, press Save, and confirm the track lands in Liked Songs in another Spotify client
@@ -128,22 +129,22 @@ far are that run plus this one.
       shows a hollow bookmark before the saved-state read lands, and the filled one after.
 - [x] **Manual:** confirm Right from a focused track row reaches its gutter squares without the
       gutter closing, and that holding Up/Down through a list never flashes a gutter.
-- [x] **Touch:** long-press a track row and confirm Save and Add to queue appear (after a haptic
-      tick) without the row ever taking focus, that holding the same row and scrolling still
-      scrolls, and that a short tap still plays. Start a swipe or scroll from a row and confirm no
-      gutter appears. Tap the row while the squares are up and confirm they close and the track
-      does not start; tap a square and confirm the action runs and the squares close.
-- [x] **Touch:** long-press a History row and confirm Queue and Remove appear, and that a tap
+- [x] **Touch:** swipe a track row left and confirm Save and Add to queue appear (after a haptic
+      tick) without the row ever taking focus, that scrolling the same row still scrolls, and that
+      a short tap still plays. Start a vertical scroll from a row and confirm no gutter appears.
+      Tap the row while the trigger is up and confirm it closes and the track does not start; tap
+      the trigger and confirm the contextual bar opens.
+- [x] **Touch:** swipe a History row left and confirm Queue and Remove appear, and that a tap
       closes them without playing the entry. Confirm the queue screen's rows keep their swipe and
       drag only.
 - [ ] **Manual:** in Liked songs, focus a row and confirm exactly two gutter actions (Remove from
       Liked Songs and Add to queue) and no additional row navigation in Options.
 - [ ] **Manual:** with nothing playing, add a track to the queue. Confirm the bar says it was
       added, the Queue screen lists it under **Up next**, and playback can start from it.
-- [ ] **Touch:** long-press one row, then move the keypad with Up/Down, and confirm the held row's
-      squares close as the focus lands on another row. Repeat the other way round: open a gutter
-      with the keypad, then long-press a different row. Two rows must never show squares at once,
-      and a long press made before the 250 ms settle must not let the focused row open as well.
+- [ ] **Touch:** swipe one row left, then move the keypad with Up/Down, and confirm the swiped
+      row's trigger closes as the focus lands on another row. Repeat the other way round: open a
+      gutter with the keypad, then swipe a different row. Two rows must never show triggers at
+      once, and a swipe made before the 250 ms settle must not let the focused row open as well.
 - [ ] **Manual:** on Now Playing, album, playlist, show, and artist screens, confirm the play
       control and every save/bookmark or follow control use the Library success fill, never the
       case/primary colour outside the action bar.

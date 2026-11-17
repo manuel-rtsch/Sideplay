@@ -48,7 +48,7 @@ fun SidetrackHomeScreen(
     onPlay: (SpotifyMediaItem) -> Unit,
     onQueue: () -> Unit,
     onQueueTrack: (SpotifyMediaItem) -> Unit,
-    onRemoveHistory: (SpotifyMediaItem) -> Unit,
+    onRemoveHistory: (SpotifyMediaItem) -> (() -> Unit)?,
     onHistory: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
@@ -71,12 +71,14 @@ fun SidetrackHomeScreen(
     )
     SidekitScaffold(
         title = "Sidetrack",
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rowActions),
         actions = bar,
         options = listOf(
             SideAction("settings", "Settings", SidekitIcon.Settings, onClick = onSettings)
         )
     ) { padding ->
         val listState = rememberLazyListState()
+        rowActions.dismissOnScroll(listState)
         SidekitList(padding, state = listState) {
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, 0)) {
@@ -167,10 +169,12 @@ fun LibraryScreen(
     )
     SidekitScaffold(
         title = "Library",
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
         actions = actions,
         options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
+        rows.bar.dismissOnScroll(listState)
         val sections = library.librarySections
         val isEmpty = sections.values.all { it.isEmpty() }
         val firstFilter = LibraryFilter.entries.firstOrNull { sections[it].orEmpty().isNotEmpty() }
@@ -289,10 +293,12 @@ fun LibraryCategoryScreen(
     )
     SidekitScaffold(
         title = filter.label,
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
         actions = actions,
         options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
+        rows.bar.dismissOnScroll(listState)
         val first = remember { FocusRequester() }
         LaunchedEffect(filter) { runCatching { first.requestFocus() } }
         val items = library.libraryItems
@@ -440,8 +446,14 @@ fun CollectionScreen(
         null
     }
     val details = artist?.let { collection.subtitle.removePrefix(it).trimStart(' ', '·', ' ') }.orEmpty()
-    SidekitScaffold(title = collection.title, actions = actions, options = options) { padding ->
+    SidekitScaffold(
+        title = collection.title,
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
+        actions = actions,
+        options = options
+    ) { padding ->
         val listState = rememberLazyListState()
+        rows.bar.dismissOnScroll(listState)
         val playFocus = remember { FocusRequester() }
         val playIds = remember(collection.items) { collection.items.mapTo(mutableSetOf()) { it.id } }
         LaunchedEffect(collection.type, collection.id) { runCatching { playFocus.requestFocus() } }
@@ -588,6 +600,7 @@ fun ArtistScreen(
     )
     SidekitScaffold(
         title = artist.name,
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
         actions = actions,
         options = listOf(
             SideAction("artistRadio", "Artist radio", SidekitIcon.Explore, onClick = onRadio),
@@ -595,6 +608,7 @@ fun ArtistScreen(
         )
     ) { padding ->
         val listState = rememberLazyListState()
+        rows.bar.dismissOnScroll(listState)
         val playIds = remember(tracks) { tracks.mapTo(mutableSetOf()) { it.id } }
         SidekitList(padding, state = listState) {
             var rowIndex = 0

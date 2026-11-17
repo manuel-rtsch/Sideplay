@@ -1308,9 +1308,34 @@ async fn rootlist_playlists(
             let owner = metadata
                 .map(|m| m.owner_username().to_string())
                 .unwrap_or_default();
-            let art_url = attributes
+            let mut art_url = attributes
                 .and_then(|a| a.picture_size.iter().find(|size| !size.url().is_empty()))
                 .map(|size| size.url().to_string());
+            if art_url.is_none() {
+                // The rootlist can omit the cover for a playlist even though its full record
+                // has one. Fetch that one playlist rather than leaving the row with the generic
+                // album placeholder.
+                if let Ok(playlist_uri) = SpotifyUri::from_uri(uri) {
+                    match playlist_get(session, token, &playlist_uri).await {
+                        Ok(playlist) => {
+                            art_url = playlist_art(&playlist);
+                            if art_url.is_none() {
+                                // A playlist without a custom cover is shown as a mosaic of its
+                                // first tracks. The rootlist has no tracks, so use the first
+                                // track's album cover as the single-image fallback.
+                                if let Some(track_uri) = playlist.tracks().next().cloned() {
+                                    if let Ok(track) = track_get(session, token, &track_uri).await {
+                                        art_url = image_url(&track.album.covers);
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => log::warn!(
+                            "rootlist art fallback failed: name={name:?} uri={uri} error={error}"
+                        ),
+                    }
+                }
+            }
             let owner_id = if owner.is_empty() {
                 None
             } else {

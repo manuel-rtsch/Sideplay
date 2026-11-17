@@ -23,7 +23,7 @@ fun HistoryScreen(
     onBack: () -> Unit,
     onPlay: (SpotifyMediaItem) -> Unit,
     onQueue: (SpotifyMediaItem) -> Unit,
-    onRemove: (SpotifyMediaItem) -> Unit,
+    onRemove: (SpotifyMediaItem) -> (() -> Unit)?,
     onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
@@ -36,10 +36,12 @@ fun HistoryScreen(
     )
     SidekitScaffold(
         title = "History",
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rowActions),
         actions = actions,
         options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
+        rowActions.dismissOnScroll(listState)
         // The gutter follows the focused row, or a long press when the list is driven by touch.
         val gutters = rememberRowGutterState()
         SidekitList(padding, state = listState) {

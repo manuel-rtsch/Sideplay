@@ -6,11 +6,11 @@ import android.view.View
 /*
  * The app's whole haptic vocabulary, and the rule behind it.
  *
- * **Haptics belong to touch only.** A finger has no focus ring, so a hold that registered has to
- * be confirmed by the phone itself; the keypad already has the focus ring, and a D-pad held
+ * **Haptics belong to touch only.** A finger has no focus ring, so a gesture that registered has
+ * to be confirmed by the phone itself; the keypad already has the focus ring, and a D-pad held
  * through a list would buzz once per row it passes. Every action both hands can reach therefore
- * ticks on its touch route and stays silent on its keypad route — see [GutterRow]'s long-press
- * reveal against its focus settle, and [rowLongPress].
+ * ticks on its touch route and stays silent on its keypad route — see [GutterRow]'s swipe reveal
+ * against its focus settle, and [rowLongPress].
  *
  * Nothing here is called from a focus event. If a new gesture needs a tick, add it here rather
  * than reaching for `performHapticFeedback` at the call site, so this rule has one home.

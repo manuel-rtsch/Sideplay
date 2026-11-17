@@ -5,10 +5,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -25,12 +28,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
+
+/** How far a left swipe must travel before it reveals the gutter. */
+private val SWIPE_REVEAL_THRESHOLD = 36.dp
 
 /**
  * Which row of a list is showing its gutter, and why.
@@ -40,8 +47,9 @@ import kotlinx.coroutines.withTimeout
  * - **Focus.** The keypad border lands on a row and the squares follow once the focus settles, so
  *   scrubbing Up/Down through a list does not flash a pair of buttons on every row it passes. The
  *   squares stay while the focus is on the row or inside its own gutter.
- * - **Touch.** A long press reveals them immediately — a touch screen has no focus border to wait
- *   for — and they stay until the user dismisses them, exactly like a swipe-revealed button.
+ * - **Touch.** A left swipe reveals them immediately — a touch screen has no focus border to wait
+ *   for — and they stay until the user dismisses them. The queue uses the same left swipe, so a
+ *   row never needs a second touch gesture to reach its actions.
  *
  * Both live here so every gutter in the app (track rows, history rows, the queue) opens the same
  * way, and so one row at a time can be open: the state is per list, not per row.
@@ -56,13 +64,13 @@ open class RowGutterState {
     var openKey: Any? by mutableStateOf(null)
         internal set
 
-    /** The row revealed by a long press, or null. */
+    /** The row revealed by a left swipe, or null. */
     var touchedKey: Any? by mutableStateOf(null)
         internal set
 
     /**
-     * True while [key]'s squares should be showing. A touch reveal is exclusive: while one row is
-     * showing squares, nothing the keypad has open may show as well. Holding one row while the
+     * True while [key]'s squares should be showing. A swipe reveal is exclusive: while one row is
+     * showing squares, nothing the keypad has open may show as well. Swiping one row while the
      * focus sits on another is two gutters otherwise.
      */
     fun isOpen(key: Any): Boolean {
@@ -71,7 +79,7 @@ open class RowGutterState {
     }
 
     fun rowFocused(key: Any) {
-        // The keypad takes over: a long press elsewhere gives its squares up as soon as the focus
+        // The keypad takes over: a swipe elsewhere gives its squares up as soon as the focus
         // lands on a different row.
         if (touchedKey != null && touchedKey != key) touchedKey = null
         focusedKey = key
@@ -82,7 +90,7 @@ open class RowGutterState {
     }
 
     /**
-     * A long press on [key]. Deliberately not debounced: a hold that lasted long enough to register
+     * A left swipe on [key]. Deliberately not debounced: a swipe that crossed the reveal threshold
      * was a deliberate act, and the squares are the only feedback it gets.
      */
     fun reveal(key: Any) {
@@ -92,7 +100,7 @@ open class RowGutterState {
         touchedKey = key
     }
 
-    /** Dismisses the long-press reveal, either for one row or for whichever row has it. */
+    /** Dismisses the swipe reveal, either for one row or for whichever row has it. */
     fun touchDismissed(key: Any? = null) {
         if (key == null || touchedKey == key) touchedKey = null
     }
@@ -107,8 +115,8 @@ fun rememberRowGutterState(): RowGutterState {
 }
 
 /**
- * The shared row shell for a focus/long-press gutter. It owns the slide animation, the long-press
- * reveal and the tap-to-dismiss overlay; callers provide the row content and the squares.
+ * The shared row shell for a focus/swipe gutter. It owns the slide animation, the swipe reveal and
+ * the tap-to-dismiss overlay; callers provide the row content and the squares.
  */
 @Composable
 fun GutterRow(
@@ -128,21 +136,27 @@ fun GutterRow(
         tween(GUTTER_ANIM_MS),
         label = "rowGutterAlpha"
     )
-    val gutterPx = with(LocalDensity.current) { gutter.toPx() }
+    val density = LocalDensity.current
+    val gutterPx = with(density) { gutter.toPx() }
     val view = LocalView.current
+    var rowHeightPx by remember { mutableStateOf(0) }
+    val rowHeight = if (rowHeightPx > 0) with(density) { rowHeightPx.toDp() } else square
     Box(modifier) {
         Box(
             Modifier
                 .graphicsLayer { translationX = -gutterPx }
-                .rowLongPress {
-                    view.longPressHaptic()
-                    state.reveal(key)
+                .onSizeChanged { rowHeightPx = it.height }
+                .rowSwipeReveal {
+                    if (state.touchedKey != key) {
+                        view.armedHaptic()
+                        state.reveal(key)
+                    }
                 }
         ) {
             content(gutter > 0.dp)
         }
-        // While a long press holds the gutter open, a tap on the row closes it rather than
-        // starting the item — the same contract a swiped-open row had.
+        // While a swipe holds the gutter open, a tap on the row closes it rather than starting
+        // the item — the same contract a swiped-open row had.
         if (state.touchedKey == key && gutter > 0.dp) {
             Box(
                 Modifier
@@ -157,12 +171,16 @@ fun GutterRow(
             Box(
                 Modifier
                     .align(Alignment.CenterEnd)
+                    .height(rowHeight)
                     .graphicsLayer {
                         alpha = gutterAlpha
                         translationX = (1f - gutterAlpha) * GUTTER_SLIDE.toPx()
                     }
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(GutterGap)) { actions() }
+                Row(
+                    Modifier.fillMaxHeight(),
+                    horizontalArrangement = Arrangement.spacedBy(GutterGap)
+                ) { actions() }
             }
         }
     }
@@ -211,6 +229,35 @@ internal fun RowGutterState.settle() {
         if (openKey != target) openKey = null
         delay(GUTTER_DELAY_MS)
         openKey = target
+    }
+}
+
+/**
+ * Reports a left swipe on the row underneath. The gesture only starts after horizontal touch slop,
+ * so a vertical list scroll still belongs to the list; once it is horizontal, the row's own click
+ * is cancelled and the swipe is consumed.
+ */
+@Composable
+fun Modifier.rowSwipeReveal(onReveal: () -> Unit): Modifier {
+    val current by rememberUpdatedState(onReveal)
+    val threshold = with(LocalDensity.current) { SWIPE_REVEAL_THRESHOLD.toPx() }
+    return pointerInput(threshold) {
+        var travelled = 0f
+        var revealed = false
+        detectHorizontalDragGestures(
+            onDragStart = {
+                travelled = 0f
+                revealed = false
+            },
+            onHorizontalDrag = { change, dragAmount ->
+                change.consume()
+                travelled += dragAmount
+                if (!revealed && travelled <= -threshold) {
+                    revealed = true
+                    current()
+                }
+            }
+        )
     }
 }
 

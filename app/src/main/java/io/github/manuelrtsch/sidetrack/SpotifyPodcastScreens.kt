@@ -39,6 +39,7 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
 import io.github.manuelrtsch.sidetrack.ui.GutterRow
+import io.github.manuelrtsch.sidetrack.ui.MeatballIcon
 import io.github.manuelrtsch.sidetrack.ui.RowActionSquare
 import io.github.manuelrtsch.sidetrack.ui.RowGutterState
 import io.github.manuelrtsch.sidetrack.ui.rememberGutterSquareFocus
@@ -96,8 +97,14 @@ fun ShowScreen(
         }
         add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     }
-    SidekitScaffold(title = collection.title, actions = actions, options = options) { padding ->
+    SidekitScaffold(
+        title = collection.title,
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rowActions),
+        actions = actions,
+        options = options
+    ) { padding ->
         val listState = rememberLazyListState()
+        rowActions.dismissOnScroll(listState)
         val playFocus = remember { FocusRequester() }
         val gutters = rememberRowGutterState()
         val playIds = remember(collection.items) { collection.items.mapTo(mutableSetOf()) { it.id } }
@@ -241,18 +248,21 @@ private fun EpisodeRow(
     val notes = remember(episode.description) { plainPodcastText(episode.description) }
     val resume = progress?.takeIf { !it.completed }
     val selected = bar.selection?.key == key
+    val rowFocus = remember { FocusRequester() }
+    CloseRowActionsWhenDisposed(selected, bar)
     GutterRow(key, focus, squares = 1, modifier = modifier, content = {
         // Free-height card rather than SidekitTile: a podcast row needs the title, its identity,
         // full-width notes and a progress line, which cannot fit the fixed single-item height.
         Box(
             Modifier
                 .fillMaxWidth()
+                .focusRequester(rowFocus)
                 .onFocusChanged { state ->
                     if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
                 }
                 .then(
                     if (selected) {
-                        Modifier.border(1.dp, SidekitTheme.colors.emphasisA1, SidekitTheme.shapes.item)
+                        Modifier.border(2.dp, SidekitTheme.colors.light, SidekitTheme.shapes.item)
                     } else {
                         Modifier
                     }
@@ -328,20 +338,23 @@ private fun EpisodeRow(
     }) {
         RowActionSquare(
             color = SidekitTheme.colors.surfaceA4,
-            icon = SidekitIcon.Apps,
             label = "Actions for ${episode.title}",
+            content = { MeatballIcon() },
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
+                rowFocus.requestFocus()
                 bar.show(
                     RowActionSelection(
                         key = key,
                         title = episode.title,
+                        focusRequester = rowFocus,
                         actions = buildList {
                             add(
                                 RowAction(
                                     key = "queue",
-                                    label = "Add ${episode.title} to queue",
+                                    label = "Queue",
+                                    contentDescription = "Add ${episode.title} to queue",
                                     icon = SidekitIcon.QueueMusic,
                                     tone = ActionTone.Primary,
                                     onClick = { onQueue(episode) }
@@ -351,9 +364,10 @@ private fun EpisodeRow(
                                 add(
                                     RowAction(
                                         key = "notes",
-                                        label = "Read notes for ${episode.title}",
+                                        label = "Notes",
+                                        contentDescription = "Read notes for ${episode.title}",
                                         icon = SidekitIcon.Docs,
-                                        tone = ActionTone.Secondary,
+                                        tone = ActionTone.Primary,
                                         onClick = onNotes
                                     )
                                 )

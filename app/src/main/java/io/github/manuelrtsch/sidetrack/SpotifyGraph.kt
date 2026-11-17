@@ -719,6 +719,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 onBack = { nav.popBackStack() },
                 onKeypadBackOverride = onKeypadBackOverride,
                 onNowPlaying = { nav.openNowPlaying(vm) },
+                onSleepTimer = { nav.navigate(SLEEP_TIMER) },
                 onJump = vm::jumpTo,
                 onMoveUpcoming = vm::moveUpcoming,
                 onCommitReorder = vm::finishReorder,

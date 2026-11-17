@@ -147,6 +147,7 @@ fun SpotifySearchScreen(
     }
     SidekitScaffold(
         title = null,
+        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
         header = {
             Box(
                 Modifier.fillMaxWidth().height(SidekitTheme.spacing.headerHeight)
@@ -170,6 +171,7 @@ fun SpotifySearchScreen(
         options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
+        rows.bar.dismissOnScroll(listState)
         if (search.query.trim().length >= 2 && !search.searchPending && search.searchError != null && results.isEmpty) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 SpotifyStatusScreen(

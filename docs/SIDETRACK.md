@@ -29,18 +29,19 @@ Spotify.
   Long lists end with a "Load more" row.
 - **Keypad first.** Every interactive row is focusable, has a visible focus ring, and a 48 dp
   minimum target. Do not fade the focused element.
-- **Two squares, then Options.** A row may reveal at most two gutter squares. Anything else the
-  row can do belongs in the screen's Options, so a 480 dp row keeps its title.
+- **One trigger, then the contextual bar.** A row reveals one gutter trigger. Pressing it
+  publishes the row's actions to the contextual action bar. Anything else the row can do belongs
+  in the screen's Options, so a 480 dp row keeps its title.
 - **Every reveal has two hands.** Anything a keypad reaches is reachable by touch and the other way
-  round. A gutter opens on focus (after the focus settles) *and* on a still long press; a long
-  press is the touch equivalent of putting the focus on a row, because a touch screen has no focus
-  border to follow. Movement past touch slop belongs to scrolling or swiping and never reveals a
-  gutter. One row shows squares at a time, whichever hand opened them: a long press gives the
-  focus's gutter up, and moving the focus gives the long press's up. The haptic tick that
-  acknowledges a reveal belongs to the touch route only: a long press ticks, a focus settle does
-  not. The keypad has the focus ring to say where it is, and buzzing there would fire on every
-  row a held D-pad passes. Every haptic in the app is touch-only for that reason, and they all
-  come from `ui/Haptics.kt`.
+  round. A gutter opens on focus (after the focus settles) *and* on a left swipe; a swipe is the
+  touch equivalent of putting the focus on a row, because a touch screen has no focus border to
+  follow. A vertical movement past touch slop belongs to scrolling and never reveals a gutter; a
+  horizontal left swipe is the reveal. One row shows its trigger at a time, whichever hand opened
+  it: a swipe gives the focus's gutter
+  up, and moving the focus gives the swipe's up. The haptic tick that acknowledges a reveal
+  belongs to the touch route only: a swipe ticks, a focus settle does not. The keypad has the
+  focus ring to say where it is, and buzzing there would fire on every row a held D-pad passes.
+  Every haptic in the app is touch-only for that reason, and they all come from `ui/Haptics.kt`.
 - **Content never wears the theme colour.** Play, selection, progress, save/unsave, and
   follow/unfollow use the Library success fill; the case colour belongs to action-bar actions and
   the vinyl status record only. Save controls are always bookmark tiles: hollow (`BookmarkBorder`)
@@ -111,8 +112,8 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   invalidate that cache.
 - Home previews five recently played items and ends the section with a compact **See more
   history** row when more exist. History is the full local list: tracks and show episodes are both
-  recorded, including when playback advances from the notification. A focused row opens a gutter
-  with Add to queue and Remove squares; a long press reveals the same pair on touch.
+  recorded, including when playback advances from the notification. A focused row reveals its
+  actions trigger; a left swipe reveals the same trigger on touch.
 - The Library overview shows five rows per category with a compact **See more** row. Opening a
   category gives the full paged list. Playlists use the rootlist order and show their folder
   path above the owner. Startup pre-caches only six items per category (five shown plus one to
@@ -207,7 +208,7 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   circle.
 - Every list row carries at most two context actions, chosen for the list it belongs to. A
   focused track row opens Save/Unsave (hollow/filled bookmark, the same success fill as every
-  other save control) and Add to queue; a long press opens the same pair on touch, and a tap closes
+  other save control) and Add to queue; a left swipe opens the same pair on touch, and a tap closes
   it instead of starting the track. Rows do not add a second row menu to Options: Artist and Album
   are destinations reached from Now Playing after the track starts, not verbs that belong on every
   browse row. A track that has never played has no known saved state, so the row asks for it when
@@ -217,26 +218,29 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   Playing (and from the episode's artwork and show-name line there).
   Recently played and History are the exception: their two actions are Add to queue and Remove
   from history, because saving belongs to the saved lists and history is where an entry is
-  forgotten. The queue's own rows do not take a long press: they already swipe to remove and hold
-  to drag-reorder, and a third touch meaning on the same gesture would fight both.
+  forgotten. The queue's own rows do not take a long press for actions: they already swipe to open
+  the same actions and hold to drag-reorder, and a third touch meaning on the same gesture would
+  fight both.
 - Home's action bar opens the queue; track rows across the app expose Add to queue in their gutter.
   Adding to the queue works before anything is playing: the item waits in Up next and the bar
   confirms it, instead of the queue screen claiming to be empty. Upcoming rows in the queue swipe
-  left to remove; the queue shows the current item and what is next (or just Up next before
-  playback starts), while the full listening history lives on the History screen. Library uses the
-  standard single-line header; Settings has one sign-out action in the bar.
+  left to open their actions; the queue shows the current item and what is next (or just Up next
+  before playback starts), while the full listening history lives on the History screen. Library
+  uses the standard single-line header; Settings has one sign-out action in the bar.
 - The queue has one primary action per row. Enter or a tap on an upcoming track plays it now; the
-  current row opens Now Playing. Remove is the single focused-row square and the left swipe; the
-  keypad square appears after the focus settles, so holding Up/Down does not flash a button on
-  every row. A touch swipe and the keypad gutter share one right edge: an open swipe suppresses
-  every gutter, and a keypad move away from the swiped row closes the swipe, so two Remove buttons
-  are never visible together. There is no edit pair and no Play next: reorder-to-top covers Play
-  next, and the row body never turns into a menu. A non-focusable **Up next · N tracks**
+  current row opens Now Playing. The focused row reveals its actions trigger after the focus
+  settles, so holding Up/Down does not flash a button on every row. A touch swipe and the keypad
+  gutter share one right edge: an open swipe suppresses every gutter, and a keypad move away from
+  the swiped row closes the swipe, so two triggers are never visible together. The contextual bar
+  carries Delete and, when reordering is available, Reorder. There is no edit pair and no Play
+  next: reorder-to-top covers Play next, and the row body never turns into a menu. A non-focusable
+  **Up next · N tracks**
   section label separates the current item from the tail and carries the shuffle state. It uses the
   same uppercase, small, muted `SectionLabel` as Home, Library, Search and album/playlist sections.
   Section labels are structural, so they do not take `listFade`: every label keeps the same full
   `surfaceA6` alpha, while the content rows below still step down toward the action bar.
-- Reorder is a list mode from Options, not a per-row menu. Choosing **Reorder** lifts the focused
+- Reorder is available as a list mode from Options and as a per-row action in the contextual bar.
+  Choosing the list mode lifts the focused
   upcoming track (or the first one when the current row has focus), shows the two bare arrows in a
   narrow sliver, and lets Up/Down step it, Confirm drop it, and Back cancel back to where it
   started; Left/Right are swallowed so focus cannot strand the lift. The bar becomes Cancel + Done.
@@ -320,8 +324,7 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 - On the `Sidephone_SP-01` emulator (480 × 640, Android 12): Liked songs loads from the complete
   collection, the Library overview and compact **See more** rows render, **Search in** changes
   scopes without opening Options, Home previews five recent items with **See more history**, and
-  History reveals Add to queue and Remove squares on focus while search results fade toward the
-  action bar.
+  History reveals its actions trigger on focus while search results fade toward the action bar.
 - On `SP01GE260600886`: instrumented tests cover the foreground-service notification and actions,
   media-session metadata/state, media-owner hand-off, and the headphone-unplug pause path.
 - On `SP01GE260600886`: dropping the network long enough to close the librespot access point

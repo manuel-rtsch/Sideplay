@@ -185,6 +185,18 @@ class SpotifyQueueRepositoryTest {
         assertEquals(listOf("b"), queue.snapshot.history.map { it.id })
     }
 
+    @Test fun `removed history can be restored at its old position`() {
+        val queue = SpotifyQueueRepository(Random(1))
+        queue.play(tracks, 0)
+        queue.next(auto = false)
+        queue.next(auto = false)
+
+        queue.removeHistory(track("b"))
+        queue.restoreHistory(index = 0, item = track("b"))
+
+        assertEquals(listOf("b", "a"), queue.snapshot.history.map { it.id })
+    }
+
     @Test fun `moving an upcoming item reorders only the tail`() {
         val queue = SpotifyQueueRepository(Random(1))
         queue.play(tracks, 0)

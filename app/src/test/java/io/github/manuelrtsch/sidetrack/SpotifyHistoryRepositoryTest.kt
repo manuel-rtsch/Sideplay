@@ -27,6 +27,19 @@ class SpotifyHistoryRepositoryTest {
         assertEquals(listOf("d", "c", "b"), history.items().map { it.id })
     }
 
+    @Test fun `removed entry can be restored at its old position`() {
+        val history = SpotifyHistoryRepository()
+        history.record(track("a"), 1)
+        history.record(track("b"), 2)
+        history.record(track("c"), 3)
+
+        val removed = history.removeEntry(track("b"))!!
+
+        assertEquals(listOf("c", "a"), history.items().map { it.id })
+        history.restore(removed)
+        assertEquals(listOf("c", "b", "a"), history.items().map { it.id })
+    }
+
     @Test fun `clear empties memory and persists the empty list`() {
         var saved: List<SpotifyHistoryEntry>? = null
         val history = SpotifyHistoryRepository(save = { saved = it })
