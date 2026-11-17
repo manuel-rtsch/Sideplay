@@ -158,14 +158,17 @@ fun SpotifyNowPlayingScreen(
     } else {
         buildList {
             add(SideAction.square("queue", SidekitIcon.QueueMusic, "Queue", onQueue))
-            // A station needs a track seed; an episode has no song radio.
-            if (current is SpotifyTrack) {
-                add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
-                // The backdrop layout has no cover tile to focus, so the album needs a second
-                // route for the keypad. The old layout's cover was that route.
-                if (backdropped) add(SideAction("openAlbum", "Open album", SidekitIcon.Album, onClick = onAlbum))
-            } else if (current is SpotifyEpisode) {
-                add(SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onEpisodeNotes))
+            // Three options at most: the bar is icon-only and a fourth square crowds it. The
+            // backdrop layout has no cover tile to focus, so its middle square is the album
+            // rather than Song radio; the keypad still reaches the album, and the bar stays at
+            // three. The art backdrop toggle itself lives in Settings.
+            when {
+                current is SpotifyTrack && backdropped ->
+                    add(SideAction.square("openAlbum", SidekitIcon.Album, "Open album", onAlbum))
+                current is SpotifyTrack ->
+                    add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
+                current is SpotifyEpisode ->
+                    add(SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onEpisodeNotes))
             }
             add(
                 SideAction.square(
@@ -173,16 +176,6 @@ fun SpotifyNowPlayingScreen(
                     SidekitIcon.Bedtime,
                     if (timer.active) "Sleep timer on" else "Sleep timer",
                     onSleepTimer
-                )
-            )
-            add(
-                SideAction(
-                    "artworkBackdrop",
-                    label = if (backdrop.enabled) "Art backdrop on" else "Art backdrop off",
-                    icon = SidekitIcon.PhotoLibrary,
-                    tone = if (backdrop.enabled) ActionTone.Secondary else ActionTone.Muted,
-                    keepOptionsOpen = true,
-                    onClick = backdrop::toggle
                 )
             )
         }

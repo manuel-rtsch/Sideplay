@@ -5,14 +5,12 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import hrln.interactive.sidekit.design.action.ChromeState
 import hrln.interactive.sidekit.design.canvas.SidekitCanvas
 import hrln.interactive.sidekit.design.theme.SidekitSpacing
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,8 +19,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The experimental song layout is behind a persisted setting, so the wiring is what can break:
- * the Options action has to flip it and the screen has to swap layouts without losing the bar it
- * was toggled from.
+ * the setting has to swap the layout, and the Options bar must stay at three squares in either
+ * layout.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -38,10 +36,7 @@ class ArtworkBackdropTest {
         settings.artworkBackdrop = false
     }
 
-    @Test
-    fun theOptionsActionSwitchesTheSongLayout() {
-        settings.artworkBackdrop = false
-        val chrome = ChromeState()
+    private fun showNowPlaying(chrome: ChromeState) {
         compose.setContent {
             CompositionLocalProvider(LocalInspectionMode provides true) {
                 SidekitTheme(spacing = SidekitSpacing.Compact) {
@@ -51,19 +46,54 @@ class ArtworkBackdropTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun theSettingSwitchesTheSongLayout() {
+        settings.artworkBackdrop = false
+        showNowPlaying(ChromeState())
         // The old layout: the cover is a tile and a focus target.
         compose.onNodeWithContentDescription(cover).assertExists()
 
-        compose.runOnIdle { chrome.toggleOptions() }
-        compose.onNodeWithContentDescription("Art backdrop off").performClick()
+        compose.runOnIdle { settings.artworkBackdrop = true }
         compose.waitForIdle()
 
         // The tiled cover is gone; the title now sits on the artwork itself.
-        assertEquals(true, settings.artworkBackdrop)
         compose.onNodeWithContentDescription(cover).assertDoesNotExist()
         compose.onNodeWithText(track.title).assertExists()
-        // A toggle that slams the bar shut would make comparing the two layouts two key presses
-        // each way instead of one.
-        compose.onNodeWithContentDescription("Art backdrop on").assertExists()
+    }
+
+    @Test
+    fun theNormalOptionsBarKeepsThreeButtons() {
+        settings.artworkBackdrop = false
+        val chrome = ChromeState()
+        showNowPlaying(chrome)
+
+        compose.runOnIdle { chrome.toggleOptions() }
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription("Queue").assertExists()
+        compose.onNodeWithContentDescription("Song radio").assertExists()
+        compose.onNodeWithContentDescription("Sleep timer").assertExists()
+        // The backdrop toggle lives in Settings; a fourth square would crowd the bar.
+        compose.onNodeWithContentDescription("Art backdrop off").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
+    }
+
+    @Test
+    fun theBackdropOptionsSwapSongRadioForTheAlbum() {
+        settings.artworkBackdrop = true
+        val chrome = ChromeState()
+        showNowPlaying(chrome)
+
+        compose.runOnIdle { chrome.toggleOptions() }
+        compose.waitForIdle()
+
+        // With no cover tile to focus, the middle square is the keypad's route to the album.
+        compose.onNodeWithContentDescription("Queue").assertExists()
+        compose.onNodeWithContentDescription("Open album").assertExists()
+        compose.onNodeWithContentDescription("Sleep timer").assertExists()
+        compose.onNodeWithContentDescription("Song radio").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Art backdrop on").assertDoesNotExist()
     }
 }

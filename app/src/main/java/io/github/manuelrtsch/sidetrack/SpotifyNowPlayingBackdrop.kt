@@ -71,7 +71,7 @@ import kotlinx.coroutines.flow.StateFlow
 private val BackdropBlur = 11.dp
 
 /**
- * The backdrop setting, shared by the screen, the Options action and Settings. It persists in
+ * The backdrop setting, shared by the screen and Settings. It persists in
  * [SidetrackLocalSettings]; the listener keeps a second screen (or a second Now Playing instance)
  * in step when the pref changes elsewhere.
  */
