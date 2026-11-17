@@ -1,9 +1,12 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.content.Context
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertFalse
@@ -84,6 +87,9 @@ class SidetrackOnboardingTest {
             }
         }
 
+        // Welcome grew a keypad guide, so the Keyboard row can sit below the first viewport.
+        compose.onNode(hasScrollToIndexAction())
+            .performScrollToNode(hasText("Keyboard"))
         compose.onNodeWithText("Keyboard").performClick()
 
         compose.runOnIdle { assertTrue(opened) }
@@ -120,6 +126,8 @@ class SidetrackOnboardingTest {
             }
         }
 
+        compose.onNode(hasScrollToIndexAction())
+            .performScrollToNode(hasText("T9 · Sidekit"))
         compose.onNodeWithText("T9 · Sidekit").assertExists()
         compose.onNodeWithText("Keypad Back key").assertDoesNotExist()
         assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())

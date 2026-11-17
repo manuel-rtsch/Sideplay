@@ -72,7 +72,7 @@ class ArtworkBackdropTest {
         compose.runOnIdle { chrome.toggleOptions() }
         compose.waitForIdle()
 
-        compose.onNodeWithContentDescription("Queue").assertExists()
+        compose.onNodeWithContentDescription("Open queue").assertExists()
         compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
         // The backdrop toggle lives in Settings; a fourth square would crowd the bar.
@@ -90,7 +90,7 @@ class ArtworkBackdropTest {
         compose.waitForIdle()
 
         // With no cover tile to focus, the middle square is the keypad's route to the album.
-        compose.onNodeWithContentDescription("Queue").assertExists()
+        compose.onNodeWithContentDescription("Open queue").assertExists()
         compose.onNodeWithContentDescription("Open album").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
         compose.onNodeWithContentDescription("Song radio").assertDoesNotExist()
