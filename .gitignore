@@ -37,3 +37,6 @@ crash-logs/
 # Python tooling
 __pycache__/
 *.pyc
+
+# Local release notes
+/RELEASE-*.draft.md
