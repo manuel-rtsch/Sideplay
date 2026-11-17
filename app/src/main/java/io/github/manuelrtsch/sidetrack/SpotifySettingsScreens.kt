@@ -52,6 +52,7 @@ fun SpotifySettingsScreen(
     onAbout: () -> Unit = {}
 ) {
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
+    val backdrop = rememberArtworkBackdropSetting()
     val context = LocalContext.current
     val back = remember { spotifyBack("Back", onBack).first() }
     val baseActions = remember(back) { listOf(back, SideAction.forward("about", "About", onClick = onAbout)) }
@@ -167,11 +168,21 @@ fun SpotifySettingsScreen(
                     onClick = { confirmation = SettingsConfirmation.ClearHistory }
                 )
             }
+            item(key = "artworkBackdrop") {
+                SidetrackItem(
+                    "Art backdrop",
+                    Modifier.listFade(listState, 7),
+                    secondary = if (backdrop.enabled) "On" else "Off",
+                    secondaryToEnd = true,
+                    toggleable = backdrop.enabled,
+                    onClick = backdrop::toggle
+                )
+            }
             if (onAppearance != null) {
                 item(key = "appearance") {
                     SidetrackItem(
                         "Appearance",
-                        Modifier.listFade(listState, 7),
+                        Modifier.listFade(listState, 8),
                         showLinkArrow = true,
                         showLinkArrowWithSecondary = true,
                         onClick = onAppearance
@@ -182,7 +193,7 @@ fun SpotifySettingsScreen(
                 item(key = "keyboard") {
                     SidetrackItem(
                         "Keyboard",
-                        Modifier.listFade(listState, 8),
+                        Modifier.listFade(listState, 9),
                         showLinkArrow = true,
                         showLinkArrowWithSecondary = true,
                         onClick = onKeyboard
