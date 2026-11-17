@@ -821,7 +821,7 @@ fun NavGraphBuilder.sidetrackGraph(
             val context = LocalContext.current
             LaunchedEffect(account.signedIn) {
                 if (account.signedIn) {
-                    val next = if (SidetrackLocalSettings(context).needsOnboarding(hostBacked)) HOME else ONBOARDING
+                    val next = if (SidetrackLocalSettings(context).needsOnboarding()) ONBOARDING else HOME
                     nav.navigate(next) {
                         popUpTo(ROOT) { inclusive = false }
                         launchSingleTop = true

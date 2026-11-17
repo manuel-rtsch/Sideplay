@@ -45,20 +45,19 @@ class SidetrackLocalSettingsTest {
         assertTrue(SidetrackLocalSettings(context).hasSeenOnboarding())
     }
 
-    @Test fun `an existing install without keypad access gets one welcome`() {
-        prefs.edit().putBoolean("onboarding_seen", true).commit()
-
-        assertTrue(SidetrackLocalSettings(context).needsOnboarding(hostBacked = false))
+    @Test fun `a fresh install needs the welcome once`() {
+        assertTrue(SidetrackLocalSettings(context).needsOnboarding())
 
         SidetrackLocalSettings(context).markOnboardingSeen()
 
-        assertFalse(SidetrackLocalSettings(context).needsOnboarding(hostBacked = false))
+        assertFalse(SidetrackLocalSettings(context).needsOnboarding())
     }
 
-    @Test fun `a host backed install does not ask for Sidetrack keypad access`() {
+    @Test fun `an install that already saw the welcome never asks again`() {
         prefs.edit().putBoolean("onboarding_seen", true).commit()
 
-        assertFalse(SidetrackLocalSettings(context).needsOnboarding(hostBacked = true))
+        assertFalse(SidetrackLocalSettings(context).needsOnboarding())
+        assertFalse(SidetrackLocalSettings(context).needsOnboarding())
     }
 
     @Test fun `the keypad accessibility service is detected by package and class suffix`() {

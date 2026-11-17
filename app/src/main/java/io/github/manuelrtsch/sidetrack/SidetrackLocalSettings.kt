@@ -43,28 +43,19 @@ internal class SidetrackLocalSettings(context: Context) {
     }
 
     /**
-     * The welcome screen is shown once per install, not once per process. A release that adds it
-     * therefore reaches existing signed-in users too: the key is absent until they finish it.
+     * The welcome screen is shown exactly once per install. The key is absent on a fresh install
+     * and on any install upgrading from a release older than 0.3.4, so those users see it on their
+     * next launch; installs that already finished it stay on Home.
      */
     fun hasSeenOnboarding(): Boolean = prefs.getBoolean(KEY_ONBOARDING_SEEN, false)
 
-    /**
-     * True when a standalone install still needs the keypad Back access prompt. The prompt is
-     * one-shot: declining it must not turn every launch into the welcome screen. Existing users
-     * upgrading into this release have [KEY_ONBOARDING_SEEN] set but [KEY_KEYPAD_ACCESS_PROMPTED]
-     * absent, so they see it once even though the welcome itself is already done.
-     */
-    fun needsOnboarding(hostBacked: Boolean): Boolean = !hasSeenOnboarding() ||
-        (!hostBacked && !SidetrackKeypadAccess.isEnabled(context) && !hasPromptedKeypadAccess())
+    fun needsOnboarding(): Boolean = !hasSeenOnboarding()
 
     fun markOnboardingSeen() {
         prefs.edit()
             .putBoolean(KEY_ONBOARDING_SEEN, true)
-            .putBoolean(KEY_KEYPAD_ACCESS_PROMPTED, true)
             .apply()
     }
-
-    private fun hasPromptedKeypadAccess(): Boolean = prefs.getBoolean(KEY_KEYPAD_ACCESS_PROMPTED, false)
 
     /**
      * Standalone Sidetrack starts in the compact layout. Only writes the default when the choice
@@ -81,7 +72,6 @@ internal class SidetrackLocalSettings(context: Context) {
         private const val KEY_INPUT_MODE = "input_mode"
         private const val KEY_ARTWORK_BACKDROP = "artwork_backdrop"
         private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
-        private const val KEY_KEYPAD_ACCESS_PROMPTED = "keypad_access_prompted"
 
         // Must match the key SharedPreferencesSidekitThemeStore reads and writes.
         private const val KEY_COMPACT_LAYOUT = "compact_layout"

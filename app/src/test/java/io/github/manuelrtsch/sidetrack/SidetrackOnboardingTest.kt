@@ -64,8 +64,9 @@ class SidetrackOnboardingTest {
         compose.onNodeWithText("Go back a screen.").assertExists()
         compose.onNodeWithText("Tap for this page’s actions. Hold for the action bar.").assertExists()
         compose.onNodeWithText("Press ••• for a focused row’s actions.").assertExists()
-        // The full diagram is a reference, not part of the first screen.
-        compose.onNodeWithText("Keypad guide").assertDoesNotExist()
+        compose.onNodeWithText("On touch, drag a row left to reveal its menu.").assertExists()
+        // The diagram now sits on Welcome so a new listener can find the printed keys.
+        compose.onNodeWithText("Where those keys are").assertExists()
         assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
     }
 

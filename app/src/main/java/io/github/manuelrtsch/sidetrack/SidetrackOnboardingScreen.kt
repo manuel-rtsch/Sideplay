@@ -23,6 +23,7 @@ import hrln.interactive.sidekit.design.input.KeypadModule
 import hrln.interactive.sidekit.design.input.LocalKeypad
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.input.SharedPreferencesKeypadPreferences
+import hrln.interactive.sidekit.sdk.settings.KeypadGuide
 
 /**
  * The one-time welcome shown after sign-in. It teaches the three keypad actions a new listener
@@ -151,6 +152,26 @@ private fun SidetrackKeypadWelcomeList(
                 color = SidekitTheme.colors.surfaceA6,
                 maxLines = 2
             )
+        }
+        item(key = "guideTitle") {
+            SidekitText(
+                "Where those keys are",
+                Modifier.padding(horizontal = 18.dp),
+                style = SidekitTheme.typography.caption,
+                maxLines = 1
+            )
+        }
+        item(key = "guide") { KeypadGuide(module) }
+        if (customMapping) {
+            item(key = "guideCustom") {
+                SidekitText(
+                    "A custom mapping is active; the guide shows the module’s default labels.",
+                    Modifier.padding(horizontal = 18.dp),
+                    style = SidekitTheme.typography.tiny,
+                    color = SidekitTheme.colors.surfaceA6,
+                    maxLines = 2
+                )
+            }
         }
         item(key = "keyboard") {
             val backStatus = when {

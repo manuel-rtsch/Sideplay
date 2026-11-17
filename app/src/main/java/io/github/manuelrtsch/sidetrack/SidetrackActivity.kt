@@ -102,7 +102,7 @@ class SidetrackActivity : SidekitActivity() {
             val signedIn = SpotifySessions.get(context).signedIn.value
             when {
                 !signedIn -> SIDE_PLAY_SIGN_IN
-                SidetrackLocalSettings(context).needsOnboarding(stores.isHostBacked) -> SIDE_PLAY_ONBOARDING
+                SidetrackLocalSettings(context).needsOnboarding() -> SIDE_PLAY_ONBOARDING
                 else -> SIDE_PLAY_START
             }
         }

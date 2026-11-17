@@ -98,6 +98,21 @@ internal fun KeypadEssentials(
                     )
                 }
             }
+            // Touch screens have no round trigger to press, so the row menu is a swipe.
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Keycap("← Drag")
+                SidekitText(
+                    "On touch, drag a row left to reveal its menu.",
+                    Modifier.weight(1f),
+                    style = SidekitTheme.typography.small,
+                    color = contentColor,
+                    maxLines = 2
+                )
+            }
         }
         if (customMapping) {
             SidekitText(
