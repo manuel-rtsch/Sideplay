@@ -19,9 +19,17 @@ squares, the queue gained real editing, and podcasts stopped queueing the whole 
 
 - **Reorder from the row.** The contextual bar carries Reorder alongside Delete, in addition to
   the existing list mode in Options.
-- **Delete with Undo.** Removing an upcoming track offers Undo, and clearing the tail asks for
-  confirmation instead of wiping on the first press.
+- **Delete with Undo.** Removing an upcoming track offers Undo, and clearing the tail clears at
+  once and offers Undo, like every other list action.
 - **Shuffle stays a list mode** and keeps its state in the header.
+
+## Fixes
+
+- **Row actions stay open.** Opening a row's actions near the bottom of a list no longer closes
+  the bar in the same frame: the list scrolls the row into view, and that scroll used to count as
+  a dismissal. History, with its longer list, showed it most.
+- **Clearing a list is one press plus Undo.** Settings' Clear history and Now Playing's Clear
+  upcoming no longer ask for a second confirmation; they act immediately and offer Undo.
 
 ## Now Playing
 
@@ -53,5 +61,4 @@ squares, the queue gained real editing, and podcasts stopped queueing the whole 
 ## Notes
 
 - Verified on the SP-01 with the release build; see `docs/DEVICE-CHECKLIST.md` for the manual pass.
-- The `Move` action in the queue uses the existing up-arrow icon; Sidekit 1.7.1 has no swap-vert
-  glyph.
+- Built against Sidekit 1.7.2, which adds the swap-vert glyph used by the queue's Move action.
