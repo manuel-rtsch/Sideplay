@@ -144,7 +144,8 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 - Artist radio lives in the artist page's Options menu rather than behind its play tile. The play
   tile keeps one meaning everywhere: it queues the list on screen, so it loads the artist's
   remaining top-track pages first and then plays the whole list in order (a page with no tracks
-  reports **No top tracks for this artist** instead of doing nothing). Artist radio is the seeded
+  reports **No top tracks for this artist** instead of doing nothing) — the show page is the one
+  exception, because an episode plays on its own (see Podcasts). Artist radio is the seeded
   station instead: an artist-seeded read through the same first-party radio endpoint (the seed
   endpoint accepts any Spotify URI; the Web API fallback seeds `/recommendations` with
   `seed_artists`), shown on the collection screen as **{artist} radio**. Opening it never touches
@@ -265,10 +266,16 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 - Podcasts have a dedicated show page and Now Playing variant. The show header carries at most two
   lines of description, followed by a compact **Read full show notes** terminal row. The episode
   list has no heading and keeps the normal Add to queue gutter plus an Episode notes square when
-  there is a description. Episode Now Playing replaces Shuffle and Repeat with −30 s and +30 s text
-  tiles, makes Previous mean the previous episode instead of the track restart rule, and shows the
-  show name and a two-line episode description without repeating the publication date or remaining
-  time already implied by the seek bar. The show name and artwork both open the show, and Options
+  there is a description. Playing an episode queues that episode alone — the play tile and every
+  episode row included — because a show's list is newest-first, so the next row is an older
+  episode, and queueing the archive would also page in the whole show before the first second of
+  audio. Lining up more is the row's Add to queue square or Options' **Add latest to queue**. A
+  finished episode stops even when Repeat was left on from a song, because episodes carry no
+  shuffle or repeat control of their own.
+  Episode Now Playing replaces Shuffle and Repeat with −30 s and +30 s text tiles, makes Previous
+  return to the item played before instead of the track restart rule, and shows the show name and a
+  two-line episode description without repeating the publication date or remaining time already
+  implied by the seek bar. The show name and artwork both open the show, and Options
   stays down to Queue, Episode notes and Sleep timer. Song radio and Save stay absent for episodes.
 - Descriptions are never a dead end: tapping show notes, episode notes, or their Episode notes
   square opens a dedicated reading screen with the full text. Options carries **Show notes** and

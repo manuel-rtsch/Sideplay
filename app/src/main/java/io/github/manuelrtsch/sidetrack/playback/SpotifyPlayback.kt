@@ -521,7 +521,7 @@ class SpotifyPlayback(
     }
 
     private fun publish() {
-        SidetrackDebug.log("publish playing=$playing positionMs=$positionMs current=${current?.uri}")
+        SidetrackDebug.log { "publish playing=$playing positionMs=$positionMs current=${current?.uri}" }
         session()?.let { session ->
             val now = SystemClock.elapsedRealtime()
             if (current != null) updateMetadata(session, now)

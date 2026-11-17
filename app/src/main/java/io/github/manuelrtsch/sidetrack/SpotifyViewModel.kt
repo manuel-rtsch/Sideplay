@@ -20,8 +20,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +41,12 @@ private const val PODCAST_SKIP_MS = 30_000L
 
 /** How often a playing episode writes its local resume point. */
 private const val EPISODE_PROGRESS_INTERVAL_MS = 5_000L
+
+/**
+ * How often the seek bar advances while it is on screen. The bar animates between samples, so
+ * 200 ms looks the same as 100 ms while halving the wakeups.
+ */
+private const val POSITION_TICK_MS = 200L
 
 /**
  * A native position event this far from the UI clock is treated as a real seek from another
@@ -148,12 +160,62 @@ class SpotifyViewModel(
     val state: StateFlow<SpotifyUiState> = _state.asStateFlow()
 
     /**
-     * Playback position for the seek bar. Kept on its own flow so the 100 ms position tick does
+     * Focused slices of [state]. A screen collects only the slices it reads, so a change to an
+     * unrelated slice (a search keystroke, a save toggle, a cache-size refresh) does not
+     * recompose it. Each slice is distinct-until-changed, so equal values do not emit.
+     */
+    val playbackState: StateFlow<PlaybackUiState> = state
+        .map { it.playback }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.playback)
+
+    val libraryState: StateFlow<LibraryUiState> = state
+        .map { it.library }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.library)
+
+    val searchState: StateFlow<SearchUiState> = state
+        .map { it.search }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.search)
+
+    val accountState: StateFlow<AccountUiState> = state
+        .map { it.account }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.account)
+
+    val savedState: StateFlow<SavedUiState> = state
+        .map { it.saved }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.saved)
+
+    val chromeState: StateFlow<ChromeUiState> = state
+        .map { it.chrome }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.chrome)
+
+    val radioState: StateFlow<RadioUiState> = state
+        .map { it.radioSlice }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.radioSlice)
+
+    /**
+     * Playback position for the seek bar. Kept on its own flow so the position tick does
      * not mutate the monolithic [state] (which would invalidate and recompose every screen that
      * collects it). Only the Now Playing seek bar subscribes to this.
      */
     private val _playbackPositionMs = MutableStateFlow(0L)
     val playbackPositionMs: StateFlow<Long> = _playbackPositionMs.asStateFlow()
+
+    /**
+     * True while a Sidetrack destination is started. The position tick only runs when this is set,
+     * so a backgrounded app does not wake the process ten times a second for an invisible bar.
+     */
+    private val uiVisible = MutableStateFlow(false)
+
+    fun setUiVisible(visible: Boolean) {
+        uiVisible.value = visible
+    }
 
     /** Per-episode podcast progress, kept out of [state] so a five-second write does not redraw menus. */
     val episodeProgress: StateFlow<Map<String, SpotifyEpisodeProgress>> = episodeProgressRepository.progress
@@ -264,10 +326,13 @@ class SpotifyViewModel(
             if (simulatePlayback) {
                 // Local fixtures and builds without the native library still need a moving progress bar.
                 viewModelScope.launch {
-                    // Back off when nothing is playing so the loop does not keep waking the main thread.
+                    // Suspend on the playing flag instead of polling: a paused player costs no wakeups.
                     while (true) {
-                        delay(if (_state.value.isPlaying) 1_000L else 2_000L)
-                        tick()
+                        _state.map { it.isPlaying }.first { it }
+                        while (_state.value.isPlaying) {
+                            delay(1_000L)
+                            tick()
+                        }
                     }
                 }
             }
@@ -282,9 +347,14 @@ class SpotifyViewModel(
                 }
             }
             viewModelScope.launch {
+                // The seek bar only needs to advance while it is on screen and playing. When the
+                // app is backgrounded or paused this suspends on the flows instead of waking up.
                 while (true) {
-                    delay(if (_state.value.isPlaying) 100L else 2_000L)
-                    updatePositionTick()
+                    uiVisible.combine(_state) { visible, s -> visible && s.isPlaying }.first { it }
+                    while (uiVisible.value && _state.value.isPlaying) {
+                        delay(POSITION_TICK_MS)
+                        updatePositionTick()
+                    }
                 }
             }
         }
@@ -609,6 +679,14 @@ class SpotifyViewModel(
     }
 
     fun playItem(item: SpotifyMediaItem) = play(listOf(item), 0)
+
+    /**
+     * Plays one episode from a show page. A show is not a setlist: its list is newest-first, so
+     * [playCollection] would queue the whole archive behind the tapped episode, autoplay backwards
+     * through it, and fetch every page before the first second of audio. Lining up more is the
+     * row's Add to queue square, so this stays a single-item queue.
+     */
+    fun playEpisode(episode: SpotifyEpisode) = playItem(episode)
 
     /**
      * Builds a station from the current track, queues it behind the still-playing seed, and makes
@@ -1929,6 +2007,7 @@ class SpotifyViewModel(
             _state.update { it.copy(isPlaying = false) }
             return
         }
+        if (endOfEpisode(current)) return
         if (snapshot.repeat == RepeatMode.Track) {
             _playbackPositionMs.value = 0L
             _state.update { it.copy(isPlaying = true) }
@@ -1936,6 +2015,17 @@ class SpotifyViewModel(
         } else {
             advance(auto = true, forceContextLoop = snapshot.repeat == RepeatMode.Context)
         }
+    }
+
+    /**
+     * Ends a finished episode. Episodes carry no shuffle or repeat control, so a mode left over
+     * from a song must not rewind the show or loop the episode forever: with nothing queued behind
+     * it or added to the queue, the queue stops.
+     */
+    private fun endOfEpisode(current: SpotifyMediaItem): Boolean {
+        if (current !is SpotifyEpisode) return false
+        advance(auto = true, forceContextLoop = false)
+        return true
     }
 
     private data class ResumeAnchor(val trackId: String, val positionMs: Long, val atMs: Long)
@@ -1978,7 +2068,7 @@ class SpotifyViewModel(
         if (nextPosition < current.durationMs) {
             _playbackPositionMs.value = nextPosition
             recordEpisodeProgress()
-        } else {
+        } else if (!endOfEpisode(current)) {
             when (s.repeat) {
                 RepeatMode.Track -> _playbackPositionMs.value = 0L
                 RepeatMode.Context -> advance(auto = true, forceContextLoop = true)

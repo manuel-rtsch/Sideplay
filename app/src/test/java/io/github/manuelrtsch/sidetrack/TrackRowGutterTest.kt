@@ -50,7 +50,7 @@ class TrackRowGutterTest {
         compose.setContent {
             SidekitPreviewFrame {
                 val state = rememberTrackRows(
-                    SpotifyUiState(savedTrackIds = if (saved) setOf(track.id) else emptySet()),
+                    SavedUiState(savedTrackIds = if (saved) setOf(track.id) else emptySet()),
                     onSave = { onSave() },
                     onEnsureSaved = {},
                     onQueue = {}

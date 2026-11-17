@@ -95,7 +95,9 @@ private fun NowPlayingSeek(
 
 @Composable
 fun SpotifyNowPlayingScreen(
-    state: SpotifyUiState,
+    playback: PlaybackUiState,
+    saved: SavedUiState,
+    chrome: ChromeUiState,
     playbackPositionMs: StateFlow<Long>,
     sleepTimer: StateFlow<SleepTimerState>,
     onBack: () -> Unit,
@@ -117,25 +119,29 @@ fun SpotifyNowPlayingScreen(
     onEpisodeNotes: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
-    val current = state.current
+    val current = playback.current
+    val savedCurrent = current?.let { it.id in saved.savedTrackIds } ?: false
     val timer by sleepTimer.collectAsStateWithLifecycle()
     // Episodes have no saved-track endpoint, so Save is a track-only action.
-    val save = (current as? SpotifyTrack)?.let {
-        SideAction.square(
-            "save",
-            if (state.savedCurrent) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-            if (state.savedCurrent) "Saved" else "Save",
-            onSave,
-            tone = if (state.savedCurrent) ActionTone.Secondary else ActionTone.Muted,
-            motion = ActionMotion.Up
-        )
+    val save = remember(current?.id, savedCurrent) {
+        (current as? SpotifyTrack)?.let {
+            SideAction.square(
+                "save",
+                if (savedCurrent) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
+                if (savedCurrent) "Saved" else "Save",
+                onSave,
+                tone = if (savedCurrent) ActionTone.Secondary else ActionTone.Muted,
+                motion = ActionMotion.Up
+            )
+        }
     }
+    val back = remember { spotifyBack("Back", onBack).first() }
     val actions = spotifyBar(
-        state,
+        chrome,
         onDismissNotice,
         onOpenNowPlaying = {},
         onDismissNowPlaying = {},
-        continueWith = spotifyBack("Back", onBack).first(),
+        continueWith = back,
         extra = listOfNotNull(save),
         showNowPlayingNotice = false
     )
@@ -260,8 +266,8 @@ fun SpotifyNowPlayingScreen(
                         SpotifySkipTile("−30", "Back 30 seconds", onSkipBack)
                         SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous episode", onPrevious, weight = 0.85f)
                         SpotifyIconTile(
-                            if (state.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                            if (state.isPlaying) "Pause" else "Play",
+                            if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+                            if (playback.isPlaying) "Pause" else "Play",
                             onPlayPause,
                             tone = SpotifyTileTone.Play,
                             weight = 1.2f
@@ -273,21 +279,21 @@ fun SpotifyNowPlayingScreen(
                     SidekitItemRow {
                         SpotifyIconTile(
                             SidekitIcon.Shuffle,
-                            if (state.shuffle) "Shuffle on" else "Shuffle off",
+                            if (playback.shuffle) "Shuffle on" else "Shuffle off",
                             onShuffle,
-                            tone = if (state.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
+                            tone = if (playback.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
                             weight = 0.85f
                         )
                         SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
                         SpotifyIconTile(
-                            if (state.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                            if (state.isPlaying) "Pause" else "Play",
+                            if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+                            if (playback.isPlaying) "Pause" else "Play",
                             onPlayPause,
                             tone = SpotifyTileTone.Play,
                             weight = 1.2f
                         )
                         SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                        SpotifyRepeatTile(state.repeat, onRepeat)
+                        SpotifyRepeatTile(playback.repeat, onRepeat)
                     }
                 }
             }
@@ -334,7 +340,8 @@ private fun removeAction(label: String, onClick: () -> Unit) = SwipeAction(
 
 @Composable
 fun QueueScreen(
-    state: SpotifyUiState,
+    playback: PlaybackUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onNowPlaying: () -> Unit,
     onJump: (Int) -> Unit,
@@ -358,15 +365,15 @@ fun QueueScreen(
     var reorderCurrentId by remember { mutableStateOf<String?>(null) }
     var reorderSize by remember { mutableStateOf(0) }
     // The list and the reorder state live above the scaffold: the key handler on the scaffold needs
-    // them, and the rows below share the same list state.
+    // them, and the rows below share the same list playback.
     val listState = rememberLazyListState()
     val reorder = rememberQueueReorderState(listState)
     // Touch swipes and the keypad gutter share the same right edge. Keep one group here so a
     // keypad move can dismiss an open swipe instead of leaving two Remove buttons on screen.
     val swipes = rememberSwipeRevealGroup()
-    val hasUpcoming = state.upcoming.isNotEmpty()
-    val hasCurrent = state.current != null
-    val canReorder = state.upcoming.size > 1
+    val hasUpcoming = playback.upcoming.isNotEmpty()
+    val hasCurrent = playback.current != null
+    val canReorder = playback.upcoming.size > 1
     // Current row, then the "Up next" header when there is a tail. The header is the visible home
     // of shuffle state, so the mode no longer exists only in an icon's content description. Its own
     // top padding is the separation from the now-playing row: no extra spacer is needed.
@@ -376,7 +383,7 @@ fun QueueScreen(
     // Keys are the track's identity, not its position: a row that moves keeps its node, so it
     // keeps focus and never blinks out and back in. Duplicates get an occurrence suffix because
     // the queue may legitimately hold the same track twice.
-    val upcomingKeys = remember(state.upcoming) { entryKeys(state.upcoming) }
+    val upcomingKeys = remember(playback.upcoming) { entryKeys(playback.upcoming) }
     // Focus state is keyed, not indexed: a shuffle or a move can change every index while the
     // row under the focus ring stays the same. This is what used to let a gutter land on the
     // wrong track after shuffle.
@@ -408,7 +415,7 @@ fun QueueScreen(
         }
     }
     LaunchedEffect(Unit) {
-        if (state.current != null) {
+        if (playback.current != null) {
             runCatching { currentFocus.requestFocus() }
         } else if (upcomingKeys.isNotEmpty()) {
             runCatching { firstUpcomingFocus.requestFocus() }
@@ -443,9 +450,9 @@ fun QueueScreen(
     }
     // A reorder must not survive the queue changing underneath it. Commit what was already picked
     // (if anything) and leave the mode; moving back to a stale index could target another track.
-    LaunchedEffect(state.current?.id, state.upcoming.size) {
+    LaunchedEffect(playback.current?.id, playback.upcoming.size) {
         if (!reorderMode) return@LaunchedEffect
-        if (state.current?.id == reorderCurrentId && state.upcoming.size == reorderSize) return@LaunchedEffect
+        if (playback.current?.id == reorderCurrentId && playback.upcoming.size == reorderSize) return@LaunchedEffect
         val moved = reorder.hasMoved
         reorder.end()
         reorderMode = false
@@ -453,7 +460,7 @@ fun QueueScreen(
         focusedKey = null
         clearFocusPending = true
     }
-    val back = spotifyBack("Back", onBack).first()
+    val back = remember { spotifyBack("Back", onBack).first() }
     // Removing a track offers Undo in the bar but drops the focus: the list must not choose a
     // neighbour for the user. The index identifies the occurrence, so duplicates are safe.
     val removeFromQueue: (Int, SpotifyMediaItem) -> Unit = { index, item ->
@@ -487,7 +494,7 @@ fun QueueScreen(
             val moved = reorder.hasMoved
             val origin = reorder.origin
             val current = reorder.from
-            val sameQueue = state.current?.id == reorderCurrentId && state.upcoming.size == reorderSize
+            val sameQueue = playback.current?.id == reorderCurrentId && playback.upcoming.size == reorderSize
             reorder.cancel()
             if (moved) {
                 if (sameQueue && current != null && origin >= 0 && current != origin) {
@@ -506,15 +513,15 @@ fun QueueScreen(
         if (canReorder && !reorderMode) {
             swipes.closeAll()
             val focusedIndex = focusedKey?.let { upcomingKeys.indexOf(it) } ?: -1
-            val target = if (focusedIndex in state.upcoming.indices) focusedIndex else 0
+            val target = if (focusedIndex in playback.upcoming.indices) focusedIndex else 0
             val targetKey = upcomingKeys[target]
             focusedKey = targetKey
             val offset = listState.layoutInfo.visibleItemsInfo
                 .firstOrNull { it.key == targetKey }
                 ?.offset ?: 0
-            reorderCurrentId = state.current?.id
-            reorderSize = state.upcoming.size
-            reorder.begin(target, state.upcoming.size, offset.toFloat(), keypad = true)
+            reorderCurrentId = playback.current?.id
+            reorderSize = playback.upcoming.size
+            reorder.begin(target, playback.upcoming.size, offset.toFloat(), keypad = true)
             reorderMode = true
             focusPending = true
         }
@@ -535,11 +542,11 @@ fun QueueScreen(
         null
     }
     val normal = spotifyActions(
-        state,
+        chrome,
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        listOfNotNull(back, clearAction)
+        remember(back, clearAction) { listOfNotNull(back, clearAction) }
     )
     val undo = when (val pending = pendingUndo) {
         is QueueUndo.Cleared -> SideAction.undo("undoClear", "Undo", "Undo clear upcoming") {
@@ -572,7 +579,7 @@ fun QueueScreen(
                 "Clear",
                 SidekitIcon.DeleteForever,
                 tone = ActionTone.Destructive,
-                contentDescription = "Clear ${state.upcoming.size} upcoming tracks",
+                contentDescription = "Clear ${playback.upcoming.size} upcoming tracks",
                 onClick = clearUpcoming
             )
         )
@@ -599,14 +606,14 @@ fun QueueScreen(
                     )
                 )
             }
-            if (state.upcoming.size > 1) {
+            if (playback.upcoming.size > 1) {
                 add(
                     SideAction.square(
                         "shuffle",
                         SidekitIcon.Shuffle,
-                        if (state.shuffle) "Shuffle on" else "Shuffle off",
+                        if (playback.shuffle) "Shuffle on" else "Shuffle off",
                         onShuffle,
-                        tone = if (state.shuffle) ActionTone.Secondary else ActionTone.Muted,
+                        tone = if (playback.shuffle) ActionTone.Secondary else ActionTone.Muted,
                         keepOptionsOpen = true
                     )
                 )
@@ -707,7 +714,7 @@ fun QueueScreen(
         BackHandler(enabled = reorderMode) { cancelReorder() }
         BackHandler(enabled = confirmClear) { confirmClear = false }
         SidekitList(padding, state = listState) {
-            val current = state.current
+            val current = playback.current
             if (current == null && !hasUpcoming) {
                 item(key = "empty") {
                     SpotifyStatusScreen(
@@ -733,11 +740,11 @@ fun QueueScreen(
                 if (hasUpcoming) {
                     item(key = "queueHeader") {
                         QueueSectionHeader(
-                            count = state.upcoming.size,
-                            shuffled = state.shuffle
+                            count = playback.upcoming.size,
+                            shuffled = playback.shuffle
                         )
                     }
-                    itemsIndexed(state.upcoming, key = { index, _ -> upcomingKeys[index] }) { index, item ->
+                    itemsIndexed(playback.upcoming, key = { index, _ -> upcomingKeys[index] }) { index, item ->
                         val key = upcomingKeys[index]
                         val pickedUp = reorder.from == index
                         // A swiped-open row already shows its Remove button; the gutter would be
@@ -791,7 +798,7 @@ fun QueueScreen(
                                     .queueReorder(
                                         state = reorder,
                                         index = index,
-                                        count = state.upcoming.size,
+                                        count = playback.upcoming.size,
                                         key = key,
                                         onPickUp = {
                                             swipes.closeAll()
@@ -866,7 +873,7 @@ fun QueueScreen(
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 if (index > 0) ReorderArrow(up = true, size = LiftedIconSize)
-                                                if (index < state.upcoming.lastIndex) ReorderArrow(up = false, size = LiftedIconSize)
+                                                if (index < playback.upcoming.lastIndex) ReorderArrow(up = false, size = LiftedIconSize)
                                             }
 
                                             GutterMode.Remove -> GutterSquare(

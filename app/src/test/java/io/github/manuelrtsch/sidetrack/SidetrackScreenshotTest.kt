@@ -47,7 +47,8 @@ class SidetrackScreenshotTest {
 
     @Test fun home() = shoot("sidetrack_home") {
         SidetrackHomeScreen(
-            state,
+            state.playback,
+            state.chrome,
             sleepTimer = MutableStateFlow(SleepTimerState.Off),
             onNowPlaying = {},
             onLibrary = {},
@@ -65,7 +66,8 @@ class SidetrackScreenshotTest {
 
     @Test fun homeWithSleepTimer() = shoot("sidetrack_home_sleep_timer") {
         SidetrackHomeScreen(
-            state,
+            state.playback,
+            state.chrome,
             sleepTimer = MutableStateFlow(SleepTimerState.Countdown(30, 1_800_000L, 23)),
             onNowPlaying = {},
             onLibrary = {},
@@ -83,7 +85,8 @@ class SidetrackScreenshotTest {
 
     @Test fun nowPlayingNotice() = shoot("sidetrack_now_playing_notice") {
         SidetrackHomeScreen(
-            state.copy(nowPlayingNotice = current),
+            state.copy(nowPlayingNotice = current).playback,
+            state.copy(nowPlayingNotice = current).chrome,
             sleepTimer = MutableStateFlow(SleepTimerState.Off),
             onNowPlaying = {},
             onLibrary = {},
@@ -102,7 +105,8 @@ class SidetrackScreenshotTest {
     @Test fun history() = shoot("sidetrack_history") {
         val episode = MockSpotifyDataSource.shows.first().episodes.first()
         HistoryScreen(
-            state.copy(recent = listOf(episode) + state.recent),
+            state.copy(recent = listOf(episode) + state.recent).playback,
+            state.copy(recent = listOf(episode) + state.recent).chrome,
             onBack = {},
             onPlay = {},
             onQueue = {},
@@ -115,7 +119,9 @@ class SidetrackScreenshotTest {
 
     @Test fun library() = shoot("sidetrack_library") {
         LibraryScreen(
-            state,
+            state.library,
+            state.saved,
+            state.chrome,
             onBack = {},
             onSearch = {},
             onSeeMore = {},
@@ -137,7 +143,9 @@ class SidetrackScreenshotTest {
     @Test fun libraryCategory() = shoot("sidetrack_library_albums") {
         LibraryCategoryScreen(
             LibraryFilter.Albums,
-            state,
+            state.library,
+            state.saved,
+            state.chrome,
             onBack = {},
             onTrack = {},
             onQueue = {},
@@ -158,7 +166,9 @@ class SidetrackScreenshotTest {
     @Test fun album() = shoot("sidetrack_album") {
         CollectionScreen(
             runBlocking { MockSpotifyDataSource.collection(SpotifyCollectionType.Album, "night_signals") }!!,
-            state,
+            state.saved,
+            state.playback,
+            state.chrome,
             onBack = {},
             onPlay = {},
             onPlayPause = {},
@@ -181,7 +191,9 @@ class SidetrackScreenshotTest {
     @Test fun show() = shoot("sidetrack_show") {
         ShowScreen(
             runBlocking { MockSpotifyDataSource.collection(SpotifyCollectionType.Show, "long_way_home") }!!,
-            state,
+            state.saved,
+            state.playback,
+            state.chrome,
             episodeProgress = mapOf(
                 "lw1" to SpotifyEpisodeProgress("lw1", 1_200_000L, 2_442_000L, 0L, completed = false)
             ),
@@ -206,7 +218,9 @@ class SidetrackScreenshotTest {
     @Test fun nowPlayingEpisode() = shoot("sidetrack_now_playing_episode") {
         val episode = MockSpotifyDataSource.shows.first().episodes.last()
         SpotifyNowPlayingScreen(
-            state.copy(current = episode, isPlaying = true),
+            state.copy(current = episode, isPlaying = true).playback,
+            state.copy(current = episode, isPlaying = true).saved,
+            state.copy(current = episode, isPlaying = true).chrome,
             playbackPositionMs = MutableStateFlow(68_000L),
             sleepTimer = MutableStateFlow(SleepTimerState.Off),
             onBack = {},
@@ -247,7 +261,9 @@ class SidetrackScreenshotTest {
             artist,
             runBlocking { MockSpotifyDataSource.albumsBy(artist).items },
             runBlocking { MockSpotifyDataSource.topTracks(artist).items },
-            state,
+            state.saved,
+            state.playback,
+            state.chrome,
             onBack = {},
             onPlay = {},
             onPlayPause = {},
@@ -272,7 +288,9 @@ class SidetrackScreenshotTest {
 
     @Test fun search() = shoot("sidetrack_search") {
         SpotifySearchScreen(
-            state.copy(query = "night"),
+            state.copy(query = "night").search,
+            state.copy(query = "night").saved,
+            state.copy(query = "night").chrome,
             onBack = {},
             onQuery = {},
             onClear = {},
@@ -306,7 +324,9 @@ class SidetrackScreenshotTest {
 
     @Test fun nowPlaying() = shoot("sidetrack_now_playing") {
         SpotifyNowPlayingScreen(
-            state,
+            state.playback,
+            state.saved,
+            state.chrome,
             playbackPositionMs = MutableStateFlow(68_000L),
             sleepTimer = MutableStateFlow(SleepTimerState.Off),
             onBack = {},
@@ -332,7 +352,9 @@ class SidetrackScreenshotTest {
 
     @Test fun nowPlayingWithSleepTimer() = shoot("sidetrack_now_playing_sleep_timer") {
         SpotifyNowPlayingScreen(
-            state,
+            state.playback,
+            state.saved,
+            state.chrome,
             playbackPositionMs = MutableStateFlow(68_000L),
             sleepTimer = MutableStateFlow(SleepTimerState.Countdown(30, 1_800_000L, 23)),
             onBack = {},
@@ -368,7 +390,8 @@ class SidetrackScreenshotTest {
 
     @Test fun queue() = shoot("sidetrack_queue") {
         QueueScreen(
-            state,
+            state.playback,
+            state.chrome,
             onBack = {},
             onNowPlaying = {},
             onJump = {},
@@ -386,7 +409,9 @@ class SidetrackScreenshotTest {
 
     @Test fun settings() = shoot("sidetrack_settings") {
         SpotifySettingsScreen(
-            state,
+            state.account,
+            state.chrome,
+            state.recent.size,
             onBack = {},
             onAudioQuality = {},
             onNormalization = {},
@@ -403,7 +428,8 @@ class SidetrackScreenshotTest {
 
     @Test fun audioQuality() = shoot("sidetrack_audio_quality") {
         SpotifyAudioQualityScreen(
-            state,
+            state.account,
+            state.chrome,
             onBack = {},
             onSelect = {},
             onDismissNotice = {}
@@ -435,7 +461,8 @@ class SidetrackScreenshotTest {
 
     @Test fun signIn() = shoot("sidetrack_sign_in") {
         SpotifySignInScreen(
-            SpotifyUiState(signedIn = false),
+            SpotifyUiState(signedIn = false).account,
+            SpotifyUiState(signedIn = false).chrome,
             onAbout = {},
             onSignIn = {},
             onDismissNotice = {}

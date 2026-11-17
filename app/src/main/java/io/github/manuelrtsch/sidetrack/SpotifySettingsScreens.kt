@@ -35,7 +35,9 @@ private enum class SettingsConfirmation { SignOut, ClearCache, ClearHistory }
 
 @Composable
 fun SpotifySettingsScreen(
-    state: SpotifyUiState,
+    account: AccountUiState,
+    chrome: ChromeUiState,
+    recentCount: Int,
     onBack: () -> Unit,
     onAudioQuality: () -> Unit,
     onNormalization: () -> Unit,
@@ -51,11 +53,12 @@ fun SpotifySettingsScreen(
 ) {
     var confirmation by remember { mutableStateOf<SettingsConfirmation?>(null) }
     val context = LocalContext.current
-    val back = spotifyBack("Back", onBack).first()
+    val back = remember { spotifyBack("Back", onBack).first() }
+    val baseActions = remember(back) { listOf(back, SideAction.forward("about", "About", onClick = onAbout)) }
     val normal = withNotice(
-        state.notice,
+        chrome.notice,
         onDismissNotice,
-        listOf(back, SideAction.forward("about", "About", onClick = onAbout))
+        baseActions
     )
     val actions = when (confirmation) {
         SettingsConfirmation.SignOut -> listOf(
@@ -96,9 +99,9 @@ fun SpotifySettingsScreen(
                 SidetrackItem(
                     "Account",
                     Modifier.listFade(listState, 0).focusRequester(first),
-                    secondary = if (state.signedIn) "Signed in" else "Not signed in",
+                    secondary = if (account.signedIn) "Signed in" else "Not signed in",
                     secondaryToEnd = true,
-                    onClick = if (state.signedIn) {
+                    onClick = if (account.signedIn) {
                         { confirmation = SettingsConfirmation.SignOut }
                     } else {
                         null
@@ -109,7 +112,7 @@ fun SpotifySettingsScreen(
                 SidetrackItem(
                     "Audio quality",
                     Modifier.listFade(listState, 1),
-                    secondary = state.audioQuality.label,
+                    secondary = account.audioQuality.label,
                     secondaryToEnd = true,
                     showLinkArrow = true,
                     showLinkArrowWithSecondary = true,
@@ -120,9 +123,9 @@ fun SpotifySettingsScreen(
                 SidetrackItem(
                     "Autoplay",
                     Modifier.listFade(listState, 2),
-                    secondary = if (state.autoplay) "On" else "Off",
+                    secondary = if (account.autoplay) "On" else "Off",
                     secondaryToEnd = true,
-                    toggleable = state.autoplay,
+                    toggleable = account.autoplay,
                     onClick = onAutoplay
                 )
             }
@@ -130,9 +133,9 @@ fun SpotifySettingsScreen(
                 SidetrackItem(
                     "Normalize volume",
                     Modifier.listFade(listState, 3),
-                    secondary = if (state.normalization) "On" else "Off",
+                    secondary = if (account.normalization) "On" else "Off",
                     secondaryToEnd = true,
-                    toggleable = state.normalization,
+                    toggleable = account.normalization,
                     onClick = onNormalization
                 )
             }
@@ -140,9 +143,9 @@ fun SpotifySettingsScreen(
                 SidetrackItem(
                     "Gapless playback",
                     Modifier.listFade(listState, 4),
-                    secondary = if (state.gapless) "On" else "Off",
+                    secondary = if (account.gapless) "On" else "Off",
                     secondaryToEnd = true,
-                    toggleable = state.gapless,
+                    toggleable = account.gapless,
                     onClick = onGapless
                 )
             }
@@ -150,7 +153,7 @@ fun SpotifySettingsScreen(
                 SidetrackItem(
                     "Clear cache",
                     Modifier.listFade(listState, 5),
-                    secondary = Formatter.formatShortFileSize(context, state.cacheSizeBytes),
+                    secondary = Formatter.formatShortFileSize(context, account.cacheSizeBytes),
                     secondaryToEnd = true,
                     onClick = { confirmation = SettingsConfirmation.ClearCache }
                 )
@@ -159,7 +162,7 @@ fun SpotifySettingsScreen(
                 SidetrackItem(
                     "Clear history",
                     Modifier.listFade(listState, 6),
-                    secondary = state.recent.size.toString(),
+                    secondary = recentCount.toString(),
                     secondaryToEnd = true,
                     onClick = { confirmation = SettingsConfirmation.ClearHistory }
                 )
@@ -192,15 +195,17 @@ fun SpotifySettingsScreen(
 
 @Composable
 fun SpotifyAudioQualityScreen(
-    state: SpotifyUiState,
+    account: AccountUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onSelect: (AudioQuality) -> Unit,
     onDismissNotice: () -> Unit
 ) {
+    val baseActions = remember { listOf(SideAction.back("back", "Settings", onBack)) }
     val actions = withNotice(
-        state.notice,
+        chrome.notice,
         onDismissNotice,
-        listOf(SideAction.back("back", "Settings", onBack))
+        baseActions
     )
     SidekitScaffold(
         title = "Audio quality",
@@ -211,7 +216,7 @@ fun SpotifyAudioQualityScreen(
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
         SidekitList(padding, modifier = Modifier.selectableGroup(), state = listState) {
             AudioQuality.entries.forEachIndexed { index, quality ->
-                val selected = quality == state.audioQuality
+                val selected = quality == account.audioQuality
                 item(key = quality.name) {
                     SidetrackItem(
                         quality.label,
@@ -235,19 +240,23 @@ fun SpotifyAudioQualityScreen(
 
 @Composable
 fun SpotifySignInScreen(
-    state: SpotifyUiState,
+    account: AccountUiState,
+    chrome: ChromeUiState,
     onAbout: () -> Unit,
     onSignIn: () -> Unit,
     onDismissNotice: () -> Unit
 ) {
     val colors = SidekitTheme.colors
-    val actions = withNotice(
-        state.notice,
-        onDismissNotice,
+    val baseActions = remember {
         listOf(
             SideAction("about", "About", tone = ActionTone.Muted, motion = ActionMotion.Up, onClick = onAbout),
             SideAction.forward("signIn", "Sign in", onSignIn)
         )
+    }
+    val actions = withNotice(
+        chrome.notice,
+        onDismissNotice,
+        baseActions
     )
     SidekitScaffold(
         title = "Sign in",
@@ -277,8 +286,8 @@ fun SpotifySignInScreen(
                     "Status",
                     Modifier.listFade(listState, 1),
                     secondary = when {
-                        state.authPending -> "Waiting for browser"
-                        state.signedIn -> "Connected"
+                        account.authPending -> "Waiting for browser"
+                        account.signedIn -> "Connected"
                         else -> "Waiting"
                     },
                     secondaryToEnd = true,

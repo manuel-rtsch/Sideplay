@@ -19,6 +19,14 @@ internal object SidetrackDebug {
         if (enabled) Log.d(TAG, message)
     }
 
+    /**
+     * Lazy variant for hot paths: the message is only built when the tag is enabled, so a
+     * disabled debug build does not allocate a string on every publish or audio read.
+     */
+    inline fun log(message: () -> String) {
+        if (enabled) Log.d(TAG, message())
+    }
+
     fun log(message: String, error: Throwable) {
         if (enabled) Log.d(TAG, message, error)
     }

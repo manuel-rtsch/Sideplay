@@ -67,6 +67,11 @@ far are that run plus this one.
       tile and confirm every top track is queued, the list on the page shows them all afterwards,
       and the tile turns into Pause. Then play something by another artist and confirm the tile is
       a Play arrow again.
+- [ ] **Manual:** on a show page with more than one page of episodes, press the play tile and
+      confirm audio starts without fetching the rest of the archive, that **Up next** holds nothing,
+      and that with Repeat off the episode ends by stopping instead of stepping to an older
+      episode. Repeat with a single episode row, then use its Add to queue square and confirm that
+      episode is queued.
 - [ ] **Manual:** with something playing, open the artist page's Options and choose **Artist
       radio**. Confirm the station screen opens without interrupting playback, that its play tile
       starts the station, and that a failed station read offers **Try again**.

@@ -50,7 +50,9 @@ import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 @Composable
 fun ShowScreen(
     collection: SpotifyCollection,
-    state: SpotifyUiState,
+    saved: SavedUiState,
+    playback: PlaybackUiState,
+    chrome: ChromeUiState,
     episodeProgress: Map<String, SpotifyEpisodeProgress>,
     onBack: () -> Unit,
     onPlay: () -> Unit,
@@ -69,13 +71,14 @@ fun ShowScreen(
     onDismissNowPlaying: () -> Unit
 ) {
     val colors = SidekitTheme.colors
-    val saved = "${SpotifyCollectionType.Show.route}:${collection.id}" in state.savedCollectionKeys
+    val savedCollection = "${SpotifyCollectionType.Show.route}:${collection.id}" in saved.savedCollectionKeys
+    val back = remember { spotifyBack("Back", onBack).first() }
     val actions = spotifyBar(
-        state,
+        chrome,
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        spotifyBack("Back", onBack).first()
+        back
     )
     val showNotes = remember(collection.description) { plainPodcastText(collection.description) }
     val options = buildList {
@@ -106,8 +109,8 @@ fun ShowScreen(
                 SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
                     ContextPlayTile(
                         playIds,
-                        state.current?.id,
-                        state.isPlaying,
+                        playback.current?.id,
+                        playback.isPlaying,
                         onPlay,
                         onPlayPause,
                         Modifier.weight(1f).focusRequester(playFocus),
@@ -122,10 +125,10 @@ fun ShowScreen(
                         onClick = onArtwork
                     )
                     SpotifyIconTile(
-                        if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-                        if (saved) "Saved" else "Save",
+                        if (savedCollection) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
+                        if (savedCollection) "Saved" else "Save",
                         onSave,
-                        tone = if (saved) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                        tone = if (savedCollection) SpotifyTileTone.Library else SpotifyTileTone.Neutral
                     )
                 }
             }
