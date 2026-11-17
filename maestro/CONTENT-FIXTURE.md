@@ -154,8 +154,8 @@ recordings.
    of the library in the video. The demo packs remove this entirely.
 5. **`02` writes to the account** (see §4). This is harmless on a throwaway account and
    inappropriate on a personal one.
-6. **There is no `flows/utility/seed-fixture.yaml`.** `FLOW-SUITE-TODO.md` still lists it as a
-   TODO; the fixture is manual and documented only. One explicit seed flow — play N distinct
+6. **There is no `flows/utility/seed-fixture.yaml`.** The fixture is manual and documented only.
+   One explicit seed flow — play N distinct
    fixture tracks from Liked Songs, add two to the queue, return Home — would fix items 1 and 2
    and make the whole recording chain independent of leftover state.
 
@@ -198,8 +198,8 @@ Reasons:
    `SpotifySessions.get()`. The UI and all flows stay identical to release.
 4. A branch would rot; a **product flavour** (`real` / `fixture`, or a `demo` build type whose
    sources live in `src/demo/`) keeps the fixture compiling with every refactor and cannot leak
-   into `realRelease`. `FLOW-SUITE-TODO.md` already anticipated this ("consider a debug-only
-   fixture intent in the app; do not add production behavior for tests").
+   into `realRelease`. A debug-only fixture intent in the app is the right shape; do not add
+   production behavior for tests.
 
 Two ways to keep playback honest:
 

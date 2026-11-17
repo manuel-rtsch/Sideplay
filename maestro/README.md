@@ -228,9 +228,8 @@ e 33`). The flow taps the first result below the **SHOWS** heading and does not 
 
 ## Flows
 
-The planned four-flow suite, coverage map, fixture requirements, and implementation checklist are in
-[`FLOW-SUITE-TODO.md`](FLOW-SUITE-TODO.md). Only `flows/suite/` is listed in `config.yaml`;
-`flows/demo/` and `flows/utility/` are kept out of the automated suite.
+Only `flows/suite/` is listed in `config.yaml`; `flows/demo/` and `flows/utility/` are kept out
+of the automated suite.
 
 - `flows/suite/01-browse-play.yaml` — Home → Library → second followed artist → third top track → Now Playing → first album → first album track → Now Playing → another top track → Now Playing → Home. Covers track, artist, and album media, and adds a history entry before flow 4 removes one.
 - `flows/suite/02-search-library-writes.yaml` — Home → Search → `Search in` scopes → artist follow write → album save write → show episode playback → Now Playing. Covers the show media kind.
