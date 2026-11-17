@@ -99,6 +99,8 @@ data class SpotifyPlaylist(
     val tracks: List<SpotifyTrack>,
     val artUrl: String? = null,
     val trackCount: Int = tracks.size,
+    /** Whether the signed-in user may add or remove items. The add-to-playlist picker filters on it. */
+    val editable: Boolean = false,
     val folder: String? = null
 )
 

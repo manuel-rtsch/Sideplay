@@ -50,6 +50,36 @@ class NativeSpotifyCatalogTest {
         assertTrue(native.playlistSave)
     }
 
+    @Test fun `add to playlist forwards the uri and reports the index`() = runTest {
+        val native = FakeNative().apply { playlistItemsAddResult = "7" }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        assertEquals(7, catalog.addToPlaylist("playlist1", "spotify:track:abc"))
+        assertEquals("playlist1", native.playlistItemsId)
+        assertEquals("[\"spotify:track:abc\"]", native.playlistItemsUris)
+    }
+
+    @Test fun `add to playlist fails when the native write is rejected`() = runTest {
+        val native = FakeNative().apply { playlistItemsAddResult = null }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.addToPlaylist("playlist1", "spotify:track:abc") }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.Network, (error as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `remove from playlist forwards the uri`() = runTest {
+        val native = FakeNative()
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        catalog.removeFromPlaylist("playlist1", "spotify:track:abc")
+
+        assertEquals("playlist1", native.playlistItemsId)
+        assertEquals("[\"spotify:track:abc\"]", native.playlistItemsUris)
+        assertTrue(native.playlistItemsRemoved)
+    }
+
     @Test fun `contains responses seed saved state`() = runTest {
         val native = FakeNative().apply {
             contains = "[true]"
@@ -268,6 +298,10 @@ class NativeSpotifyCatalogTest {
         var playlistSaved = "false"
         var playlistId: String? = null
         var playlistSave = false
+        var playlistItemsId: String? = null
+        var playlistItemsUris: String? = null
+        var playlistItemsAddResult: String? = "0"
+        var playlistItemsRemoved = false
         var libraryResult: String? = "[]"
         var libraryOffset = -1L
         var libraryLimit = -1L
@@ -340,6 +374,17 @@ class NativeSpotifyCatalogTest {
         override fun playlistSave(id: String, save: Boolean): Boolean {
             playlistId = id
             playlistSave = save
+            return writeOk
+        }
+        override fun playlistItemsAdd(id: String, uris: String): String? {
+            playlistItemsId = id
+            playlistItemsUris = uris
+            return playlistItemsAddResult
+        }
+        override fun playlistItemsRemove(id: String, uris: String): Boolean {
+            playlistItemsId = id
+            playlistItemsUris = uris
+            playlistItemsRemoved = true
             return writeOk
         }
     }

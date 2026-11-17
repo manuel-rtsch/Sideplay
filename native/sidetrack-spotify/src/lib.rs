@@ -481,6 +481,41 @@ pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_
     bool_result(result)
 }
 
+#[no_mangle]
+pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_nativePlaylistItemsAdd(
+    mut env: JNIEnv,
+    _this: JObject,
+    id: JString,
+    uris: JString,
+) -> jni::sys::jstring {
+    let (Some(id), Some(uris)) = (string(&mut env, &id), string(&mut env, &uris)) else {
+        return std::ptr::null_mut();
+    };
+    let uris: Vec<String> = serde_json::from_str(&uris).unwrap_or_default();
+    let result = engine::with_session_and_token(|session, token| {
+        engine::run(catalog::playlist_items_add(session, token, &id, &uris))
+            .and_then(|index| serde_json::to_string(&index).map_err(|e| e.to_string()))
+    });
+    catalog_result(&mut env, result)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_nativePlaylistItemsRemove(
+    mut env: JNIEnv,
+    _this: JObject,
+    id: JString,
+    uris: JString,
+) -> jboolean {
+    let (Some(id), Some(uris)) = (string(&mut env, &id), string(&mut env, &uris)) else {
+        return JNI_FALSE;
+    };
+    let uris: Vec<String> = serde_json::from_str(&uris).unwrap_or_default();
+    let result = engine::with_session_and_token(|session, token| {
+        engine::run(catalog::playlist_items_remove(session, token, &id, &uris))
+    });
+    bool_result(result)
+}
+
 fn bool_result(result: Result<(), String>) -> jboolean {
     if result.is_ok() {
         JNI_TRUE

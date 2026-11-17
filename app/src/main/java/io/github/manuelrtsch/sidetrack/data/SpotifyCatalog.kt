@@ -88,4 +88,14 @@ interface SpotifyLibraryWriter {
     suspend fun setTrackSaved(id: String, saved: Boolean)
     suspend fun setSaved(type: SpotifyCollectionType, id: String, saved: Boolean)
     suspend fun setArtistFollowed(id: String, followed: Boolean)
+
+    /**
+     * Appends [uri] to [playlistId] and returns the index it landed at, which is what Undo needs.
+     * Returns null when the transport cannot edit playlists; callers should hide the action rather
+     * than report a failure.
+     */
+    suspend fun addToPlaylist(playlistId: String, uri: String): Int? = null
+
+    /** Removes the most recent occurrence of [uri] from [playlistId]. */
+    suspend fun removeFromPlaylist(playlistId: String, uri: String) = Unit
 }
