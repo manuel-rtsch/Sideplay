@@ -23,7 +23,7 @@ use librespot_protocol::extended_metadata::{
 };
 use librespot_protocol::extension_kind::ExtensionKind;
 use librespot_protocol::playlist4_external::{
-    Add, Delta, Item as PlaylistItem, ListChanges, Op, Rem, SelectedListContent,
+    Add, Delta, Item as PlaylistItem, ItemAttributes, ListChanges, Op, Rem, SelectedListContent,
 };
 use protobuf::{EnumOrUnknown, Message, MessageField};
 use serde::Serialize;
@@ -89,6 +89,10 @@ struct PlaylistJson {
     tracks: Vec<TrackJson>,
     art_url: Option<String>,
     track_count: i32,
+    /// Whether the signed-in user may add or remove items. The add-to-playlist picker only
+    /// offers playlists that report `true`, so a followed playlist cannot be chosen and then
+    /// rejected by the service.
+    editable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     folder: Option<String>,
 }
@@ -292,6 +296,7 @@ fn playlist_json(playlist: &Playlist, tracks: Vec<TrackJson>, current_user: &str
         tracks,
         art_url: playlist_art(playlist),
         track_count: playlist.length.max(0),
+        editable: playlist.capabilities.can_edit_items || owner == current_user,
         folder: None,
     }
 }
@@ -783,6 +788,10 @@ fn pf_playlist(data: &Value, current_user: &str) -> Option<PlaylistJson> {
             .pointer("/tracks/totalCount")
             .and_then(Value::as_i64)
             .unwrap_or(0) as i32,
+        // The search payload carries no capabilities. Ownership is the one case that is always
+        // editable, so report that and leave collaborative playlists to the rootlist, which does
+        // decorate capabilities.
+        editable: owner_name == current_user,
         folder: None,
     })
 }
@@ -1350,6 +1359,10 @@ async fn rootlist_playlists(
                 tracks: Vec::new(),
                 art_url,
                 track_count: metadata.map(|m| m.length()).unwrap_or(0),
+                editable: metadata
+                    .and_then(|m| m.capabilities.as_ref())
+                    .is_some_and(|capabilities| capabilities.can_edit_items())
+                    || owner == user,
                 folder: (!folders.is_empty()).then(|| folders.join(" / ")),
             });
             if playlists.len() >= limit {
@@ -1628,6 +1641,228 @@ pub async fn playlist_save(
     )
     .await?;
     Ok(())
+}
+
+/// Reads a playlist with the decorations the write path needs: the revision to base a delta on,
+/// the current item list, and the capabilities that say whether this user may edit it.
+async fn playlist_content(
+    session: &Session,
+    token: &str,
+    id: &str,
+) -> Result<SelectedListContent, String> {
+    let id = id_of(&spotify_uri(id, "playlist")?);
+    let endpoint = format!(
+        "/playlist/v2/playlist/{id}?decorate=revision,length,attributes,owner,capabilities"
+    );
+    let bytes = sp_request(session, token, Method::GET, &endpoint, None, &[])
+        .await
+        .map_err(|e| format!("playlist: {e}"))?;
+    SelectedListContent::parse_from_bytes(&bytes).map_err(|e| e.to_string())
+}
+
+/// The service answers a stale `base_revision` with 409. librespot flattens the status into the
+/// error string, so the retry has to recognise it there.
+fn is_revision_conflict(error: &str) -> bool {
+    error.contains("409") || error.contains("Conflict")
+}
+
+fn now_micros() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_micros() as i64)
+        .unwrap_or(0)
+}
+
+/// Builds the delta that appends [uris] to a playlist. Kept pure so the wire shape is testable
+/// without a session.
+fn playlist_add_changes(
+    base_revision: &[u8],
+    uris: &[String],
+    added_by: &str,
+    timestamp: i64,
+) -> ListChanges {
+    let mut changes = ListChanges::new();
+    changes.base_revision = Some(base_revision.to_vec());
+    let mut delta = Delta::new();
+    let items = uris
+        .iter()
+        .map(|uri| PlaylistItem {
+            uri: Some(uri.clone()),
+            attributes: MessageField::some(ItemAttributes {
+                added_by: Some(added_by.to_string()),
+                timestamp: Some(timestamp),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .collect();
+    delta.ops.push(Op {
+        kind: Some(EnumOrUnknown::new(
+            librespot_protocol::playlist4_external::op::Kind::ADD,
+        )),
+        add: MessageField::some(Add {
+            items,
+            add_last: Some(true),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    changes.deltas.push(delta);
+    changes
+}
+
+/// Builds the delta that removes [indices]. Removals are emitted highest index first so each
+/// index still refers to the same item after the previous removal shifted the list.
+fn playlist_remove_changes(base_revision: &[u8], indices: &[i32]) -> ListChanges {
+    let mut changes = ListChanges::new();
+    changes.base_revision = Some(base_revision.to_vec());
+    let mut delta = Delta::new();
+    let mut indices = indices.to_vec();
+    indices.sort_unstable_by(|a, b| b.cmp(a));
+    indices.dedup();
+    for index in indices {
+        delta.ops.push(Op {
+            kind: Some(EnumOrUnknown::new(
+                librespot_protocol::playlist4_external::op::Kind::REM,
+            )),
+            rem: MessageField::some(Rem {
+                from_index: Some(index),
+                length: Some(1),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+    }
+    changes.deltas.push(delta);
+    changes
+}
+
+/// Indices of the last occurrence of each URI, in the order the URIs were given. Undo removes
+/// the copy that was just added, not an older duplicate.
+fn playlist_item_indices(items: &[PlaylistItem], uris: &[String]) -> Vec<i32> {
+    uris.iter()
+        .filter_map(|uri| {
+            items
+                .iter()
+                .rposition(|item| item.uri() == uri)
+                .map(|index| index as i32)
+        })
+        .collect()
+}
+
+/// Appends [uris] to a playlist the user can edit. Returns the index the first item landed at,
+/// which is what the caller needs to offer Undo.
+pub async fn playlist_items_add(
+    session: &Session,
+    token: &str,
+    id: &str,
+    uris: &[String],
+) -> Result<i32, String> {
+    if uris.is_empty() {
+        return Ok(0);
+    }
+    let playlist_id = id_of(&spotify_uri(id, "playlist")?);
+    let mut last_error = String::new();
+    for attempt in 0..2 {
+        let content = playlist_content(session, token, &playlist_id).await?;
+        let owner = content.owner_username();
+        let editable = content
+            .capabilities
+            .as_ref()
+            .is_some_and(|capabilities| capabilities.can_edit_items())
+            || owner == session.username();
+        if !editable {
+            return Err("this playlist is not yours to edit".to_string());
+        }
+        let index = content
+            .contents
+            .as_ref()
+            .map(|contents| contents.items.len())
+            .unwrap_or(0) as i32;
+        let changes = playlist_add_changes(
+            content.revision.as_deref().unwrap_or_default(),
+            uris,
+            &session.username(),
+            now_micros(),
+        );
+        let body = changes.write_to_bytes().map_err(|e| e.to_string())?;
+        match sp_request(
+            session,
+            token,
+            Method::POST,
+            &format!("/playlist/v2/playlist/{playlist_id}/changes"),
+            Some("application/x-www-form-urlencoded"),
+            &body,
+        )
+        .await
+        {
+            Ok(_) => {
+                invalidate_collection(&session.username(), &playlist_id);
+                return Ok(index);
+            }
+            // Another client wrote between the read and the write. Re-read once and retry with
+            // the new revision instead of dropping the user's action.
+            Err(error) if attempt == 0 && is_revision_conflict(&error) => {
+                log::warn!("playlist add hit a revision conflict, retrying: {error}");
+                last_error = error;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_error)
+}
+
+/// Removes the last occurrence of each URI from a playlist. This is the Undo path for
+/// [playlist_items_add]; it re-reads the playlist so a concurrent edit cannot make it remove the
+/// wrong item.
+pub async fn playlist_items_remove(
+    session: &Session,
+    token: &str,
+    id: &str,
+    uris: &[String],
+) -> Result<(), String> {
+    if uris.is_empty() {
+        return Ok(());
+    }
+    let playlist_id = id_of(&spotify_uri(id, "playlist")?);
+    let mut last_error = String::new();
+    for attempt in 0..2 {
+        let content = playlist_content(session, token, &playlist_id).await?;
+        let items = content
+            .contents
+            .as_ref()
+            .map(|contents| contents.items.as_slice())
+            .unwrap_or_default();
+        let indices = playlist_item_indices(items, uris);
+        if indices.is_empty() {
+            // Already gone: another client removed it, or Undo ran twice. Nothing to do.
+            return Ok(());
+        }
+        let changes =
+            playlist_remove_changes(content.revision.as_deref().unwrap_or_default(), &indices);
+        let body = changes.write_to_bytes().map_err(|e| e.to_string())?;
+        match sp_request(
+            session,
+            token,
+            Method::POST,
+            &format!("/playlist/v2/playlist/{playlist_id}/changes"),
+            Some("application/x-www-form-urlencoded"),
+            &body,
+        )
+        .await
+        {
+            Ok(_) => {
+                invalidate_collection(&session.username(), &playlist_id);
+                return Ok(());
+            }
+            Err(error) if attempt == 0 && is_revision_conflict(&error) => {
+                log::warn!("playlist remove hit a revision conflict, retrying: {error}");
+                last_error = error;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_error)
 }
 
 pub async fn library(
@@ -2029,10 +2264,13 @@ pub async fn top_tracks(
 #[cfg(test)]
 mod tests {
     use super::{
-        library_page, owner_display, percent_decode, playlist_id_of, radio_playlist_uri,
-        radio_track_uris, rootlist_folder_name, sort_newest_first, CollectionItem,
+        library_page, owner_display, percent_decode, playlist_add_changes, playlist_id_of,
+        playlist_item_indices, playlist_remove_changes, radio_playlist_uri, radio_track_uris,
+        rootlist_folder_name, sort_newest_first, CollectionItem,
     };
     use librespot_core::SpotifyUri;
+    use librespot_protocol::playlist4_external::Item as PlaylistItem;
+    use protobuf::Message;
     use serde_json::json;
 
     #[test]
@@ -2147,5 +2385,80 @@ mod tests {
         assert_eq!(owner_display("alice", "alice"), "You");
         assert_eq!(owner_display("bob", "alice"), "bob");
         assert_eq!(owner_display("", "alice"), "Spotify");
+    }
+
+    #[test]
+    fn playlist_add_appends_with_attribution() {
+        let uris = vec![
+            "spotify:track:one".to_string(),
+            "spotify:track:two".to_string(),
+        ];
+        let changes = playlist_add_changes(b"rev-1", &uris, "alice", 1_700_000_000_000_000);
+        assert_eq!(changes.base_revision.as_deref(), Some(&b"rev-1"[..]));
+        let delta = &changes.deltas[0];
+        assert_eq!(delta.ops.len(), 1);
+        let op = &delta.ops[0];
+        assert_eq!(
+            op.kind.as_ref().unwrap().enum_value().unwrap(),
+            librespot_protocol::playlist4_external::op::Kind::ADD
+        );
+        let add = op.add.as_ref().unwrap();
+        assert_eq!(add.add_last(), true);
+        assert_eq!(add.items.len(), 2);
+        assert_eq!(add.items[0].uri(), "spotify:track:one");
+        assert_eq!(add.items[1].uri(), "spotify:track:two");
+        let attributes = add.items[0].attributes.as_ref().unwrap();
+        assert_eq!(attributes.added_by(), "alice");
+        assert_eq!(attributes.timestamp(), 1_700_000_000_000_000);
+    }
+
+    #[test]
+    fn playlist_remove_emits_highest_index_first() {
+        let changes = playlist_remove_changes(b"rev-2", &[3, 7, 5]);
+        let ops = &changes.deltas[0].ops;
+        let indices: Vec<i32> = ops
+            .iter()
+            .map(|op| {
+                assert_eq!(
+                    op.kind.as_ref().unwrap().enum_value().unwrap(),
+                    librespot_protocol::playlist4_external::op::Kind::REM
+                );
+                op.rem.as_ref().unwrap().from_index()
+            })
+            .collect();
+        assert_eq!(indices, vec![7, 5, 3]);
+    }
+
+    #[test]
+    fn playlist_item_indices_pick_the_last_duplicate() {
+        let items: Vec<PlaylistItem> = ["a", "b", "a"]
+            .iter()
+            .map(|uri| PlaylistItem {
+                uri: Some(format!("spotify:track:{uri}")),
+                ..Default::default()
+            })
+            .collect();
+        let indices = playlist_item_indices(
+            &items,
+            &[
+                "spotify:track:a".to_string(),
+                "spotify:track:missing".to_string(),
+                "spotify:track:b".to_string(),
+            ],
+        );
+        assert_eq!(indices, vec![2, 1]);
+    }
+
+    #[test]
+    fn playlist_changes_round_trip_through_the_wire_format() {
+        let changes = playlist_add_changes(b"rev", &["spotify:track:x".to_string()], "alice", 1);
+        let bytes = changes.write_to_bytes().unwrap();
+        let parsed =
+            librespot_protocol::playlist4_external::ListChanges::parse_from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.base_revision.as_deref(), Some(&b"rev"[..]));
+        assert_eq!(
+            parsed.deltas[0].ops[0].add.as_ref().unwrap().items[0].uri(),
+            "spotify:track:x"
+        );
     }
 }

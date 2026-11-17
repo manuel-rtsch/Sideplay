@@ -120,6 +120,24 @@ class NativeSpotifyCatalog(
 
     override suspend fun setArtistFollowed(id: String, followed: Boolean) = writeCollection("artist", "spotify:artist:$id", followed)
 
+    override suspend fun addToPlaylist(playlistId: String, uri: String): Int? = withContext(Dispatchers.IO) {
+        ensureSession()
+        val text = native.playlistItemsAdd(playlistId, JSONArray(listOf(uri)).toString())
+            ?: fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
+        runCatching { text.trim().toInt() }.getOrElse {
+            fail(SpotifyFailure.Unknown, "Spotify returned an unreadable playlist response")
+        }
+    }
+
+    override suspend fun removeFromPlaylist(playlistId: String, uri: String) {
+        withContext(Dispatchers.IO) {
+            ensureSession()
+            if (!native.playlistItemsRemove(playlistId, JSONArray(listOf(uri)).toString())) {
+                fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
+            }
+        }
+    }
+
     private suspend fun contains(set: String, uri: String): Boolean? {
         val text = callText {
             native.collectionContains(set, JSONArray(listOf(uri)).toString())
@@ -313,6 +331,7 @@ private fun playlistFromNative(json: JSONObject): SpotifyPlaylist? {
         tracks = json.optJSONArray("tracks").tracks(),
         artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
         trackCount = json.optInt("trackCount", 0),
+        editable = json.optBoolean("editable", false),
         folder = json.optString("folder").takeIf { it.isNotEmpty() }
     )
 }

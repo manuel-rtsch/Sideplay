@@ -39,4 +39,8 @@ interface SpotifyNative {
     fun collectionWrite(set: String, uris: String, removed: Boolean): Boolean
     fun playlistSaved(id: String): String?
     fun playlistSave(id: String, save: Boolean): Boolean
+
+    /** Appends [uris] to a playlist. Returns the index the first item landed at, or null. */
+    fun playlistItemsAdd(id: String, uris: String): String?
+    fun playlistItemsRemove(id: String, uris: String): Boolean
 }
