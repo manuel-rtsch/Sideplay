@@ -604,7 +604,7 @@ fun QueueScreen(
                                 key = "move",
                                 label = "Move",
                                 contentDescription = "Move ${item.title}",
-                                icon = SidekitIcon.SwapVert,
+                                icon = SidekitIcon.ArrowUpward,
                                 tone = ActionTone.Primary,
                                 onClick = { startReorderAt(index) }
                             )
