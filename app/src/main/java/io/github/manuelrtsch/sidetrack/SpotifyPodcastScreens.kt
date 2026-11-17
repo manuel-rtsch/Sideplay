@@ -343,7 +343,6 @@ private fun EpisodeRow(
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
-                rowFocus.requestFocus()
                 bar.show(
                     RowActionSelection(
                         key = key,

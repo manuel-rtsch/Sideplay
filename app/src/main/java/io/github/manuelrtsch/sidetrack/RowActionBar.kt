@@ -111,7 +111,14 @@ fun rememberRowActionBarState(): RowActionBarState {
         if (chrome?.optionsOpen == true) state.close(restoreFocus = false)
     }
     LaunchedEffect(state.selection) {
-        if (state.selection != null) chrome?.focusActionBar()
+        if (state.selection == null) return@LaunchedEffect
+        // The bar morphs to the row's actions in the same frame the selection changes. Asking for
+        // focus before that frame has been applied leaves it on the row, so wait for the new
+        // buttons to exist and retry once if the host has not registered its first slot yet.
+        repeat(3) {
+            withFrameNanos { }
+            if (chrome?.focusActionBar() == true) return@LaunchedEffect
+        }
     }
     LaunchedEffect(state.undo) {
         if (state.undo != null) {

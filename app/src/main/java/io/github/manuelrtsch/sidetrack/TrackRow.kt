@@ -116,7 +116,6 @@ fun TrackRow(
             modifier = squareFocus,
             onClick = {
                 rows.focus.touchDismissed(key)
-                rowFocus.requestFocus()
                 rows.bar.show(
                     RowActionSelection(
                         key = key,
@@ -258,7 +257,6 @@ fun HistoryRow(
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
-                rowFocus.requestFocus()
                 bar.show(
                     RowActionSelection(
                         key = key,
