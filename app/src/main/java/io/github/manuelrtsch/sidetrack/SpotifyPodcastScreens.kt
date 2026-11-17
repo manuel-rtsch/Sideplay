@@ -171,7 +171,11 @@ fun ShowScreen(
             val base = rowIndex
             // Keyed by episode id, not position: the list is newest-first, so a newly published
             // episode prepends and every index shifts.
-            itemsIndexed(collection.items, key = { _, item -> item.id }) { index, item ->
+            itemsIndexed(
+                collection.items,
+                key = { _, item -> item.id },
+                contentType = { _, item -> if (item is SpotifyTrack) "track" else "episode" }
+            ) { index, item ->
                 val key = item.id
                 val modifier = Modifier.listFade(listState, base + index)
                 if (item is SpotifyEpisode) {
@@ -390,7 +394,11 @@ fun NotesScreen(
                     )
                 }
             }
-            itemsIndexed(paragraphs, key = { index, _ -> "p$index" }) { index, paragraph ->
+            itemsIndexed(
+                paragraphs,
+                key = { index, _ -> "p$index" },
+                contentType = { _, _ -> "paragraph" }
+            ) { index, paragraph ->
                 SidekitText(
                     paragraph,
                     Modifier

@@ -781,7 +781,11 @@ fun QueueScreen(
                             shuffled = playback.shuffle
                         )
                     }
-                    itemsIndexed(playback.upcoming, key = { index, _ -> upcomingKeys[index] }) { index, item ->
+                    itemsIndexed(
+                        playback.upcoming,
+                        key = { index, _ -> upcomingKeys[index] },
+                        contentType = { _, item -> if (item is SpotifyTrack) "track" else "episode" }
+                    ) { index, item ->
                         val key = upcomingKeys[index]
                         val pickedUp = reorder.from == index
                         // A swiped-open row already shows its Remove button; the gutter would be

@@ -41,7 +41,11 @@ fun HistoryScreen(
         SidekitList(padding, state = listState) {
             // History is local-only and has no empty state: with no entries the list is simply blank.
             // A track can be played again, so the id alone repeats; index keeps keys unique.
-            itemsIndexed(playback.recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
+            itemsIndexed(
+                playback.recent,
+                key = { index, item -> "$index:${item.id}" },
+                contentType = { _, item -> if (item is SpotifyTrack) "track" else "episode" }
+            ) { index, item ->
                 val key = "$index:${item.id}"
                 HistoryRow(
                     key,

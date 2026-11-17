@@ -90,7 +90,11 @@ fun SidetrackHomeScreen(
                     )
                 }
             } else {
-                itemsIndexed(recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
+                itemsIndexed(
+                    recent,
+                    key = { index, item -> "$index:${item.id}" },
+                    contentType = { _, item -> mediaContentType(item) }
+                ) { index, item ->
                     val key = "$index:${item.id}"
                     HistoryRow(
                         key,
@@ -204,7 +208,11 @@ fun LibraryScreen(
                 }
                 rowIndex += 1
                 val base = rowIndex
-                itemsIndexed(items, key = { index, item -> "${filter.name}:$index:${libraryKey(item)}" }) { index, item ->
+                itemsIndexed(
+                    items,
+                    key = { index, item -> "${filter.name}:$index:${libraryKey(item)}" },
+                    contentType = { _, item -> libraryKey(item).take(1) }
+                ) { index, item ->
                     val modifier = Modifier.listFade(listState, base + index)
                         .then(
                             if (filter == firstFilter && index == 0) Modifier.focusRequester(first) else Modifier
@@ -310,7 +318,11 @@ fun LibraryCategoryScreen(
                 rowIndex += 1
             }
             val base = rowIndex
-            itemsIndexed(items, key = { index, item -> "$index:${libraryKey(item)}" }) { index, item ->
+            itemsIndexed(
+                items,
+                key = { index, item -> "$index:${libraryKey(item)}" },
+                contentType = { _, item -> libraryKey(item).take(1) }
+            ) { index, item ->
                 val modifier = Modifier.listFade(listState, base + index)
                     .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
                 LibraryRow(item, modifier, rows, onTrack, onPlaylist, onAlbum, onArtist, onShow)
@@ -473,7 +485,11 @@ fun CollectionScreen(
             // Albums and shows share one cover, so a position number is the useful left column.
             // Playlist tracks have their own artwork, which is more informative than a list index.
             val showTrackArt = collection.type == SpotifyCollectionType.Playlist
-            itemsIndexed(collection.items, key = { index, item -> "$index:${item.id}" }) { index, item ->
+            itemsIndexed(
+                collection.items,
+                key = { index, item -> "$index:${item.id}" },
+                contentType = { _, item -> mediaContentType(item) }
+            ) { index, item ->
                 val key = "$index:${item.id}"
                 val modifier = Modifier.listFade(listState, base + index)
                 if (item is SpotifyTrack) {
@@ -596,7 +612,11 @@ fun ArtistScreen(
             }
             rowIndex += 1
             val tracksBase = rowIndex
-            itemsIndexed(tracks, key = { index, track -> "$index:${track.id}" }) { index, track ->
+            itemsIndexed(
+                tracks,
+                key = { index, track -> "$index:${track.id}" },
+                contentType = { _, _ -> "track" }
+            ) { index, track ->
                 TrackRow(
                     "$index:${track.id}",
                     track,
@@ -622,7 +642,11 @@ fun ArtistScreen(
             }
             rowIndex += 1
             val albumsBase = rowIndex
-            itemsIndexed(albums, key = { index, album -> "$index:${album.id}" }) { index, album ->
+            itemsIndexed(
+                albums,
+                key = { index, album -> "$index:${album.id}" },
+                contentType = { _, _ -> "album" }
+            ) { index, album ->
                 SpotifyLibraryRow(
                     album.artRes,
                     album.title,
@@ -645,6 +669,12 @@ fun ArtistScreen(
             }
         }
     }
+}
+
+private fun mediaContentType(item: Any): String = when (item) {
+    is SpotifyTrack -> "track"
+    is SpotifyEpisode -> "episode"
+    else -> "media"
 }
 
 private fun libraryKey(item: Any): String = when (item) {

@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -68,7 +69,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 
 /** How much the cover is softened behind the controls. Enough to read type over it, not a glass. */
-private val BackdropBlur = 14.dp
+private val BackdropBlur = 11.dp
 
 /**
  * The backdrop setting, shared by the screen, the Options action and Settings. It persists in
@@ -105,9 +106,10 @@ internal fun rememberArtworkBackdropSetting(): ArtworkBackdropSetting {
 }
 
 /**
- * The cover, scaled to cover the whole panel (cropped at the long axis, never letterboxed) and
- * blurred. The cover is square and the panel is 480 x 640, so the square grows to the panel's
- * height and the sides run off the edge.
+ * The cover, scaled to cover the panel's width (cropped at the long axis, never letterboxed) and
+ * blurred. The cover is square and the panel is 480 x 640, so the square grows past the width and
+ * the sides run off the edge. It stops short of the action bar, where the transport gradient is
+ * already black.
  *
  * The blurred image is its own composable taking only the primitives of the track. The screen
  * re-composes once a second while the sleep timer ticks (it reads the timer for the Options
@@ -128,14 +130,17 @@ internal fun ArtworkBackdrop(
     val dark = SidekitTheme.colors.dark
     val scrim = remember(dark) {
         Brush.verticalGradient(
-            0f to dark.copy(alpha = 0.10f),
-            0.45f to dark.copy(alpha = 0.28f),
-            1f to dark.copy(alpha = 0.48f)
+            0f to dark.copy(alpha = 0.12f),
+            0.45f to dark.copy(alpha = 0.24f),
+            1f to dark.copy(alpha = 0.36f)
         )
     }
     BoxWithConstraints(modifier.clipToBounds()) {
-        val side = maxOf(maxWidth, maxHeight)
-        BackdropImage(item.artRes, item.artUrl, side, Modifier.align(Alignment.Center))
+        // The lower controls sit on a black gradient, so the cover only has to reach the top of
+        // that gradient. Keeping the square shorter saves a fifth of the decoded pixels without
+        // leaving a visible edge: the bottom of the image is already under the scrim.
+        val side = maxOf(maxWidth, maxHeight * 0.75f)
+        BackdropImage(item.artRes, item.artUrl, side, Modifier.align(Alignment.TopCenter))
         // A tap on the empty screen still opens the album, as tapping the cover did on the old
         // layout. It is pointer input rather than clickable so the 480 dp area never becomes a
         // focus target; the keypad reaches the album through Options.
@@ -261,26 +266,42 @@ internal fun BackdroppedNowPlayingBody(
         Spacer(Modifier.weight(0.7f))
         NowPlayingSleepTimer(sleepTimer)
         Spacer(Modifier.height(6.dp))
-        NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
-        Spacer(Modifier.height(6.dp))
-        SidekitItemRow {
-            SpotifyIconTile(
-                SidekitIcon.Shuffle,
-                if (playback.shuffle) "Shuffle on" else "Shuffle off",
-                onShuffle,
-                tone = if (playback.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
-                weight = 0.85f
+        // The transport block fades from transparent at the seek bar to black at the action bar,
+        // so the controls stay legible over any cover without dimming the title area.
+        Box(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.45f to Color.Black.copy(alpha = 0.55f),
+                        0.6f to Color.Black,
+                        1f to Color.Black
+                    )
+                )
             )
-            SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
-            SpotifyIconTile(
-                if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                if (playback.isPlaying) "Pause" else "Play",
-                onPlayPause,
-                tone = SpotifyTileTone.Play,
-                weight = 1.2f
-            )
-            SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-            SpotifyRepeatTile(playback.repeat, onRepeat)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
+                Spacer(Modifier.height(6.dp))
+                SidekitItemRow {
+                    SpotifyIconTile(
+                        SidekitIcon.Shuffle,
+                        if (playback.shuffle) "Shuffle on" else "Shuffle off",
+                        onShuffle,
+                        tone = if (playback.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
+                        weight = 0.85f
+                    )
+                    SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
+                    SpotifyIconTile(
+                        if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+                        if (playback.isPlaying) "Pause" else "Play",
+                        onPlayPause,
+                        tone = SpotifyTileTone.Play,
+                        weight = 1.2f
+                    )
+                    SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+                    SpotifyRepeatTile(playback.repeat, onRepeat)
+                }
+            }
         }
     }
 }

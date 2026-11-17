@@ -114,7 +114,11 @@ fun SpotifyCover(
     contentDescription: String? = null,
     artUrl: String? = null,
     onClick: (() -> Unit)? = null,
-    onClickLabel: String? = null
+    onClickLabel: String? = null,
+    // When the caller already knows the square's size, request exactly that bitmap instead of
+    // letting RemoteArtworkImage measure itself with a BoxWithConstraints subcomposition. Long
+    // lists pay that subcomposition once per row, so the list rows pass their fixed size.
+    requestSize: Dp? = null
 ) {
     val colors = SidekitTheme.colors
     Box(
@@ -125,6 +129,15 @@ fun SpotifyCover(
             .then(if (onClick != null) Modifier.clickable(onClickLabel = onClickLabel, onClick = onClick) else Modifier)
     ) {
         when {
+            artUrl != null && requestSize != null -> RemoteArtworkImage(
+                artUrl,
+                width = requestSize,
+                height = requestSize,
+                modifier = Modifier.fillMaxSize(),
+                placeholder = SidekitIcon.Album,
+                contentDescription = contentDescription
+            )
+
             artUrl != null -> RemoteArtworkImage(
                 artUrl,
                 Modifier.fillMaxSize(),
@@ -183,7 +196,7 @@ fun SpotifyMediaRow(
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
             if (showArt) {
-                SpotifyCover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl)
+                SpotifyCover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl, requestSize = ListArtworkSize)
             } else if (index != null) {
                 Box(Modifier.width(TrackNumberWidth), contentAlignment = Alignment.Center) {
                     SidekitText("${index + 1}", style = SidekitTheme.typography.small, color = colors.surfaceA6)
@@ -326,7 +339,7 @@ fun NowPlayingTile(
                     SidekitIconImage(SidekitIcon.MusicNote2, size = 36.dp)
                 }
             } else {
-                SpotifyCover(current.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = current.artUrl)
+                SpotifyCover(current.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = current.artUrl, requestSize = ListArtworkSize)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 // With a live timer the overline becomes the indicator, so the title keeps the
@@ -985,7 +998,7 @@ fun SpotifyLibraryRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            SpotifyCover(artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = artUrl)
+            SpotifyCover(artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = artUrl, requestSize = ListArtworkSize)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
                 SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)

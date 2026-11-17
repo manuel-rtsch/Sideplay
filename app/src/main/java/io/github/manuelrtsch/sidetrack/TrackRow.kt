@@ -65,13 +65,7 @@ fun TrackRow(
     secondary: String = track.artist,
     onClick: () -> Unit
 ) {
-    val open = rows.focus.isOpen(key)
     val saved = rows.saved(track)
-    val squareFocus = rememberGutterSquareFocus(key, rows.focus)
-    // The saved state of a row that never played is unknown: the gutter is the moment to ask.
-    LaunchedEffect(open) {
-        if (open) rows.onEnsureSaved(track)
-    }
     GutterRow(key, rows.focus, squares = 2, modifier = modifier, content = { gutterVisible ->
         SpotifyMediaRow(
             track,
@@ -89,6 +83,11 @@ fun TrackRow(
             }
         )
     }) {
+        // The squares and their focus state only exist while the gutter is open. A long list
+        // otherwise pays for a focus modifier and a saved-state request on every row it composes.
+        val squareFocus = rememberGutterSquareFocus(key, rows.focus)
+        // The saved state of a row that never played is unknown: the gutter is the moment to ask.
+        LaunchedEffect(Unit) { rows.onEnsureSaved(track) }
         RowActionSquare(
             color = SidekitTheme.colors.successA1,
             icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
@@ -132,7 +131,6 @@ fun GutterMediaRow(
     onQueue: (SpotifyMediaItem) -> Unit,
     onClick: () -> Unit
 ) {
-    val squareFocus = rememberGutterSquareFocus(key, focus)
     GutterRow(key, focus, squares = 1, modifier = modifier, content = { gutterVisible ->
         SpotifyMediaRow(
             item,
@@ -149,6 +147,7 @@ fun GutterMediaRow(
             }
         )
     }) {
+        val squareFocus = rememberGutterSquareFocus(key, focus)
         RowActionSquare(
             color = SidekitTheme.colors.successA1,
             icon = SidekitIcon.QueueMusic,
@@ -177,7 +176,6 @@ fun HistoryRow(
     onRemove: (SpotifyMediaItem) -> Unit,
     onClick: () -> Unit
 ) {
-    val squareFocus = rememberGutterSquareFocus(key, focus)
     GutterRow(key, focus, squares = 2, modifier = modifier, content = { gutterVisible ->
         SpotifyMediaRow(
             item,
@@ -192,6 +190,7 @@ fun HistoryRow(
             }
         )
     }) {
+        val squareFocus = rememberGutterSquareFocus(key, focus)
         RowActionSquare(
             color = SidekitTheme.colors.successA1,
             icon = SidekitIcon.QueueMusic,

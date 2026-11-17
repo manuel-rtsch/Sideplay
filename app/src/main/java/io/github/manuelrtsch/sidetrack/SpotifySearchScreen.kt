@@ -242,7 +242,11 @@ fun SpotifySearchScreen(
                         }
                         rowIndex += 1
                         val base = rowIndex
-                        itemsIndexed(results.tracks, key = { _, track -> "t${track.id}" }) { index, track ->
+                        itemsIndexed(
+                            results.tracks,
+                            key = { _, track -> "t${track.id}" },
+                            contentType = { _, _ -> "track" }
+                        ) { index, track ->
                             TrackRow(
                                 "t${track.id}",
                                 track,
@@ -272,7 +276,11 @@ fun SpotifySearchScreen(
                         }
                         rowIndex += 1
                         val base = rowIndex
-                        itemsIndexed(results.artists, key = { _, artist -> "r${artist.id}" }) { index, artist ->
+                        itemsIndexed(
+                            results.artists,
+                            key = { _, artist -> "r${artist.id}" },
+                            contentType = { _, _ -> "artist" }
+                        ) { index, artist ->
                             SpotifyLibraryRow(
                                 artist.artRes,
                                 artist.name,
@@ -303,7 +311,11 @@ fun SpotifySearchScreen(
                         }
                         rowIndex += 1
                         val base = rowIndex
-                        itemsIndexed(results.albums, key = { _, album -> "a${album.id}" }) { index, album ->
+                        itemsIndexed(
+                            results.albums,
+                            key = { _, album -> "a${album.id}" },
+                            contentType = { _, _ -> "album" }
+                        ) { index, album ->
                             SpotifyLibraryRow(
                                 album.artRes,
                                 album.title,
@@ -334,7 +346,11 @@ fun SpotifySearchScreen(
                         }
                         rowIndex += 1
                         val base = rowIndex
-                        itemsIndexed(results.playlists, key = { _, playlist -> "p${playlist.id}" }) { index, playlist ->
+                        itemsIndexed(
+                            results.playlists,
+                            key = { _, playlist -> "p${playlist.id}" },
+                            contentType = { _, _ -> "playlist" }
+                        ) { index, playlist ->
                             SpotifyLibraryRow(
                                 playlist.artRes,
                                 playlist.name,
@@ -365,7 +381,11 @@ fun SpotifySearchScreen(
                         }
                         rowIndex += 1
                         val base = rowIndex
-                        itemsIndexed(results.shows, key = { _, show -> "s${show.id}" }) { index, show ->
+                        itemsIndexed(
+                            results.shows,
+                            key = { _, show -> "s${show.id}" },
+                            contentType = { _, _ -> "show" }
+                        ) { index, show ->
                             SpotifyLibraryRow(
                                 show.artRes,
                                 show.name,
