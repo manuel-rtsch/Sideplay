@@ -415,15 +415,17 @@ class SidetrackScreenshotTest {
         SidetrackOnboardingContent(
             module = KeypadModule.T9,
             keyboardLabel = KeypadModule.T9.label,
-            keyboardHint = "Press Keyboard to switch modules.",
-            canSwitchKeyboard = true,
-            onSwitchKeyboard = {},
+            canOpenKeyboard = true,
+            onOpenKeyboard = {},
             canManageKeypadAccess = true,
             keypadBackEnabled = false,
-            onEnableKeypadBack = {},
             onAbout = {},
             onDone = {}
         )
+    }
+
+    @Test fun keyboard() = shoot("sidetrack_keyboard") {
+        SidetrackKeyboardScreen(onBack = {})
     }
 
     @Test fun signIn() = shoot("sidetrack_sign_in") {

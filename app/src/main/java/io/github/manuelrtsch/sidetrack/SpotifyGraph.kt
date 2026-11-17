@@ -779,7 +779,16 @@ fun NavGraphBuilder.sidetrackGraph(
             SidetrackAppearanceScreen(onBack = { nav.popBackStack() })
         }
         composable(KEYBOARD) {
-            SidetrackKeyboardScreen(onBack = { nav.popBackStack() })
+            val backLabel = if (nav.previousBackStackEntry?.destination?.route == ONBOARDING) {
+                "Welcome"
+            } else {
+                "Settings"
+            }
+            SidetrackKeyboardScreen(
+                onBack = { nav.popBackStack() },
+                backLabel = backLabel,
+                keypadAccessAvailable = !hostBacked
+            )
         }
         composable(ABOUT) {
             val backLabel = when (nav.previousBackStackEntry?.destination?.route) {
@@ -793,6 +802,7 @@ fun NavGraphBuilder.sidetrackGraph(
             SidetrackOnboardingScreen(
                 hostBacked = hostBacked,
                 onAbout = { nav.navigate(ABOUT) },
+                onKeyboard = { nav.navigate(KEYBOARD) },
                 onDone = {
                     nav.navigate(HOME) {
                         // Replace Welcome (and anything still below it, such as Sign in), so Back

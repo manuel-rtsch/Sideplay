@@ -31,7 +31,12 @@ class SidetrackOnboardingTest {
         var done = false
         compose.setContent {
             SidekitPreviewFrame {
-                SidetrackOnboardingScreen(hostBacked = false, onAbout = {}, onDone = { done = true })
+                SidetrackOnboardingScreen(
+                    hostBacked = false,
+                    onAbout = {},
+                    onKeyboard = {},
+                    onDone = { done = true }
+                )
             }
         }
 
@@ -44,29 +49,75 @@ class SidetrackOnboardingTest {
     }
 
     @Test
-    fun aStandaloneInstallSwitchesTheModuleFromTheKeyboardRow() {
+    fun theWelcomeTeachesTheThreeEssentials() {
         compose.setContent {
             SidekitPreviewFrame {
-                SidetrackOnboardingScreen(hostBacked = false, onAbout = {}, onDone = {})
+                SidetrackOnboardingScreen(
+                    hostBacked = false,
+                    onAbout = {},
+                    onKeyboard = {},
+                    onDone = {}
+                )
             }
         }
 
-        compose.onNodeWithText("Keyboard").performClick()
-
-        compose.onNodeWithText("Mini QWERTY").assertExists()
-        compose.onNodeWithText("Keypad Back key").assertExists()
+        compose.onNodeWithText("Go back a screen.").assertExists()
+        compose.onNodeWithText("Tap for this page’s actions. Hold for the action bar.").assertExists()
+        compose.onNodeWithText("Press ••• for a focused row’s actions.").assertExists()
+        // The full diagram is a reference, not part of the first screen.
+        compose.onNodeWithText("Keypad guide").assertDoesNotExist()
         assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
     }
 
     @Test
-    fun aHostBackedInstallDoesNotOfferTheSwitch() {
+    fun aStandaloneInstallOpensKeyboardFromTheKeyboardRow() {
+        var opened = false
         compose.setContent {
             SidekitPreviewFrame {
-                SidetrackOnboardingScreen(hostBacked = true, onAbout = {}, onDone = {})
+                SidetrackOnboardingScreen(
+                    hostBacked = false,
+                    onAbout = {},
+                    onKeyboard = { opened = true },
+                    onDone = {}
+                )
             }
         }
 
         compose.onNodeWithText("Keyboard").performClick()
+
+        compose.runOnIdle { assertTrue(opened) }
+        compose.onNodeWithText("T9 · Back off ›").assertExists()
+        assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
+    }
+
+    @Test
+    fun theKeyboardGuideStaysClosedUntilAsked() {
+        compose.setContent {
+            SidekitPreviewFrame {
+                SidetrackKeyboardScreen(onBack = {})
+            }
+        }
+
+        compose.onNodeWithText("Keypad guide").assertExists()
+        compose.onNodeWithText("Hide").assertDoesNotExist()
+
+        compose.onNodeWithText("Keypad guide").performClick()
+
+        compose.onNodeWithText("Hide").assertExists()
+    }
+
+    @Test
+    fun aHostBackedInstallDoesNotOfferTheKeyboardPage() {
+        compose.setContent {
+            SidekitPreviewFrame {
+                SidetrackOnboardingScreen(
+                    hostBacked = true,
+                    onAbout = {},
+                    onKeyboard = {},
+                    onDone = {}
+                )
+            }
+        }
 
         compose.onNodeWithText("T9 · Sidekit").assertExists()
         compose.onNodeWithText("Keypad Back key").assertDoesNotExist()

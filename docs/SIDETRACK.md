@@ -81,17 +81,19 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 
 **Behaviour**
 
-- Welcome is the one-time onboarding after sign-in. It names the attached keypad, cycles the
-  module on a standalone install, explains that Options reveals each screen's extra actions, and
-  shows the keypad guide. A standalone install also gets a **Keypad Back key** row: Android's
-  keypad Back action is delivered by the bundled accessibility service, so the row shows whether
-  that service is enabled and opens the system Accessibility settings when tapped. The status
-  refreshes on return. Finishing Welcome writes `onboarding_seen` and
-  `keypad_access_prompted` to the local settings file. An existing signed-in install without
-  `onboarding_seen`, or one that has never been shown the keypad access row, sees Welcome once
-  after updating; declining access does not reopen it on every launch. A Sidekit host keeps
-  ownership of the keyboard choice, so Welcome shows the module without offering a switch and does
-  not ask for Sidetrack's own accessibility service.
+- Welcome is the one-time onboarding after sign-in. It teaches the three keypad habits a listener
+  needs before Home: Back returns, Options tap opens the page's extra actions, Options hold jumps
+  to the action bar, and a focused row's round trigger opens that item's actions. The copy follows
+  the attached module (T9/QWERTY, Sundial or GamePad). A single **Keyboard** row names the module
+  and its Back-key status and opens the Keyboard screen, where the full keypad guide sits behind a
+  collapsed **Keypad guide** row. A standalone install enables Android's keypad Back action through
+  the bundled accessibility service from the Keyboard screen's **Keypad Back key** row; the status
+  refreshes on return. Finishing Welcome writes `onboarding_seen` and `keypad_access_prompted` to
+  the local settings file. An existing signed-in install without `onboarding_seen`, or one that has
+  never been shown the keypad access row, sees Welcome once after updating; declining access does
+  not reopen it on every launch. A Sidekit host keeps ownership of the keyboard choice, so Welcome
+  shows the module without offering a switch and does not ask for Sidetrack's own accessibility
+  service.
 - The keypad Back key is the screen's left action when that action leads back: Library returns
   Home, an album/artist/playlist returns to the screen that opened it, and so on. It does not pop
   Home, Sign in or Welcome, so those still leave the app to the system. A list mode claims the key

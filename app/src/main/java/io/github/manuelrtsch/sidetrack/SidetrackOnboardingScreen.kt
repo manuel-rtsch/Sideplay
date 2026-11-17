@@ -1,27 +1,20 @@
 package io.github.manuelrtsch.sidetrack
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import hrln.interactive.sidekit.design.action.SideAction
-import hrln.interactive.sidekit.design.components.SidekitCard
+import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitText
@@ -30,19 +23,20 @@ import hrln.interactive.sidekit.design.input.KeypadModule
 import hrln.interactive.sidekit.design.input.LocalKeypad
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.input.SharedPreferencesKeypadPreferences
-import hrln.interactive.sidekit.sdk.settings.KeypadGuide
 
 /**
- * The one-time welcome shown after sign-in. It names the attached keypad, lets a standalone
- * install switch modules, and points out the Options key before the listener reaches Home.
+ * The one-time welcome shown after sign-in. It teaches the three keypad actions a new listener
+ * needs before Home, keeps the module and Back-key status compact, and leaves the full key guide
+ * on the Keyboard screen instead of asking the user to explore a diagram first.
  *
- * A Sidekit host owns the keypad choice, so with a host installed the row is informational and
- * the module and input mode keep coming from Sidekit.
+ * A Sidekit host owns the keypad choice, so with a host installed the keyboard row is
+ * informational and the module and input mode keep coming from Sidekit.
  */
 @Composable
 fun SidetrackOnboardingScreen(
     hostBacked: Boolean,
     onAbout: () -> Unit,
+    onKeyboard: () -> Unit,
     onDone: () -> Unit
 ) {
     val context = LocalContext.current.applicationContext
@@ -54,45 +48,27 @@ fun SidetrackOnboardingScreen(
     val custom = keypad?.mapper?.customModule ?: keypadPrefs.customModule()
     var accessRevision by remember { mutableIntStateOf(0) }
     val keypadBackEnabled = remember(accessRevision) { SidetrackKeypadAccess.isEnabled(context) }
-    val accessSettings = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        accessRevision++
-    }
     // Android does not report an accessibility-service change through a callback. Refresh when
-    // the user comes back from the system Accessibility screen.
+    // the user comes back from the Keyboard screen or the system Accessibility screen.
     LifecycleResumeEffect(Unit) {
         accessRevision++
         onPauseOrDispose {}
     }
-    var module by remember(keypad) {
-        mutableStateOf(keypad?.module ?: custom ?: keypadPrefs.module() ?: KeypadModule.T9)
-    }
-    val canSwitch = !hostBacked && custom == null
+    val module = keypad?.module ?: custom ?: keypadPrefs.module() ?: KeypadModule.T9
     val keyboardLabel = when {
         hostBacked -> "${module.label} · Sidekit"
         custom != null -> "${custom.label} · custom"
         else -> module.label
     }
-    val keyboardHint = when {
-        hostBacked -> "Sidekit manages the keyboard and input mode."
-        custom != null -> "A custom key mapping is active. Change it in Settings › Keyboard."
-        else -> "Press Keyboard to switch modules."
-    }
 
     SidetrackOnboardingContent(
         module = module,
         keyboardLabel = keyboardLabel,
-        keyboardHint = keyboardHint,
-        canSwitchKeyboard = canSwitch,
-        onSwitchKeyboard = {
-            val next = KeypadModule.entries[(module.ordinal + 1) % KeypadModule.entries.size]
-            keypad?.useModule(next) ?: keypadPrefs.writeModule(next)
-            module = next
-        },
+        customMapping = custom != null,
+        canOpenKeyboard = !hostBacked,
+        onOpenKeyboard = onKeyboard,
         canManageKeypadAccess = !hostBacked,
         keypadBackEnabled = keypadBackEnabled,
-        onEnableKeypadBack = {
-            runCatching { accessSettings.launch(SidetrackKeypadAccess.settingsIntent()) }
-        },
         onAbout = onAbout,
         onDone = {
             local.markOnboardingSeen()
@@ -109,20 +85,15 @@ fun SidetrackOnboardingScreen(
 internal fun SidetrackOnboardingContent(
     module: KeypadModule,
     keyboardLabel: String,
-    keyboardHint: String,
-    canSwitchKeyboard: Boolean,
-    onSwitchKeyboard: () -> Unit,
+    customMapping: Boolean = false,
+    canOpenKeyboard: Boolean = true,
+    onOpenKeyboard: () -> Unit = {},
     canManageKeypadAccess: Boolean = false,
     keypadBackEnabled: Boolean = false,
-    onEnableKeypadBack: () -> Unit = {},
     onAbout: () -> Unit,
     onDone: () -> Unit
 ) {
     val list = rememberLazyListState()
-    val keyboardFocus = remember { FocusRequester() }
-    LaunchedEffect(canSwitchKeyboard) {
-        if (canSwitchKeyboard) runCatching { keyboardFocus.requestFocus() }
-    }
 
     SidekitScaffold(
         title = "Welcome",
@@ -134,95 +105,68 @@ internal fun SidetrackOnboardingContent(
             SideAction("about", "About Sidetrack", SidekitIcon.BrandAwareness, onClick = onAbout)
         )
     ) { padding ->
-        SidekitList(padding, state = list) {
-            item(key = "intro") {
-                SidekitText(
-                    "Sidetrack is made for the keypad: arrows move, OK or Enter chooses, Back returns.",
-                    Modifier.padding(horizontal = 18.dp),
-                    style = SidekitTheme.typography.caption,
-                    maxLines = Int.MAX_VALUE
-                )
-            }
-            item(key = "keyboard") {
-                SidetrackItem(
-                    "Keyboard",
-                    if (canSwitchKeyboard) Modifier.focusRequester(keyboardFocus) else Modifier,
-                    secondary = keyboardLabel,
-                    secondaryToEnd = true,
-                    onClick = if (canSwitchKeyboard) onSwitchKeyboard else null
-                )
-            }
-            item(key = "keyboardHint") {
-                SidekitText(
-                    keyboardHint,
-                    Modifier.padding(horizontal = 18.dp),
-                    style = SidekitTheme.typography.small,
-                    color = SidekitTheme.colors.surfaceA6,
-                    maxLines = 2
-                )
-            }
-            if (canManageKeypadAccess) {
-                item(key = "keypadBack") {
-                    SidetrackItem(
-                        "Keypad Back key",
-                        secondary = if (keypadBackEnabled) "On" else "Off",
-                        secondaryToEnd = true,
-                        showLinkArrow = true,
-                        showLinkArrowWithSecondary = true,
-                        onClick = onEnableKeypadBack
-                    )
-                }
-                item(key = "keypadBackHint") {
-                    SidekitText(
-                        if (keypadBackEnabled) {
-                            "Enabled. The top-left key goes Back; hold it to open the dialer."
-                        } else {
-                            "Needed for the top-left Back key. Enable Sidetrack keypad in Accessibility; hold Back to open the dialer."
-                        },
-                        Modifier.padding(horizontal = 18.dp),
-                        style = SidekitTheme.typography.small,
-                        color = SidekitTheme.colors.surfaceA6,
-                        maxLines = 3
-                    )
-                }
-            }
-            item(key = "options") {
-                SidekitCard(Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SidekitText(
-                            "Options opens more",
-                            style = SidekitTheme.typography.label,
-                            maxLines = Int.MAX_VALUE
-                        )
-                        SidekitText(
-                            optionsHint(module),
-                            style = SidekitTheme.typography.caption,
-                            maxLines = Int.MAX_VALUE
-                        )
-                    }
-                }
-            }
-            item(key = "guide") {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SectionLabel("Keypad guide")
-                    KeypadGuide(module)
-                }
-            }
-        }
+        SidetrackKeypadWelcomeList(
+            padding = padding,
+            list = list,
+            module = module,
+            keyboardLabel = keyboardLabel,
+            customMapping = customMapping,
+            canOpenKeyboard = canOpenKeyboard,
+            onOpenKeyboard = onOpenKeyboard,
+            canManageKeypadAccess = canManageKeypadAccess,
+            keypadBackEnabled = keypadBackEnabled
+        )
     }
 }
 
-/** The Options key sits differently on each module, so the copy follows the attached one. */
-internal fun optionsHint(module: KeypadModule): String = when (module) {
-    KeypadModule.T9, KeypadModule.Qwerty ->
-        "Press Options (top right) for this screen's extra actions."
-
-    KeypadModule.Sundial ->
-        "Hold Enter (or ←) for this screen's extra actions."
-
-    KeypadModule.GamePad ->
-        "Press the Options button for this screen's extra actions."
+@Composable
+private fun SidetrackKeypadWelcomeList(
+    padding: PaddingValues,
+    list: LazyListState,
+    module: KeypadModule,
+    keyboardLabel: String,
+    customMapping: Boolean,
+    canOpenKeyboard: Boolean,
+    onOpenKeyboard: () -> Unit,
+    canManageKeypadAccess: Boolean,
+    keypadBackEnabled: Boolean
+) {
+    SidekitList(padding, state = list) {
+        item(key = "intro") {
+            SidekitText(
+                "Learn three keypad habits.",
+                Modifier.padding(horizontal = 18.dp),
+                style = SidekitTheme.typography.caption,
+                maxLines = 1
+            )
+        }
+        item(key = "essentials") {
+            KeypadEssentials(module, customMapping = customMapping)
+        }
+        item(key = "tryIt") {
+            SidekitText(
+                "Try it: press Options now — About Sidetrack is there.",
+                Modifier.padding(horizontal = 18.dp),
+                style = SidekitTheme.typography.small,
+                color = SidekitTheme.colors.surfaceA6,
+                maxLines = 2
+            )
+        }
+        item(key = "keyboard") {
+            val backStatus = when {
+                !canManageKeypadAccess -> null
+                keypadBackEnabled -> "Back on"
+                else -> "Back off"
+            }
+            SidekitCompactItem(
+                "Keyboard",
+                secondary = if (canOpenKeyboard) {
+                    listOfNotNull(keyboardLabel, backStatus).joinToString(" · ") + " ›"
+                } else {
+                    keyboardLabel
+                },
+                onClick = if (canOpenKeyboard) onOpenKeyboard else null
+            )
+        }
+    }
 }

@@ -55,9 +55,10 @@ size with the compact layout enabled, not hand-taken photos.
    if you want the full launcher and app suite. Sidetrack works without it too.
 2. Install the Sidetrack APK.
 3. Open Sidetrack and sign in with your Spotify account.
-4. On the one-time **Welcome** screen, check the selected keypad, enable **Keypad Back key** if you
-   want the top-left key to go Back, and press **Get started**. Press **Options** to see the extra
-   actions it explains.
+4. On the one-time **Welcome** screen, learn the three keypad habits: **Back** returns,
+   **Options** opens the page's extra actions, and holding **Options** jumps to the action bar.
+   Open **Keyboard** to switch modules, enable **Keypad Back key** if you want the top-left key to
+   go Back, or show the full keypad guide, then press **Get started**.
 5. Pick something from your library, or press **Search** and start typing on the keypad.
 6. Press **OK** / **Enter** to play. A now-playing confirmation appears in the action bar for a
    few seconds; press it to open Now Playing, or press its X to dismiss it. Pressing **OK** /
