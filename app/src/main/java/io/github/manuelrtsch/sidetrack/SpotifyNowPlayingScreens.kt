@@ -116,7 +116,7 @@ fun SpotifyNowPlayingScreen(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     onSave: () -> Unit,
-    onQueue: () -> Unit,
+    onOpenQueue: () -> Unit,
     onRadio: () -> Unit,
     onAlbum: () -> Unit,
     onShow: () -> Unit,
@@ -157,7 +157,7 @@ fun SpotifyNowPlayingScreen(
         emptyList()
     } else {
         buildList {
-            add(SideAction.square("queue", SidekitIcon.QueueMusic, "Queue", onQueue))
+            add(SideAction.square("queue", SidekitIcon.QueueMusic, "Open queue", onOpenQueue))
             // Three options at most: the bar is icon-only and a fourth square crowds it. The
             // backdrop layout has no cover tile to focus, so its middle square is the album
             // rather than Song radio; the keypad still reaches the album, and the bar stays at

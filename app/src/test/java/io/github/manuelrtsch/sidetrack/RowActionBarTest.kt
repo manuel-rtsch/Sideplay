@@ -41,9 +41,9 @@ class RowActionBarTest {
         title = "Row",
         actions = listOf(
             RowAction(
-                key = "queue",
-                label = "Queue",
-                icon = SidekitIcon.QueueMusic,
+                key = "addToQueue",
+                label = "Add to queue",
+                icon = SidekitIcon.PlaylistAdd,
                 onClick = {}
             )
         )

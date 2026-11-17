@@ -46,8 +46,8 @@ fun SidetrackHomeScreen(
     onSearch: () -> Unit,
     onSettings: () -> Unit,
     onPlay: (SpotifyMediaItem) -> Unit,
-    onQueue: () -> Unit,
-    onQueueTrack: (SpotifyMediaItem) -> Unit,
+    onOpenQueue: () -> Unit,
+    onAddToQueue: (SpotifyMediaItem) -> Unit,
     onRemoveHistory: (SpotifyMediaItem) -> (() -> Unit)?,
     onHistory: () -> Unit,
     onDismissNotice: () -> Unit,
@@ -61,7 +61,7 @@ fun SidetrackHomeScreen(
     val rowActions = rememberRowActionBarState()
     val baseActions = remember {
         listOf(
-            SideAction("queue", "Queue", SidekitIcon.QueueMusic, onClick = onQueue),
+            SideAction("queue", "Queue", SidekitIcon.QueueMusic, contentDescription = "Open queue", onClick = onOpenQueue),
             SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch)
         )
     }
@@ -108,7 +108,7 @@ fun SidetrackHomeScreen(
                         recentGutters,
                         rowActions,
                         Modifier.listFade(listState, index + 2),
-                        onQueue = onQueueTrack,
+                        onAddToQueue = onAddToQueue,
                         onRemove = onRemoveHistory,
                         onClick = { onPlay(item) }
                     )
@@ -142,7 +142,7 @@ fun LibraryScreen(
     onSearch: () -> Unit,
     onSeeMore: (LibraryFilter) -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
-    onQueue: (SpotifyTrack) -> Unit,
+    onAddToQueue: (SpotifyTrack) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
     onArtist: (SpotifyArtist) -> Unit,
@@ -158,7 +158,7 @@ fun LibraryScreen(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onQueue
+        onAddToQueue
     )
     val baseActions = remember {
         listOf(spotifyBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
@@ -267,7 +267,7 @@ fun LibraryCategoryScreen(
     chrome: ChromeUiState,
     onBack: () -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
-    onQueue: (SpotifyTrack) -> Unit,
+    onAddToQueue: (SpotifyTrack) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
     onArtist: (SpotifyArtist) -> Unit,
@@ -284,7 +284,7 @@ fun LibraryCategoryScreen(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onQueue
+        onAddToQueue
     )
     val baseActions = remember { listOf(spotifyBack("Library", onBack).first()) }
     val actions = rowActionBarActions(
@@ -401,8 +401,8 @@ fun CollectionScreen(
     onItem: (Int) -> Unit,
     onSave: () -> Unit,
     onArtist: () -> Unit,
-    onQueue: () -> Unit,
-    onQueueItem: (SpotifyMediaItem) -> Unit,
+    onAddToQueue: () -> Unit,
+    onAddItemToQueue: (SpotifyMediaItem) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
     onNowPlaying: () -> Unit,
@@ -419,7 +419,7 @@ fun CollectionScreen(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onQueueItem
+        onAddItemToQueue
     )
     val savedCollection = "${collection.type.route}:${collection.id}" in saved.savedCollectionKeys
     val back = remember { spotifyBack("Back", onBack).first() }
@@ -437,7 +437,7 @@ fun CollectionScreen(
     // metadata line below it, so collections keep the same play / image / save-or-follow layout
     // without a third Options entry.
     val options = buildList {
-        collection.items.firstOrNull()?.let { add(SideAction("queue", "Add to queue", SidekitIcon.QueueMusic, onClick = onQueue)) }
+        collection.items.firstOrNull()?.let { add(SideAction("addToQueue", "Add to queue", SidekitIcon.PlaylistAdd, onClick = onAddToQueue)) }
         add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     }
     val artist = if (collection.type == SpotifyCollectionType.Album) {
@@ -536,7 +536,7 @@ fun CollectionScreen(
                         index = if (showTrackArt) null else index,
                         showArt = showTrackArt,
                         secondary = if (item is SpotifyEpisode) formatPublishedDate(item.published) else item.creator,
-                        onQueue = onQueueItem,
+                        onAddToQueue = onAddItemToQueue,
                         onClick = { onItem(index) }
                     )
                 }
@@ -564,7 +564,7 @@ fun ArtistScreen(
     onPlay: () -> Unit,
     onPlayPause: () -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
-    onQueue: (SpotifyTrack) -> Unit,
+    onAddToQueue: (SpotifyTrack) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
@@ -585,7 +585,7 @@ fun ArtistScreen(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onQueue
+        onAddToQueue
     )
     val back = remember { spotifyBack("Back", onBack).first() }
     val actions = rowActionBarActions(

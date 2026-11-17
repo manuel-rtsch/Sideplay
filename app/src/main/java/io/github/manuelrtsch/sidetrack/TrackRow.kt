@@ -37,7 +37,7 @@ class TrackRows(
     val savedIds: Set<String>,
     val onSave: (SpotifyTrack) -> Unit,
     val onEnsureSaved: (SpotifyTrack) -> Unit,
-    val onQueue: (SpotifyTrack) -> Unit
+    val onAddToQueue: (SpotifyTrack) -> Unit
 ) {
     fun saved(track: SpotifyTrack): Boolean = track.id in savedIds
 }
@@ -48,12 +48,12 @@ fun rememberTrackRows(
     saved: SavedUiState,
     onSave: (SpotifyTrack) -> Unit,
     onEnsureSaved: (SpotifyTrack) -> Unit,
-    onQueue: (SpotifyTrack) -> Unit
+    onAddToQueue: (SpotifyTrack) -> Unit
 ): TrackRows {
     val focus = remember { TrackRowFocusState() }
     val bar = rememberRowActionBarState()
     focus.settle()
-    return TrackRows(focus, bar, saved.savedTrackIds, onSave, onEnsureSaved, onQueue)
+    return TrackRows(focus, bar, saved.savedTrackIds, onSave, onEnsureSaved, onAddToQueue)
 }
 
 /**
@@ -146,12 +146,12 @@ fun TrackRow(
                                 }
                             ),
                             RowAction(
-                                key = "queue",
-                                label = "Queue",
+                                key = "addToQueue",
+                                label = "Add to queue",
                                 contentDescription = "Add ${track.title} to queue",
-                                icon = SidekitIcon.QueueMusic,
+                                icon = SidekitIcon.PlaylistAdd,
                                 tone = ActionTone.Primary,
-                                onClick = { rows.onQueue(track) }
+                                onClick = { rows.onAddToQueue(track) }
                             )
                         )
                     )
@@ -174,7 +174,7 @@ fun GutterMediaRow(
     index: Int? = null,
     showArt: Boolean = true,
     secondary: String = item.creator,
-    onQueue: (SpotifyMediaItem) -> Unit,
+    onAddToQueue: (SpotifyMediaItem) -> Unit,
     onClick: () -> Unit
 ) {
     GutterRow(key, focus, squares = 1, modifier = modifier, content = { gutterVisible ->
@@ -196,12 +196,12 @@ fun GutterMediaRow(
         val squareFocus = rememberGutterSquareFocus(key, focus)
         RowActionSquare(
             color = SidekitTheme.colors.successA1,
-            icon = SidekitIcon.QueueMusic,
+            icon = SidekitIcon.PlaylistAdd,
             label = "Add ${item.title} to queue",
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
-                onQueue(item)
+                onAddToQueue(item)
             }
         )
     }
@@ -220,7 +220,7 @@ fun HistoryRow(
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
     secondary: String = item.creator,
-    onQueue: (SpotifyMediaItem) -> Unit,
+    onAddToQueue: (SpotifyMediaItem) -> Unit,
     onRemove: (SpotifyMediaItem) -> (() -> Unit)?,
     onClick: () -> Unit
 ) {
@@ -266,12 +266,12 @@ fun HistoryRow(
                         focusRequester = rowFocus,
                         actions = listOf(
                             RowAction(
-                                key = "queue",
-                                label = "Queue",
+                                key = "addToQueue",
+                                label = "Add to queue",
                                 contentDescription = "Add ${item.title} to queue",
-                                icon = SidekitIcon.QueueMusic,
+                                icon = SidekitIcon.PlaylistAdd,
                                 tone = ActionTone.Primary,
-                                onClick = { onQueue(item) }
+                                onClick = { onAddToQueue(item) }
                             ),
                             RowAction(
                                 key = "remove",

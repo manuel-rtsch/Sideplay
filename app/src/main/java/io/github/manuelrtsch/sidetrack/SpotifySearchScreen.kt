@@ -43,7 +43,7 @@ fun SpotifySearchScreen(
     onClear: () -> Unit,
     onToggleScope: (SearchScope) -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
-    onQueue: (SpotifyTrack) -> Unit,
+    onAddToQueue: (SpotifyTrack) -> Unit,
     onArtist: (SpotifyArtist) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
@@ -62,7 +62,7 @@ fun SpotifySearchScreen(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onQueue
+        onAddToQueue
     )
     val baseActions = remember(search.query) {
         buildList {

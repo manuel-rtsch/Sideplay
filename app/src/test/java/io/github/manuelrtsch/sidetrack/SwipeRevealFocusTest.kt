@@ -45,7 +45,7 @@ class SwipeRevealFocusTest {
                     modifier = Modifier.width(320.dp),
                     action = SwipeAction(
                         label = "Add to queue",
-                        icon = SidekitIcon.QueueMusic,
+                        icon = SidekitIcon.PlaylistAdd,
                         color = SidekitTheme.colors.successA1,
                         onClick = {}
                     )

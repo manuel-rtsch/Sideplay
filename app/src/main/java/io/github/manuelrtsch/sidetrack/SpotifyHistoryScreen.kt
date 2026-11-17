@@ -22,7 +22,7 @@ fun HistoryScreen(
     chrome: ChromeUiState,
     onBack: () -> Unit,
     onPlay: (SpotifyMediaItem) -> Unit,
-    onQueue: (SpotifyMediaItem) -> Unit,
+    onAddToQueue: (SpotifyMediaItem) -> Unit,
     onRemove: (SpotifyMediaItem) -> (() -> Unit)?,
     onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit,
@@ -59,7 +59,7 @@ fun HistoryScreen(
                     gutters,
                     rowActions,
                     Modifier.listFade(listState, index),
-                    onQueue = onQueue,
+                    onAddToQueue = onAddToQueue,
                     onRemove = onRemove,
                     onClick = { onPlay(item) }
                 )

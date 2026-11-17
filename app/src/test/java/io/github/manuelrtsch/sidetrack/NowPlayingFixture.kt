@@ -33,7 +33,7 @@ internal fun NowPlayingUnderTest(
         onShuffle = {},
         onRepeat = {},
         onSave = {},
-        onQueue = {},
+        onOpenQueue = {},
         onRadio = {},
         onAlbum = onAlbum,
         onShow = {},

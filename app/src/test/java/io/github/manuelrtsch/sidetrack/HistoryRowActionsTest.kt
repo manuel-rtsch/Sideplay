@@ -35,7 +35,7 @@ class HistoryRowActionsTest {
                         ChromeUiState(),
                         onBack = {},
                         onPlay = { onPlay() },
-                        onQueue = {},
+                        onAddToQueue = {},
                         onRemove = { null },
                         onNowPlaying = {},
                         onDismissNotice = {},

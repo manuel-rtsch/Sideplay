@@ -62,8 +62,8 @@ fun ShowScreen(
     onPlayPause: () -> Unit,
     onItem: (Int) -> Unit,
     onSave: () -> Unit,
-    onQueue: () -> Unit,
-    onQueueItem: (SpotifyMediaItem) -> Unit,
+    onAddLatestToQueue: () -> Unit,
+    onAddItemToQueue: (SpotifyMediaItem) -> Unit,
     onNowPlaying: () -> Unit,
     onArtwork: () -> Unit,
     onLoadMore: () -> Unit,
@@ -90,7 +90,7 @@ fun ShowScreen(
     val showNotes = remember(collection.description) { plainPodcastText(collection.description) }
     val options = buildList {
         collection.items.firstOrNull()?.let {
-            add(SideAction("queue", "Add latest to queue", SidekitIcon.QueueMusic, onClick = onQueue))
+            add(SideAction("addToQueue", "Add latest to queue", SidekitIcon.PlaylistAdd, onClick = onAddLatestToQueue))
         }
         if (showNotes.isNotBlank()) {
             add(SideAction("notes", "Show notes", SidekitIcon.Docs, onClick = onShowNotes))
@@ -199,7 +199,7 @@ fun ShowScreen(
                         gutters,
                         rowActions,
                         modifier,
-                        onQueue = onQueueItem,
+                        onAddToQueue = onAddItemToQueue,
                         onNotes = { onEpisodeNotes(item) },
                         onClick = { onItem(index) }
                     )
@@ -239,7 +239,7 @@ private fun EpisodeRow(
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
-    onQueue: (SpotifyMediaItem) -> Unit,
+    onAddToQueue: (SpotifyMediaItem) -> Unit,
     onNotes: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -352,12 +352,12 @@ private fun EpisodeRow(
                         actions = buildList {
                             add(
                                 RowAction(
-                                    key = "queue",
-                                    label = "Queue",
+                                    key = "addToQueue",
+                                    label = "Add to queue",
                                     contentDescription = "Add ${episode.title} to queue",
-                                    icon = SidekitIcon.QueueMusic,
+                                    icon = SidekitIcon.PlaylistAdd,
                                     tone = ActionTone.Primary,
-                                    onClick = { onQueue(episode) }
+                                    onClick = { onAddToQueue(episode) }
                                 )
                             )
                             if (notes.isNotBlank()) {

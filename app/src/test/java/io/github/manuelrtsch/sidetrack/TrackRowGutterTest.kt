@@ -60,7 +60,7 @@ class TrackRowGutterTest {
                     SavedUiState(savedTrackIds = if (saved) setOf(track.id) else emptySet()),
                     onSave = { onSave() },
                     onEnsureSaved = {},
-                    onQueue = {}
+                    onAddToQueue = {}
                 )
                 rows = state
                 LazyColumn {

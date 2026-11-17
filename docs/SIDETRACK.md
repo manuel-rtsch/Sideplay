@@ -229,6 +229,12 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   left to open their actions; the queue shows the current item and what is next (or just Up next
   before playback starts), while the full listening history lives on the History screen. Library
   uses the standard single-line header; Settings has one sign-out action in the bar.
+- Queue has two meanings, and they never share a glyph, a label, or a key. Opening the queue is a
+  destination: the bare QueueMusic glyph, the noun **Queue**, the key `queue`, and the callback
+  `onOpenQueue`, in the screen's action bar or Options. Adding an item is a verb: the PlaylistAdd
+  glyph, the words **Add to queue** (or **Add latest to queue**), the key `addToQueue`, and the
+  callback `onAddToQueue`, on the row or the item's own screen. A queue button's scope is therefore
+  readable from its icon, its words, and its name before it is pressed.
 - The queue has one primary action per row. Enter or a tap on an upcoming track plays it now; the
   current row opens Now Playing. The focused row reveals its actions trigger after the focus
   settles, so holding Up/Down does not flash a button on every row. A touch swipe and the keypad
