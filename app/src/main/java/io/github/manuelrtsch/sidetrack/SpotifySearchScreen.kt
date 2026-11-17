@@ -35,7 +35,9 @@ import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 @Composable
 fun SpotifySearchScreen(
-    state: SpotifyUiState,
+    search: SearchUiState,
+    saved: SavedUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onQuery: (String) -> Unit,
     onClear: () -> Unit,
@@ -55,41 +57,38 @@ fun SpotifySearchScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
-    val results = state.searchResults
+    val results = search.searchResults
     val rows = rememberTrackRows(
-        state,
+        saved,
         onSaveTrack,
         onEnsureSavedTrack,
         onQueue
     )
-    val actions = spotifyActions(
-        state,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
+    val baseActions = remember(search.query) {
         buildList {
             add(spotifyBack("Back", onBack).first())
-            if (state.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
+            if (search.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
         }
-    )
+    }
+    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     // The right side of the "Search in" row must stay on one line. The only selection that
     // overflows is four of five scopes, so name the one that is left out instead of listing four.
-    val scopeSummary = when (state.searchScopes.size) {
+    val scopeSummary = when (search.searchScopes.size) {
         SearchScope.entries.size -> "Everything"
 
         0 -> "Nothing"
 
-        1 -> SearchScope.entries.first { it in state.searchScopes }.label
+        1 -> SearchScope.entries.first { it in search.searchScopes }.label
 
         SearchScope.entries.size - 1 ->
-            "All but " + SearchScope.entries.first { it !in state.searchScopes }.label
+            "All but " + SearchScope.entries.first { it !in search.searchScopes }.label
 
-        else -> SearchScope.entries.filter { it in state.searchScopes }.joinToString(", ") { it.label }
+        else -> SearchScope.entries.filter { it in search.searchScopes }.joinToString(", ") { it.label }
     }
     val searchFocus = remember { FocusRequester() }
     val scopesFocus = remember { FocusRequester() }
     val firstResultFocus = remember { FocusRequester() }
-    val firstResultScope = if (state.query.trim().length < 2 || results.isEmpty) {
+    val firstResultScope = if (search.query.trim().length < 2 || results.isEmpty) {
         null
     } else {
         when {
@@ -109,7 +108,7 @@ fun SpotifySearchScreen(
         results.tracks.isNotEmpty() -> SearchScope.Tracks
         else -> null
     }
-    val lastResultIsSeeMore = lastResultScope != null && lastResultScope in state.searchHasMore
+    val lastResultIsSeeMore = lastResultScope != null && lastResultScope in search.searchHasMore
     // Enter in the search field hands the keypad to the results. Up walks back out: first result
     // to "Search in", then "Search in" to the field, so typing and browsing never fight over keys.
     // Preview handlers run before the focused row's own D-pad handling, which would otherwise
@@ -151,7 +150,7 @@ fun SpotifySearchScreen(
                     .padding(horizontal = SidekitTheme.spacing.itemPadding).padding(top = SidekitTheme.spacing.headerPaddingTop)
             ) {
                 SidekitTextField(
-                    state.query,
+                    search.query,
                     onQuery,
                     Modifier.fillMaxWidth().semantics { contentDescription = "Search Spotify" },
                     textStyle = SidekitTheme.typography.title,
@@ -168,11 +167,11 @@ fun SpotifySearchScreen(
         options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
-        if (state.query.trim().length >= 2 && !state.searchPending && state.searchError != null && results.isEmpty) {
+        if (search.query.trim().length >= 2 && !search.searchPending && search.searchError != null && results.isEmpty) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 SpotifyStatusScreen(
                     "Couldn't search Spotify",
-                    hint = state.searchError,
+                    hint = search.searchError,
                     actionLabel = "Try again",
                     onAction = onRetry
                 )
@@ -194,7 +193,7 @@ fun SpotifySearchScreen(
             }
             rowIndex += 1
             when {
-                state.query.isBlank() -> {
+                search.query.isBlank() -> {
                     val index = rowIndex
                     item(key = "idle") {
                         EmptyMessage(
@@ -204,7 +203,7 @@ fun SpotifySearchScreen(
                     }
                 }
 
-                state.query.trim().length < 2 -> {
+                search.query.trim().length < 2 -> {
                     val index = rowIndex
                     item(key = "short") {
                         EmptyMessage(
@@ -214,7 +213,7 @@ fun SpotifySearchScreen(
                     }
                 }
 
-                state.searchPending && results.isEmpty -> {
+                search.searchPending && results.isEmpty -> {
                     val index = rowIndex
                     item(key = "loading") {
                         EmptyMessage(
@@ -229,7 +228,7 @@ fun SpotifySearchScreen(
                     val index = rowIndex
                     item(key = "noResults") {
                         EmptyMessage(
-                            "No results for \"${state.query.trim()}\"",
+                            "No results for \"${search.query.trim()}\"",
                             Modifier.listFade(listState, index),
                             hint = "Try another spelling or keyword"
                         )
@@ -253,12 +252,12 @@ fun SpotifySearchScreen(
                             ) { onTrack(track) }
                         }
                         rowIndex += results.tracks.size
-                        if (SearchScope.Tracks in state.searchHasMore) {
+                        if (SearchScope.Tracks in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreTracks") {
                                 SeeMoreRow(
                                     "See more tracks",
-                                    SearchScope.Tracks in state.searchMorePending,
+                                    SearchScope.Tracks in search.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Tracks) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Tracks && lastResultIsSeeMore) lastRowModifier else Modifier)
@@ -284,12 +283,12 @@ fun SpotifySearchScreen(
                             ) { onArtist(artist) }
                         }
                         rowIndex += results.artists.size
-                        if (SearchScope.Artists in state.searchHasMore) {
+                        if (SearchScope.Artists in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreArtists") {
                                 SeeMoreRow(
                                     "See more artists",
-                                    SearchScope.Artists in state.searchMorePending,
+                                    SearchScope.Artists in search.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Artists) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Artists && lastResultIsSeeMore) lastRowModifier else Modifier)
@@ -315,12 +314,12 @@ fun SpotifySearchScreen(
                             ) { onAlbum(album) }
                         }
                         rowIndex += results.albums.size
-                        if (SearchScope.Albums in state.searchHasMore) {
+                        if (SearchScope.Albums in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreAlbums") {
                                 SeeMoreRow(
                                     "See more albums",
-                                    SearchScope.Albums in state.searchMorePending,
+                                    SearchScope.Albums in search.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Albums) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Albums && lastResultIsSeeMore) lastRowModifier else Modifier)
@@ -346,12 +345,12 @@ fun SpotifySearchScreen(
                             ) { onPlaylist(playlist) }
                         }
                         rowIndex += results.playlists.size
-                        if (SearchScope.Playlists in state.searchHasMore) {
+                        if (SearchScope.Playlists in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "morePlaylists") {
                                 SeeMoreRow(
                                     "See more playlists",
-                                    SearchScope.Playlists in state.searchMorePending,
+                                    SearchScope.Playlists in search.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Playlists) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Playlists && lastResultIsSeeMore) lastRowModifier else Modifier)
@@ -377,12 +376,12 @@ fun SpotifySearchScreen(
                             ) { onShow(show) }
                         }
                         rowIndex += results.shows.size
-                        if (SearchScope.Shows in state.searchHasMore) {
+                        if (SearchScope.Shows in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreShows") {
                                 SeeMoreRow(
                                     "See more shows",
-                                    SearchScope.Shows in state.searchMorePending,
+                                    SearchScope.Shows in search.searchMorePending,
                                     onClick = { onLoadMore(SearchScope.Shows) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Shows && lastResultIsSeeMore) lastRowModifier else Modifier)
@@ -399,20 +398,16 @@ fun SpotifySearchScreen(
 /** Lets the user choose which search categories are queried without hiding them in Options. */
 @Composable
 fun SearchScopesScreen(
-    state: SpotifyUiState,
+    search: SearchUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onToggleScope: (SearchScope) -> Unit,
     onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
-    val actions = spotifyActions(
-        state,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
-        listOf(spotifyBack("Search", onBack).first())
-    )
+    val baseActions = remember { listOf(spotifyBack("Search", onBack).first()) }
+    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     SidekitScaffold(
         title = "Search in",
         actions = actions,
@@ -425,7 +420,7 @@ fun SearchScopesScreen(
             }
             SearchScope.entries.forEachIndexed { index, scope ->
                 item(key = scope.name) {
-                    val included = scope in state.searchScopes
+                    val included = scope in search.searchScopes
                     SidetrackItem(
                         scope.label,
                         modifier = Modifier.listFade(listState, index + 1),

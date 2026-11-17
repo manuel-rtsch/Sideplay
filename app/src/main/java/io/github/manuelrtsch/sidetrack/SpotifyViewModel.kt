@@ -20,11 +20,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -155,6 +158,46 @@ class SpotifyViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(SpotifyUiState(signedIn = session?.signedIn?.value ?: false))
     val state: StateFlow<SpotifyUiState> = _state.asStateFlow()
+
+    /**
+     * Focused slices of [state]. A screen collects only the slices it reads, so a change to an
+     * unrelated slice (a search keystroke, a save toggle, a cache-size refresh) does not
+     * recompose it. Each slice is distinct-until-changed, so equal values do not emit.
+     */
+    val playbackState: StateFlow<PlaybackUiState> = state
+        .map { it.playback }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.playback)
+
+    val libraryState: StateFlow<LibraryUiState> = state
+        .map { it.library }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.library)
+
+    val searchState: StateFlow<SearchUiState> = state
+        .map { it.search }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.search)
+
+    val accountState: StateFlow<AccountUiState> = state
+        .map { it.account }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.account)
+
+    val savedState: StateFlow<SavedUiState> = state
+        .map { it.saved }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.saved)
+
+    val chromeState: StateFlow<ChromeUiState> = state
+        .map { it.chrome }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.chrome)
+
+    val radioState: StateFlow<RadioUiState> = state
+        .map { it.radioSlice }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.radioSlice)
 
     /**
      * Playback position for the seek bar. Kept on its own flow so the position tick does

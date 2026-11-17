@@ -3,6 +3,7 @@ package io.github.manuelrtsch.sidetrack
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -17,7 +18,8 @@ import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
  */
 @Composable
 fun HistoryScreen(
-    state: SpotifyUiState,
+    playback: PlaybackUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onPlay: (SpotifyMediaItem) -> Unit,
     onQueue: (SpotifyMediaItem) -> Unit,
@@ -26,13 +28,8 @@ fun HistoryScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
-    val actions = spotifyActions(
-        state,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
-        listOf(spotifyBack("Home", onBack).first())
-    )
+    val baseActions = remember { listOf(spotifyBack("Home", onBack).first()) }
+    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     SidekitScaffold(
         title = "History",
         actions = actions,
@@ -44,7 +41,7 @@ fun HistoryScreen(
         SidekitList(padding, state = listState) {
             // History is local-only and has no empty state: with no entries the list is simply blank.
             // A track can be played again, so the id alone repeats; index keeps keys unique.
-            itemsIndexed(state.recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
+            itemsIndexed(playback.recent, key = { index, item -> "$index:${item.id}" }) { index, item ->
                 val key = "$index:${item.id}"
                 HistoryRow(
                     key,

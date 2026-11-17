@@ -38,7 +38,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 fun SidetrackHomeScreen(
-    state: SpotifyUiState,
+    playback: PlaybackUiState,
+    chrome: ChromeUiState,
     sleepTimer: StateFlow<SleepTimerState>,
     onNowPlaying: () -> Unit,
     onLibrary: () -> Unit,
@@ -54,19 +55,16 @@ fun SidetrackHomeScreen(
 ) {
     // The slice is remembered so an unrelated state change (notice, save, etc.) does not give the
     // recent rows a new list instance and force them to rebuild.
-    val recent = remember(state.recent) { state.recent.take(RECENT_PREVIEW_SIZE) }
-    val hasMoreHistory = state.recent.size > RECENT_PREVIEW_SIZE
+    val recent = remember(playback.recent) { playback.recent.take(RECENT_PREVIEW_SIZE) }
+    val hasMoreHistory = playback.recent.size > RECENT_PREVIEW_SIZE
     val recentGutters = rememberRowGutterState()
-    val bar = spotifyActions(
-        state,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
+    val baseActions = remember {
         listOf(
             SideAction("queue", "Queue", SidekitIcon.QueueMusic, onClick = onQueue),
             SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch)
         )
-    )
+    }
+    val bar = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     SidekitScaffold(
         title = "Sidetrack",
         actions = bar,
@@ -78,7 +76,7 @@ fun SidetrackHomeScreen(
         SidekitList(padding, state = listState) {
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, 0)) {
-                    NowPlayingTile(state.current, sleepTimer, onNowPlaying, Modifier.weight(1f))
+                    NowPlayingTile(playback.current, sleepTimer, onNowPlaying, Modifier.weight(1f))
                     LibraryTile(onLibrary, Modifier.width(SidekitTheme.spacing.itemHeight))
                 }
             }
@@ -126,7 +124,9 @@ fun SidetrackHomeScreen(
  */
 @Composable
 fun LibraryScreen(
-    state: SpotifyUiState,
+    library: LibraryUiState,
+    saved: SavedUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onSeeMore: (LibraryFilter) -> Unit,
@@ -144,30 +144,27 @@ fun LibraryScreen(
     onDismissNowPlaying: () -> Unit
 ) {
     val rows = rememberTrackRows(
-        state,
+        saved,
         onSaveTrack,
         onEnsureSavedTrack,
         onQueue
     )
-    val actions = spotifyActions(
-        state,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
+    val baseActions = remember {
         listOf(spotifyBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
-    )
+    }
+    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     SidekitScaffold(
         title = "Library",
         actions = actions,
         options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     ) { padding ->
         val listState = rememberLazyListState()
-        val sections = state.librarySections
+        val sections = library.librarySections
         val isEmpty = sections.values.all { it.isEmpty() }
         val firstFilter = LibraryFilter.entries.firstOrNull { sections[it].orEmpty().isNotEmpty() }
         val first = remember { FocusRequester() }
         LaunchedEffect(firstFilter) { runCatching { first.requestFocus() } }
-        if (isEmpty && state.librarySectionsLoading) {
+        if (isEmpty && library.librarySectionsLoading) {
             SpotifyLoadingScreen(
                 Modifier.padding(padding),
                 title = "Loading your library…",
@@ -175,11 +172,11 @@ fun LibraryScreen(
             )
             return@SidekitScaffold
         }
-        if (isEmpty && state.librarySectionsError != null) {
+        if (isEmpty && library.librarySectionsError != null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 SpotifyStatusScreen(
                     "Couldn't load your library",
-                    hint = state.librarySectionsError,
+                    hint = library.librarySectionsError,
                     actionLabel = "Try again",
                     onAction = onRetry
                 )
@@ -224,7 +221,7 @@ fun LibraryScreen(
                     )
                 }
                 rowIndex += items.size
-                if (filter in state.librarySectionHasMore) {
+                if (filter in library.librarySectionHasMore) {
                     val moreIndex = rowIndex
                     item(key = "more.${filter.name}") {
                         SeeMoreRow(
@@ -245,7 +242,9 @@ fun LibraryScreen(
 @Composable
 fun LibraryCategoryScreen(
     filter: LibraryFilter,
-    state: SpotifyUiState,
+    library: LibraryUiState,
+    saved: SavedUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
     onQueue: (SpotifyTrack) -> Unit,
@@ -262,18 +261,13 @@ fun LibraryCategoryScreen(
     onDismissNowPlaying: () -> Unit
 ) {
     val rows = rememberTrackRows(
-        state,
+        saved,
         onSaveTrack,
         onEnsureSavedTrack,
         onQueue
     )
-    val actions = spotifyActions(
-        state,
-        onDismissNotice,
-        onNowPlaying,
-        onDismissNowPlaying,
-        listOf(spotifyBack("Library", onBack).first())
-    )
+    val baseActions = remember { listOf(spotifyBack("Library", onBack).first()) }
+    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     SidekitScaffold(
         title = filter.label,
         actions = actions,
@@ -282,8 +276,8 @@ fun LibraryCategoryScreen(
         val listState = rememberLazyListState()
         val first = remember { FocusRequester() }
         LaunchedEffect(filter) { runCatching { first.requestFocus() } }
-        val items = state.libraryItems
-        if (items.isEmpty() && state.libraryLoading) {
+        val items = library.libraryItems
+        if (items.isEmpty() && library.libraryLoading) {
             SpotifyLoadingScreen(
                 Modifier.padding(padding),
                 title = "Loading ${filter.label.lowercase()}…",
@@ -291,11 +285,11 @@ fun LibraryCategoryScreen(
             )
             return@SidekitScaffold
         }
-        if (items.isEmpty() && state.libraryError != null) {
+        if (items.isEmpty() && library.libraryError != null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 SpotifyStatusScreen(
                     "Couldn't load ${filter.label.lowercase()}",
-                    hint = state.libraryError,
+                    hint = library.libraryError,
                     actionLabel = "Try again",
                     onAction = onRetry
                 )
@@ -322,10 +316,10 @@ fun LibraryCategoryScreen(
                 LibraryRow(item, modifier, rows, onTrack, onPlaylist, onAlbum, onArtist, onShow)
             }
             rowIndex += items.size
-            if (state.libraryHasMore) {
+            if (library.libraryHasMore) {
                 val moreIndex = rowIndex
                 item(key = "more") {
-                    PagingFooter(state.libraryMorePending, onLoadMore, Modifier.listFade(listState, moreIndex))
+                    PagingFooter(library.libraryMorePending, onLoadMore, Modifier.listFade(listState, moreIndex))
                 }
             }
         }
@@ -369,7 +363,9 @@ private fun LibraryRow(
 @Composable
 fun CollectionScreen(
     collection: SpotifyCollection,
-    state: SpotifyUiState,
+    saved: SavedUiState,
+    playback: PlaybackUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onPlay: () -> Unit,
     onPlayPause: () -> Unit,
@@ -391,18 +387,19 @@ fun CollectionScreen(
 ) {
     val colors = SidekitTheme.colors
     val rows = rememberTrackRows(
-        state,
+        saved,
         onSaveTrack,
         onEnsureSavedTrack,
         onQueueItem
     )
-    val saved = "${collection.type.route}:${collection.id}" in state.savedCollectionKeys
+    val savedCollection = "${collection.type.route}:${collection.id}" in saved.savedCollectionKeys
+    val back = remember { spotifyBack("Back", onBack).first() }
     val actions = spotifyBar(
-        state,
+        chrome,
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        spotifyBack("Back", onBack).first()
+        back
     )
     // The header keeps the three primary actions: play, artwork and save. The artist lives in the
     // metadata line below it, so collections keep the same play / image / save-or-follow layout
@@ -428,8 +425,8 @@ fun CollectionScreen(
                 SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
                     ContextPlayTile(
                         playIds,
-                        state.current?.id,
-                        state.isPlaying,
+                        playback.current?.id,
+                        playback.isPlaying,
                         onPlay,
                         onPlayPause,
                         Modifier.weight(1f).focusRequester(playFocus)
@@ -443,10 +440,10 @@ fun CollectionScreen(
                     )
                     if (showSave) {
                         SpotifyIconTile(
-                            if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-                            if (saved) "Saved" else "Save",
+                            if (savedCollection) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
+                            if (savedCollection) "Saved" else "Save",
                             onSave,
-                            tone = if (saved) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                            tone = if (savedCollection) SpotifyTileTone.Library else SpotifyTileTone.Neutral
                         )
                     }
                 }
@@ -518,7 +515,9 @@ fun ArtistScreen(
     artist: SpotifyArtist,
     albums: List<SpotifyAlbum>,
     tracks: List<SpotifyTrack>,
-    state: SpotifyUiState,
+    saved: SavedUiState,
+    playback: PlaybackUiState,
+    chrome: ChromeUiState,
     onBack: () -> Unit,
     onPlay: () -> Unit,
     onPlayPause: () -> Unit,
@@ -539,19 +538,20 @@ fun ArtistScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
-    val followed = artist.id in state.followedArtistIds
+    val followed = artist.id in saved.followedArtistIds
     val rows = rememberTrackRows(
-        state,
+        saved,
         onSaveTrack,
         onEnsureSavedTrack,
         onQueue
     )
+    val back = remember { spotifyBack("Back", onBack).first() }
     val actions = spotifyBar(
-        state,
+        chrome,
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        spotifyBack("Back", onBack).first()
+        back
     )
     SidekitScaffold(
         title = artist.name,
@@ -569,8 +569,8 @@ fun ArtistScreen(
                 SidekitItemRow(Modifier.listFade(listState, rowIndex)) {
                     ContextPlayTile(
                         playIds,
-                        state.current?.id,
-                        state.isPlaying,
+                        playback.current?.id,
+                        playback.isPlaying,
                         onPlay,
                         onPlayPause,
                         Modifier.weight(1f)

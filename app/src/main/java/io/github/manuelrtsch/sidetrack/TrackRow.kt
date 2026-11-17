@@ -38,14 +38,14 @@ class TrackRows(
 /** Remembers the list's gutter state and settles it once focus stops moving. */
 @Composable
 fun rememberTrackRows(
-    state: SpotifyUiState,
+    saved: SavedUiState,
     onSave: (SpotifyTrack) -> Unit,
     onEnsureSaved: (SpotifyTrack) -> Unit,
     onQueue: (SpotifyTrack) -> Unit
 ): TrackRows {
     val focus = remember { TrackRowFocusState() }
     focus.settle()
-    return TrackRows(focus, state.savedTrackIds, onSave, onEnsureSaved, onQueue)
+    return TrackRows(focus, saved.savedTrackIds, onSave, onEnsureSaved, onQueue)
 }
 
 /**

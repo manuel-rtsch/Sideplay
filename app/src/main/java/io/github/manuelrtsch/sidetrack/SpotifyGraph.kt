@@ -190,12 +190,15 @@ fun NavGraphBuilder.sidetrackGraph(
     navigation(startDestination = startDestination, route = ROOT) {
         composable(HOME) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
-            LaunchedEffect(state.signedIn) {
-                if (!state.signedIn) nav.navigate(SIGN_IN) { launchSingleTop = true }
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
+            val account by vm.accountState.collectAsStateWithLifecycle()
+            LaunchedEffect(account.signedIn) {
+                if (!account.signedIn) nav.navigate(SIGN_IN) { launchSingleTop = true }
             }
             SidetrackHomeScreen(
-                state,
+                playback,
+                chrome,
                 vm.sleepTimer,
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onLibrary = { nav.navigate(LIBRARY) },
@@ -212,9 +215,11 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(HISTORY) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             HistoryScreen(
-                state,
+                playback,
+                chrome,
                 onBack = { nav.popBackStack() },
                 onPlay = { item -> nav.openTrack(vm, item) { vm.playRecent(item) } },
                 onQueue = vm::addToQueue,
@@ -226,12 +231,16 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(LIBRARY) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val library by vm.libraryState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             // The startup pre-cache may have run offline. Opening the Library is the natural
             // moment to refresh it, and it also recovers from a failed first load.
             LaunchedEffect(Unit) { vm.refreshLibrary() }
             LibraryScreen(
-                state,
+                library,
+                saved,
+                chrome,
                 onBack = { nav.popBackStack() },
                 onSearch = { nav.navigate(SEARCH) },
                 onSeeMore = { nav.navigate(libraryFilterRoute(it)) },
@@ -254,13 +263,17 @@ fun NavGraphBuilder.sidetrackGraph(
             arguments = listOf(navArgument("filter") { type = NavType.StringType })
         ) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val library by vm.libraryState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             val filter = LibraryFilter.entries.firstOrNull { it.name == entry.arguments?.getString("filter") }
                 ?: LibraryFilter.LikedSongs
             LaunchedEffect(filter) { vm.setFilter(filter) }
             LibraryCategoryScreen(
                 filter,
-                state,
+                library,
+                saved,
+                chrome,
                 onBack = { nav.popBackStack() },
                 onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onQueue = vm::addToQueue,
@@ -279,7 +292,10 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(COLLECTION, arguments = collectionArgs) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val library by vm.libraryState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             val episodeProgress by vm.episodeProgress.collectAsStateWithLifecycle()
             val type = SpotifyCollectionType.entries.firstOrNull { it.route == entry.arguments?.getString("type") }
             val id = entry.arguments?.getString("id").orEmpty()
@@ -289,14 +305,14 @@ fun NavGraphBuilder.sidetrackGraph(
                 val key = type?.let { "${it.route}:$id" }
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
-                    loading = key != null && key in state.pendingCollections,
+                    loading = key != null && key in library.pendingCollections,
                     loadingTitle = when (type) {
                         SpotifyCollectionType.Album -> "Loading album"
                         SpotifyCollectionType.Playlist -> "Loading playlist"
                         SpotifyCollectionType.Show -> "Loading show"
                         null -> "Loading…"
                     },
-                    error = key?.let(state.collectionErrors::get),
+                    error = key?.let(library.collectionErrors::get),
                     errorTitle = when (type) {
                         SpotifyCollectionType.Album -> "Couldn't load this album"
                         SpotifyCollectionType.Playlist -> "Couldn't load this playlist"
@@ -309,7 +325,9 @@ fun NavGraphBuilder.sidetrackGraph(
             } else if (collection.type == SpotifyCollectionType.Show) {
                 ShowScreen(
                     collection,
-                    state,
+                    saved,
+                    playback,
+                    chrome,
                     episodeProgress,
                     onBack = { nav.popBackStack() },
                     onPlay = {
@@ -328,7 +346,7 @@ fun NavGraphBuilder.sidetrackGraph(
                         nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
                     },
                     onLoadMore = { type?.let { vm.loadMoreCollection(it, id) } },
-                    loadingMore = "${type?.route}:$id" in state.collectionMorePending,
+                    loadingMore = "${type?.route}:$id" in library.collectionMorePending,
                     onShowNotes = {
                         nav.navigate(
                             notesRoute(
@@ -357,7 +375,9 @@ fun NavGraphBuilder.sidetrackGraph(
             } else {
                 CollectionScreen(
                     collection,
-                    state,
+                    saved,
+                    playback,
+                    chrome,
                     onBack = { nav.popBackStack() },
                     onPlay = { vm.playCollection(collection, 0) },
                     onPlayPause = vm::togglePlayPause,
@@ -380,7 +400,7 @@ fun NavGraphBuilder.sidetrackGraph(
                         nav.navigate(artworkRoute(collection.artRes, collection.artUrl, collection.title))
                     },
                     onLoadMore = { type?.let { vm.loadMoreCollection(it, id) } },
-                    loadingMore = "${type?.route}:$id" in state.collectionMorePending,
+                    loadingMore = "${type?.route}:$id" in library.collectionMorePending,
                     onDismissNotice = vm::dismissNotice,
                     onDismissNowPlaying = vm::dismissNowPlayingNotice
                 )
@@ -388,16 +408,19 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(ARTIST, arguments = artistArgs) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val library by vm.libraryState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             val artistId = entry.arguments?.getString("id").orEmpty()
             LaunchedEffect(artistId) { vm.ensureArtist(artistId) }
             val artist = vm.artist(artistId)
             if (artist == null) {
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
-                    loading = artistId in state.pendingArtists,
+                    loading = artistId in library.pendingArtists,
                     loadingTitle = "Loading artist",
-                    error = state.artistErrors[artistId],
+                    error = library.artistErrors[artistId],
                     errorTitle = "Couldn't load this artist",
                     missingTitle = "This artist isn't available",
                     onRetry = { vm.retryArtist(artistId) }
@@ -409,7 +432,9 @@ fun NavGraphBuilder.sidetrackGraph(
                     artist,
                     albums,
                     tracks,
-                    state,
+                    saved,
+                    playback,
+                    chrome,
                     onBack = { nav.popBackStack() },
                     onPlay = { vm.playArtist(artist) },
                     onPlayPause = vm::togglePlayPause,
@@ -426,9 +451,9 @@ fun NavGraphBuilder.sidetrackGraph(
                     },
                     onLoadMoreAlbums = { vm.loadMoreArtistAlbums(artist) },
                     onLoadMoreTracks = { vm.loadMoreArtistTracks(artist) },
-                    albumHasMore = state.artistAlbumHasMore[artist.id] == true,
-                    trackHasMore = state.artistTrackHasMore[artist.id] == true,
-                    loadingMore = artist.id in state.artistMorePending,
+                    albumHasMore = library.artistAlbumHasMore[artist.id] == true,
+                    trackHasMore = library.artistTrackHasMore[artist.id] == true,
+                    loadingMore = artist.id in library.artistMorePending,
                     onDismissNotice = vm::dismissNotice,
                     onDismissNowPlaying = vm::dismissNowPlayingNotice
                 )
@@ -436,9 +461,13 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(SEARCH) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val search by vm.searchState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             SpotifySearchScreen(
-                state,
+                search,
+                saved,
+                chrome,
                 onBack = { nav.popBackStack() },
                 onQuery = vm::setQuery,
                 onClear = vm::clearQuery,
@@ -461,9 +490,11 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(SEARCH_SCOPES) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val search by vm.searchState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             SearchScopesScreen(
-                state,
+                search,
+                chrome,
                 onBack = { nav.popBackStack() },
                 onToggleScope = vm::toggleScope,
                 onNowPlaying = { nav.openNowPlaying(vm) },
@@ -494,11 +525,15 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(NOW_PLAYING) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             // The position is collected inside the seek composable, so the playback position flow
             // only recomposes the small seek bar, not the whole Now Playing screen.
             SpotifyNowPlayingScreen(
-                state,
+                playback,
+                saved,
+                chrome,
                 vm.playbackPositionMs,
                 vm.sleepTimer,
                 onBack = { nav.popBackStack() },
@@ -514,21 +549,21 @@ fun NavGraphBuilder.sidetrackGraph(
                 onQueue = { nav.navigate(QUEUE) },
                 onRadio = { nav.navigate(RADIO) },
                 onAlbum = {
-                    (state.current as? SpotifyTrack)?.albumId?.spotifyIdOrNull()?.let { id ->
+                    (playback.current as? SpotifyTrack)?.albumId?.spotifyIdOrNull()?.let { id ->
                         nav.navigate(collectionRoute(SpotifyCollectionType.Album, id))
                     }
                 },
                 onShow = {
-                    (state.current as? SpotifyEpisode)?.showId?.spotifyIdOrNull()?.let { id ->
+                    (playback.current as? SpotifyEpisode)?.showId?.spotifyIdOrNull()?.let { id ->
                         nav.navigate(collectionRoute(SpotifyCollectionType.Show, id))
                     }
                 },
                 onArtist = {
-                    state.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
+                    playback.current?.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
                 },
                 onSleepTimer = { nav.navigate(SLEEP_TIMER) },
                 onEpisodeNotes = {
-                    (state.current as? SpotifyEpisode)?.let { episode ->
+                    (playback.current as? SpotifyEpisode)?.let { episode ->
                         nav.navigate(
                             notesRoute(
                                 SidetrackNotes.remember(
@@ -564,18 +599,21 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(RADIO) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val radioState by vm.radioState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             LaunchedEffect(Unit) { vm.ensureRadio() }
-            val radio = state.radio
+            val radio = radioState.radio
             if (radio == null) {
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
                     title = "Song radio",
                     // Before the LaunchedEffect runs there is no request state yet; treat that
                     // first frame as loading instead of flashing the empty station message.
-                    loading = state.radioPending || state.radioError == null,
+                    loading = radioState.radioPending || radioState.radioError == null,
                     loadingTitle = "Starting radio",
-                    error = state.radioError,
+                    error = radioState.radioError,
                     errorTitle = "Couldn't start song radio",
                     missingTitle = "No radio for this track",
                     onRetry = vm::retryRadio
@@ -583,7 +621,9 @@ fun NavGraphBuilder.sidetrackGraph(
             } else {
                 CollectionScreen(
                     radio,
-                    state,
+                    saved,
+                    playback,
+                    chrome,
                     onBack = { nav.popBackStack() },
                     onPlay = { vm.playRadio(0) },
                     onPlayPause = vm::togglePlayPause,
@@ -606,7 +646,11 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(ARTIST_RADIO, arguments = artistArgs) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val library by vm.libraryState.collectAsStateWithLifecycle()
+            val radioState by vm.radioState.collectAsStateWithLifecycle()
+            val saved by vm.savedState.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             val artistId = entry.arguments?.getString("id").orEmpty()
             LaunchedEffect(artistId) { vm.ensureArtist(artistId) }
             val artist = vm.artist(artistId)
@@ -614,9 +658,9 @@ fun NavGraphBuilder.sidetrackGraph(
                 MissingCollectionScreen(
                     onBack = { nav.popBackStack() },
                     title = "Artist radio",
-                    loading = artistId in state.pendingArtists,
+                    loading = artistId in library.pendingArtists,
                     loadingTitle = "Loading artist",
-                    error = state.artistErrors[artistId],
+                    error = library.artistErrors[artistId],
                     errorTitle = "Couldn't load this artist",
                     missingTitle = "This artist isn't available",
                     onRetry = { vm.retryArtist(artistId) }
@@ -625,15 +669,15 @@ fun NavGraphBuilder.sidetrackGraph(
                 LaunchedEffect(artist.id) { vm.ensureArtistRadio(artist) }
                 // A station built for another artist is not this screen's station, even before the
                 // request above has reset the state.
-                val radio = state.artistRadio?.takeIf { state.artistRadioArtistId == artist.id }
+                val radio = radioState.artistRadio?.takeIf { radioState.artistRadioArtistId == artist.id }
                 if (radio == null) {
                     MissingCollectionScreen(
                         onBack = { nav.popBackStack() },
                         title = "Artist radio",
                         // Before the LaunchedEffect runs there is no request state yet.
-                        loading = state.artistRadioPending || state.artistRadioError == null,
+                        loading = radioState.artistRadioPending || radioState.artistRadioError == null,
                         loadingTitle = "Starting radio",
-                        error = state.artistRadioError,
+                        error = radioState.artistRadioError,
                         errorTitle = "Couldn't start artist radio",
                         missingTitle = "No radio for this artist",
                         onRetry = { vm.retryArtistRadio(artist) }
@@ -641,7 +685,9 @@ fun NavGraphBuilder.sidetrackGraph(
                 } else {
                     CollectionScreen(
                         radio,
-                        state,
+                        saved,
+                        playback,
+                        chrome,
                         onBack = { nav.popBackStack() },
                         onPlay = { vm.playArtistRadio(0) },
                         onPlayPause = vm::togglePlayPause,
@@ -665,9 +711,11 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(QUEUE) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             QueueScreen(
-                state,
+                playback,
+                chrome,
                 onBack = { nav.popBackStack() },
                 onKeypadBackOverride = onKeypadBackOverride,
                 onNowPlaying = { nav.openNowPlaying(vm) },
@@ -685,11 +733,15 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(SETTINGS) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val account by vm.accountState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
+            val playback by vm.playbackState.collectAsStateWithLifecycle()
             val context = LocalContext.current
             LaunchedEffect(Unit) { vm.refreshCacheSize() }
             SpotifySettingsScreen(
-                state,
+                account,
+                chrome,
+                playback.recent.size,
                 onBack = { nav.popBackStack() },
                 onAudioQuality = { nav.navigate(AUDIO_QUALITY) },
                 onNormalization = vm::toggleNormalization,
@@ -711,9 +763,11 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(AUDIO_QUALITY) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val account by vm.accountState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             SpotifyAudioQualityScreen(
-                state,
+                account,
+                chrome,
                 onBack = { nav.popBackStack() },
                 onSelect = vm::setAudioQuality,
                 onDismissNotice = vm::dismissNotice
@@ -750,10 +804,11 @@ fun NavGraphBuilder.sidetrackGraph(
         }
         composable(SIGN_IN) { entry ->
             val vm = entry.spotifyViewModel(nav)
-            val state by vm.state.collectAsStateWithLifecycle()
+            val account by vm.accountState.collectAsStateWithLifecycle()
+            val chrome by vm.chromeState.collectAsStateWithLifecycle()
             val context = LocalContext.current
-            LaunchedEffect(state.signedIn) {
-                if (state.signedIn) {
+            LaunchedEffect(account.signedIn) {
+                if (account.signedIn) {
                     val next = if (SidetrackLocalSettings(context).needsOnboarding(hostBacked)) HOME else ONBOARDING
                     nav.navigate(next) {
                         popUpTo(ROOT) { inclusive = false }
@@ -762,7 +817,8 @@ fun NavGraphBuilder.sidetrackGraph(
                 }
             }
             SpotifySignInScreen(
-                state,
+                account,
+                chrome,
                 onAbout = { nav.navigate(ABOUT) },
                 onSignIn = vm::signIn,
                 onDismissNotice = vm::dismissNotice

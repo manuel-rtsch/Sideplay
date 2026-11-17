@@ -712,17 +712,17 @@ fun withNotice(notice: String?, onDismiss: () -> Unit, actions: List<SideAction>
  * normal actions. A real notice (an error or confirmation) wins over the now-playing confirmation.
  */
 fun spotifyActions(
-    state: SpotifyUiState,
+    chrome: ChromeUiState,
     onDismissNotice: () -> Unit,
     onOpenNowPlaying: () -> Unit,
     onDismissNowPlaying: () -> Unit,
     actions: List<SideAction>,
     showNowPlayingNotice: Boolean = true
 ): List<SideAction> = when {
-    state.notice != null -> withNotice(state.notice, onDismissNotice, actions)
+    chrome.notice != null -> withNotice(chrome.notice, onDismissNotice, actions)
 
-    showNowPlayingNotice && state.nowPlayingNotice != null ->
-        nowPlayingNoticeActions(state.nowPlayingNotice, onOpenNowPlaying, onDismissNowPlaying)
+    showNowPlayingNotice && chrome.nowPlayingNotice != null ->
+        nowPlayingNoticeActions(chrome.nowPlayingNotice, onOpenNowPlaying, onDismissNowPlaying)
 
     else -> actions
 }
@@ -731,7 +731,7 @@ fun spotifyBack(label: String, onBack: () -> Unit) = listOf(SideAction.back("bac
 
 /** The action bar for screens that can change saved state, plus any important notice. */
 fun spotifyBar(
-    state: SpotifyUiState,
+    chrome: ChromeUiState,
     onDismissNotice: () -> Unit,
     onOpenNowPlaying: () -> Unit,
     onDismissNowPlaying: () -> Unit,
@@ -739,7 +739,7 @@ fun spotifyBar(
     extra: List<SideAction> = emptyList(),
     showNowPlayingNotice: Boolean = true
 ): List<SideAction> = spotifyActions(
-    state,
+    chrome,
     onDismissNotice,
     onOpenNowPlaying,
     onDismissNowPlaying,
