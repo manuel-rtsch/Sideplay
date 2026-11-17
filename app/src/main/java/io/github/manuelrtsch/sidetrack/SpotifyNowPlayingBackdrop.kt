@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -266,42 +265,26 @@ internal fun BackdroppedNowPlayingBody(
         Spacer(Modifier.weight(0.7f))
         NowPlayingSleepTimer(sleepTimer)
         Spacer(Modifier.height(6.dp))
-        // The transport block fades from transparent at the seek bar to black at the action bar,
-        // so the controls stay legible over any cover without dimming the title area.
-        Box(Modifier.fillMaxWidth()) {
-            Box(
-                Modifier.matchParentSize().background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.45f to Color.Black.copy(alpha = 0.55f),
-                        0.6f to Color.Black,
-                        1f to Color.Black
-                    )
-                )
+        NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
+        Spacer(Modifier.height(6.dp))
+        SidekitItemRow {
+            SpotifyIconTile(
+                SidekitIcon.Shuffle,
+                if (playback.shuffle) "Shuffle on" else "Shuffle off",
+                onShuffle,
+                tone = if (playback.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
+                weight = 0.85f
             )
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
-                Spacer(Modifier.height(6.dp))
-                SidekitItemRow {
-                    SpotifyIconTile(
-                        SidekitIcon.Shuffle,
-                        if (playback.shuffle) "Shuffle on" else "Shuffle off",
-                        onShuffle,
-                        tone = if (playback.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
-                        weight = 0.85f
-                    )
-                    SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
-                    SpotifyIconTile(
-                        if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                        if (playback.isPlaying) "Pause" else "Play",
-                        onPlayPause,
-                        tone = SpotifyTileTone.Play,
-                        weight = 1.2f
-                    )
-                    SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                    SpotifyRepeatTile(playback.repeat, onRepeat)
-                }
-            }
+            SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
+            SpotifyIconTile(
+                if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+                if (playback.isPlaying) "Pause" else "Play",
+                onPlayPause,
+                tone = SpotifyTileTone.Play,
+                weight = 1.2f
+            )
+            SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+            SpotifyRepeatTile(playback.repeat, onRepeat)
         }
     }
 }
