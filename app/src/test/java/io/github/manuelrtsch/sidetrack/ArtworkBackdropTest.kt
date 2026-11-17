@@ -81,7 +81,7 @@ class ArtworkBackdropTest {
     }
 
     @Test
-    fun theBackdropOptionsSwapSongRadioForTheAlbum() {
+    fun theBackdropOptionsKeepSongRadio() {
         settings.artworkBackdrop = true
         val chrome = ChromeState()
         showNowPlaying(chrome)
@@ -89,11 +89,12 @@ class ArtworkBackdropTest {
         compose.runOnIdle { chrome.toggleOptions() }
         compose.waitForIdle()
 
-        // With no cover tile to focus, the middle square is the keypad's route to the album.
+        // The artwork itself opens the album, so the middle square stays Song radio in both
+        // layouts and the bar keeps its three buttons.
         compose.onNodeWithContentDescription("Open queue").assertExists()
-        compose.onNodeWithContentDescription("Open album").assertExists()
+        compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
-        compose.onNodeWithContentDescription("Song radio").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
         compose.onNodeWithContentDescription("Art backdrop on").assertDoesNotExist()
     }
 }

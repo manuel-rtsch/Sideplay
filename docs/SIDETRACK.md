@@ -137,8 +137,8 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
   disconnect, and sign-out.
 - Song radio is seeded from the current track. Now Playing's Options bar carries three square,
   primary-coloured icon buttons — Queue, Song radio and Sleep timer — with no text labels. The
-  bar never grows past three: the art backdrop toggle lives in Settings, and in the backdrop
-  layout the Song radio square gives way to Open album so the keypad can still reach the album.
+  bar never grows past three: the art backdrop toggle lives in Settings, and the backdrop
+  layout opens the album by tapping the artwork, so Song radio keeps its square in both layouts.
   The station is read through librespot's first-party `get_radio_for_track` endpoint (the same
   authenticated session the catalog uses), resolved to normal track rows, and shown with the
   collection screen's play/artwork header and track list. Opening the station queues it behind

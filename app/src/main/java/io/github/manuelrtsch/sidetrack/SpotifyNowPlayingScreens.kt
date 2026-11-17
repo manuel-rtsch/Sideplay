@@ -161,16 +161,14 @@ fun SpotifyNowPlayingScreen(
     } else {
         buildList {
             add(SideAction.square("queue", SidekitIcon.QueueMusic, "Open queue", onOpenQueue))
-            // Three options at most: the bar is icon-only and a fourth square crowds it. The
-            // backdrop layout has no cover tile to focus, so its middle square is the album
-            // rather than Song radio; the keypad still reaches the album, and the bar stays at
-            // three. The art backdrop toggle itself lives in Settings.
-            when {
-                current is SpotifyTrack && backdropped ->
-                    add(SideAction.square("openAlbum", SidekitIcon.Album, "Open album", onAlbum))
-                current is SpotifyTrack ->
+            // Three options at most: the bar is icon-only and a fourth square crowds it. Song
+            // radio stays in the middle in both layouts; the backdrop layout opens the album by
+            // tapping the artwork, so it does not need a square of its own. The art backdrop
+            // toggle itself lives in Settings.
+            when (current) {
+                is SpotifyTrack ->
                     add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
-                current is SpotifyEpisode ->
+                is SpotifyEpisode ->
                     add(SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onEpisodeNotes))
             }
             add(
