@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -42,6 +43,10 @@ fun SidetrackItem(
     showLinkArrow: Boolean = false,
     showLinkArrowWithSecondary: Boolean = false,
     colour: ItemColour = ItemColour.Primary,
+    /** Overrides [colour]'s container, e.g. to paint an active row in the action colour. */
+    containerColor: Color? = null,
+    /** Overrides the trailing value's colour; defaults to the muted surface tone. */
+    secondaryColor: Color? = null,
     titleDecoration: TextDecoration? = null,
     /** When set, the row is exposed as a switch/checkbox with this checked state. */
     toggleable: Boolean? = null,
@@ -52,7 +57,8 @@ fun SidetrackItem(
     onClick: (() -> Unit)? = null,
     leading: (@Composable RowScope.() -> Unit)? = null
 ) {
-    val contentColor = SidekitTheme.colors.contentColorFor(colour.container())
+    val background = containerColor ?: colour.container()
+    val contentColor = SidekitTheme.colors.contentColorFor(background)
     val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier.padding(horizontal = SidekitTheme.spacing.itemPadding),
@@ -67,7 +73,7 @@ fun SidetrackItem(
                 SidekitText(
                     secondary,
                     if (secondaryNoEllipsis) Modifier else Modifier.weight(1f),
-                    color = SidekitTheme.colors.surfaceA6,
+                    color = secondaryColor ?: SidekitTheme.colors.surfaceA6,
                     textAlign = if (secondaryToEnd) TextAlign.End else null
                 )
             }
@@ -86,7 +92,7 @@ fun SidetrackItem(
             modifier = modifier.fillMaxWidth()
                 .height(SidekitTheme.spacing.itemHeight)
                 .clip(SidekitTheme.shapes.item)
-                .background(colour.container())
+                .background(background)
                 .toggleable(value = toggleable, role = toggleRole, onValueChange = { onClick?.invoke() }),
             contentAlignment = Alignment.CenterStart
         ) { content() }
@@ -95,14 +101,14 @@ fun SidetrackItem(
             modifier = modifier.fillMaxWidth()
                 .height(SidekitTheme.spacing.itemHeight)
                 .clip(SidekitTheme.shapes.item)
-                .background(colour.container())
+                .background(background)
                 .selectable(selected = selected, role = selectionRole, onClick = { onClick?.invoke() }),
             contentAlignment = Alignment.CenterStart
         ) { content() }
 
         else -> SidekitTile(
             modifier = modifier.fillMaxWidth(),
-            color = colour.container(),
+            color = background,
             onClick = onClick,
             contentAlignment = Alignment.CenterStart
         ) { content() }

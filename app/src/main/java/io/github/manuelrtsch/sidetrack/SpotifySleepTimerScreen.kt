@@ -12,11 +12,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import hrln.interactive.sidekit.design.action.SideAction
-import hrln.interactive.sidekit.design.components.ItemColour
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
+import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerDurations
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlinx.coroutines.flow.StateFlow
@@ -48,7 +48,7 @@ fun SpotifySleepTimerScreen(
                     "Off",
                     Modifier.listFade(listState, 0).then(Modifier.focusRequester(first)),
                     icon = if (selected) SidekitIcon.Check else null,
-                    colour = if (selected) ItemColour.Secondary else ItemColour.Primary,
+                    containerColor = if (selected) SidekitTheme.colors.successA1 else null,
                     selected = selected,
                     selectionRole = Role.RadioButton,
                     onClick = onOff
@@ -66,7 +66,8 @@ fun SpotifySleepTimerScreen(
                         secondaryToEnd = true,
                         secondaryNoEllipsis = true,
                         icon = if (selected) SidekitIcon.Check else null,
-                        colour = if (selected) ItemColour.Secondary else ItemColour.Primary,
+                        containerColor = if (selected) SidekitTheme.colors.successA1 else null,
+                        secondaryColor = if (selected) SidekitTheme.colors.light else null,
                         selected = selected,
                         selectionRole = Role.RadioButton,
                         onClick = { onDuration(minutes) }
@@ -79,7 +80,7 @@ fun SpotifySleepTimerScreen(
                     "End of track",
                     Modifier.listFade(listState, SleepTimerDurations.size + 1),
                     icon = if (selected) SidekitIcon.Check else null,
-                    colour = if (selected) ItemColour.Secondary else ItemColour.Primary,
+                    containerColor = if (selected) SidekitTheme.colors.successA1 else null,
                     selected = selected,
                     selectionRole = Role.RadioButton,
                     onClick = onEndOfTrack

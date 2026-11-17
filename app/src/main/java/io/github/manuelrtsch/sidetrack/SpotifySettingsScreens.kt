@@ -238,7 +238,8 @@ fun SpotifyAudioQualityScreen(
                         secondaryToEnd = true,
                         secondaryNoEllipsis = true,
                         icon = if (selected) SidekitIcon.Check else null,
-                        colour = if (selected) ItemColour.Secondary else ItemColour.Primary,
+                        containerColor = if (selected) SidekitTheme.colors.successA1 else null,
+                        secondaryColor = if (selected) SidekitTheme.colors.light else null,
                         selected = selected,
                         selectionRole = Role.RadioButton,
                         onClick = { onSelect(quality) }
