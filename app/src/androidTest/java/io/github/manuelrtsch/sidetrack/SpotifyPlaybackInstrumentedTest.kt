@@ -15,6 +15,7 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyGateway
 import io.github.manuelrtsch.sidetrack.playback.MediaSessionOwner
 import io.github.manuelrtsch.sidetrack.playback.MediaSessionRegistry
 import io.github.manuelrtsch.sidetrack.playback.PlaybackController
+import io.github.manuelrtsch.sidetrack.playback.librespotPlaybackController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,7 +41,7 @@ class SpotifyPlaybackInstrumentedTest {
     @Test
     fun mediaSessionPublishesMetadataAndPauseState() {
         val gateway = FakeGateway()
-        val playback = PlaybackController(gateway, scope, MediaSessionRegistry(), context = silentContext)
+        val playback = librespotPlaybackController(gateway, scope, MediaSessionRegistry(), context = silentContext)
         onMain {
             playback.setNowPlaying(track("Session track"), 12_000L)
             playback.updateState(true, 12_000L)
@@ -64,7 +65,7 @@ class SpotifyPlaybackInstrumentedTest {
     fun activatingAnotherMediaOwnerPausesSidetrack() {
         val gateway = FakeGateway()
         val registry = MediaSessionRegistry()
-        val playback = PlaybackController(gateway, scope, registry, context = silentContext)
+        val playback = librespotPlaybackController(gateway, scope, registry, context = silentContext)
         val music = FakeOwner("music")
         registry.register(music)
         onMain {
@@ -88,7 +89,7 @@ class SpotifyPlaybackInstrumentedTest {
     @Test
     fun headphoneUnplugPausesPlayback() {
         val gateway = FakeGateway()
-        val playback = PlaybackController(gateway, scope, MediaSessionRegistry(), context = silentContext)
+        val playback = librespotPlaybackController(gateway, scope, MediaSessionRegistry(), context = silentContext)
         onMain {
             playback.setNowPlaying(track("Unplugged"), 0L)
             playback.updateState(true, 0L)
@@ -113,7 +114,7 @@ class SpotifyPlaybackInstrumentedTest {
         }
     }
 
-    private fun track(title: String) = SpotifyTrack(
+    private fun track(title: String) = Track(
         id = "track-${title.hashCode()}",
         title = title,
         artist = "Artist",

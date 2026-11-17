@@ -2,12 +2,12 @@ package io.github.manuelrtsch.sidetrack
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import io.github.manuelrtsch.sidetrack.data.FileSpotifyHistoryStore
-import io.github.manuelrtsch.sidetrack.data.FileSpotifyPositionStore
-import io.github.manuelrtsch.sidetrack.data.FileSpotifyQueueStore
-import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
-import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
-import io.github.manuelrtsch.sidetrack.data.SpotifyResumePoint
+import io.github.manuelrtsch.sidetrack.data.FileHistoryStore
+import io.github.manuelrtsch.sidetrack.data.FilePositionStore
+import io.github.manuelrtsch.sidetrack.data.FileQueueStore
+import io.github.manuelrtsch.sidetrack.data.HistoryRepository
+import io.github.manuelrtsch.sidetrack.data.QueueRepository
+import io.github.manuelrtsch.sidetrack.data.ResumePoint
 import java.io.BufferedOutputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -29,30 +29,30 @@ class SpotifyPersistenceTest {
     )
 
     @Test fun `queue survives a process restart with shuffle and history`() {
-        val store = FileSpotifyQueueStore(tempFile("queue"))
-        val first = SpotifyQueueRepository(Random(1), load = store::read, save = store::write)
+        val store = FileQueueStore(tempFile("queue"))
+        val first = QueueRepository(Random(1), load = store::read, save = store::write)
         first.play(tracks, 0)
         first.play(tracks, 1)
         first.toggleShuffle()
         first.addToQueue(episode("e"))
 
-        val second = SpotifyQueueRepository(Random(2), load = store::read, save = store::write)
+        val second = QueueRepository(Random(2), load = store::read, save = store::write)
 
         assertEquals(first.snapshot, second.snapshot)
         assertEquals("b", second.snapshot.current?.id)
         assertEquals(listOf("a"), second.snapshot.history.map { it.id })
         assertTrue(second.snapshot.shuffle)
         assertEquals(listOf("c", "d", "e"), second.snapshot.shuffleBackup?.map { it.id })
-        assertTrue(second.snapshot.upcoming.last() is SpotifyEpisode)
+        assertTrue(second.snapshot.upcoming.last() is Episode)
     }
 
     @Test fun `queue keeps repeat and its original context across a restart`() {
-        val store = FileSpotifyQueueStore(tempFile("queue-context"))
-        val first = SpotifyQueueRepository(Random(1), load = store::read, save = store::write)
+        val store = FileQueueStore(tempFile("queue-context"))
+        val first = QueueRepository(Random(1), load = store::read, save = store::write)
         first.play(tracks, 1)
         first.setRepeat(RepeatMode.Context)
 
-        val second = SpotifyQueueRepository(Random(2), load = store::read, save = store::write)
+        val second = QueueRepository(Random(2), load = store::read, save = store::write)
 
         assertEquals(RepeatMode.Context, second.snapshot.repeat)
         assertEquals(tracks.map { it.id }, second.snapshot.context.map { it.id })
@@ -61,75 +61,75 @@ class SpotifyPersistenceTest {
 
     @Test fun `a queue file from an unknown version falls back to an empty queue`() {
         val file = tempFile("queue-version")
-        val store = FileSpotifyQueueStore(file)
-        store.write(SpotifyQueueRepository.Snapshot(current = track("a")))
+        val store = FileQueueStore(file)
+        store.write(QueueRepository.Snapshot(current = track("a")))
         val bytes = file.readBytes()
         // MAGIC is the first int; the version follows it. Bump it to a version this build cannot read.
         bytes[7] = 99
         file.writeBytes(bytes)
 
-        assertEquals(SpotifyQueueRepository.Snapshot(), FileSpotifyQueueStore(file).read())
+        assertEquals(QueueRepository.Snapshot(), FileQueueStore(file).read())
     }
 
     @Test fun `recently played history survives a process restart`() {
-        val store = FileSpotifyHistoryStore(tempFile("history"))
-        val first = SpotifyHistoryRepository(load = store::read, save = store::write)
+        val store = FileHistoryStore(tempFile("history"))
+        val first = HistoryRepository(load = store::read, save = store::write)
         first.record(track("a"), 10)
         first.record(episode("b"), 20)
 
-        val second = SpotifyHistoryRepository(load = store::read, save = store::write)
+        val second = HistoryRepository(load = store::read, save = store::write)
 
         assertEquals(listOf("b", "a"), second.items().map { it.id })
         assertEquals(20L, second.snapshot().first().playedAtMs)
     }
 
     @Test fun `removing a history entry persists the shorter list`() {
-        val store = FileSpotifyHistoryStore(tempFile("history-remove"))
-        val history = SpotifyHistoryRepository(load = store::read, save = store::write)
+        val store = FileHistoryStore(tempFile("history-remove"))
+        val history = HistoryRepository(load = store::read, save = store::write)
         history.record(track("a"), 10)
         history.record(track("b"), 20)
 
         history.remove(track("b"))
 
-        assertEquals(listOf("a"), SpotifyHistoryRepository(load = store::read).items().map { it.id })
+        assertEquals(listOf("a"), HistoryRepository(load = store::read).items().map { it.id })
     }
 
     @Test fun `a corrupt queue file falls back to an empty queue`() {
         val file = tempFile("corrupt").also { it.writeBytes(byteArrayOf(1, 2, 3, 4)) }
 
-        val snapshot = FileSpotifyQueueStore(file).read()
+        val snapshot = FileQueueStore(file).read()
 
-        assertEquals(SpotifyQueueRepository.Snapshot(), snapshot)
+        assertEquals(QueueRepository.Snapshot(), snapshot)
     }
 
     @Test fun `resume point survives a restart with its offset`() {
         val file = tempFile("resume")
-        FileSpotifyPositionStore(file).write(SpotifyResumePoint("b", 42_500L))
+        FilePositionStore(file).write(ResumePoint(MediaKey(ServiceId.Spotify, MediaType.Track, "b"), 42_500L))
 
-        assertEquals(SpotifyResumePoint("b", 42_500L), FileSpotifyPositionStore(file).read())
+        assertEquals(ResumePoint(MediaKey(ServiceId.Spotify, MediaType.Track, "b"), 42_500L), FilePositionStore(file).read())
     }
 
     @Test fun `a cleared resume point reads back as nothing`() {
         val file = tempFile("resume-cleared")
-        val store = FileSpotifyPositionStore(file)
-        store.write(SpotifyResumePoint("b", 1_000L))
+        val store = FilePositionStore(file)
+        store.write(ResumePoint(MediaKey(ServiceId.Spotify, MediaType.Track, "b"), 1_000L))
         store.write(null)
 
-        assertEquals(null, FileSpotifyPositionStore(file).read())
+        assertEquals(null, FilePositionStore(file).read())
     }
 
     @Test fun `a corrupt resume point falls back to the start`() {
         val file = tempFile("resume-corrupt")
         file.writeBytes(byteArrayOf(1, 2, 3, 4, 5))
 
-        assertEquals(null, FileSpotifyPositionStore(file).read())
+        assertEquals(null, FilePositionStore(file).read())
     }
 
     @Test fun `a version 1 queue file is read as Spotify and rewritten as version 2`() {
         val file = tempFile("queue-v1")
         writeV1Queue(file, listOf("a", "b"), current = "b")
 
-        val store = FileSpotifyQueueStore(file)
+        val store = FileQueueStore(file)
         val snapshot = store.read()
 
         assertEquals("b", snapshot.current?.id)
@@ -139,14 +139,14 @@ class SpotifyPersistenceTest {
 
         // The next save upgrades the file; reading it back must still produce the same queue.
         store.write(snapshot)
-        assertEquals(snapshot, FileSpotifyQueueStore(file).read())
+        assertEquals(snapshot, FileQueueStore(file).read())
     }
 
     @Test fun `a version 1 history file is read as Spotify`() {
         val file = tempFile("history-v1")
         writeV1History(file, listOf("a", "b"))
 
-        val entries = FileSpotifyHistoryStore(file).read()
+        val entries = FileHistoryStore(file).read()
 
         assertEquals(listOf("a", "b"), entries.map { it.item.id })
         assertTrue(entries.all { it.item.service == ServiceId.Spotify })
@@ -161,15 +161,15 @@ class SpotifyPersistenceTest {
             out.writeLong(42_500L)
         }
 
-        assertEquals(SpotifyResumePoint("b", 42_500L), FileSpotifyPositionStore(file).read())
+        assertEquals(ResumePoint(MediaKey(ServiceId.Spotify, MediaType.Track, "b"), 42_500L), FilePositionStore(file).read())
     }
 
     @Test fun `a version 2 queue keeps the service of each item`() {
         val file = tempFile("queue-service")
         val navidrome = track("a").copy(service = ServiceId.Navidrome)
-        FileSpotifyQueueStore(file).write(SpotifyQueueRepository.Snapshot(current = navidrome))
+        FileQueueStore(file).write(QueueRepository.Snapshot(current = navidrome))
 
-        val read = FileSpotifyQueueStore(file).read()
+        val read = FileQueueStore(file).read()
 
         assertEquals(ServiceId.Navidrome, read.current?.service)
         assertEquals(MediaKey(ServiceId.Navidrome, MediaType.Track, "a"), read.current?.key)
@@ -230,7 +230,7 @@ class SpotifyPersistenceTest {
 
     private fun tempFile(name: String) = File(context.cacheDir, "sidetrack-$name-${System.nanoTime()}.bin").also { it.delete() }
 
-    private fun track(id: String) = SpotifyTrack(
+    private fun track(id: String) = Track(
         id = id,
         title = "Track $id",
         artist = "Artist",
@@ -240,7 +240,7 @@ class SpotifyPersistenceTest {
         durationMs = 180_000L
     )
 
-    private fun episode(id: String) = SpotifyEpisode(
+    private fun episode(id: String) = Episode(
         id = id,
         title = "Episode $id",
         show = "Show",

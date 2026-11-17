@@ -87,7 +87,7 @@ class MusicServiceTest {
         override val id: ServiceId,
         override val displayName: String
     ) : MusicServiceProvider {
-        override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
+        override val capabilities: ServiceCapabilities = ServiceCapabilities.All
 
         override fun createAuth(): ServiceAuth = error("not used")
     }

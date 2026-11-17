@@ -14,13 +14,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** What a local podcast resume point needs to know about one episode. */
-data class SpotifyEpisodeProgress(
+data class EpisodeProgress(
     val episodeId: String,
     val positionMs: Long,
     val durationMs: Long,
     val updatedAtMs: Long,
     val completed: Boolean,
-    val service: ServiceId = ServiceId.Spotify
+    val service: ServiceId = ServiceId.Local
 ) {
     /** How much of the episode is behind the listener, clamped for the row's progress line. */
     fun fraction(): Float {
@@ -31,9 +31,9 @@ data class SpotifyEpisodeProgress(
 }
 
 /** Persists podcast progress by episode id. */
-interface SpotifyEpisodeProgressStore {
-    fun read(): Map<String, SpotifyEpisodeProgress>
-    fun write(entries: Map<String, SpotifyEpisodeProgress>)
+interface EpisodeProgressStore {
+    fun read(): Map<String, EpisodeProgress>
+    fun write(entries: Map<String, EpisodeProgress>)
 }
 
 /**
@@ -41,9 +41,9 @@ interface SpotifyEpisodeProgressStore {
  * a show can remember where several episodes were left off, and finishing an episode can clear
  * its resume point without touching anything else.
  */
-class SpotifyEpisodeProgressRepository(
-    private val load: () -> Map<String, SpotifyEpisodeProgress> = { emptyMap() },
-    private val save: (Map<String, SpotifyEpisodeProgress>) -> Unit = {},
+class EpisodeProgressRepository(
+    private val load: () -> Map<String, EpisodeProgress> = { emptyMap() },
+    private val save: (Map<String, EpisodeProgress>) -> Unit = {},
     private val now: () -> Long = System::currentTimeMillis,
     /**
      * Where [save] runs. Null writes inline, which keeps tests deterministic; the app hands in a
@@ -51,15 +51,15 @@ class SpotifyEpisodeProgressRepository(
      */
     saveScope: CoroutineScope? = null
 ) {
-    private var entries: Map<String, SpotifyEpisodeProgress> =
+    private var entries: Map<String, EpisodeProgress> =
         prune(runCatching(load).getOrDefault(emptyMap()))
     private val _progress = MutableStateFlow(displayOf(entries))
-    val progress: StateFlow<Map<String, SpotifyEpisodeProgress>> = _progress.asStateFlow()
+    val progress: StateFlow<Map<String, EpisodeProgress>> = _progress.asStateFlow()
     private val saver = saveScope?.let { scope ->
-        ConflatedSaver<Map<String, SpotifyEpisodeProgress>>(scope) { next -> save(next) }
+        ConflatedSaver<Map<String, EpisodeProgress>>(scope) { next -> save(next) }
     }
 
-    fun get(episodeId: String): SpotifyEpisodeProgress? = entries[episodeId]
+    fun get(episodeId: String): EpisodeProgress? = entries[episodeId]
 
     /**
      * Records a playback position. Episodes are considered finished when they are within half a
@@ -69,7 +69,8 @@ class SpotifyEpisodeProgressRepository(
         episodeId: String,
         positionMs: Long,
         durationMs: Long,
-        completed: Boolean? = null
+        completed: Boolean? = null,
+        service: ServiceId = ServiceId.Local
     ) {
         if (episodeId.isEmpty()) return
         val duration = durationMs.coerceAtLeast(0L)
@@ -85,16 +86,16 @@ class SpotifyEpisodeProgressRepository(
         ) {
             return
         }
-        commit(entries + (episodeId to SpotifyEpisodeProgress(episodeId, position, duration, now(), finished)))
+        commit(entries + (episodeId to EpisodeProgress(episodeId, position, duration, now(), finished, service)))
     }
 
     /** Marks an episode played or unplayed without inventing a playback position. */
-    fun setCompleted(episodeId: String, completed: Boolean, durationMs: Long = 0L) {
+    fun setCompleted(episodeId: String, completed: Boolean, durationMs: Long = 0L, service: ServiceId = ServiceId.Local) {
         if (episodeId.isEmpty()) return
         val previous = entries[episodeId]
         val duration = durationMs.takeIf { it > 0L } ?: previous?.durationMs ?: 0L
         val position = if (completed) duration else 0L
-        commit(entries + (episodeId to SpotifyEpisodeProgress(episodeId, position, duration, now(), completed)))
+        commit(entries + (episodeId to EpisodeProgress(episodeId, position, duration, now(), completed, service)))
     }
 
     /** The offset playback should start at, or zero when there is nothing useful to resume. */
@@ -122,7 +123,7 @@ class SpotifyEpisodeProgressRepository(
         return positionMs >= threshold
     }
 
-    private fun commit(next: Map<String, SpotifyEpisodeProgress>) {
+    private fun commit(next: Map<String, EpisodeProgress>) {
         entries = prune(next)
         // The UI only prints whole minutes and draws a 4 dp line, so publishing an entry for every
         // five-second tick would recompose the show page for a change nobody can see.
@@ -133,7 +134,7 @@ class SpotifyEpisodeProgressRepository(
     }
 
     /** Keeps the newest [MAX_ENTRIES] episodes so the file and the map stay bounded. */
-    private fun prune(entries: Map<String, SpotifyEpisodeProgress>): Map<String, SpotifyEpisodeProgress> {
+    private fun prune(entries: Map<String, EpisodeProgress>): Map<String, EpisodeProgress> {
         if (entries.size <= MAX_ENTRIES) return entries
         return entries.values
             .sortedByDescending { it.updatedAtMs }
@@ -143,8 +144,8 @@ class SpotifyEpisodeProgressRepository(
 
     /** The map the UI reads: positions rounded to the display step, completed at the end. */
     private fun displayOf(
-        entries: Map<String, SpotifyEpisodeProgress>
-    ): Map<String, SpotifyEpisodeProgress> {
+        entries: Map<String, EpisodeProgress>
+    ): Map<String, EpisodeProgress> {
         if (entries.isEmpty()) return entries
         return entries.mapValues { (_, entry) ->
             val position = if (entry.completed) {
@@ -169,10 +170,10 @@ class SpotifyEpisodeProgressRepository(
 }
 
 /** Binary progress file, replaced atomically like the queue, history and resume stores. */
-class FileSpotifyEpisodeProgressStore(file: File) : SpotifyEpisodeProgressStore {
+class FileEpisodeProgressStore(file: File) : EpisodeProgressStore {
     private val file = AtomicFile(file)
 
-    override fun read(): Map<String, SpotifyEpisodeProgress> {
+    override fun read(): Map<String, EpisodeProgress> {
         val stream = try {
             file.openRead()
         } catch (_: IOException) {
@@ -194,7 +195,7 @@ class FileSpotifyEpisodeProgressStore(file: File) : SpotifyEpisodeProgressStore 
                         val updated = input.readLong()
                         val completed = input.readBoolean()
                         if (id.isNotEmpty()) {
-                            put(id, SpotifyEpisodeProgress(id, position, duration, updated, completed, service))
+                            put(id, EpisodeProgress(id, position, duration, updated, completed, service))
                         }
                     }
                 }
@@ -204,7 +205,7 @@ class FileSpotifyEpisodeProgressStore(file: File) : SpotifyEpisodeProgressStore 
         }
     }
 
-    override fun write(entries: Map<String, SpotifyEpisodeProgress>) {
+    override fun write(entries: Map<String, EpisodeProgress>) {
         val out = file.startWrite()
         try {
             val data = DataOutputStream(BufferedOutputStream(out))

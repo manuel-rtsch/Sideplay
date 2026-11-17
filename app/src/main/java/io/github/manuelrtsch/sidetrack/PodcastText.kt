@@ -1,6 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
-import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
+import io.github.manuelrtsch.sidetrack.data.EpisodeProgress
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 
 /** Block-level tags become a paragraph break so the reading screen can lay the text out lazily. */
@@ -12,7 +12,7 @@ private val podcastSpaces = Regex("[\\t\\u00A0 ]+")
 private val podcastNumericEntity = Regex("&#(x?[0-9a-fA-F]+);")
 
 /**
- * Spotify show notes arrive as HTML on both catalog paths. Compose renders text, not markup, so
+ * Show notes arrive as HTML on both catalog paths. Compose renders text, not markup, so
  * strip the markup, decode the common entities and collapse each line into readable text while
  * keeping the paragraph breaks, which the reading screen turns into separate rows. Unknown entities
  * are left alone instead of being replaced with a misleading character.
@@ -55,13 +55,13 @@ fun plainPodcastText(value: String): String {
 }
 
 /**
- * The one-line identity of an episode: its real publishing number when Spotify provides it, the
+ * The one-line identity of an episode: its real publishing number when the service provides it, the
  * publication date and the running time. Never the row's position, because the list is newest-first
  * and that would call the latest episode "1".
  */
 fun episodeMetaLine(
-    episode: SpotifyEpisode,
-    progress: SpotifyEpisodeProgress? = null,
+    episode: Episode,
+    progress: EpisodeProgress? = null,
     compactProgress: Boolean = false
 ): String = buildList {
     episode.episodeNumber?.takeIf { it > 0 }?.let { add("Ep. $it") }
@@ -78,7 +78,7 @@ fun episodeMetaLine(
 }.joinToString(" · ")
 
 /** "Played" or the rounded time left, once there is enough progress to be worth reporting. */
-fun episodeProgressLabel(progress: SpotifyEpisodeProgress, compact: Boolean = false): String? {
+fun episodeProgressLabel(progress: EpisodeProgress, compact: Boolean = false): String? {
     if (progress.completed) return "Played"
     if (progress.durationMs <= 0L || progress.positionMs < 30_000L) return null
     val remaining = (progress.durationMs - progress.positionMs).coerceAtLeast(0L)

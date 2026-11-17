@@ -6,7 +6,7 @@ import org.json.JSONObject
 /**
  * A playable reference handed to a [PlaybackEngine].
  *
- * Spotify uses its canonical URI as both [id] and [uri]. HTTP services will put a stream URL in
+ * A service may use its canonical URI as both [id] and [uri]. HTTP services put a stream URL in
  * [uri] and keep their own stable id in [id]; [headers] is reserved for authenticated streams.
  */
 data class PlaybackSource(

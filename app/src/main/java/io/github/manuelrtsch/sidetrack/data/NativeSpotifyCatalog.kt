@@ -1,21 +1,22 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.Album
+import io.github.manuelrtsch.sidetrack.Artist
+import io.github.manuelrtsch.sidetrack.Collection
+import io.github.manuelrtsch.sidetrack.CollectionType
+import io.github.manuelrtsch.sidetrack.Episode
 import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
+import io.github.manuelrtsch.sidetrack.Page
+import io.github.manuelrtsch.sidetrack.Playlist
+import io.github.manuelrtsch.sidetrack.SearchResults
 import io.github.manuelrtsch.sidetrack.SearchScope
-import io.github.manuelrtsch.sidetrack.SpotifyAlbum
-import io.github.manuelrtsch.sidetrack.SpotifyArtist
-import io.github.manuelrtsch.sidetrack.SpotifyCollection
-import io.github.manuelrtsch.sidetrack.SpotifyCollectionType
-import io.github.manuelrtsch.sidetrack.SpotifyEpisode
-import io.github.manuelrtsch.sidetrack.SpotifyPage
-import io.github.manuelrtsch.sidetrack.SpotifyPlaylist
-import io.github.manuelrtsch.sidetrack.SpotifySearchResults
-import io.github.manuelrtsch.sidetrack.SpotifyShow
-import io.github.manuelrtsch.sidetrack.SpotifyStation
-import io.github.manuelrtsch.sidetrack.SpotifyTrack
+import io.github.manuelrtsch.sidetrack.ServiceId
+import io.github.manuelrtsch.sidetrack.Show
+import io.github.manuelrtsch.sidetrack.Station
+import io.github.manuelrtsch.sidetrack.Track
 import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
-import io.github.manuelrtsch.sidetrack.spotifyIdOrNull
+import io.github.manuelrtsch.sidetrack.mediaIdOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -32,7 +33,7 @@ class NativeSpotifyCatalog(
     private val ensureSession: suspend () -> Unit
 ) : SpotifyCatalog,
     SpotifyLibraryWriter {
-    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<LibraryEntry> {
+    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): Page<LibraryEntry> {
         val text = callText { native.catalogLibrary(filter.name, offset.toLong(), limit.toLong()) }
         // The native catalog answers with `{items, total}` so paging does not have to guess from
         // how many entries survived metadata hydration. A bare array is still accepted.
@@ -46,51 +47,51 @@ class NativeSpotifyCatalog(
             LibraryFilter.Shows -> array.shows()
         }
         val total = payload?.optInt("total", -1)?.takeIf { it >= 0 }
-        return SpotifyPage.of(items, offset, limit, total)
+        return Page.of(items, offset, limit, total)
     }
 
     override suspend fun collection(
-        type: SpotifyCollectionType,
+        type: CollectionType,
         id: String,
         offset: Int,
         limit: Int
-    ): SpotifyCollection? {
+    ): Collection? {
         val json = call { native.catalogCollection(type.name, id, offset.toLong(), limit.toLong()) }
         return runCatching { json.collection(type) }.getOrNull()
     }
 
-    override suspend fun artist(id: String): SpotifyArtist? {
+    override suspend fun artist(id: String): Artist? {
         val json = call { native.catalogArtist(id) }
         return runCatching { artistFromNative(json) }.getOrNull()
     }
 
-    override suspend fun albumsBy(artist: SpotifyArtist, offset: Int, limit: Int): SpotifyPage<SpotifyAlbum> {
+    override suspend fun albumsBy(artist: Artist, offset: Int, limit: Int): Page<Album> {
         val array = parseArray(callText { native.catalogAlbumsBy(artist.id, offset.toLong(), limit.toLong()) })
-        return SpotifyPage.of(array.albums(), offset, limit)
+        return Page.of(array.albums(), offset, limit)
     }
 
-    override suspend fun topTracks(artist: SpotifyArtist, offset: Int, limit: Int): SpotifyPage<SpotifyTrack> {
+    override suspend fun topTracks(artist: Artist, offset: Int, limit: Int): Page<Track> {
         val array = parseArray(callText { native.catalogTopTracks(artist.id, offset.toLong(), limit.toLong()) })
-        return SpotifyPage.of(array.tracks(), offset, limit)
+        return Page.of(array.tracks(), offset, limit)
     }
 
-    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> = songRadioStation(trackId, limit).tracks
+    override suspend fun songRadio(trackId: String, limit: Int): List<Track> = songRadioStation(trackId, limit).tracks
 
-    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> = artistRadioStation(artistId, limit).tracks
+    override suspend fun artistRadio(artistId: String, limit: Int): List<Track> = artistRadioStation(artistId, limit).tracks
 
-    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = parseStation(callText { native.catalogSongRadio(trackId, limit.toLong()) })
+    override suspend fun songRadioStation(trackId: String, limit: Int): Station = parseStation(callText { native.catalogSongRadio(trackId, limit.toLong()) })
 
-    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation = parseStation(callText { native.catalogArtistRadio(artistId, limit.toLong()) })
+    override suspend fun artistRadioStation(artistId: String, limit: Int): Station = parseStation(callText { native.catalogArtistRadio(artistId, limit.toLong()) })
 
     override suspend fun search(
         query: String,
         scopes: Set<SearchScope>,
         offset: Int,
         limit: Int
-    ): SpotifySearchResults {
+    ): SearchResults {
         val scopeJson = JSONArray(scopes.map { it.name }).toString()
         val json = call { native.catalogSearch(query.trim(), scopeJson, offset.toLong(), limit.toLong()) }
-        return SpotifySearchResults(
+        return SearchResults(
             tracks = json.optJSONArray("tracks").tracks(),
             artists = json.optJSONArray("artists").artists(),
             albums = json.optJSONArray("albums").albums(),
@@ -101,21 +102,21 @@ class NativeSpotifyCatalog(
 
     override suspend fun isTrackSaved(id: String): Boolean? = contains("collection", "spotify:track:$id")
 
-    override suspend fun isSaved(type: SpotifyCollectionType, id: String): Boolean? = when (type) {
-        SpotifyCollectionType.Album -> contains("collection", "spotify:album:$id")
-        SpotifyCollectionType.Show -> contains("show", "spotify:show:$id")
-        SpotifyCollectionType.Playlist -> playlistSaved(id)
+    override suspend fun isSaved(type: CollectionType, id: String): Boolean? = when (type) {
+        CollectionType.Album -> contains("collection", "spotify:album:$id")
+        CollectionType.Show -> contains("show", "spotify:show:$id")
+        CollectionType.Playlist -> playlistSaved(id)
     }
 
     override suspend fun isArtistFollowed(id: String): Boolean? = contains("artist", "spotify:artist:$id")
 
     override suspend fun setTrackSaved(id: String, saved: Boolean) = writeCollection("collection", "spotify:track:$id", saved)
 
-    override suspend fun setSaved(type: SpotifyCollectionType, id: String, saved: Boolean) {
+    override suspend fun setSaved(type: CollectionType, id: String, saved: Boolean) {
         when (type) {
-            SpotifyCollectionType.Album -> writeCollection("collection", "spotify:album:$id", saved)
-            SpotifyCollectionType.Show -> writeCollection("show", "spotify:show:$id", saved)
-            SpotifyCollectionType.Playlist -> writePlaylist(id, saved)
+            CollectionType.Album -> writeCollection("collection", "spotify:album:$id", saved)
+            CollectionType.Show -> writeCollection("show", "spotify:show:$id", saved)
+            CollectionType.Playlist -> writePlaylist(id, saved)
         }
     }
 
@@ -202,12 +203,12 @@ class NativeSpotifyCatalog(
      * The native station response is `{playlistId, tracks}`. A bare array is still accepted so an
      * older bridge (or a test fixture) keeps working; it simply has no playlist to save.
      */
-    private fun parseStation(text: String): SpotifyStation {
-        if (!text.trimStart().startsWith("{")) return SpotifyStation(parseArray(text).tracks())
+    private fun parseStation(text: String): Station {
+        if (!text.trimStart().startsWith("{")) return Station(parseArray(text).tracks())
         val json = parseObject(text)
-        return SpotifyStation(
+        return Station(
             tracks = json.optJSONArray("tracks").tracks(),
-            playlistId = json.optString("playlistId").spotifyIdOrNull()
+            playlistId = json.optString("playlistId").mediaIdOrNull()
         )
     }
 
@@ -218,98 +219,101 @@ class NativeSpotifyCatalog(
     private fun fail(failure: SpotifyFailure, message: String): Nothing = throw SpotifyGatewayException(failure, message)
 }
 
-private fun JSONArray?.tracks(): List<SpotifyTrack> = buildList {
+private fun JSONArray?.tracks(): List<Track> = buildList {
     if (this@tracks == null) return@buildList
     for (i in 0 until this@tracks.length()) {
         this@tracks.optJSONObject(i)?.let(::trackFromNative)?.let(::add)
     }
 }
 
-private fun JSONArray?.albums(): List<SpotifyAlbum> = buildList {
+private fun JSONArray?.albums(): List<Album> = buildList {
     if (this@albums == null) return@buildList
     for (i in 0 until this@albums.length()) {
         this@albums.optJSONObject(i)?.let(::albumFromNative)?.let(::add)
     }
 }
 
-private fun JSONArray?.artists(): List<SpotifyArtist> = buildList {
+private fun JSONArray?.artists(): List<Artist> = buildList {
     if (this@artists == null) return@buildList
     for (i in 0 until this@artists.length()) {
         this@artists.optJSONObject(i)?.let(::artistFromNative)?.let(::add)
     }
 }
 
-private fun JSONArray?.playlists(): List<SpotifyPlaylist> = buildList {
+private fun JSONArray?.playlists(): List<Playlist> = buildList {
     if (this@playlists == null) return@buildList
     for (i in 0 until this@playlists.length()) {
         this@playlists.optJSONObject(i)?.let(::playlistFromNative)?.let(::add)
     }
 }
 
-private fun JSONArray?.shows(): List<SpotifyShow> = buildList {
+private fun JSONArray?.shows(): List<Show> = buildList {
     if (this@shows == null) return@buildList
     for (i in 0 until this@shows.length()) {
         this@shows.optJSONObject(i)?.let(::showFromNative)?.let(::add)
     }
 }
 
-internal fun JSONObject.collection(type: SpotifyCollectionType): SpotifyCollection? {
-    val id = optString("id").spotifyIdOrNull() ?: return null
+internal fun JSONObject.collection(type: CollectionType): Collection? {
+    val id = optString("id").mediaIdOrNull() ?: return null
     val items = when (type) {
-        SpotifyCollectionType.Show -> optJSONArray("items").episodes(null)
-        SpotifyCollectionType.Album, SpotifyCollectionType.Playlist -> optJSONArray("items").tracks()
+        CollectionType.Show -> optJSONArray("items").episodes(null)
+        CollectionType.Album, CollectionType.Playlist -> optJSONArray("items").tracks()
     }
-    return SpotifyCollection(
+    return Collection(
         type = type,
         id = id,
         title = optString("title", "Unknown"),
         subtitle = optString("subtitle"),
         artRes = 0,
         items = items,
-        artistId = optString("artistId").spotifyIdOrNull(),
+        artistId = optString("artistId").mediaIdOrNull(),
         artUrl = optString("artUrl").takeIf { it.isNotEmpty() },
         totalItems = optInt("totalItems", items.size),
         hasMore = optBoolean("hasMore", false),
-        description = optString("description")
+        description = optString("description"),
+        service = ServiceId.Spotify
     )
 }
 
-private fun trackFromNative(json: JSONObject): SpotifyTrack? {
-    val id = json.optString("id").spotifyIdOrNull() ?: return null
-    return SpotifyTrack(
+private fun trackFromNative(json: JSONObject): Track? {
+    val id = json.optString("id").mediaIdOrNull() ?: return null
+    return Track(
         id = id,
         title = json.optString("title", "Unknown track"),
         artist = json.optString("artist", "Unknown artist"),
-        artistId = json.optString("artistId").spotifyIdOrNull().orEmpty(),
-        albumId = json.optString("albumId").spotifyIdOrNull().orEmpty(),
+        artistId = json.optString("artistId").mediaIdOrNull().orEmpty(),
+        albumId = json.optString("albumId").mediaIdOrNull().orEmpty(),
         artRes = 0,
         durationMs = json.optLong("durationMs", 0L),
         explicit = json.optBoolean("explicit", false),
         playable = json.optBoolean("playable", true),
         uri = json.optString("uri").takeIf { it.isNotEmpty() },
-        artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() }
+        artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+        service = ServiceId.Spotify
     )
 }
 
-private fun albumFromNative(json: JSONObject): SpotifyAlbum? {
-    val id = json.optString("id").spotifyIdOrNull() ?: return null
-    return SpotifyAlbum(
+private fun albumFromNative(json: JSONObject): Album? {
+    val id = json.optString("id").mediaIdOrNull() ?: return null
+    return Album(
         id = id,
         title = json.optString("title", "Unknown album"),
         artist = json.optString("artist", "Unknown artist"),
-        artistId = json.optString("artistId").spotifyIdOrNull().orEmpty(),
+        artistId = json.optString("artistId").mediaIdOrNull().orEmpty(),
         year = json.optInt("year", 0),
         artRes = 0,
         tracks = json.optJSONArray("tracks").tracks(),
         artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
-        trackCount = json.optInt("trackCount", 0)
+        trackCount = json.optInt("trackCount", 0),
+        service = ServiceId.Spotify
     )
 }
 
-private fun artistFromNative(json: JSONObject): SpotifyArtist? {
-    val id = json.optString("id").spotifyIdOrNull() ?: return null
+private fun artistFromNative(json: JSONObject): Artist? {
+    val id = json.optString("id").mediaIdOrNull() ?: return null
     val albumIds = json.optJSONArray("albumIds") ?: JSONArray()
-    return SpotifyArtist(
+    return Artist(
         id = id,
         name = json.optString("name", "Unknown artist"),
         artRes = 0,
@@ -317,29 +321,31 @@ private fun artistFromNative(json: JSONObject): SpotifyArtist? {
             for (i in 0 until albumIds.length()) albumIds.optString(i).takeIf { it.isNotEmpty() }?.let(::add)
         },
         artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
-        albumCount = json.optInt("albumCount", albumIds.length())
+        albumCount = json.optInt("albumCount", albumIds.length()),
+        service = ServiceId.Spotify
     )
 }
 
-private fun playlistFromNative(json: JSONObject): SpotifyPlaylist? {
-    val id = json.optString("id").spotifyIdOrNull() ?: return null
-    return SpotifyPlaylist(
+private fun playlistFromNative(json: JSONObject): Playlist? {
+    val id = json.optString("id").mediaIdOrNull() ?: return null
+    return Playlist(
         id = id,
         name = json.optString("name", "Unknown playlist"),
         owner = json.optString("owner", "Spotify"),
-        ownerId = json.optString("ownerId").spotifyIdOrNull(),
+        ownerId = json.optString("ownerId").mediaIdOrNull(),
         artRes = 0,
         tracks = json.optJSONArray("tracks").tracks(),
         artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
         trackCount = json.optInt("trackCount", 0),
         editable = json.optBoolean("editable", false),
-        folder = json.optString("folder").takeIf { it.isNotEmpty() }
+        folder = json.optString("folder").takeIf { it.isNotEmpty() },
+        service = ServiceId.Spotify
     )
 }
 
-private fun showFromNative(json: JSONObject): SpotifyShow? {
-    val id = json.optString("id").spotifyIdOrNull() ?: return null
-    return SpotifyShow(
+private fun showFromNative(json: JSONObject): Show? {
+    val id = json.optString("id").mediaIdOrNull() ?: return null
+    return Show(
         id = id,
         name = json.optString("name", "Unknown show"),
         publisher = json.optString("publisher", "Podcast"),
@@ -347,21 +353,22 @@ private fun showFromNative(json: JSONObject): SpotifyShow? {
         episodes = json.optJSONArray("episodes").episodes(null),
         artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
         episodeCount = json.optInt("episodeCount", 0),
-        description = json.optString("description")
+        description = json.optString("description"),
+        service = ServiceId.Spotify
     )
 }
 
-private fun JSONArray?.episodes(show: SpotifyShow?): List<SpotifyEpisode> = buildList {
+private fun JSONArray?.episodes(show: Show?): List<Episode> = buildList {
     if (this@episodes == null) return@buildList
     for (i in 0 until this@episodes.length()) {
         val json = this@episodes.optJSONObject(i) ?: continue
-        val id = json.optString("id").spotifyIdOrNull() ?: continue
+        val id = json.optString("id").mediaIdOrNull() ?: continue
         add(
-            SpotifyEpisode(
+            Episode(
                 id = id,
                 title = json.optString("title", "Unknown episode"),
                 show = json.optString("show").ifEmpty { show?.name ?: "Podcast" },
-                showId = json.optString("showId").spotifyIdOrNull() ?: show?.id.orEmpty(),
+                showId = json.optString("showId").mediaIdOrNull() ?: show?.id.orEmpty(),
                 published = json.optString("published"),
                 artRes = 0,
                 durationMs = json.optLong("durationMs", 0L),
@@ -370,7 +377,8 @@ private fun JSONArray?.episodes(show: SpotifyShow?): List<SpotifyEpisode> = buil
                 artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
                 description = json.optString("description"),
                 episodeNumber = json.optInt("number", 0).takeIf { it > 0 },
-                explicit = json.optBoolean("explicit", false)
+                explicit = json.optBoolean("explicit", false),
+                service = ServiceId.Spotify
             )
         )
     }

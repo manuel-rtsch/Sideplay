@@ -1,8 +1,8 @@
 package io.github.manuelrtsch.sidetrack
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryEntry
-import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
+import io.github.manuelrtsch.sidetrack.data.HistoryEntry
+import io.github.manuelrtsch.sidetrack.data.HistoryRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyMediaCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,8 +28,8 @@ class ClearHistoryTest {
 
     @Test fun `clear history can be undone`() = runTest(dispatcher) {
         val track = MockSpotifyDataSource.recentlyPlayed.first()
-        val history = SpotifyHistoryRepository(load = { listOf(SpotifyHistoryEntry(track, 1)) })
-        val vm = SpotifyViewModel(SpotifyMediaCatalog(MockSpotifyDataSource), history = history, simulatePlayback = false)
+        val history = HistoryRepository(load = { listOf(HistoryEntry(track, 1)) })
+        val vm = SidetrackViewModel(SpotifyMediaCatalog(MockSpotifyDataSource), history = history, simulatePlayback = false)
 
         assertTrue(vm.clearHistory())
         assertEquals(0, vm.state.value.recent.size)

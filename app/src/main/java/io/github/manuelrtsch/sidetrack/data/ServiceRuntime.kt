@@ -7,21 +7,13 @@ import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.playback.PlaybackController
 import kotlinx.coroutines.flow.StateFlow
 
-// The repositories are service-neutral (they key everything by MediaKey); the Spotify names are
-// historical. These aliases keep the runtime contract free of provider names.
-typealias QueueRepository = SpotifyQueueRepository
-typealias HistoryRepository = SpotifyHistoryRepository
-typealias EpisodeProgressRepository = SpotifyEpisodeProgressRepository
-typealias EpisodeMetaRepository = SpotifyEpisodeMetaRepository
-typealias ResumePoint = SpotifyResumePoint
-
 /**
  * Everything the UI needs from one signed-in music service.
  *
  * A runtime owns the service's catalog, writer, queue, history, settings and playback controller.
  * [AppSession] keeps one runtime per installed service and exposes the active one, so the UI never
- * reaches into a provider-specific session. Spotify's runtime is [SpotifySession]; a Navidrome
- * runtime implements the same contract.
+ * reaches into a provider-specific session. Each provider supplies one runtime; the UI only sees
+ * this contract.
  *
  * The core is deliberately small. Provider-specific abilities live in the optional interfaces
  * below, so a service that has no native player, no quality settings or no cache does not have to

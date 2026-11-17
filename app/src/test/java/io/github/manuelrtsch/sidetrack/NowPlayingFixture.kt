@@ -11,13 +11,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
  */
 @Composable
 internal fun NowPlayingUnderTest(
-    state: SpotifyUiState,
+    state: SidetrackUiState,
     timer: SleepTimerState = SleepTimerState.Off,
     onAlbum: () -> Unit = {}
 ) {
     val position = remember { MutableStateFlow(68_000L) }
     val sleepTimer = remember(timer) { MutableStateFlow(timer) }
-    SpotifyNowPlayingScreen(
+    NowPlayingScreen(
         state.playback,
         state.saved,
         state.chrome,

@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Tracks whether the device currently has a usable network. Playback and catalog failures are
- * mapped to [SpotifyFailure.Network] when this says there is no connection, so an abrupt signal
- * loss is not reported as an expired Spotify session.
+ * mapped to [ServiceFailure.Network] when this says there is no connection, so an abrupt signal
+ * loss is not reported as an expired session.
  */
 class NetworkMonitor(context: Context) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)

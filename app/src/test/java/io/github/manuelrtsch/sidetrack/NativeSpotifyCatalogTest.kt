@@ -31,11 +31,11 @@ class NativeSpotifyCatalogTest {
         val native = FakeNative()
         val catalog = NativeSpotifyCatalog(native) {}
 
-        catalog.setSaved(SpotifyCollectionType.Album, "album1", false)
+        catalog.setSaved(CollectionType.Album, "album1", false)
         assertEquals("collection", native.set)
         assertTrue(native.removed)
 
-        catalog.setSaved(SpotifyCollectionType.Show, "show1", true)
+        catalog.setSaved(CollectionType.Show, "show1", true)
         assertEquals("show", native.set)
         assertFalse(native.removed)
     }
@@ -44,7 +44,7 @@ class NativeSpotifyCatalogTest {
         val native = FakeNative()
         val catalog = NativeSpotifyCatalog(native) {}
 
-        catalog.setSaved(SpotifyCollectionType.Playlist, "playlist1", true)
+        catalog.setSaved(CollectionType.Playlist, "playlist1", true)
 
         assertEquals("playlist1", native.playlistId)
         assertTrue(native.playlistSave)
@@ -88,7 +88,7 @@ class NativeSpotifyCatalogTest {
         val catalog = NativeSpotifyCatalog(native) {}
 
         assertTrue(catalog.isTrackSaved("abc") == true)
-        assertTrue(catalog.isSaved(SpotifyCollectionType.Playlist, "playlist1") == true)
+        assertTrue(catalog.isSaved(CollectionType.Playlist, "playlist1") == true)
     }
 
     @Test fun `library forwards paging and reports another page`() = runTest {
@@ -154,7 +154,7 @@ class NativeSpotifyCatalogTest {
         }
         val catalog = NativeSpotifyCatalog(native) {}
 
-        val collection = catalog.collection(SpotifyCollectionType.Playlist, "p1", offset = 50, limit = 50)
+        val collection = catalog.collection(CollectionType.Playlist, "p1", offset = 50, limit = 50)
 
         assertEquals(202, collection?.totalItems)
         assertTrue(collection?.hasMore == true)

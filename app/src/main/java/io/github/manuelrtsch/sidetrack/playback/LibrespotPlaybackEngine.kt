@@ -188,3 +188,22 @@ class LibrespotPlaybackEngine(
         const val PAUSE_DRAIN_GRACE_MS = 60L
     }
 }
+
+/**
+ * Builds the librespot-backed controller. Kept here, next to the engine, so the neutral
+ * [PlaybackController] does not import the native gateway or audio sink.
+ */
+fun librespotPlaybackController(
+    gateway: SpotifyGateway,
+    scope: kotlinx.coroutines.CoroutineScope,
+    registry: MediaSessionRegistry = MediaSessions,
+    audio: SpotifyAudioSink? = null,
+    context: android.content.Context? = null,
+    elapsedTime: () -> Long = { android.os.SystemClock.elapsedRealtime() }
+): PlaybackController = PlaybackController(
+    engine = LibrespotPlaybackEngine(gateway, audio),
+    scope = scope,
+    registry = registry,
+    context = context,
+    elapsedTime = elapsedTime
+)

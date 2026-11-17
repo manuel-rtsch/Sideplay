@@ -2,10 +2,10 @@ package io.github.manuelrtsch.sidetrack
 
 import androidx.lifecycle.viewModelScope
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgressRepository
+import io.github.manuelrtsch.sidetrack.data.EpisodeProgressRepository
+import io.github.manuelrtsch.sidetrack.data.QueueRepository
+import io.github.manuelrtsch.sidetrack.data.ResumePoint
 import io.github.manuelrtsch.sidetrack.data.SpotifyMediaCatalog
-import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
-import io.github.manuelrtsch.sidetrack.data.SpotifyResumePoint
 import io.github.manuelrtsch.sidetrack.data.SpotifySession
 import io.github.manuelrtsch.sidetrack.playback.PlaybackEvent
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
@@ -31,7 +31,7 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpotifyViewModelEventTest {
     private val dispatcher = StandardTestDispatcher()
-    private val viewModels = mutableListOf<SpotifyViewModel>()
+    private val viewModels = mutableListOf<SidetrackViewModel>()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
 
@@ -66,9 +66,9 @@ class SpotifyViewModelEventTest {
     }
 
     @Test fun `an episode resumes at its saved local offset`() = runTest(dispatcher) {
-        val progress = SpotifyEpisodeProgressRepository(now = { 1_000L })
+        val progress = EpisodeProgressRepository(now = { 1_000L })
         progress.record("lw5", 1_200_000L, 2_529_000L)
-        val vm = SpotifyViewModel(
+        val vm = SidetrackViewModel(
             SpotifyMediaCatalog(MockSpotifyDataSource),
             episodeProgressRepository = progress,
             simulatePlayback = false
@@ -81,8 +81,8 @@ class SpotifyViewModelEventTest {
     }
 
     @Test fun `seeking an episode saves the new local offset`() = runTest(dispatcher) {
-        val progress = SpotifyEpisodeProgressRepository(now = { 1_000L })
-        val vm = SpotifyViewModel(
+        val progress = EpisodeProgressRepository(now = { 1_000L })
+        val vm = SidetrackViewModel(
             SpotifyMediaCatalog(MockSpotifyDataSource),
             episodeProgressRepository = progress,
             simulatePlayback = false
@@ -117,7 +117,7 @@ class SpotifyViewModelEventTest {
 
     @Test fun `end of track timer stops before advancing`() = runTest(dispatcher) {
         val session = SpotifySession()
-        val vm = SpotifyViewModel(
+        val vm = SidetrackViewModel(
             SpotifyMediaCatalog(MockSpotifyDataSource),
             session = session,
             simulatePlayback = false
@@ -278,11 +278,11 @@ class SpotifyViewModelEventTest {
         val session = SpotifySession()
         SpotifySession::class.java.getDeclaredField("resumePoint").apply {
             isAccessible = true
-            set(session, SpotifyResumePoint(track.id, 42_000L))
+            set(session, ResumePoint(track.key, 42_000L))
         }
-        val queue = SpotifyQueueRepository(load = { SpotifyQueueRepository.Snapshot(current = track) })
+        val queue = QueueRepository(load = { QueueRepository.Snapshot(current = track) })
 
-        val vm = SpotifyViewModel(
+        val vm = SidetrackViewModel(
             SpotifyMediaCatalog(MockSpotifyDataSource),
             queue = queue,
             session = session,
@@ -301,11 +301,11 @@ class SpotifyViewModelEventTest {
         val session = SpotifySession()
         SpotifySession::class.java.getDeclaredField("resumePoint").apply {
             isAccessible = true
-            set(session, SpotifyResumePoint("someone-else", 42_000L))
+            set(session, ResumePoint(MediaKey(ServiceId.Spotify, MediaType.Track, "someone-else"), 42_000L))
         }
-        val queue = SpotifyQueueRepository(load = { SpotifyQueueRepository.Snapshot(current = track) })
+        val queue = QueueRepository(load = { QueueRepository.Snapshot(current = track) })
 
-        val vm = SpotifyViewModel(
+        val vm = SidetrackViewModel(
             SpotifyMediaCatalog(MockSpotifyDataSource),
             queue = queue,
             session = session,
@@ -433,5 +433,5 @@ class SpotifyViewModelEventTest {
 
     private fun event(raw: String): PlaybackEvent = PlaybackEvent.fromJson(raw)
 
-    private fun viewModel() = SpotifyViewModel(SpotifyMediaCatalog(MockSpotifyDataSource), simulatePlayback = false).also { viewModels += it }
+    private fun viewModel() = SidetrackViewModel(SpotifyMediaCatalog(MockSpotifyDataSource), simulatePlayback = false).also { viewModels += it }
 }

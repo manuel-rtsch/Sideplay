@@ -3,21 +3,21 @@ package io.github.manuelrtsch.sidetrack
 import hrln.interactive.sidekit.design.action.NoticeKind
 
 /**
- * Focused views of [SpotifyUiState].
+ * Focused views of [SidetrackUiState].
  *
  * The screen state used to be one large data class, so any change (a notice, a save toggle, a
  * search keystroke) produced a new instance and recomposed every screen that collected it. Each
  * slice below is a small, structurally comparable value: a screen collects only the slices it
  * reads, and a change to an unrelated slice no longer reaches it.
  *
- * The slices are derived from the single [SpotifyUiState] source of truth, so the ViewModel's
+ * The slices are derived from the single [SidetrackUiState] source of truth, so the ViewModel's
  * update sites stay unchanged.
  */
 data class PlaybackUiState(
-    val current: SpotifyMediaItem? = null,
-    val upcoming: List<SpotifyMediaItem> = emptyList(),
-    val history: List<SpotifyMediaItem> = emptyList(),
-    val recent: List<SpotifyMediaItem> = emptyList(),
+    val current: MediaItem? = null,
+    val upcoming: List<MediaItem> = emptyList(),
+    val history: List<MediaItem> = emptyList(),
+    val recent: List<MediaItem> = emptyList(),
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val shuffle: Boolean = false,
@@ -35,10 +35,10 @@ data class LibraryUiState(
     val libraryHasMore: Boolean = false,
     val libraryMorePending: Boolean = false,
     val filter: LibraryFilter = LibraryFilter.LikedSongs,
-    val collections: Map<String, SpotifyCollection> = emptyMap(),
-    val artists: Map<String, SpotifyArtist> = emptyMap(),
-    val artistAlbums: Map<String, List<SpotifyAlbum>> = emptyMap(),
-    val artistTracks: Map<String, List<SpotifyTrack>> = emptyMap(),
+    val collections: Map<String, Collection> = emptyMap(),
+    val artists: Map<String, Artist> = emptyMap(),
+    val artistAlbums: Map<String, List<Album>> = emptyMap(),
+    val artistTracks: Map<String, List<Track>> = emptyMap(),
     val pendingCollections: Set<String> = emptySet(),
     val pendingArtists: Set<String> = emptySet(),
     val collectionErrors: Map<String, String> = emptyMap(),
@@ -50,7 +50,7 @@ data class LibraryUiState(
 )
 
 data class SearchUiState(
-    val searchResults: SpotifySearchResults = SpotifySearchResults(),
+    val searchResults: SearchResults = SearchResults(),
     val searchPending: Boolean = false,
     val searchError: String? = null,
     val searchHasMore: Set<SearchScope> = emptySet(),
@@ -85,24 +85,24 @@ data class SavedUiState(
 data class ChromeUiState(
     val notice: String? = null,
     val noticeKind: NoticeKind = NoticeKind.Other,
-    val nowPlayingNotice: SpotifyMediaItem? = null
+    val nowPlayingNotice: MediaItem? = null
 )
 
 data class RadioUiState(
-    val radio: SpotifyCollection? = null,
+    val radio: Collection? = null,
     val radioSeedId: String? = null,
     val radioPending: Boolean = false,
     val radioError: String? = null,
-    val artistRadio: SpotifyCollection? = null,
+    val artistRadio: Collection? = null,
     val artistRadioArtistId: String? = null,
     val artistRadioPending: Boolean = false,
     val artistRadioError: String? = null
 )
 
-val SpotifyUiState.playback: PlaybackUiState
+val SidetrackUiState.playback: PlaybackUiState
     get() = PlaybackUiState(current, upcoming, history, recent, isPlaying, isBuffering, shuffle, repeat)
 
-val SpotifyUiState.library: LibraryUiState
+val SidetrackUiState.library: LibraryUiState
     get() = LibraryUiState(
         libraryItems = libraryItems,
         librarySections = librarySections,
@@ -128,7 +128,7 @@ val SpotifyUiState.library: LibraryUiState
         artistMorePending = artistMorePending
     )
 
-val SpotifyUiState.search: SearchUiState
+val SidetrackUiState.search: SearchUiState
     get() = SearchUiState(
         searchResults = searchResults,
         searchPending = searchPending,
@@ -139,7 +139,7 @@ val SpotifyUiState.search: SearchUiState
         query = query
     )
 
-val SpotifyUiState.account: AccountUiState
+val SidetrackUiState.account: AccountUiState
     get() = AccountUiState(
         signedIn = signedIn,
         authPending = authPending,
@@ -150,13 +150,13 @@ val SpotifyUiState.account: AccountUiState
         cacheSizeBytes = cacheSizeBytes
     )
 
-val SpotifyUiState.saved: SavedUiState
+val SidetrackUiState.saved: SavedUiState
     get() = SavedUiState(savedTrackIds, savedCollectionKeys, followedArtistIds)
 
-val SpotifyUiState.chrome: ChromeUiState
+val SidetrackUiState.chrome: ChromeUiState
     get() = ChromeUiState(notice, noticeKind, nowPlayingNotice)
 
-val SpotifyUiState.radioSlice: RadioUiState
+val SidetrackUiState.radioSlice: RadioUiState
     get() = RadioUiState(
         radio = radio,
         radioSeedId = radioSeedId,

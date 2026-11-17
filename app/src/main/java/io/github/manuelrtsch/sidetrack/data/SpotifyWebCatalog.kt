@@ -1,15 +1,15 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.Album
+import io.github.manuelrtsch.sidetrack.Artist
+import io.github.manuelrtsch.sidetrack.Collection
+import io.github.manuelrtsch.sidetrack.CollectionType
 import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
+import io.github.manuelrtsch.sidetrack.Page
+import io.github.manuelrtsch.sidetrack.SearchResults
 import io.github.manuelrtsch.sidetrack.SearchScope
-import io.github.manuelrtsch.sidetrack.SpotifyAlbum
-import io.github.manuelrtsch.sidetrack.SpotifyArtist
-import io.github.manuelrtsch.sidetrack.SpotifyCollection
-import io.github.manuelrtsch.sidetrack.SpotifyCollectionType
-import io.github.manuelrtsch.sidetrack.SpotifyPage
-import io.github.manuelrtsch.sidetrack.SpotifySearchResults
-import io.github.manuelrtsch.sidetrack.SpotifyTrack
+import io.github.manuelrtsch.sidetrack.Track
 
 /** [SpotifyCatalog] over the Web API. */
 class SpotifyWebCatalog(private val api: SpotifyWebApi) : SpotifyCatalog {
@@ -17,37 +17,37 @@ class SpotifyWebCatalog(private val api: SpotifyWebApi) : SpotifyCatalog {
         filter: LibraryFilter,
         offset: Int,
         limit: Int
-    ): SpotifyPage<LibraryEntry> = api.library(filter, offset, limit)
+    ): Page<LibraryEntry> = api.library(filter, offset, limit)
 
     override suspend fun collection(
-        type: SpotifyCollectionType,
+        type: CollectionType,
         id: String,
         offset: Int,
         limit: Int
-    ): SpotifyCollection? = api.collection(type, id, offset, limit)
+    ): Collection? = api.collection(type, id, offset, limit)
 
-    override suspend fun artist(id: String): SpotifyArtist? = api.artist(id)
+    override suspend fun artist(id: String): Artist? = api.artist(id)
 
     override suspend fun albumsBy(
-        artist: SpotifyArtist,
+        artist: Artist,
         offset: Int,
         limit: Int
-    ): SpotifyPage<SpotifyAlbum> = api.albumsBy(artist, offset, limit)
+    ): Page<Album> = api.albumsBy(artist, offset, limit)
 
     override suspend fun topTracks(
-        artist: SpotifyArtist,
+        artist: Artist,
         offset: Int,
         limit: Int
-    ): SpotifyPage<SpotifyTrack> = api.topTracks(artist, offset, limit)
+    ): Page<Track> = api.topTracks(artist, offset, limit)
 
-    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> = api.songRadio(trackId, limit)
+    override suspend fun songRadio(trackId: String, limit: Int): List<Track> = api.songRadio(trackId, limit)
 
-    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> = api.artistRadio(artistId, limit)
+    override suspend fun artistRadio(artistId: String, limit: Int): List<Track> = api.artistRadio(artistId, limit)
 
     override suspend fun search(
         query: String,
         scopes: Set<SearchScope>,
         offset: Int,
         limit: Int
-    ): SpotifySearchResults = api.search(query, scopes, offset, limit)
+    ): SearchResults = api.search(query, scopes, offset, limit)
 }

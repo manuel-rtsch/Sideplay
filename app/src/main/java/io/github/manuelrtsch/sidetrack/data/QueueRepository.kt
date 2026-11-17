@@ -1,7 +1,7 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.RepeatMode
-import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 import kotlin.random.Random
 
 /**
@@ -14,20 +14,20 @@ import kotlin.random.Random
  * current item and history never move. The repository is deliberately free of Android and
  * Compose types; playback, persistence and the UI observe it through [snapshot].
  */
-class SpotifyQueueRepository(
+class QueueRepository(
     private val random: Random = Random.Default,
     private val load: () -> Snapshot = { Snapshot() },
     private val save: (Snapshot) -> Unit = {}
 ) {
     data class Snapshot(
-        val current: SpotifyMediaItem? = null,
-        val upcoming: List<SpotifyMediaItem> = emptyList(),
-        val history: List<SpotifyMediaItem> = emptyList(),
+        val current: MediaItem? = null,
+        val upcoming: List<MediaItem> = emptyList(),
+        val history: List<MediaItem> = emptyList(),
         val shuffle: Boolean = false,
         val repeat: RepeatMode = RepeatMode.Off,
-        val context: List<SpotifyMediaItem> = emptyList(),
+        val context: List<MediaItem> = emptyList(),
         /** Upcoming order before shuffle, kept so shuffle can be turned off after process death. */
-        val shuffleBackup: List<SpotifyMediaItem>? = null
+        val shuffleBackup: List<MediaItem>? = null
     )
 
     var snapshot: Snapshot = runCatching(load).getOrDefault(Snapshot())
@@ -40,7 +40,7 @@ class SpotifyQueueRepository(
      * Starts playback from [index] within [items], replacing the queue. The rows after the
      * chosen item become upcoming; the item that was playing moves into history.
      */
-    fun play(items: List<SpotifyMediaItem>, index: Int): Snapshot {
+    fun play(items: List<MediaItem>, index: Int): Snapshot {
         if (index !in items.indices) return snapshot
         val item = items[index]
         if (!item.playable) return snapshot
@@ -62,7 +62,7 @@ class SpotifyQueueRepository(
         )
     }
 
-    fun playItem(item: SpotifyMediaItem): Snapshot = play(listOf(item), 0)
+    fun playItem(item: MediaItem): Snapshot = play(listOf(item), 0)
 
     /** Stops and clears the queue. */
     fun stop(): Snapshot = commit(
@@ -100,10 +100,10 @@ class SpotifyQueueRepository(
 
     fun clearHistory(): Snapshot = commit(snapshot.copy(history = emptyList()))
 
-    fun removeHistory(item: SpotifyMediaItem): Snapshot = commit(snapshot.copy(history = snapshot.history.filterNot { it.key == item.key }))
+    fun removeHistory(item: MediaItem): Snapshot = commit(snapshot.copy(history = snapshot.history.filterNot { it.key == item.key }))
 
     /** Puts a removed history entry back at its old position, unless it is already there again. */
-    fun restoreHistory(index: Int, item: SpotifyMediaItem): Snapshot {
+    fun restoreHistory(index: Int, item: MediaItem): Snapshot {
         if (snapshot.history.any { it.key == item.key }) return snapshot
         val history = snapshot.history.toMutableList()
         history.add(index.coerceIn(0, history.size), item)
@@ -175,7 +175,7 @@ class SpotifyQueueRepository(
      * Puts one occurrence directly after the current item. An existing occurrence is moved, not
      * duplicated; the first match is enough because the queue UI has no id-based Play next.
      */
-    fun playNext(item: SpotifyMediaItem): Snapshot {
+    fun playNext(item: MediaItem): Snapshot {
         if (item.key == snapshot.current?.key) return snapshot
         val upcoming = snapshot.upcoming.toMutableList()
         val at = upcoming.indexOfFirst { it.key == item.key }
@@ -184,14 +184,14 @@ class SpotifyQueueRepository(
         return commit(snapshot.copy(upcoming = upcoming))
     }
 
-    fun addToQueue(item: SpotifyMediaItem): Snapshot = addToQueue(listOf(item))
+    fun addToQueue(item: MediaItem): Snapshot = addToQueue(listOf(item))
 
     /**
      * Appends a batch as one commit. When shuffle is on, the pre-shuffle order has to grow too:
      * otherwise switching shuffle off later would restore the old tail and silently drop every
      * item added in the meantime.
      */
-    fun addToQueue(items: List<SpotifyMediaItem>): Snapshot {
+    fun addToQueue(items: List<MediaItem>): Snapshot {
         if (items.isEmpty()) return snapshot
         val backup = snapshot.shuffleBackup
         return commit(
@@ -214,7 +214,7 @@ class SpotifyQueueRepository(
     }
 
     /** Puts a removed occurrence back where it was, or as close to it as the tail allows. */
-    fun restoreRemovedUpcoming(index: Int, item: SpotifyMediaItem): Snapshot {
+    fun restoreRemovedUpcoming(index: Int, item: MediaItem): Snapshot {
         val upcoming = snapshot.upcoming.toMutableList()
         upcoming.add(index.coerceIn(0, upcoming.size), item)
         return commit(snapshot.copy(upcoming = upcoming))
@@ -248,14 +248,14 @@ class SpotifyQueueRepository(
     }
 
     /** Removes every upcoming item and returns them so the caller can offer Undo. */
-    fun clearUpcoming(): List<SpotifyMediaItem> {
+    fun clearUpcoming(): List<MediaItem> {
         val removed = snapshot.upcoming
         commit(snapshot.copy(upcoming = emptyList(), shuffle = false, shuffleBackup = null))
         return removed
     }
 
     /** Restores a cleared tail in front of whatever was appended in the meantime. */
-    fun restoreUpcoming(items: List<SpotifyMediaItem>): Snapshot = commit(snapshot.copy(upcoming = items + snapshot.upcoming))
+    fun restoreUpcoming(items: List<MediaItem>): Snapshot = commit(snapshot.copy(upcoming = items + snapshot.upcoming))
 
     private fun replayContext(): Snapshot {
         val items = snapshot.context

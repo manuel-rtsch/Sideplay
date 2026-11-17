@@ -1,9 +1,9 @@
 package io.github.manuelrtsch.sidetrack.data
 
 import androidx.core.util.AtomicFile
+import io.github.manuelrtsch.sidetrack.Episode
+import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.ServiceId
-import io.github.manuelrtsch.sidetrack.SpotifyEpisode
-import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -20,38 +20,38 @@ import kotlinx.coroutines.CoroutineScope
  * page fetches episode metadata again anyway; this cache only exists so the item restored into
  * Now Playing still knows its notes, its publishing number and its explicit marker.
  */
-data class SpotifyEpisodeMeta(
+data class EpisodeMeta(
     val episodeId: String,
     val description: String,
     val episodeNumber: Int?,
     val explicit: Boolean,
     val updatedAtMs: Long,
-    val service: ServiceId = ServiceId.Spotify
+    val service: ServiceId = ServiceId.Local
 )
 
-/** Persists [SpotifyEpisodeMeta] by episode id. */
-interface SpotifyEpisodeMetaStore {
-    fun read(): Map<String, SpotifyEpisodeMeta>
-    fun write(entries: Map<String, SpotifyEpisodeMeta>)
+/** Persists [EpisodeMeta] by episode id. */
+interface EpisodeMetaStore {
+    fun read(): Map<String, EpisodeMeta>
+    fun write(entries: Map<String, EpisodeMeta>)
 }
 
 /** A small, bounded, write-behind cache of episode metadata. */
-class SpotifyEpisodeMetaRepository(
-    private val load: () -> Map<String, SpotifyEpisodeMeta> = { emptyMap() },
-    private val save: (Map<String, SpotifyEpisodeMeta>) -> Unit = {},
+class EpisodeMetaRepository(
+    private val load: () -> Map<String, EpisodeMeta> = { emptyMap() },
+    private val save: (Map<String, EpisodeMeta>) -> Unit = {},
     private val now: () -> Long = System::currentTimeMillis,
     /** Null writes inline; the app passes a background scope so the queue never waits on disk. */
     saveScope: CoroutineScope? = null
 ) {
-    private var entries: Map<String, SpotifyEpisodeMeta> = prune(runCatching(load).getOrDefault(emptyMap()))
+    private var entries: Map<String, EpisodeMeta> = prune(runCatching(load).getOrDefault(emptyMap()))
     private val saver = saveScope?.let { scope ->
-        ConflatedSaver<Map<String, SpotifyEpisodeMeta>>(scope) { next -> save(next) }
+        ConflatedSaver<Map<String, EpisodeMeta>>(scope) { next -> save(next) }
     }
 
-    fun get(episodeId: String): SpotifyEpisodeMeta? = entries[episodeId]
+    fun get(episodeId: String): EpisodeMeta? = entries[episodeId]
 
     /** Remembers an episode the player is showing. Cheap to call on every item change. */
-    fun remember(episode: SpotifyEpisode) {
+    fun remember(episode: Episode) {
         if (episode.id.isEmpty()) return
         val previous = entries[episode.id]
         if (previous != null &&
@@ -62,7 +62,7 @@ class SpotifyEpisodeMetaRepository(
             return
         }
         val next = entries + (
-            episode.id to SpotifyEpisodeMeta(
+            episode.id to EpisodeMeta(
                 episodeId = episode.id,
                 // `writeUTF` tops out below 64 KiB, and a description longer than this is more
                 // than the reading screen can ever need from a restored episode.
@@ -79,8 +79,8 @@ class SpotifyEpisodeMetaRepository(
     }
 
     /** Fills a restored episode's notes and identity from the cache. */
-    fun hydrate(item: SpotifyMediaItem?): SpotifyMediaItem? {
-        val episode = item as? SpotifyEpisode ?: return item
+    fun hydrate(item: MediaItem?): MediaItem? {
+        val episode = item as? Episode ?: return item
         if (episode.description.isNotEmpty() && episode.episodeNumber != null && episode.explicit) return item
         val meta = entries[episode.id] ?: return item
         return episode.copy(
@@ -91,7 +91,7 @@ class SpotifyEpisodeMetaRepository(
     }
 
     /** Hydrates the lists a restored session can start playing from. */
-    fun hydrate(snapshot: SpotifyQueueRepository.Snapshot): SpotifyQueueRepository.Snapshot = snapshot.copy(
+    fun hydrate(snapshot: QueueRepository.Snapshot): QueueRepository.Snapshot = snapshot.copy(
         current = hydrate(snapshot.current),
         upcoming = snapshot.upcoming.map { hydrate(it) ?: it },
         history = snapshot.history.map { hydrate(it) ?: it }
@@ -104,7 +104,7 @@ class SpotifyEpisodeMetaRepository(
         if (saver != null) saver.submit(snapshot) else runCatching { save(snapshot) }
     }
 
-    private fun prune(entries: Map<String, SpotifyEpisodeMeta>): Map<String, SpotifyEpisodeMeta> {
+    private fun prune(entries: Map<String, EpisodeMeta>): Map<String, EpisodeMeta> {
         if (entries.size <= MAX_ENTRIES) return entries
         return entries.values
             .sortedByDescending { it.updatedAtMs }
@@ -119,10 +119,10 @@ class SpotifyEpisodeMetaRepository(
 }
 
 /** Binary metadata cache, replaced atomically like the queue, history and resume stores. */
-class FileSpotifyEpisodeMetaStore(file: File) : SpotifyEpisodeMetaStore {
+class FileEpisodeMetaStore(file: File) : EpisodeMetaStore {
     private val file = AtomicFile(file)
 
-    override fun read(): Map<String, SpotifyEpisodeMeta> {
+    override fun read(): Map<String, EpisodeMeta> {
         val stream = try {
             file.openRead()
         } catch (_: IOException) {
@@ -144,7 +144,7 @@ class FileSpotifyEpisodeMetaStore(file: File) : SpotifyEpisodeMetaStore {
                         val explicit = input.readBoolean()
                         val updated = input.readLong()
                         if (id.isNotEmpty()) {
-                            put(id, SpotifyEpisodeMeta(id, description, number, explicit, updated, service))
+                            put(id, EpisodeMeta(id, description, number, explicit, updated, service))
                         }
                     }
                 }
@@ -154,7 +154,7 @@ class FileSpotifyEpisodeMetaStore(file: File) : SpotifyEpisodeMetaStore {
         }
     }
 
-    override fun write(entries: Map<String, SpotifyEpisodeMeta>) {
+    override fun write(entries: Map<String, EpisodeMeta>) {
         val out = file.startWrite()
         try {
             val data = DataOutputStream(BufferedOutputStream(out))

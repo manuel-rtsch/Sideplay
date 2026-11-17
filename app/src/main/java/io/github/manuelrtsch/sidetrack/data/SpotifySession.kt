@@ -5,14 +5,13 @@ import android.os.SystemClock
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.DemoContentSource
+import io.github.manuelrtsch.sidetrack.Episode
 import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.MediaKey
 import io.github.manuelrtsch.sidetrack.ServiceCapabilities
 import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
-import io.github.manuelrtsch.sidetrack.SpotifyEpisode
-import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
-import io.github.manuelrtsch.sidetrack.SpotifyTrack
+import io.github.manuelrtsch.sidetrack.Track
 import io.github.manuelrtsch.sidetrack.auth.SpotifyAuth
 import io.github.manuelrtsch.sidetrack.bridge.NativeBridge
 import io.github.manuelrtsch.sidetrack.playback.LibrespotPlaybackEngine
@@ -43,7 +42,7 @@ class SpotifySession(
     QualitySettingsRuntime,
     CacheRuntime {
     override val service: ServiceId = ServiceId.Spotify
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
+    override val capabilities: ServiceCapabilities = ServiceCapabilities.All
 
     private val _signedIn = MutableStateFlow(auth.hasCredentials())
     override val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
@@ -57,32 +56,32 @@ class SpotifySession(
     override val isOnline: Boolean get() = network?.isOnline ?: true
 
     // Legacy file names kept so existing dev installs keep their queue and history.
-    private val queueStore = appContext?.let { FileSpotifyQueueStore(File(it.filesDir, "sidetracks-queue.bin")) }
-    private val historyStore = appContext?.let { FileSpotifyHistoryStore(File(it.filesDir, "sidetracks-history.bin")) }
-    private val positionStore = appContext?.let { FileSpotifyPositionStore(File(it.filesDir, "sidetracks-resume.bin")) }
+    private val queueStore = appContext?.let { FileQueueStore(File(it.filesDir, "sidetracks-queue.bin")) }
+    private val historyStore = appContext?.let { FileHistoryStore(File(it.filesDir, "sidetracks-history.bin")) }
+    private val positionStore = appContext?.let { FilePositionStore(File(it.filesDir, "sidetracks-resume.bin")) }
     private val episodeProgressStore = appContext?.let {
-        FileSpotifyEpisodeProgressStore(File(it.filesDir, "sidetracks-episode-progress.bin"))
+        FileEpisodeProgressStore(File(it.filesDir, "sidetracks-episode-progress.bin"))
     }
     private val episodeMetaStore = appContext?.let {
-        FileSpotifyEpisodeMetaStore(File(it.filesDir, "sidetracks-episode-meta.bin"))
+        FileEpisodeMetaStore(File(it.filesDir, "sidetracks-episode-meta.bin"))
     }
 
     /** Writes the podcast state files without holding up the main thread. */
     private val storageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Where the last session stopped: the item and the offset, so reopening resumes it. */
-    @Volatile override var resumePoint: SpotifyResumePoint? = positionStore?.read()
+    @Volatile override var resumePoint: ResumePoint? = positionStore?.read()
         private set
 
     /** Per-episode podcast offsets, independent of the single-session resume point. */
-    override val episodeProgress = SpotifyEpisodeProgressRepository(
+    override val episodeProgress = EpisodeProgressRepository(
         load = { episodeProgressStore?.read().orEmpty() },
         save = { episodeProgressStore?.write(it) },
         saveScope = storageScope
     )
 
     /** Notes and identity for the episode a restored session puts back on the player. */
-    override val episodeMeta = SpotifyEpisodeMetaRepository(
+    override val episodeMeta = EpisodeMetaRepository(
         load = { episodeMetaStore?.read().orEmpty() },
         save = { episodeMetaStore?.write(it) },
         saveScope = storageScope
@@ -114,10 +113,10 @@ class SpotifySession(
     override val writer: MediaLibraryWriter? get() = spotifyWriter?.let(::SpotifyMediaLibraryWriter)
 
     /** Process-wide queue and history so leaving Sidetrack does not forget what is playing. */
-    override val queue = SpotifyQueueRepository(
+    override val queue = QueueRepository(
         // The queue file holds the whole upcoming list, so an episode reaches Now Playing without
         // its notes and publishing number; the metadata cache has them.
-        load = { queueStore?.read()?.let(episodeMeta::hydrate) ?: SpotifyQueueRepository.Snapshot() },
+        load = { queueStore?.read()?.let(episodeMeta::hydrate) ?: QueueRepository.Snapshot() },
         save = { queueStore?.write(it) }
     )
 
@@ -141,7 +140,7 @@ class SpotifySession(
 
     @Volatile private var currentPlayRequestUri: String? = null
 
-    override val history = SpotifyHistoryRepository(
+    override val history = HistoryRepository(
         load = { historyStore?.read().orEmpty() },
         save = { historyStore?.write(it) }
     )
@@ -413,7 +412,7 @@ class SpotifySession(
         val point = if (clear) {
             null
         } else {
-            playback.current?.let { SpotifyResumePoint(it.key, playback.position.coerceAtLeast(0L)) }
+            playback.current?.let { ResumePoint(it.key, playback.position.coerceAtLeast(0L)) }
         }
         positionStore?.write(point)
         resumePoint = point
@@ -438,7 +437,7 @@ class SpotifySession(
 
     /** Saves the current podcast offset when the app closes or the notification stops playback. */
     private fun rememberEpisodeProgress() {
-        val current = playback.current as? SpotifyEpisode ?: return
+        val current = playback.current as? Episode ?: return
         episodeProgress.record(current.id, playback.position, current.durationMs)
     }
 
@@ -480,7 +479,7 @@ class SpotifySession(
         }
     }
 
-    private fun startFromTransport(item: SpotifyMediaItem) {
+    private fun startFromTransport(item: MediaItem) {
         halting = false
         history.record(item, System.currentTimeMillis())
         playback.setNowPlaying(item, 0L)

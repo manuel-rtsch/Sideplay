@@ -47,7 +47,7 @@ interface Media3PlayerListener {
 /**
  * [PlaybackEngine] over Media3/ExoPlayer for HTTP music services (Navidrome and friends).
  *
- * Spotify keeps [LibrespotPlaybackEngine]; this engine never sees a Spotify URI and librespot
+ * The native engine keeps [LibrespotPlaybackEngine]; this engine never sees a native URI and librespot
  * never sees an HTTP stream. The controller, media session, notification, audio focus and sleep
  * timer are shared and unchanged.
  *

@@ -13,7 +13,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.manuelrtsch.sidetrack.data.AppSessions
-import io.github.manuelrtsch.sidetrack.playback.SpotifyPlaybackService
+import io.github.manuelrtsch.sidetrack.playback.PlaybackService
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -48,7 +48,7 @@ class SpotifyPlaybackServiceInstrumentedTest {
             session.playback.updateState(false, 0L)
             session.playback.setNowPlaying(null)
         }
-        context.stopService(Intent(context, SpotifyPlaybackService::class.java))
+        context.stopService(Intent(context, PlaybackService::class.java))
         manager.cancel(notificationId)
     }
 
@@ -82,7 +82,7 @@ class SpotifyPlaybackServiceInstrumentedTest {
 
     private fun onMain(block: () -> Unit) = instrumentation.runOnMainSync(block)
 
-    private val track = SpotifyTrack(
+    private val track = Track(
         id = "service-track",
         title = "Service track",
         artist = "Artist",

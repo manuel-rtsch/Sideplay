@@ -111,7 +111,7 @@ private val TrackNumberWidth = 44.dp
 
 /** Square artwork: remote when the catalog has a URL, otherwise a local fixture or icon. */
 @Composable
-fun SpotifyCover(
+fun Cover(
     @DrawableRes artRes: Int,
     modifier: Modifier = Modifier,
     shape: androidx.compose.ui.graphics.Shape = SidekitTheme.shapes.control,
@@ -177,8 +177,8 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun SpotifyMediaRow(
-    item: SpotifyMediaItem,
+fun MediaRow(
+    item: MediaItem,
     modifier: Modifier = Modifier,
     index: Int? = null,
     showArt: Boolean = true,
@@ -201,7 +201,7 @@ fun SpotifyMediaRow(
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
             if (showArt) {
-                SpotifyCover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl, requestSize = ListArtworkSize)
+                Cover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl, requestSize = ListArtworkSize)
             } else if (index != null) {
                 Box(Modifier.width(TrackNumberWidth), contentAlignment = Alignment.Center) {
                     SidekitText("${index + 1}", style = SidekitTheme.typography.small, color = colors.surfaceA6)
@@ -230,12 +230,12 @@ fun SpotifyMediaRow(
 }
 
 @Composable
-fun RowScope.SpotifyIconTile(
+fun RowScope.IconTile(
     icon: SidekitIcon,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    tone: SpotifyTileTone = SpotifyTileTone.Neutral,
+    tone: TileTone = TileTone.Neutral,
     weight: Float = 1f
 ) {
     val colors = SidekitTheme.colors
@@ -256,7 +256,7 @@ fun RowScope.SpotifyIconTile(
  * and repeat-one is the current track.
  */
 @Composable
-fun RowScope.SpotifyRepeatTile(
+fun RowScope.RepeatTile(
     repeat: RepeatMode,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -267,7 +267,7 @@ fun RowScope.SpotifyRepeatTile(
     val icon = if (repeat == RepeatMode.Track) R.drawable.ic_repeat_one else R.drawable.ic_repeat
     SidekitTile(
         modifier = modifier.weight(weight),
-        color = (if (active) SpotifyTileTone.On else SpotifyTileTone.Neutral).colour(colors),
+        color = (if (active) TileTone.On else TileTone.Neutral).colour(colors),
         onClick = onClick,
         onClickLabel = repeat.label
     ) {
@@ -285,7 +285,7 @@ fun RowScope.SpotifyRepeatTile(
  * keeping the five-tile transport row intact.
  */
 @Composable
-fun RowScope.SpotifySkipTile(
+fun RowScope.SkipTile(
     label: String,
     contentDescription: String,
     onClick: () -> Unit,
@@ -294,7 +294,7 @@ fun RowScope.SpotifySkipTile(
 ) {
     SidekitTile(
         modifier = modifier.weight(weight),
-        color = SpotifyTileTone.Neutral.colour(SidekitTheme.colors),
+        color = TileTone.Neutral.colour(SidekitTheme.colors),
         onClick = onClick,
         onClickLabel = contentDescription
     ) {
@@ -306,7 +306,7 @@ fun RowScope.SpotifySkipTile(
     }
 }
 
-enum class SpotifyTileTone {
+enum class TileTone {
     Neutral,
     Play,
     Library,
@@ -325,7 +325,7 @@ enum class SpotifyTileTone {
 
 @Composable
 fun NowPlayingTile(
-    current: SpotifyMediaItem?,
+    current: MediaItem?,
     sleepTimer: StateFlow<SleepTimerState>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -344,7 +344,7 @@ fun NowPlayingTile(
                     SidekitIconImage(SidekitIcon.MusicNote2, size = 36.dp)
                 }
             } else {
-                SpotifyCover(current.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = current.artUrl, requestSize = ListArtworkSize)
+                Cover(current.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = current.artUrl, requestSize = ListArtworkSize)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 // With a live timer the overline becomes the indicator, so the title keeps the
@@ -393,7 +393,7 @@ fun NowPlayingTile(
  * an auto-dismiss action before opening options.
  */
 fun nowPlayingNoticeActions(
-    item: SpotifyMediaItem,
+    item: MediaItem,
     onOpen: () -> Unit,
     onDismiss: () -> Unit
 ): List<SideAction> = listOf(
@@ -420,9 +420,9 @@ fun nowPlayingNoticeActions(
 )
 
 @Composable
-private fun NowPlayingNoticeArt(item: SpotifyMediaItem) {
+private fun NowPlayingNoticeArt(item: MediaItem) {
     Box(Modifier.size(48.dp)) {
-        SpotifyCover(
+        Cover(
             item.artRes,
             Modifier.fillMaxSize(),
             shape = SidekitTheme.shapes.artwork,
@@ -496,7 +496,7 @@ fun ArtworkTile(
     onClick: (() -> Unit)? = null
 ) {
     SidekitTile(modifier, onClick = onClick, onClickLabel = if (onClick != null) "View artwork" else null) {
-        SpotifyCover(artRes, Modifier.fillMaxSize(), shape = SidekitTheme.shapes.item, contentDescription = label, artUrl = artUrl)
+        Cover(artRes, Modifier.fillMaxSize(), shape = SidekitTheme.shapes.item, contentDescription = label, artUrl = artUrl)
     }
 }
 
@@ -551,10 +551,10 @@ private fun VinylRecord(angle: Float, modifier: Modifier = Modifier) {
  * catalog request is in flight, so the screen reads as activity rather than a stalled empty state.
  */
 @Composable
-fun SpotifyLoadingScreen(
+fun LoadingScreen(
     modifier: Modifier = Modifier,
     title: String = "Loading…",
-    hint: String? = "Fetching from Spotify"
+    hint: String? = "Fetching"
 ) {
     val colors = SidekitTheme.colors
     val transition = rememberInfiniteTransition(label = "record")
@@ -593,12 +593,12 @@ fun SpotifyLoadingScreen(
 }
 
 /**
- * The settled counterpart to [SpotifyLoadingScreen]: the same record, but still, with an optional
+ * The settled counterpart to [LoadingScreen]: the same record, but still, with an optional
  * retry action. Used for empty and failed library loads so those states look intentional instead
  * of like a blank list.
  */
 @Composable
-fun SpotifyStatusScreen(
+fun StatusScreen(
     title: String,
     modifier: Modifier = Modifier,
     hint: String? = null,
@@ -636,7 +636,7 @@ fun SpotifyStatusScreen(
         }
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(20.dp))
-            SpotifyCenteredLineButton(actionLabel, onAction)
+            CenteredLineButton(actionLabel, onAction)
         }
     }
 }
@@ -647,7 +647,7 @@ fun SpotifyStatusScreen(
  * the icon and label instead. The SDK has no alignment parameter for its line button.
  */
 @Composable
-private fun SpotifyCenteredLineButton(label: String, onClick: () -> Unit) {
+private fun CenteredLineButton(label: String, onClick: () -> Unit) {
     SidekitTile(
         modifier = Modifier.fillMaxWidth(),
         color = SidekitTheme.colors.surfaceA3,
@@ -761,7 +761,7 @@ private const val KEY_SEEK_DEBOUNCE_MS = 300L
  * transport feels the same in both apps.
  */
 @Composable
-fun SpotifySeek(
+fun Seek(
     positionMs: Long,
     durationMs: Long,
     onSeek: (Long) -> Unit,
@@ -1033,7 +1033,7 @@ fun ContextPlayTile(
 }
 
 @Composable
-fun SpotifyLibraryRow(
+fun LibraryRow(
     @DrawableRes artRes: Int,
     title: String,
     secondary: String,
@@ -1048,7 +1048,7 @@ fun SpotifyLibraryRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            SpotifyCover(artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = artUrl, requestSize = ListArtworkSize)
+            Cover(artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = artUrl, requestSize = ListArtworkSize)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
                 SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)

@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
  * to Now Playing, where the status line appears immediately.
  */
 @Composable
-fun SpotifySleepTimerScreen(
+fun SleepTimerScreen(
     sleepTimer: StateFlow<SleepTimerState>,
     onBack: () -> Unit,
     onOff: () -> Unit,

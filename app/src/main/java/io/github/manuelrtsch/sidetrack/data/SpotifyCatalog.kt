@@ -1,17 +1,17 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.Album
+import io.github.manuelrtsch.sidetrack.Artist
+import io.github.manuelrtsch.sidetrack.CATALOG_PAGE_SIZE
+import io.github.manuelrtsch.sidetrack.Collection
+import io.github.manuelrtsch.sidetrack.CollectionType
 import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
-import io.github.manuelrtsch.sidetrack.SPOTIFY_PAGE_SIZE
+import io.github.manuelrtsch.sidetrack.Page
+import io.github.manuelrtsch.sidetrack.SearchResults
 import io.github.manuelrtsch.sidetrack.SearchScope
-import io.github.manuelrtsch.sidetrack.SpotifyAlbum
-import io.github.manuelrtsch.sidetrack.SpotifyArtist
-import io.github.manuelrtsch.sidetrack.SpotifyCollection
-import io.github.manuelrtsch.sidetrack.SpotifyCollectionType
-import io.github.manuelrtsch.sidetrack.SpotifyPage
-import io.github.manuelrtsch.sidetrack.SpotifySearchResults
-import io.github.manuelrtsch.sidetrack.SpotifyStation
-import io.github.manuelrtsch.sidetrack.SpotifyTrack
+import io.github.manuelrtsch.sidetrack.Station
+import io.github.manuelrtsch.sidetrack.Track
 
 /**
  * Read side of the Spotify account, as the UI needs it. The production implementation is the Web
@@ -20,62 +20,62 @@ import io.github.manuelrtsch.sidetrack.SpotifyTrack
 interface SpotifyCatalog {
     /**
      * One page of a library category. Implementations that know the category size must report it as
-     * [SpotifyPage.total]; paging and the overview's "See more" row rely on it because a catalog
+     * [Page.total]; paging and the overview's "See more" row rely on it because a catalog
      * can drop entries whose metadata failed to load.
      */
     suspend fun library(
         filter: LibraryFilter,
         offset: Int = 0,
-        limit: Int = SPOTIFY_PAGE_SIZE
-    ): SpotifyPage<LibraryEntry>
+        limit: Int = CATALOG_PAGE_SIZE
+    ): Page<LibraryEntry>
 
     suspend fun collection(
-        type: SpotifyCollectionType,
+        type: CollectionType,
         id: String,
         offset: Int = 0,
-        limit: Int = SPOTIFY_PAGE_SIZE
-    ): SpotifyCollection?
+        limit: Int = CATALOG_PAGE_SIZE
+    ): Collection?
 
-    suspend fun artist(id: String): SpotifyArtist?
+    suspend fun artist(id: String): Artist?
     suspend fun albumsBy(
-        artist: SpotifyArtist,
+        artist: Artist,
         offset: Int = 0,
-        limit: Int = SPOTIFY_PAGE_SIZE
-    ): SpotifyPage<SpotifyAlbum>
+        limit: Int = CATALOG_PAGE_SIZE
+    ): Page<Album>
 
     suspend fun topTracks(
-        artist: SpotifyArtist,
+        artist: Artist,
         offset: Int = 0,
-        limit: Int = SPOTIFY_PAGE_SIZE
-    ): SpotifyPage<SpotifyTrack>
+        limit: Int = CATALOG_PAGE_SIZE
+    ): Page<Track>
 
     /**
      * Tracks for a station seeded by [trackId]. The native catalog uses librespot's first-party
      * radio endpoint; transports that cannot build a station return an empty list.
      */
-    suspend fun songRadio(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> = emptyList()
+    suspend fun songRadio(trackId: String, limit: Int = CATALOG_PAGE_SIZE): List<Track> = emptyList()
 
     /**
      * Tracks for a station seeded by [artistId]. Same contract as [songRadio]: transports that
      * cannot build a station return an empty list rather than inventing tracks.
      */
-    suspend fun artistRadio(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): List<SpotifyTrack> = emptyList()
+    suspend fun artistRadio(artistId: String, limit: Int = CATALOG_PAGE_SIZE): List<Track> = emptyList()
 
     /**
      * A station seeded by [trackId], including the playlist that backs it when the transport can
      * report one. The default wraps [songRadio], so transports that only return tracks still work.
      */
-    suspend fun songRadioStation(trackId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation = SpotifyStation(songRadio(trackId, limit))
+    suspend fun songRadioStation(trackId: String, limit: Int = CATALOG_PAGE_SIZE): Station = Station(songRadio(trackId, limit))
 
     /** A station seeded by [artistId]; same contract as [songRadioStation]. */
-    suspend fun artistRadioStation(artistId: String, limit: Int = SPOTIFY_PAGE_SIZE): SpotifyStation = SpotifyStation(artistRadio(artistId, limit))
+    suspend fun artistRadioStation(artistId: String, limit: Int = CATALOG_PAGE_SIZE): Station = Station(artistRadio(artistId, limit))
 
     suspend fun search(
         query: String,
         scopes: Set<SearchScope>,
         offset: Int = 0,
-        limit: Int = SPOTIFY_PAGE_SIZE
-    ): SpotifySearchResults
+        limit: Int = CATALOG_PAGE_SIZE
+    ): SearchResults
 }
 
 /**
@@ -84,10 +84,10 @@ interface SpotifyCatalog {
  */
 interface SpotifyLibraryWriter {
     suspend fun isTrackSaved(id: String): Boolean?
-    suspend fun isSaved(type: SpotifyCollectionType, id: String): Boolean?
+    suspend fun isSaved(type: CollectionType, id: String): Boolean?
     suspend fun isArtistFollowed(id: String): Boolean?
     suspend fun setTrackSaved(id: String, saved: Boolean)
-    suspend fun setSaved(type: SpotifyCollectionType, id: String, saved: Boolean)
+    suspend fun setSaved(type: CollectionType, id: String, saved: Boolean)
     suspend fun setArtistFollowed(id: String, followed: Boolean)
 
     /**

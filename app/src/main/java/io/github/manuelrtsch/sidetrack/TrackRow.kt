@@ -35,20 +35,20 @@ class TrackRows(
     val focus: TrackRowFocusState,
     val bar: RowActionBarState,
     val savedIds: Set<String>,
-    val onSave: (SpotifyTrack) -> Unit,
-    val onEnsureSaved: (SpotifyTrack) -> Unit,
-    val onAddToQueue: (SpotifyTrack) -> Unit
+    val onSave: (Track) -> Unit,
+    val onEnsureSaved: (Track) -> Unit,
+    val onAddToQueue: (Track) -> Unit
 ) {
-    fun saved(track: SpotifyTrack): Boolean = track.key.encode() in savedIds
+    fun saved(track: Track): Boolean = track.key.encode() in savedIds
 }
 
 /** Remembers the list's gutter state and settles it once focus stops moving. */
 @Composable
 fun rememberTrackRows(
     saved: SavedUiState,
-    onSave: (SpotifyTrack) -> Unit,
-    onEnsureSaved: (SpotifyTrack) -> Unit,
-    onAddToQueue: (SpotifyTrack) -> Unit
+    onSave: (Track) -> Unit,
+    onEnsureSaved: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit
 ): TrackRows {
     val focus = remember { TrackRowFocusState() }
     val bar = rememberRowActionBarState()
@@ -66,7 +66,7 @@ fun rememberTrackRows(
 @Composable
 fun TrackRow(
     key: Any,
-    track: SpotifyTrack,
+    track: Track,
     rows: TrackRows,
     modifier: Modifier = Modifier,
     index: Int? = null,
@@ -79,7 +79,7 @@ fun TrackRow(
     val rowFocus = remember { FocusRequester() }
     CloseRowActionsWhenDisposed(selected, rows.bar)
     GutterRow(key, rows.focus, squares = 1, modifier = modifier, content = { gutterVisible ->
-        SpotifyMediaRow(
+        MediaRow(
             track,
             Modifier
                 .focusRequester(rowFocus)
@@ -167,17 +167,17 @@ fun TrackRow(
 @Composable
 fun GutterMediaRow(
     key: Any,
-    item: SpotifyMediaItem,
+    item: MediaItem,
     focus: RowGutterState,
     modifier: Modifier = Modifier,
     index: Int? = null,
     showArt: Boolean = true,
     secondary: String = item.creator,
-    onAddToQueue: (SpotifyMediaItem) -> Unit,
+    onAddToQueue: (MediaItem) -> Unit,
     onClick: () -> Unit
 ) {
     GutterRow(key, focus, squares = 1, modifier = modifier, content = { gutterVisible ->
-        SpotifyMediaRow(
+        MediaRow(
             item,
             Modifier.onFocusChanged { state ->
                 if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
@@ -214,20 +214,20 @@ fun GutterMediaRow(
 @Composable
 fun HistoryRow(
     key: Any,
-    item: SpotifyMediaItem,
+    item: MediaItem,
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
     secondary: String = item.creator,
-    onAddToQueue: (SpotifyMediaItem) -> Unit,
-    onRemove: (SpotifyMediaItem) -> (() -> Unit)?,
+    onAddToQueue: (MediaItem) -> Unit,
+    onRemove: (MediaItem) -> (() -> Unit)?,
     onClick: () -> Unit
 ) {
     val selected = bar.selection?.key == key
     val rowFocus = remember { FocusRequester() }
     CloseRowActionsWhenDisposed(selected, bar)
     GutterRow(key, focus, squares = 1, modifier = modifier, content = { gutterVisible ->
-        SpotifyMediaRow(
+        MediaRow(
             item,
             Modifier
                 .focusRequester(rowFocus)

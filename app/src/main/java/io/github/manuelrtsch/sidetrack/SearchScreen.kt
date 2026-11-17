@@ -34,7 +34,7 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 @Composable
-fun SpotifySearchScreen(
+fun SearchScreen(
     search: SearchUiState,
     saved: SavedUiState,
     chrome: ChromeUiState,
@@ -42,14 +42,14 @@ fun SpotifySearchScreen(
     onQuery: (String) -> Unit,
     onClear: () -> Unit,
     onToggleScope: (SearchScope) -> Unit,
-    onTrack: (SpotifyTrack) -> Unit,
-    onAddToQueue: (SpotifyTrack) -> Unit,
-    onArtist: (SpotifyArtist) -> Unit,
-    onAlbum: (SpotifyAlbum) -> Unit,
-    onPlaylist: (SpotifyPlaylist) -> Unit,
-    onShow: (SpotifyShow) -> Unit,
-    onSaveTrack: (SpotifyTrack) -> Unit,
-    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
+    onTrack: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onArtist: (Artist) -> Unit,
+    onAlbum: (Album) -> Unit,
+    onPlaylist: (Playlist) -> Unit,
+    onShow: (Show) -> Unit,
+    onSaveTrack: (Track) -> Unit,
+    onEnsureSavedTrack: (Track) -> Unit,
     onLoadMore: (SearchScope) -> Unit,
     onRetry: () -> Unit,
     onScopes: () -> Unit,
@@ -156,9 +156,9 @@ fun SpotifySearchScreen(
                 SidekitTextField(
                     search.query,
                     onQuery,
-                    Modifier.fillMaxWidth().semantics { contentDescription = "Search Spotify" },
+                    Modifier.fillMaxWidth().semantics { contentDescription = "Search" },
                     textStyle = SidekitTheme.typography.title,
-                    placeholder = "Search Spotify",
+                    placeholder = "Search",
                     focusRequester = searchFocus,
                     focusOnKeypad = true,
                     singleLine = true,
@@ -174,8 +174,8 @@ fun SpotifySearchScreen(
         rows.bar.dismissOnScroll(listState)
         if (search.query.trim().length >= 2 && !search.searchPending && search.searchError != null && results.isEmpty) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                SpotifyStatusScreen(
-                    "Couldn't search Spotify",
+                StatusScreen(
+                    "Couldn't search",
                     hint = search.searchError,
                     actionLabel = "Try again",
                     onAction = onRetry
@@ -224,7 +224,7 @@ fun SpotifySearchScreen(
                         EmptyMessage(
                             "Searching…",
                             Modifier.listFade(listState, index),
-                            hint = "Looking on Spotify"
+                            hint = "Searching"
                         )
                     }
                 }
@@ -286,7 +286,7 @@ fun SpotifySearchScreen(
                             key = { _, artist -> "r${artist.id}" },
                             contentType = { _, _ -> "artist" }
                         ) { index, artist ->
-                            SpotifyLibraryRow(
+                            LibraryRow(
                                 artist.artRes,
                                 artist.name,
                                 "Artist",
@@ -321,7 +321,7 @@ fun SpotifySearchScreen(
                             key = { _, album -> "a${album.id}" },
                             contentType = { _, _ -> "album" }
                         ) { index, album ->
-                            SpotifyLibraryRow(
+                            LibraryRow(
                                 album.artRes,
                                 album.title,
                                 if (album.year > 0) "${album.artist} · ${album.year}" else album.artist,
@@ -356,7 +356,7 @@ fun SpotifySearchScreen(
                             key = { _, playlist -> "p${playlist.id}" },
                             contentType = { _, _ -> "playlist" }
                         ) { index, playlist ->
-                            SpotifyLibraryRow(
+                            LibraryRow(
                                 playlist.artRes,
                                 playlist.name,
                                 playlistSubtitle(playlist),
@@ -391,7 +391,7 @@ fun SpotifySearchScreen(
                             key = { _, show -> "s${show.id}" },
                             contentType = { _, _ -> "show" }
                         ) { index, show ->
-                            SpotifyLibraryRow(
+                            LibraryRow(
                                 show.artRes,
                                 show.name,
                                 show.publisher,

@@ -38,12 +38,12 @@ import io.github.manuelrtsch.sidetrack.data.MusicServiceProvider
 private enum class SettingsConfirmation { SignOut }
 
 @Composable
-fun SpotifySettingsScreen(
+fun SettingsScreen(
     account: AccountUiState,
     chrome: ChromeUiState,
     recentCount: Int,
-    serviceName: String = "Spotify",
-    capabilities: ServiceCapabilities = ServiceCapabilities.Spotify,
+    serviceName: String = "",
+    capabilities: ServiceCapabilities = ServiceCapabilities.All,
     onService: () -> Unit = {},
     onBack: () -> Unit,
     onAudioQuality: () -> Unit,
@@ -269,7 +269,7 @@ fun ServicePickerScreen(
 }
 
 @Composable
-fun SpotifyAudioQualityScreen(
+fun AudioQualityScreen(
     account: AccountUiState,
     chrome: ChromeUiState,
     onBack: () -> Unit,
@@ -311,12 +311,13 @@ fun SpotifyAudioQualityScreen(
 }
 
 @Composable
-fun SpotifySignInScreen(
+fun SignInScreen(
     account: AccountUiState,
     chrome: ChromeUiState,
     onAbout: () -> Unit,
     onSignIn: () -> Unit,
-    onDismissNotice: () -> Unit
+    onDismissNotice: () -> Unit,
+    serviceName: String = "your music service"
 ) {
     val colors = SidekitTheme.colors
     val baseActions = remember {
@@ -336,7 +337,7 @@ fun SpotifySignInScreen(
                 SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidekitText(
-                            "Connect Sidetrack with your Spotify account",
+                            "Connect Sidetrack with your $serviceName account",
                             style = SidekitTheme.typography.bodySmall,
                             maxLines = Int.MAX_VALUE
                         )

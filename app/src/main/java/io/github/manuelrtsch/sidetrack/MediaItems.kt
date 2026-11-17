@@ -3,14 +3,14 @@ package io.github.manuelrtsch.sidetrack
 import androidx.annotation.DrawableRes
 
 /**
- * Spotify ids as they can safely travel through a navigation route.
+ * Service ids as they can safely travel through a navigation route.
  *
  * org.json's `optString` returns the literal string "null" for a JSON null, and Navigation's
  * `NavType.StringType` parses the literal "null" back into a real null. A non-nullable route
  * argument then fails verification while navigating and takes the process down, so ids are
  * normalised here before they reach a route.
  */
-internal fun String?.spotifyIdOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
+internal fun String?.mediaIdOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
 
 /** A saved album, playlist or show. Collections share one screen, so they share one shape. */
 enum class CollectionType(val route: String, val mediaType: MediaType) {
@@ -23,7 +23,7 @@ enum class CollectionType(val route: String, val mediaType: MediaType) {
  * Everything that can be played. Albums and playlists hold [Track]s, shows hold [Episode]s; the
  * queue and Now Playing never need to know which screen it came from.
  *
- * [key] is the identity. [id] and [uri] are service details kept for the Spotify adapter and the
+ * [key] is the identity. [id] and [uri] are service details kept for the service adapter and the
  * existing UI; new code should compare and persist [key].
  */
 sealed interface MediaItem : LibraryEntry {
@@ -38,7 +38,7 @@ sealed interface MediaItem : LibraryEntry {
     val playable: Boolean
     val explicit: Boolean
 
-    /** Canonical Spotify URI for the real catalog; null for the local test fixtures. */
+    /** Canonical service URI for the real catalog; null for the local test fixtures. */
     val uri: String? get() = null
 
     /** Remote cover art for the real catalog; null for local fixtures and placeholder art. */
@@ -57,7 +57,7 @@ data class Track(
     override val playable: Boolean = true,
     override val uri: String? = null,
     override val artUrl: String? = null,
-    override val service: ServiceId = ServiceId.Spotify
+    override val service: ServiceId = ServiceId.Local
 ) : MediaItem {
     override val creator: String get() = artist
     override val key: MediaKey get() = MediaKey(service, MediaType.Track, id)
@@ -76,10 +76,10 @@ data class Episode(
     override val artUrl: String? = null,
     /** Show notes, already plain text. The catalog may return HTML; [plainPodcastText] cleans it. */
     val description: String = "",
-    /** Spotify's publishing number, when the native metadata carries one. */
+    /** The service's publishing number, when its metadata carries one. */
     val episodeNumber: Int? = null,
     override val explicit: Boolean = false,
-    override val service: ServiceId = ServiceId.Spotify
+    override val service: ServiceId = ServiceId.Local
 ) : MediaItem {
     override val creator: String get() = show
     override val artistId: String? get() = null
@@ -97,7 +97,7 @@ data class Album(
     val tracks: List<Track>,
     val artUrl: String? = null,
     val trackCount: Int = tracks.size,
-    val service: ServiceId = ServiceId.Spotify
+    val service: ServiceId = ServiceId.Local
 ) : LibraryEntry {
     override val key: MediaKey get() = MediaKey(service, MediaType.Album, id)
 }
@@ -114,7 +114,7 @@ data class Playlist(
     /** Whether the signed-in user may add or remove items. The add-to-playlist picker filters on it. */
     val editable: Boolean = false,
     val folder: String? = null,
-    val service: ServiceId = ServiceId.Spotify
+    val service: ServiceId = ServiceId.Local
 ) : LibraryEntry {
     override val key: MediaKey get() = MediaKey(service, MediaType.Playlist, id)
 }
@@ -128,7 +128,7 @@ data class Show(
     val artUrl: String? = null,
     val episodeCount: Int = episodes.size,
     val description: String = "",
-    val service: ServiceId = ServiceId.Spotify
+    val service: ServiceId = ServiceId.Local
 ) : LibraryEntry {
     override val key: MediaKey get() = MediaKey(service, MediaType.Show, id)
 }
@@ -140,7 +140,7 @@ data class Artist(
     val albumIds: List<String>,
     val artUrl: String? = null,
     val albumCount: Int = albumIds.size,
-    val service: ServiceId = ServiceId.Spotify
+    val service: ServiceId = ServiceId.Local
 ) : LibraryEntry {
     override val key: MediaKey get() = MediaKey(service, MediaType.Artist, id)
 }
@@ -161,7 +161,7 @@ data class Collection(
     val saveable: Boolean = true,
     /** Show notes for a podcast collection; the other collection kinds do not have any. */
     val description: String = "",
-    val service: ServiceId = ServiceId.Spotify
+    val service: ServiceId = ServiceId.Local
 ) {
     val key: MediaKey get() = MediaKey(service, type.mediaType, id)
     val kind: MediaType get() = type.mediaType
@@ -177,7 +177,7 @@ data class Station(
 )
 
 /** How many rows a catalog request asks for. Kept small for the Sidephone's weak CPU. */
-const val SPOTIFY_PAGE_SIZE = 50
+const val CATALOG_PAGE_SIZE = 50
 const val SPOTIFY_SEARCH_PAGE_SIZE = 5
 
 /** Rows shown per category on the Library overview before "See more". */
@@ -261,7 +261,7 @@ fun playlistSubtitle(item: Playlist): String = buildString {
     append(item.owner).append(" · ").append(item.trackCount).append(" tracks")
 }
 
-/** Spotify metadata dates are ISO calendar dates; show them the way Sidekit shows release dates. */
+/** Service metadata dates are ISO calendar dates; show them the way Sidekit shows release dates. */
 fun formatPublishedDate(value: String): String {
     val date = value.substringBefore('T').substringBefore(' ')
     if (date.length != 10 || date[4] != '-' || date[7] != '-') return value
@@ -269,22 +269,3 @@ fun formatPublishedDate(value: String): String {
         java.time.LocalDate.parse(date).format(java.time.format.DateTimeFormatter.ofPattern("d MMM uuuu"))
     }.getOrDefault(value)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Migration bridge. The Spotify adapter and the existing UI still use these names; new code
-// should use the neutral types above. Remove the aliases once the rename is complete.
-// ---------------------------------------------------------------------------------------------
-
-typealias SpotifyMediaItem = MediaItem
-typealias SpotifyTrack = Track
-typealias SpotifyEpisode = Episode
-typealias SpotifyAlbum = Album
-typealias SpotifyPlaylist = Playlist
-typealias SpotifyShow = Show
-typealias SpotifyArtist = Artist
-typealias SpotifyCollection = Collection
-typealias SpotifyCollectionType = CollectionType
-typealias SpotifyStation = Station
-typealias SpotifyPage<T> = Page<T>
-typealias SpotifySearchResults = SearchResults
-typealias SpotifyQueueItem = QueueItem

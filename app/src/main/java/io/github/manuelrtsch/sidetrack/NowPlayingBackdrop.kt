@@ -57,7 +57,7 @@ import kotlinx.coroutines.flow.StateFlow
  * it no longer spends any of the 480 x 640 panel on itself and the title and artist can take the
  * room back.
  *
- * It is a separate layout rather than a variant of [SpotifyNowPlayingScreen] on purpose. The
+ * It is a separate layout rather than a variant of [NowPlayingScreen] on purpose. The
  * experiment is about what the screen becomes once the artwork stops being a tile: a poster of
  * type over the record. Episodes keep the existing screen, where the artwork still carries the
  * show and the notes need the height.
@@ -122,7 +122,7 @@ internal fun rememberArtworkBackdropSetting(): ArtworkBackdropSetting {
  */
 @Composable
 internal fun ArtworkBackdrop(
-    item: SpotifyMediaItem,
+    item: MediaItem,
     onOpenAlbum: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
@@ -215,7 +215,7 @@ private fun RemoteBackdrop(url: String, side: Dp) {
 @Composable
 internal fun BackdroppedNowPlayingBody(
     playback: PlaybackUiState,
-    current: SpotifyTrack,
+    current: Track,
     playbackPositionMs: StateFlow<Long>,
     sleepTimer: StateFlow<SleepTimerState>,
     padding: PaddingValues,
@@ -229,7 +229,7 @@ internal fun BackdroppedNowPlayingBody(
 ) {
     val colors = SidekitTheme.colors
     val typography = SidekitTheme.typography
-    val artistAction = onArtist.takeIf { current.artistId.spotifyIdOrNull() != null }
+    val artistAction = onArtist.takeIf { current.artistId.mediaIdOrNull() != null }
     Column(
         Modifier.fillMaxSize().padding(padding),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -273,23 +273,23 @@ internal fun BackdroppedNowPlayingBody(
         )
         Spacer(Modifier.height(6.dp))
         SidekitItemRow {
-            SpotifyIconTile(
+            IconTile(
                 SidekitIcon.Shuffle,
                 if (playback.shuffle) "Shuffle on" else "Shuffle off",
                 onShuffle,
-                tone = if (playback.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
+                tone = if (playback.shuffle) TileTone.On else TileTone.Neutral,
                 weight = 0.85f
             )
-            SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
-            SpotifyIconTile(
+            IconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
+            IconTile(
                 if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
                 if (playback.isPlaying) "Pause" else "Play",
                 onPlayPause,
-                tone = SpotifyTileTone.Play,
+                tone = TileTone.Play,
                 weight = 1.2f
             )
-            SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-            SpotifyRepeatTile(playback.repeat, onRepeat)
+            IconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+            RepeatTile(playback.repeat, onRepeat)
         }
     }
 }

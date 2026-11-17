@@ -4,7 +4,7 @@ package io.github.manuelrtsch.sidetrack.playback
  * Timing rules for one [android.media.AudioTrack] drain: when a freshly created track may start
  * playing, and when a running one has gone silent for long enough to call it dead.
  *
- * Kept away from [SpotifyAudioSink] so the rules can be exercised without an AudioTrack, a
+ * Kept away from the audio sink so the rules can be exercised without an AudioTrack, a
  * device or a real clock. Every timestamp is `SystemClock.elapsedRealtime()` milliseconds.
  *
  * The two rules exist for two observed failures:

@@ -8,6 +8,9 @@ value class ServiceId(val value: String) {
     companion object {
         val Spotify = ServiceId("spotify")
         val Navidrome = ServiceId("navidrome")
+
+        /** A context-free fixture, used by previews and unit tests that have no signed-in service. */
+        val Local = ServiceId("local")
     }
 }
 
@@ -29,8 +32,6 @@ data class MediaKey(
     fun encode(): String = "${service.value}:${type.name.lowercase()}:$id"
 
     companion object {
-        fun spotify(type: MediaType, id: String): MediaKey = MediaKey(ServiceId.Spotify, type, id)
-
         fun decode(value: String): MediaKey? {
             val first = value.indexOf(':')
             if (first <= 0) return null
@@ -71,8 +72,8 @@ data class ServiceCapabilities(
     val supportsScrobbling: Boolean = false
 ) {
     companion object {
-        /** Spotify keeps every capability it had before the migration. */
-        val Spotify = ServiceCapabilities(
+        /** A service that supports every capability this build knows about. */
+        val All = ServiceCapabilities(
             librarySections = LibrarySection.entries.toSet(),
             searchScopes = SearchScope.entries.toSet(),
             supportsPodcasts = true,

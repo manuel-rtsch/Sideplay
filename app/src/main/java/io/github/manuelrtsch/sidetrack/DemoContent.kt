@@ -1,8 +1,8 @@
 package io.github.manuelrtsch.sidetrack
 
+import io.github.manuelrtsch.sidetrack.data.HistoryRepository
+import io.github.manuelrtsch.sidetrack.data.QueueRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
-import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
-import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
 
 /**
  * A fixed catalog for promo and demo builds.
@@ -19,7 +19,7 @@ interface DemoContent {
     fun catalog(): SpotifyCatalog
 
     /** Restores the fixture's starting queue and history when they are missing. */
-    fun seed(history: SpotifyHistoryRepository, queue: SpotifyQueueRepository)
+    fun seed(history: HistoryRepository, queue: QueueRepository)
 }
 
 internal object DemoContentSource {

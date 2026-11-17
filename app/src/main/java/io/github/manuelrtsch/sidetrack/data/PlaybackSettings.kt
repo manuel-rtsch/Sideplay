@@ -7,7 +7,7 @@ import io.github.manuelrtsch.sidetrack.AudioQuality
 /** User preferences that survive process death and apply before the native player is created. */
 data class PlaybackSettings(
     val audioQuality: AudioQuality = AudioQuality.High,
-    /** Apply Spotify's per-track loudness data so tracks play back at a similar level. */
+    /** Apply the service's per-track loudness data so tracks play back at a similar level. */
     val normalization: Boolean = false,
     /** Keep librespot's sink open between tracks so adjacent tracks join without a gap. */
     val gapless: Boolean = true,
@@ -60,7 +60,3 @@ class PlaybackSettingsStore(
         const val KEY_AUTOPLAY = "autoplay"
     }
 }
-
-/** Migration bridge: the settings are generic playback preferences, not Spotify's. */
-typealias SpotifySettings = PlaybackSettings
-typealias SpotifySettingsStore = PlaybackSettingsStore

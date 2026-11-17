@@ -16,15 +16,15 @@ import java.io.File
 import java.io.IOException
 
 /** Persists the process-wide queue, including its history and the pre-shuffle order. */
-interface SpotifyQueueStore {
-    fun read(): SpotifyQueueRepository.Snapshot
-    fun write(snapshot: SpotifyQueueRepository.Snapshot)
+interface QueueStore {
+    fun read(): QueueRepository.Snapshot
+    fun write(snapshot: QueueRepository.Snapshot)
 }
 
 /** Persists the recently played list shown on Home. */
-interface SpotifyHistoryStore {
-    fun read(): List<SpotifyHistoryEntry>
-    fun write(entries: List<SpotifyHistoryEntry>)
+interface HistoryStore {
+    fun read(): List<HistoryEntry>
+    fun write(entries: List<HistoryEntry>)
 }
 
 /**
@@ -34,30 +34,30 @@ interface SpotifyHistoryStore {
  * Version 2 adds a service id to every record. Version 1 files are read as Spotify and rewritten
  * as version 2 on the next save, so an existing install keeps its queue and history.
  */
-class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
+class FileQueueStore(file: File) : QueueStore {
     private val file = AtomicFile(file)
 
-    override fun read(): SpotifyQueueRepository.Snapshot {
+    override fun read(): QueueRepository.Snapshot {
         val stream = try {
             file.openRead()
         } catch (_: IOException) {
-            return SpotifyQueueRepository.Snapshot()
+            return QueueRepository.Snapshot()
         }
         return try {
             DataInputStream(BufferedInputStream(stream)).use { input ->
-                if (input.readInt() != MAGIC) return SpotifyQueueRepository.Snapshot()
+                if (input.readInt() != MAGIC) return QueueRepository.Snapshot()
                 when (input.readInt()) {
                     VERSION_1 -> input.readQueue(service = ServiceId.Spotify, versioned = false)
                     VERSION_2 -> input.readQueue(service = null, versioned = true)
-                    else -> SpotifyQueueRepository.Snapshot()
+                    else -> QueueRepository.Snapshot()
                 }
             }
         } catch (_: Exception) {
-            SpotifyQueueRepository.Snapshot()
+            QueueRepository.Snapshot()
         }
     }
 
-    override fun write(snapshot: SpotifyQueueRepository.Snapshot) {
+    override fun write(snapshot: QueueRepository.Snapshot) {
         val out = file.startWrite()
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
@@ -78,10 +78,10 @@ class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
         }
     }
 
-    private fun DataInputStream.readQueue(service: ServiceId?, versioned: Boolean): SpotifyQueueRepository.Snapshot {
+    private fun DataInputStream.readQueue(service: ServiceId?, versioned: Boolean): QueueRepository.Snapshot {
         val shuffle = readBoolean()
         val repeat = RepeatMode.entries.getOrNull(readInt()) ?: RepeatMode.Off
-        return SpotifyQueueRepository.Snapshot(
+        return QueueRepository.Snapshot(
             current = readItemOrNull(service, versioned),
             upcoming = readItems(service, versioned),
             history = readItems(service, versioned),
@@ -103,27 +103,21 @@ class FileSpotifyQueueStore(file: File) : SpotifyQueueStore {
  * Where the last session left off: the item that was playing and the offset it had reached, so
  * reopening Sidetrack can pick the same track up at the same second instead of starting at 0:00.
  */
-data class SpotifyResumePoint(val key: MediaKey, val positionMs: Long) {
+data class ResumePoint(val key: MediaKey, val positionMs: Long) {
     /** Legacy accessor for the Spotify adapter and the existing UI. */
     val trackId: String get() = key.id
-
-    /** Legacy constructor: a bare id is a Spotify track. */
-    constructor(trackId: String, positionMs: Long) : this(
-        MediaKey(ServiceId.Spotify, MediaType.Track, trackId),
-        positionMs
-    )
 }
 
 /** Persists the resume point. A missing or unreadable file simply means "start at the beginning". */
-interface SpotifyPositionStore {
-    fun read(): SpotifyResumePoint?
-    fun write(point: SpotifyResumePoint?)
+interface PositionStore {
+    fun read(): ResumePoint?
+    fun write(point: ResumePoint?)
 }
 
-class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
+class FilePositionStore(file: File) : PositionStore {
     private val file = AtomicFile(file)
 
-    override fun read(): SpotifyResumePoint? {
+    override fun read(): ResumePoint? {
         val stream = try {
             file.openRead()
         } catch (_: IOException) {
@@ -136,14 +130,14 @@ class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
                     VERSION_1 -> {
                         val id = input.readUTF()
                         val position = input.readLong()
-                        if (id.isEmpty()) null else SpotifyResumePoint(id, position.coerceAtLeast(0L))
+                        if (id.isEmpty()) null else ResumePoint(MediaKey(ServiceId.Spotify, MediaType.Track, id), position.coerceAtLeast(0L))
                     }
 
                     VERSION_2 -> {
                         val encoded = input.readUTF()
                         val position = input.readLong()
                         val key = MediaKey.decode(encoded) ?: return null
-                        SpotifyResumePoint(key, position.coerceAtLeast(0L))
+                        ResumePoint(key, position.coerceAtLeast(0L))
                     }
 
                     else -> null
@@ -154,7 +148,7 @@ class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
         }
     }
 
-    override fun write(point: SpotifyResumePoint?) {
+    override fun write(point: ResumePoint?) {
         val out = file.startWrite()
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
@@ -177,10 +171,10 @@ class FileSpotifyPositionStore(file: File) : SpotifyPositionStore {
     }
 }
 
-class FileSpotifyHistoryStore(file: File) : SpotifyHistoryStore {
+class FileHistoryStore(file: File) : HistoryStore {
     private val file = AtomicFile(file)
 
-    override fun read(): List<SpotifyHistoryEntry> {
+    override fun read(): List<HistoryEntry> {
         val stream = try {
             file.openRead()
         } catch (_: IOException) {
@@ -200,7 +194,7 @@ class FileSpotifyHistoryStore(file: File) : SpotifyHistoryStore {
         }
     }
 
-    override fun write(entries: List<SpotifyHistoryEntry>) {
+    override fun write(entries: List<HistoryEntry>) {
         val out = file.startWrite()
         try {
             val data = DataOutputStream(BufferedOutputStream(out))
@@ -219,8 +213,8 @@ class FileSpotifyHistoryStore(file: File) : SpotifyHistoryStore {
         }
     }
 
-    private fun DataInputStream.readHistory(service: ServiceId?, versioned: Boolean): List<SpotifyHistoryEntry> = List(readCount(MAX_HISTORY)) {
-        SpotifyHistoryEntry(readItem(service, versioned), readLong())
+    private fun DataInputStream.readHistory(service: ServiceId?, versioned: Boolean): List<HistoryEntry> = List(readCount(MAX_HISTORY)) {
+        HistoryEntry(readItem(service, versioned), readLong())
     }
 
     private companion object {

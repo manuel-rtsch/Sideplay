@@ -1,11 +1,11 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.MediaKey
-import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
 
 /** A played item and when it last started. Timestamps are local and never uploaded. */
-data class SpotifyHistoryEntry(
-    val item: SpotifyMediaItem,
+data class HistoryEntry(
+    val item: MediaItem,
     val playedAtMs: Long
 )
 
@@ -16,12 +16,12 @@ data class SpotifyHistoryEntry(
  * Persistence is injected as a pair of lambdas so JVM tests use memory and the app can use the
  * same atomic-file convention as the rest of Sidekit.
  */
-class SpotifyHistoryRepository(
+class HistoryRepository(
     private val limit: Int = DEFAULT_LIMIT,
-    private val load: () -> List<SpotifyHistoryEntry> = { emptyList() },
-    private val save: (List<SpotifyHistoryEntry>) -> Unit = {}
+    private val load: () -> List<HistoryEntry> = { emptyList() },
+    private val save: (List<HistoryEntry>) -> Unit = {}
 ) {
-    private val entries = ArrayDeque<SpotifyHistoryEntry>()
+    private val entries = ArrayDeque<HistoryEntry>()
 
     init {
         // Older builds could persist the same item more than once. Home renders this list with
@@ -33,21 +33,21 @@ class SpotifyHistoryRepository(
             .forEach(entries::addLast)
     }
 
-    fun snapshot(): List<SpotifyHistoryEntry> = entries.toList()
+    fun snapshot(): List<HistoryEntry> = entries.toList()
 
-    fun items(): List<SpotifyMediaItem> = entries.map { it.item }
+    fun items(): List<MediaItem> = entries.map { it.item }
 
     /** Marks [item] as most recently played and persists the new bounded list. */
-    fun record(item: SpotifyMediaItem, playedAtMs: Long): List<SpotifyHistoryEntry> {
+    fun record(item: MediaItem, playedAtMs: Long): List<HistoryEntry> {
         entries.removeAll { it.item.key == item.key }
-        entries.addFirst(SpotifyHistoryEntry(item, playedAtMs))
+        entries.addFirst(HistoryEntry(item, playedAtMs))
         while (entries.size > limit) entries.removeLast()
         save(entries.toList())
         return snapshot()
     }
 
     /** Removes one entry and returns it with its position, so the caller can offer Undo. */
-    fun removeEntry(item: SpotifyMediaItem): Removed? {
+    fun removeEntry(item: MediaItem): Removed? {
         val index = entries.indexOfFirst { it.item.key == item.key }
         if (index < 0) return null
         val entry = entries.removeAt(index)
@@ -55,22 +55,22 @@ class SpotifyHistoryRepository(
         return Removed(entry, index)
     }
 
-    fun remove(item: SpotifyMediaItem): List<SpotifyHistoryEntry> {
+    fun remove(item: MediaItem): List<HistoryEntry> {
         removeEntry(item)
         return snapshot()
     }
 
     /** Puts a removed entry back where it was, unless it has already been played again. */
-    fun restore(removed: Removed): List<SpotifyHistoryEntry> {
+    fun restore(removed: Removed): List<HistoryEntry> {
         if (entries.any { it.item.key == removed.entry.item.key }) return snapshot()
         entries.add(removed.index.coerceIn(0, entries.size), removed.entry)
         save(entries.toList())
         return snapshot()
     }
 
-    data class Removed(val entry: SpotifyHistoryEntry, val index: Int)
+    data class Removed(val entry: HistoryEntry, val index: Int)
 
-    fun clear(): List<SpotifyHistoryEntry> {
+    fun clear(): List<HistoryEntry> {
         val removed = entries.toList()
         entries.clear()
         save(emptyList())
@@ -82,7 +82,7 @@ class SpotifyHistoryRepository(
      * their new position at the front; the restored ones follow, so Undo never reorders what the
      * user did in between.
      */
-    fun restoreAll(removed: List<SpotifyHistoryEntry>): List<SpotifyHistoryEntry> {
+    fun restoreAll(removed: List<HistoryEntry>): List<HistoryEntry> {
         if (removed.isEmpty()) return snapshot()
         val present = entries.map { it.item.key }.toSet()
         entries.addAll(removed.filterNot { it.item.key in present })

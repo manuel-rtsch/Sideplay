@@ -1,15 +1,15 @@
 package io.github.manuelrtsch.sidetrack
 
-import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryEntry
-import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
+import io.github.manuelrtsch.sidetrack.data.HistoryEntry
+import io.github.manuelrtsch.sidetrack.data.HistoryRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpotifyHistoryRepositoryTest {
     @Test fun `most recent item is first and duplicates move up`() {
-        val saved = mutableListOf<List<SpotifyHistoryEntry>>()
-        val history = SpotifyHistoryRepository(save = { saved += it })
+        val saved = mutableListOf<List<HistoryEntry>>()
+        val history = HistoryRepository(save = { saved += it })
 
         history.record(track("a"), 1)
         history.record(track("b"), 2)
@@ -20,7 +20,7 @@ class SpotifyHistoryRepositoryTest {
     }
 
     @Test fun `history is bounded and drops the oldest entry`() {
-        val history = SpotifyHistoryRepository(limit = 3)
+        val history = HistoryRepository(limit = 3)
 
         listOf("a", "b", "c", "d").forEachIndexed { index, id -> history.record(track(id), index.toLong()) }
 
@@ -28,7 +28,7 @@ class SpotifyHistoryRepositoryTest {
     }
 
     @Test fun `removed entry can be restored at its old position`() {
-        val history = SpotifyHistoryRepository()
+        val history = HistoryRepository()
         history.record(track("a"), 1)
         history.record(track("b"), 2)
         history.record(track("c"), 3)
@@ -41,8 +41,8 @@ class SpotifyHistoryRepositoryTest {
     }
 
     @Test fun `clear empties memory and persists the empty list`() {
-        var saved: List<SpotifyHistoryEntry>? = null
-        val history = SpotifyHistoryRepository(save = { saved = it })
+        var saved: List<HistoryEntry>? = null
+        val history = HistoryRepository(save = { saved = it })
         history.record(track("a"), 1)
 
         history.clear()
@@ -52,7 +52,7 @@ class SpotifyHistoryRepositoryTest {
     }
 
     @Test fun `clear returns the removed entries so Undo can restore them`() {
-        val history = SpotifyHistoryRepository()
+        val history = HistoryRepository()
         history.record(track("a"), 1)
         history.record(track("b"), 2)
 
@@ -65,7 +65,7 @@ class SpotifyHistoryRepositoryTest {
     }
 
     @Test fun `restoreAll keeps an item played after the clear at the front`() {
-        val history = SpotifyHistoryRepository()
+        val history = HistoryRepository()
         history.record(track("a"), 1)
         history.record(track("b"), 2)
         val removed = history.clear()
@@ -77,7 +77,7 @@ class SpotifyHistoryRepositoryTest {
     }
 
     @Test fun `removing an unknown item returns null and leaves history alone`() {
-        val history = SpotifyHistoryRepository()
+        val history = HistoryRepository()
         history.record(track("a"), 1)
 
         val removed = history.removeEntry(track("missing"))
@@ -87,7 +87,7 @@ class SpotifyHistoryRepositoryTest {
     }
 
     @Test fun `restoring an item played again does not duplicate it`() {
-        val history = SpotifyHistoryRepository()
+        val history = HistoryRepository()
         history.record(track("a"), 1)
         history.record(track("b"), 2)
         val removed = history.removeEntry(track("a"))!!
@@ -101,26 +101,26 @@ class SpotifyHistoryRepositoryTest {
 
     @Test fun `load seeds the repository in order`() {
         val stored = listOf(
-            SpotifyHistoryEntry(track("a"), 2),
-            SpotifyHistoryEntry(track("b"), 1)
+            HistoryEntry(track("a"), 2),
+            HistoryEntry(track("b"), 1)
         )
-        val history = SpotifyHistoryRepository(load = { stored })
+        val history = HistoryRepository(load = { stored })
 
         assertEquals(listOf("a", "b"), history.items().map { it.id })
     }
 
     @Test fun `load drops duplicate ids from older files`() {
         val stored = listOf(
-            SpotifyHistoryEntry(track("a"), 3),
-            SpotifyHistoryEntry(track("b"), 2),
-            SpotifyHistoryEntry(track("a"), 1)
+            HistoryEntry(track("a"), 3),
+            HistoryEntry(track("b"), 2),
+            HistoryEntry(track("a"), 1)
         )
-        val history = SpotifyHistoryRepository(load = { stored })
+        val history = HistoryRepository(load = { stored })
 
         assertEquals(listOf("a", "b"), history.items().map { it.id })
     }
 
-    private fun track(id: String) = SpotifyTrack(
+    private fun track(id: String) = Track(
         id = id,
         title = "Track $id",
         artist = "Artist",

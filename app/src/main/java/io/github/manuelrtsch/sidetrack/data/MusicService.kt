@@ -33,7 +33,25 @@ data class ServiceAccount(
     val credentials: Map<String, String> = emptyMap()
 )
 
-/** What a sign-in attempt needs. Spotify opens a browser; a self-hosted server takes a password. */
+/** A provider-neutral failure category, so the UI can explain an error without naming a service. */
+enum class ServiceFailure {
+    Unavailable,
+    NotConnected,
+    AuthenticationExpired,
+    Network,
+    RateLimited,
+    TrackUnavailable,
+    Unknown
+}
+
+/** A catalog or playback failure carrying a [ServiceFailure] the UI can map to copy. */
+class ServiceException(
+    val failure: ServiceFailure,
+    message: String,
+    cause: Throwable? = null
+) : Exception(message, cause)
+
+/** What a sign-in attempt needs. A browser flow or a self-hosted server's password. */
 sealed interface AuthInput {
     /** A provider that signs in through a browser or custom tab. */
     data class Browser(val openBrowser: suspend (String) -> Unit) : AuthInput
@@ -53,12 +71,11 @@ interface ServiceAuth {
 }
 
 /**
- * Read side of a music service, expressed in the neutral domain model. The Spotify adapter maps
- * the existing [SpotifyCatalog] onto this contract; a future Navidrome adapter implements it
- * directly.
+ * Read side of a music service, expressed in the neutral domain model. Each provider maps its
+ * own catalog onto this contract; the UI never sees a provider-specific type.
  *
  * This is the only catalog the UI sees. Service-specific ids live inside [MediaKey]; nothing here
- * assumes Spotify's URI or collection vocabulary.
+ * assumes a particular service's URI or collection vocabulary.
  */
 interface MediaCatalog {
     val capabilities: ServiceCapabilities
@@ -103,146 +120,4 @@ interface MusicServiceProvider {
     val capabilities: ServiceCapabilities
 
     fun createAuth(): ServiceAuth
-}
-
-/** Maps the neutral library sections onto the Spotify catalog's filters. */
-private fun LibrarySection.toFilter(): LibraryFilter = when (this) {
-    LibrarySection.Liked -> LibraryFilter.LikedSongs
-    LibrarySection.Playlists -> LibraryFilter.Playlists
-    LibrarySection.Albums -> LibraryFilter.Albums
-    LibrarySection.Artists -> LibraryFilter.Artists
-    LibrarySection.Shows -> LibraryFilter.Shows
-}
-
-private fun MediaType.toCollectionType(): CollectionType? = when (this) {
-    MediaType.Album -> CollectionType.Album
-    MediaType.Playlist -> CollectionType.Playlist
-    MediaType.Show -> CollectionType.Show
-    else -> null
-}
-
-/** Spotify's existing catalog behind the neutral [MediaCatalog] contract. */
-class SpotifyMediaCatalog(
-    private val catalog: SpotifyCatalog
-) : MediaCatalog {
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
-
-    override suspend fun library(section: LibrarySection, offset: Int, limit: Int): Page<LibraryEntry> = catalog.library(section.toFilter(), offset, limit)
-
-    override suspend fun collection(key: MediaKey, offset: Int, limit: Int): Collection? {
-        val type = key.type.toCollectionType() ?: return null
-        return catalog.collection(type, key.id, offset, limit)
-    }
-
-    override suspend fun artist(key: MediaKey): Artist? = catalog.artist(key.id)
-
-    override suspend fun resolvePlaybackSource(item: MediaItem): PlaybackSource {
-        val uri = item.uri ?: throw IllegalStateException("Spotify item ${item.key.encode()} has no URI")
-        return PlaybackSource(id = item.key.encode(), uri = uri)
-    }
-
-    override suspend fun albums(artist: MediaKey, offset: Int, limit: Int): Page<Album> {
-        val resolved = catalog.artist(artist.id) ?: return Page()
-        return catalog.albumsBy(resolved, offset, limit)
-    }
-
-    override suspend fun topTracks(artist: MediaKey, offset: Int, limit: Int): Page<Track> {
-        val resolved = catalog.artist(artist.id) ?: return Page()
-        return catalog.topTracks(resolved, offset, limit)
-    }
-
-    override suspend fun search(
-        query: String,
-        scopes: Set<SearchScope>,
-        offset: Int,
-        limit: Int
-    ): SearchResults = catalog.search(query, scopes, offset, limit)
-
-    override suspend fun radio(seed: MediaKey, offset: Int, limit: Int): Page<Track> {
-        val tracks = if (seed.type == MediaType.Artist) {
-            catalog.artistRadio(seed.id, limit)
-        } else {
-            catalog.songRadio(seed.id, limit)
-        }
-        return Page(items = tracks, hasMore = tracks.size >= limit)
-    }
-
-    override suspend fun radioStation(seed: MediaKey, limit: Int): Station = if (seed.type == MediaType.Artist) {
-        catalog.artistRadioStation(seed.id, limit)
-    } else {
-        catalog.songRadioStation(seed.id, limit)
-    }
-}
-
-/** Spotify's existing writer behind the neutral [MediaLibraryWriter] contract. */
-class SpotifyMediaLibraryWriter(
-    private val writer: SpotifyLibraryWriter
-) : MediaLibraryWriter {
-    override suspend fun isSaved(item: MediaKey): Boolean? = when (item.type) {
-        MediaType.Track -> writer.isTrackSaved(item.id)
-        else -> item.type.toCollectionType()?.let { writer.isSaved(it, item.id) }
-    }
-
-    override suspend fun isFollowed(artist: MediaKey): Boolean? = writer.isArtistFollowed(artist.id)
-
-    override suspend fun setSaved(item: MediaKey, saved: Boolean) {
-        if (item.type == MediaType.Track) {
-            writer.setTrackSaved(item.id, saved)
-            return
-        }
-        val type = item.type.toCollectionType() ?: return
-        writer.setSaved(type, item.id, saved)
-    }
-
-    override suspend fun setFollowed(artist: MediaKey, followed: Boolean) {
-        writer.setArtistFollowed(artist.id, followed)
-    }
-
-    override suspend fun addToPlaylist(playlist: MediaKey, item: MediaItem): Int? {
-        val uri = item.uri ?: return null
-        return writer.addToPlaylist(playlist.id, uri)
-    }
-
-    override suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem) {
-        val uri = item.uri ?: return
-        writer.removeFromPlaylist(playlist.id, uri)
-    }
-}
-
-/** Spotify's OAuth flow behind [ServiceAuth]. */
-class SpotifyServiceAuth(
-    private val session: SpotifySession
-) : ServiceAuth {
-    override suspend fun signIn(input: AuthInput): ServiceAccount {
-        val browser = input as? AuthInput.Browser
-            ?: throw IllegalArgumentException("Spotify needs a browser sign-in")
-        session.signIn(browser)
-        return account()
-    }
-
-    override suspend fun restore(): ServiceAccount? = if (session.signedIn.value) account() else null
-
-    override suspend fun signOut() {
-        session.signOut()
-    }
-
-    private fun account() = ServiceAccount(
-        service = ServiceId.Spotify,
-        userId = "spotify",
-        displayName = "Spotify"
-    )
-}
-
-/**
- * The Spotify provider. It wraps the existing session, catalog, writer and librespot engine so
- * the registry can treat Spotify as one service among several without changing playback.
- */
-class SpotifyProvider(
-    private val session: SpotifySession
-) : MusicServiceProvider {
-    override val id: ServiceId = ServiceId.Spotify
-    override val displayName: String = "Spotify"
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
-
-    override fun createAuth(): ServiceAuth = SpotifyServiceAuth(session)
 }

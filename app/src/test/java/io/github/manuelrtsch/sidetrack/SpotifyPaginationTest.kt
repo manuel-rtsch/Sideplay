@@ -12,8 +12,8 @@ import org.junit.runner.RunWith
 class SpotifyPaginationTest {
     @Test fun `collection pages continue without gaps`() = runTest {
         val full = MockSpotifyDataSource.playlist("late_night")!!.tracks
-        val first = MockSpotifyDataSource.collection(SpotifyCollectionType.Playlist, "late_night", 0, 3)!!
-        val second = MockSpotifyDataSource.collection(SpotifyCollectionType.Playlist, "late_night", 3, 3)!!
+        val first = MockSpotifyDataSource.collection(CollectionType.Playlist, "late_night", 0, 3)!!
+        val second = MockSpotifyDataSource.collection(CollectionType.Playlist, "late_night", 3, 3)!!
 
         assertEquals(full.take(3), first.items)
         assertEquals(full.drop(3).take(3), second.items)
@@ -24,7 +24,7 @@ class SpotifyPaginationTest {
     @Test fun `last collection page reports no more`() = runTest {
         val full = MockSpotifyDataSource.playlist("late_night")!!.tracks
         val last = MockSpotifyDataSource.collection(
-            SpotifyCollectionType.Playlist,
+            CollectionType.Playlist,
             "late_night",
             full.size - 2,
             3

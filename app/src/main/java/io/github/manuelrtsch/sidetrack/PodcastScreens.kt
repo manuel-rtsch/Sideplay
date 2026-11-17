@@ -37,7 +37,7 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
-import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
+import io.github.manuelrtsch.sidetrack.data.EpisodeProgress
 import io.github.manuelrtsch.sidetrack.ui.GutterRow
 import io.github.manuelrtsch.sidetrack.ui.MeatballIcon
 import io.github.manuelrtsch.sidetrack.ui.RowActionSquare
@@ -52,24 +52,24 @@ import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
  */
 @Composable
 fun ShowScreen(
-    collection: SpotifyCollection,
+    collection: Collection,
     saved: SavedUiState,
     playback: PlaybackUiState,
     chrome: ChromeUiState,
-    episodeProgress: Map<String, SpotifyEpisodeProgress>,
+    episodeProgress: Map<String, EpisodeProgress>,
     onBack: () -> Unit,
     onPlay: () -> Unit,
     onPlayPause: () -> Unit,
     onItem: (Int) -> Unit,
     onSave: () -> Unit,
     onAddLatestToQueue: () -> Unit,
-    onAddItemToQueue: (SpotifyMediaItem) -> Unit,
+    onAddItemToQueue: (MediaItem) -> Unit,
     onNowPlaying: () -> Unit,
     onArtwork: () -> Unit,
     onLoadMore: () -> Unit,
     loadingMore: Boolean,
     onShowNotes: () -> Unit,
-    onEpisodeNotes: (SpotifyEpisode) -> Unit,
+    onEpisodeNotes: (Episode) -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
@@ -109,7 +109,7 @@ fun ShowScreen(
         val gutters = rememberRowGutterState()
         val playIds = remember(collection.items) { collection.items.mapTo(mutableSetOf()) { it.id } }
         LaunchedEffect(collection.id) { runCatching { playFocus.requestFocus() } }
-        val latest = collection.items.firstOrNull() as? SpotifyEpisode
+        val latest = collection.items.firstOrNull() as? Episode
         val latestProgress = latest?.let { episodeProgress[it.id] }
         val playLabel = if (latestProgress != null && !latestProgress.completed && latestProgress.positionMs >= 30_000L) {
             "Continue latest episode"
@@ -137,11 +137,11 @@ fun ShowScreen(
                         collection.artUrl,
                         onClick = onArtwork
                     )
-                    SpotifyIconTile(
+                    IconTile(
                         if (savedCollection) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
                         if (savedCollection) "Saved" else "Save",
                         onSave,
-                        tone = if (savedCollection) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                        tone = if (savedCollection) TileTone.Library else TileTone.Neutral
                     )
                 }
             }
@@ -187,11 +187,11 @@ fun ShowScreen(
             itemsIndexed(
                 collection.items,
                 key = { _, item -> item.id },
-                contentType = { _, item -> if (item is SpotifyTrack) "track" else "episode" }
+                contentType = { _, item -> if (item is Track) "track" else "episode" }
             ) { index, item ->
                 val key = item.id
                 val modifier = Modifier.listFade(listState, base + index)
-                if (item is SpotifyEpisode) {
+                if (item is Episode) {
                     EpisodeRow(
                         key,
                         item,
@@ -234,12 +234,12 @@ fun ShowScreen(
 @Composable
 private fun EpisodeRow(
     key: Any,
-    episode: SpotifyEpisode,
-    progress: SpotifyEpisodeProgress?,
+    episode: Episode,
+    progress: EpisodeProgress?,
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
-    onAddToQueue: (SpotifyMediaItem) -> Unit,
+    onAddToQueue: (MediaItem) -> Unit,
     onNotes: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -294,7 +294,7 @@ private fun EpisodeRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(13.dp)
                 ) {
-                    SpotifyCover(
+                    Cover(
                         episode.artRes,
                         Modifier.size(80.dp),
                         shape = SidekitTheme.shapes.artwork,

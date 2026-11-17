@@ -45,10 +45,10 @@ fun SidetrackHomeScreen(
     onLibrary: () -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
-    onPlay: (SpotifyMediaItem) -> Unit,
+    onPlay: (MediaItem) -> Unit,
     onOpenQueue: () -> Unit,
-    onAddToQueue: (SpotifyMediaItem) -> Unit,
-    onRemoveHistory: (SpotifyMediaItem) -> (() -> Unit)?,
+    onAddToQueue: (MediaItem) -> Unit,
+    onRemoveHistory: (MediaItem) -> (() -> Unit)?,
     onHistory: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
@@ -89,7 +89,7 @@ fun SidetrackHomeScreen(
             item(key = "recentLabel") { SectionLabel("Recently played") }
             if (recent.isEmpty()) {
                 item(key = "empty") {
-                    SpotifyStatusScreen(
+                    StatusScreen(
                         "Nothing played yet",
                         Modifier.listFade(listState, 1),
                         hint = "Search to find your first track"
@@ -141,14 +141,14 @@ fun LibraryScreen(
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onSeeMore: (LibraryFilter) -> Unit,
-    onTrack: (SpotifyTrack) -> Unit,
-    onAddToQueue: (SpotifyTrack) -> Unit,
-    onPlaylist: (SpotifyPlaylist) -> Unit,
-    onAlbum: (SpotifyAlbum) -> Unit,
-    onArtist: (SpotifyArtist) -> Unit,
-    onShow: (SpotifyShow) -> Unit,
-    onSaveTrack: (SpotifyTrack) -> Unit,
-    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
+    onTrack: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onPlaylist: (Playlist) -> Unit,
+    onAlbum: (Album) -> Unit,
+    onArtist: (Artist) -> Unit,
+    onShow: (Show) -> Unit,
+    onSaveTrack: (Track) -> Unit,
+    onEnsureSavedTrack: (Track) -> Unit,
     onNowPlaying: () -> Unit,
     onRetry: () -> Unit,
     onDismissNotice: () -> Unit,
@@ -181,7 +181,7 @@ fun LibraryScreen(
         val first = remember { FocusRequester() }
         LaunchedEffect(firstFilter) { runCatching { first.requestFocus() } }
         if (isEmpty && library.librarySectionsLoading) {
-            SpotifyLoadingScreen(
+            LoadingScreen(
                 Modifier.padding(padding),
                 title = "Loading your library…",
                 hint = "Liked songs, playlists and more"
@@ -190,7 +190,7 @@ fun LibraryScreen(
         }
         if (isEmpty && library.librarySectionsError != null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                SpotifyStatusScreen(
+                StatusScreen(
                     "Couldn't load your library",
                     hint = library.librarySectionsError,
                     actionLabel = "Try again",
@@ -204,7 +204,7 @@ fun LibraryScreen(
             if (isEmpty) {
                 val index = rowIndex
                 item(key = "empty") {
-                    SpotifyStatusScreen(
+                    StatusScreen(
                         "Your library is empty",
                         Modifier.listFade(listState, index),
                         hint = "Search to find something to save"
@@ -266,14 +266,14 @@ fun LibraryCategoryScreen(
     saved: SavedUiState,
     chrome: ChromeUiState,
     onBack: () -> Unit,
-    onTrack: (SpotifyTrack) -> Unit,
-    onAddToQueue: (SpotifyTrack) -> Unit,
-    onPlaylist: (SpotifyPlaylist) -> Unit,
-    onAlbum: (SpotifyAlbum) -> Unit,
-    onArtist: (SpotifyArtist) -> Unit,
-    onShow: (SpotifyShow) -> Unit,
-    onSaveTrack: (SpotifyTrack) -> Unit,
-    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
+    onTrack: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onPlaylist: (Playlist) -> Unit,
+    onAlbum: (Album) -> Unit,
+    onArtist: (Artist) -> Unit,
+    onShow: (Show) -> Unit,
+    onSaveTrack: (Track) -> Unit,
+    onEnsureSavedTrack: (Track) -> Unit,
     onLoadMore: () -> Unit,
     onNowPlaying: () -> Unit,
     onRetry: () -> Unit,
@@ -303,7 +303,7 @@ fun LibraryCategoryScreen(
         LaunchedEffect(filter) { runCatching { first.requestFocus() } }
         val items = library.libraryItems
         if (items.isEmpty() && library.libraryLoading) {
-            SpotifyLoadingScreen(
+            LoadingScreen(
                 Modifier.padding(padding),
                 title = "Loading ${filter.label.lowercase()}…",
                 hint = null
@@ -312,7 +312,7 @@ fun LibraryCategoryScreen(
         }
         if (items.isEmpty() && library.libraryError != null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                SpotifyStatusScreen(
+                StatusScreen(
                     "Couldn't load ${filter.label.lowercase()}",
                     hint = library.libraryError,
                     actionLabel = "Try again",
@@ -326,7 +326,7 @@ fun LibraryCategoryScreen(
             if (items.isEmpty()) {
                 val index = rowIndex
                 item(key = "empty") {
-                    SpotifyStatusScreen(
+                    StatusScreen(
                         filter.empty,
                         Modifier.listFade(listState, index),
                         hint = "Search to find something to save"
@@ -360,20 +360,20 @@ private fun LibraryRow(
     item: Any,
     modifier: Modifier,
     rows: TrackRows,
-    onTrack: (SpotifyTrack) -> Unit,
-    onPlaylist: (SpotifyPlaylist) -> Unit,
-    onAlbum: (SpotifyAlbum) -> Unit,
-    onArtist: (SpotifyArtist) -> Unit,
-    onShow: (SpotifyShow) -> Unit
+    onTrack: (Track) -> Unit,
+    onPlaylist: (Playlist) -> Unit,
+    onAlbum: (Album) -> Unit,
+    onArtist: (Artist) -> Unit,
+    onShow: (Show) -> Unit
 ) {
     when (item) {
         // Library rows carry no list index: a track can appear once per category, so its id is
         // already unique here.
-        is SpotifyTrack -> TrackRow(item.id, item, rows, modifier) { onTrack(item) }
+        is Track -> TrackRow(item.id, item, rows, modifier) { onTrack(item) }
 
-        is SpotifyPlaylist -> SpotifyLibraryRow(item.artRes, item.name, playlistSubtitle(item), modifier, artUrl = item.artUrl) { onPlaylist(item) }
+        is Playlist -> LibraryRow(item.artRes, item.name, playlistSubtitle(item), modifier, artUrl = item.artUrl) { onPlaylist(item) }
 
-        is SpotifyAlbum -> SpotifyLibraryRow(
+        is Album -> LibraryRow(
             item.artRes,
             item.title,
             if (item.year > 0) "${item.artist} · ${item.year}" else item.artist,
@@ -381,9 +381,9 @@ private fun LibraryRow(
             artUrl = item.artUrl
         ) { onAlbum(item) }
 
-        is SpotifyArtist -> SpotifyLibraryRow(item.artRes, item.name, "Artist", modifier, artUrl = item.artUrl) { onArtist(item) }
+        is Artist -> LibraryRow(item.artRes, item.name, "Artist", modifier, artUrl = item.artUrl) { onArtist(item) }
 
-        is SpotifyShow -> SpotifyLibraryRow(item.artRes, item.name, item.publisher, modifier, artUrl = item.artUrl) { onShow(item) }
+        is Show -> LibraryRow(item.artRes, item.name, item.publisher, modifier, artUrl = item.artUrl) { onShow(item) }
 
         else -> Unit
     }
@@ -391,7 +391,7 @@ private fun LibraryRow(
 
 @Composable
 fun CollectionScreen(
-    collection: SpotifyCollection,
+    collection: Collection,
     saved: SavedUiState,
     playback: PlaybackUiState,
     chrome: ChromeUiState,
@@ -402,9 +402,9 @@ fun CollectionScreen(
     onSave: () -> Unit,
     onArtist: () -> Unit,
     onAddToQueue: () -> Unit,
-    onAddItemToQueue: (SpotifyMediaItem) -> Unit,
-    onSaveTrack: (SpotifyTrack) -> Unit,
-    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
+    onAddItemToQueue: (MediaItem) -> Unit,
+    onSaveTrack: (Track) -> Unit,
+    onEnsureSavedTrack: (Track) -> Unit,
     onNowPlaying: () -> Unit,
     onArtwork: () -> Unit,
     onLoadMore: () -> Unit,
@@ -440,8 +440,8 @@ fun CollectionScreen(
         collection.items.firstOrNull()?.let { add(SideAction("addToQueue", "Add to queue", SidekitIcon.PlaylistAdd, onClick = onAddToQueue)) }
         add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     }
-    val artist = if (collection.type == SpotifyCollectionType.Album) {
-        collection.artistId.spotifyIdOrNull()?.let { collection.subtitle.substringBefore(" · ").takeIf(String::isNotBlank) }
+    val artist = if (collection.type == CollectionType.Album) {
+        collection.artistId.mediaIdOrNull()?.let { collection.subtitle.substringBefore(" · ").takeIf(String::isNotBlank) }
     } else {
         null
     }
@@ -477,11 +477,11 @@ fun CollectionScreen(
                         onClick = onArtwork
                     )
                     if (showSave) {
-                        SpotifyIconTile(
+                        IconTile(
                             if (savedCollection) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
                             if (savedCollection) "Saved" else "Save",
                             onSave,
-                            tone = if (savedCollection) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                            tone = if (savedCollection) TileTone.Library else TileTone.Neutral
                         )
                     }
                 }
@@ -510,7 +510,7 @@ fun CollectionScreen(
             val base = rowIndex
             // Albums and shows share one cover, so a position number is the useful left column.
             // Playlist tracks have their own artwork, which is more informative than a list index.
-            val showTrackArt = collection.type == SpotifyCollectionType.Playlist
+            val showTrackArt = collection.type == CollectionType.Playlist
             itemsIndexed(
                 collection.items,
                 key = { index, item -> "$index:${item.id}" },
@@ -518,7 +518,7 @@ fun CollectionScreen(
             ) { index, item ->
                 val key = "$index:${item.id}"
                 val modifier = Modifier.listFade(listState, base + index)
-                if (item is SpotifyTrack) {
+                if (item is Track) {
                     TrackRow(
                         key,
                         item,
@@ -535,7 +535,7 @@ fun CollectionScreen(
                         modifier,
                         index = if (showTrackArt) null else index,
                         showArt = showTrackArt,
-                        secondary = if (item is SpotifyEpisode) formatPublishedDate(item.published) else item.creator,
+                        secondary = if (item is Episode) formatPublishedDate(item.published) else item.creator,
                         onAddToQueue = onAddItemToQueue,
                         onClick = { onItem(index) }
                     )
@@ -554,20 +554,20 @@ fun CollectionScreen(
 
 @Composable
 fun ArtistScreen(
-    artist: SpotifyArtist,
-    albums: List<SpotifyAlbum>,
-    tracks: List<SpotifyTrack>,
+    artist: Artist,
+    albums: List<Album>,
+    tracks: List<Track>,
     saved: SavedUiState,
     playback: PlaybackUiState,
     chrome: ChromeUiState,
     onBack: () -> Unit,
     onPlay: () -> Unit,
     onPlayPause: () -> Unit,
-    onTrack: (SpotifyTrack) -> Unit,
-    onAddToQueue: (SpotifyTrack) -> Unit,
-    onAlbum: (SpotifyAlbum) -> Unit,
-    onSaveTrack: (SpotifyTrack) -> Unit,
-    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
+    onTrack: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onAlbum: (Album) -> Unit,
+    onSaveTrack: (Track) -> Unit,
+    onEnsureSavedTrack: (Track) -> Unit,
     onFollow: () -> Unit,
     onRadio: () -> Unit,
     canFollow: Boolean = true,
@@ -632,11 +632,11 @@ fun ArtistScreen(
                         onClick = onArtwork
                     )
                     if (canFollow) {
-                        SpotifyIconTile(
+                        IconTile(
                             if (followed) SidekitIcon.Artist else SidekitIcon.ArtistBorder,
                             if (followed) "Following" else "Follow",
                             onFollow,
-                            tone = if (followed) SpotifyTileTone.Library else SpotifyTileTone.Neutral
+                            tone = if (followed) TileTone.Library else TileTone.Neutral
                         )
                     }
                 }
@@ -682,7 +682,7 @@ fun ArtistScreen(
                 key = { index, album -> "$index:${album.id}" },
                 contentType = { _, _ -> "album" }
             ) { index, album ->
-                SpotifyLibraryRow(
+                LibraryRow(
                     album.artRes,
                     album.title,
                     "${album.year}" + if (album.trackCount > 0) " · ${album.trackCount} tracks" else "",
@@ -707,17 +707,17 @@ fun ArtistScreen(
 }
 
 private fun mediaContentType(item: Any): String = when (item) {
-    is SpotifyTrack -> "track"
-    is SpotifyEpisode -> "episode"
+    is Track -> "track"
+    is Episode -> "episode"
     else -> "media"
 }
 
 private fun libraryKey(item: Any): String = when (item) {
-    is SpotifyTrack -> "t${item.id}"
-    is SpotifyPlaylist -> "p${item.id}"
-    is SpotifyAlbum -> "a${item.id}"
-    is SpotifyArtist -> "r${item.id}"
-    is SpotifyShow -> "s${item.id}"
+    is Track -> "t${item.id}"
+    is Playlist -> "p${item.id}"
+    is Album -> "a${item.id}"
+    is Artist -> "r${item.id}"
+    is Show -> "s${item.id}"
     else -> item.toString()
 }
 

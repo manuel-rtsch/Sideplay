@@ -29,11 +29,11 @@ class SpotifyIdNavigationTest {
 
     @Test
     fun jsonNullsAndBlanksAreNotRouteIds() {
-        assertNull("null".spotifyIdOrNull())
-        assertNull("".spotifyIdOrNull())
-        assertNull("   ".spotifyIdOrNull())
-        assertNull(null.spotifyIdOrNull())
-        assertEquals("h33fR99rX82mBeIzNvbG0BN", "h33fR99rX82mBeIzNvbG0BN".spotifyIdOrNull())
+        assertNull("null".mediaIdOrNull())
+        assertNull("".mediaIdOrNull())
+        assertNull("   ".mediaIdOrNull())
+        assertNull(null.mediaIdOrNull())
+        assertEquals("h33fR99rX82mBeIzNvbG0BN", "h33fR99rX82mBeIzNvbG0BN".mediaIdOrNull())
     }
 
     @Test
@@ -41,10 +41,10 @@ class SpotifyIdNavigationTest {
         val album = JSONObject("""{"id":"abc","title":"Album","artistId":null,"items":[]}""")
         // org.json's trap: a JSON null arrives as the literal string "null".
         assertEquals("null", album.optString("artistId"))
-        assertNull(album.collection(SpotifyCollectionType.Album)?.artistId)
+        assertNull(album.collection(CollectionType.Album)?.artistId)
 
         // A catalog entry whose own id is JSON null cannot be opened at all.
         val broken = JSONObject("""{"id":null,"title":"Album","items":[]}""")
-        assertNull(broken.collection(SpotifyCollectionType.Album))
+        assertNull(broken.collection(CollectionType.Album))
     }
 }

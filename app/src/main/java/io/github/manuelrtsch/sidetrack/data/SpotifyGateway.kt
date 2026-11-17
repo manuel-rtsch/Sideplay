@@ -22,18 +22,6 @@ interface SpotifyGateway {
 }
 
 /** Stable gateway failures. Raw librespot strings must not reach the UI. */
-enum class SpotifyFailure {
-    Unavailable,
-    NotConnected,
-    AuthenticationExpired,
-    Network,
-    RateLimited,
-    TrackUnavailable,
-    Unknown
-}
-
-class SpotifyGatewayException(
-    val failure: SpotifyFailure,
-    message: String,
-    cause: Throwable? = null
-) : Exception(message, cause)
+// The adapter keeps its historical names; the UI sees the neutral ServiceFailure/ServiceException.
+typealias SpotifyFailure = ServiceFailure
+typealias SpotifyGatewayException = ServiceException

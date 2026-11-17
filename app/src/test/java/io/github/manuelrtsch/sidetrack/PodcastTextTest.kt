@@ -1,6 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
-import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
+import io.github.manuelrtsch.sidetrack.data.EpisodeProgress
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -41,7 +41,7 @@ class PodcastTextTest {
 
     @Test
     fun episodeMetaUsesRealNumberNotPosition() {
-        val episode = SpotifyEpisode(
+        val episode = Episode(
             id = "e1",
             title = "The Last Bus",
             show = "The Long Way Home",
@@ -57,7 +57,7 @@ class PodcastTextTest {
 
     @Test
     fun episodeMetaShowsLocalProgressInsteadOfDuration() {
-        val episode = SpotifyEpisode(
+        val episode = Episode(
             id = "e1",
             title = "The Last Bus",
             show = "The Long Way Home",
@@ -67,7 +67,7 @@ class PodcastTextTest {
             durationMs = 2_529_000L,
             episodeNumber = 42
         )
-        val progress = SpotifyEpisodeProgress("e1", 1_200_000L, 2_529_000L, 0L, completed = false)
+        val progress = EpisodeProgress("e1", 1_200_000L, 2_529_000L, 0L, completed = false)
 
         assertEquals("Ep. 42 · 9 Apr 2025 · 23m left", episodeMetaLine(episode, progress))
         assertEquals("Ep. 42 · 9 Apr 2025 · Played", episodeMetaLine(episode, progress.copy(completed = true)))

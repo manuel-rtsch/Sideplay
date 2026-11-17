@@ -99,11 +99,11 @@ internal fun NowPlayingSeek(
     buffering: Boolean = false
 ) {
     val positionMs by playbackPositionMs.collectAsStateWithLifecycle()
-    SpotifySeek(positionMs, durationMs, onSeek, modifier, buffering)
+    Seek(positionMs, durationMs, onSeek, modifier, buffering)
 }
 
 @Composable
-fun SpotifyNowPlayingScreen(
+fun NowPlayingScreen(
     playback: PlaybackUiState,
     saved: SavedUiState,
     chrome: ChromeUiState,
@@ -131,11 +131,11 @@ fun SpotifyNowPlayingScreen(
     val current = playback.current
     val savedCurrent = current?.let { it.key.encode() in saved.savedTrackIds } ?: false
     val backdrop = rememberArtworkBackdropSetting()
-    val backdropped = current is SpotifyTrack && backdrop.enabled
+    val backdropped = current is Track && backdrop.enabled
     val timer by sleepTimer.collectAsStateWithLifecycle()
     // Episodes have no saved-track endpoint, so Save is a track-only action.
     val save = remember(current?.id, savedCurrent) {
-        (current as? SpotifyTrack)?.let {
+        (current as? Track)?.let {
             SideAction.square(
                 "save",
                 if (savedCurrent) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
@@ -166,10 +166,10 @@ fun SpotifyNowPlayingScreen(
             // tapping the artwork, so it does not need a square of its own. The art backdrop
             // toggle itself lives in Settings.
             when (current) {
-                is SpotifyTrack ->
+                is Track ->
                     add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
 
-                is SpotifyEpisode ->
+                is Episode ->
                     add(SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onEpisodeNotes))
             }
             add(
@@ -183,7 +183,7 @@ fun SpotifyNowPlayingScreen(
         }
     }
     Box(Modifier.fillMaxSize()) {
-        if (backdropped && current is SpotifyTrack) {
+        if (backdropped && current is Track) {
             // The artwork is the screen: behind the scaffold, so it can run under the chrome,
             // which the canvas paints after the screens. The body has no cover tile of its own.
             ArtworkBackdrop(current, onOpenAlbum = onAlbum, modifier = Modifier.matchParentSize())
@@ -209,13 +209,13 @@ fun SpotifyNowPlayingScreen(
                 // The same status block the queue and the library use: vinyl, title and hint, so an
                 // empty Now Playing reads like every other empty page instead of a bare line of text.
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    SpotifyStatusScreen(
+                    StatusScreen(
                         "Nothing playing",
                         Modifier.fillMaxWidth(),
                         hint = "Pick something from your library"
                     )
                 }
-            } else if (backdropped && current is SpotifyTrack) {
+            } else if (backdropped && current is Track) {
                 BackdroppedNowPlayingBody(
                     playback,
                     current,
@@ -238,7 +238,7 @@ fun SpotifyNowPlayingScreen(
                 ) {
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         val art = minOf(maxWidth, maxHeight)
-                        SpotifyCover(
+                        Cover(
                             current.artRes,
                             Modifier.size(art),
                             shape = SidekitTheme.shapes.item,
@@ -246,23 +246,23 @@ fun SpotifyNowPlayingScreen(
                             contentDescription = "${current.title} artwork",
                             artUrl = current.artUrl,
                             onClick = when (current) {
-                                is SpotifyTrack -> onAlbum
-                                is SpotifyEpisode -> onShow
+                                is Track -> onAlbum
+                                is Episode -> onShow
                             },
                             onClickLabel = when (current) {
-                                is SpotifyTrack -> "Open album"
-                                is SpotifyEpisode -> "Open show"
+                                is Track -> "Open album"
+                                is Episode -> "Open show"
                             }
                         )
                     }
-                    val episode = current as? SpotifyEpisode
+                    val episode = current as? Episode
                     // The creator line is a destination: an artist for a track, the show for an
                     // episode. Episodes also carry their publishing identity below it.
                     val creatorAction = when (current) {
-                        is SpotifyTrack -> onArtist.takeIf { current.artistId.spotifyIdOrNull() != null }
-                        is SpotifyEpisode -> onShow
+                        is Track -> onArtist.takeIf { current.artistId.mediaIdOrNull() != null }
+                        is Episode -> onShow
                     }
-                    val creatorLabel = if (current is SpotifyEpisode) "Open show" else "Open artist"
+                    val creatorLabel = if (current is Episode) "Open show" else "Open artist"
                     val notes = remember(episode?.description) { plainPodcastText(episode?.description.orEmpty()) }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         SidekitText(
@@ -317,41 +317,41 @@ fun SpotifyNowPlayingScreen(
                         onSeek,
                         buffering = playback.isBuffering
                     )
-                    if (current is SpotifyEpisode) {
+                    if (current is Episode) {
                         // Podcasts do not repeat or shuffle. The two outer tiles are the podcast
                         // controls a song player does not need: rewind and fast-forward by 30 s.
                         SidekitItemRow {
-                            SpotifySkipTile("−30", "Back 30 seconds", onSkipBack)
-                            SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous episode", onPrevious, weight = 0.85f)
-                            SpotifyIconTile(
+                            SkipTile("−30", "Back 30 seconds", onSkipBack)
+                            IconTile(SidekitIcon.SkipPrevious, "Previous episode", onPrevious, weight = 0.85f)
+                            IconTile(
                                 if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
                                 if (playback.isPlaying) "Pause" else "Play",
                                 onPlayPause,
-                                tone = SpotifyTileTone.Play,
+                                tone = TileTone.Play,
                                 weight = 1.2f
                             )
-                            SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                            SpotifySkipTile("+30", "Forward 30 seconds", onSkipForward)
+                            IconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+                            SkipTile("+30", "Forward 30 seconds", onSkipForward)
                         }
                     } else {
                         SidekitItemRow {
-                            SpotifyIconTile(
+                            IconTile(
                                 SidekitIcon.Shuffle,
                                 if (playback.shuffle) "Shuffle on" else "Shuffle off",
                                 onShuffle,
-                                tone = if (playback.shuffle) SpotifyTileTone.On else SpotifyTileTone.Neutral,
+                                tone = if (playback.shuffle) TileTone.On else TileTone.Neutral,
                                 weight = 0.85f
                             )
-                            SpotifyIconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
-                            SpotifyIconTile(
+                            IconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
+                            IconTile(
                                 if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
                                 if (playback.isPlaying) "Pause" else "Play",
                                 onPlayPause,
-                                tone = SpotifyTileTone.Play,
+                                tone = TileTone.Play,
                                 weight = 1.2f
                             )
-                            SpotifyIconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                            SpotifyRepeatTile(playback.repeat, onRepeat)
+                            IconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+                            RepeatTile(playback.repeat, onRepeat)
                         }
                     }
                 }
@@ -398,9 +398,9 @@ fun QueueScreen(
     onMoveUpcoming: (Int, Int) -> Unit,
     onCommitReorder: () -> Unit,
     onRemove: (Int) -> Int,
-    onRestoreRemoved: (Int, SpotifyMediaItem) -> Unit,
-    onClearUpcoming: () -> List<SpotifyMediaItem>,
-    onRestoreUpcoming: (List<SpotifyMediaItem>) -> Unit,
+    onRestoreRemoved: (Int, MediaItem) -> Unit,
+    onClearUpcoming: () -> List<MediaItem>,
+    onRestoreUpcoming: (List<MediaItem>) -> Unit,
     onShuffle: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit,
@@ -511,7 +511,7 @@ fun QueueScreen(
     val back = remember { spotifyBack("Back", onBack).first() }
     // Removing a track offers Undo in the bar but drops the focus: the list must not choose a
     // neighbour for the user. The index identifies the occurrence, so duplicates are safe.
-    val removeFromQueue: (Int, SpotifyMediaItem) -> Unit = { index, item ->
+    val removeFromQueue: (Int, MediaItem) -> Unit = { index, item ->
         val removed = onRemove(index)
         if (removed >= 0) {
             pendingUndo = QueueUndo.Removed(removed, item)
@@ -576,7 +576,7 @@ fun QueueScreen(
             focusPending = true
         }
     }
-    val openRowActions: (Int, SpotifyMediaItem) -> Unit = { index, item ->
+    val openRowActions: (Int, MediaItem) -> Unit = { index, item ->
         val key = upcomingKeys[index]
         focusedKey = key
         rowActions.show(
@@ -787,7 +787,7 @@ fun QueueScreen(
             val current = playback.current
             if (current == null && !hasUpcoming) {
                 item(key = "empty") {
-                    SpotifyStatusScreen(
+                    StatusScreen(
                         "Nothing queued",
                         Modifier.listFade(listState, 0),
                         hint = "Search to find something to play"
@@ -796,7 +796,7 @@ fun QueueScreen(
             } else {
                 if (current != null) {
                     item(key = "current") {
-                        SpotifyMediaRow(
+                        MediaRow(
                             current,
                             Modifier
                                 .listFade(listState, 0)
@@ -817,7 +817,7 @@ fun QueueScreen(
                     itemsIndexed(
                         playback.upcoming,
                         key = { index, _ -> upcomingKeys[index] },
-                        contentType = { _, item -> if (item is SpotifyTrack) "track" else "episode" }
+                        contentType = { _, item -> if (item is Track) "track" else "episode" }
                     ) { index, item ->
                         val key = upcomingKeys[index]
                         val selected = rowActions.selection?.key == key
@@ -901,7 +901,7 @@ fun QueueScreen(
                                     // delete square would crowd the same edge.
                                     revealOnFocus = false
                                 ) {
-                                    SpotifyMediaRow(
+                                    MediaRow(
                                         item,
                                         Modifier
                                             .onFocusChanged {
@@ -998,7 +998,7 @@ private fun QueueSectionHeader(count: Int, shuffled: Boolean, modifier: Modifier
 }
 
 /** Stable keys for the upcoming list: track identity plus an occurrence rank for duplicates. */
-private fun entryKeys(items: List<SpotifyMediaItem>): List<String> {
+private fun entryKeys(items: List<MediaItem>): List<String> {
     val seen = HashMap<String, Int>(items.size)
     return items.map { item ->
         val rank = seen[item.id] ?: 0
@@ -1009,9 +1009,9 @@ private fun entryKeys(items: List<SpotifyMediaItem>): List<String> {
 
 /** What the bar's Undo will put back. */
 private sealed interface QueueUndo {
-    class Cleared(val items: List<SpotifyMediaItem>) : QueueUndo
+    class Cleared(val items: List<MediaItem>) : QueueUndo
 
-    class Removed(val index: Int, val item: SpotifyMediaItem) : QueueUndo
+    class Removed(val index: Int, val item: MediaItem) : QueueUndo
 }
 
 /** How long a row must hold the focus before its gutter control appears. */

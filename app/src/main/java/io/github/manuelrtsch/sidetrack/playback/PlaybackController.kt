@@ -12,10 +12,9 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState as SessionState
 import android.os.SystemClock
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
+import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.MediaKey
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
-import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
-import io.github.manuelrtsch.sidetrack.data.SpotifyGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,29 +40,10 @@ class PlaybackController(
     /** Monotonic clock seam: the sleep timer's deadline math is the only consumer. */
     private val elapsedTime: () -> Long = { SystemClock.elapsedRealtime() }
 ) : MediaSessionOwner {
-    /**
-     * Migration bridge for the existing tests and call sites: builds the librespot engine from
-     * the gateway and sink. New code should pass a [PlaybackEngine] directly.
-     */
-    constructor(
-        gateway: SpotifyGateway,
-        scope: CoroutineScope,
-        registry: MediaSessionRegistry = MediaSessions,
-        audio: SpotifyAudioSink? = null,
-        context: Context? = null,
-        elapsedTime: () -> Long = { SystemClock.elapsedRealtime() }
-    ) : this(
-        engine = LibrespotPlaybackEngine(gateway, audio),
-        scope = scope,
-        registry = registry,
-        context = context,
-        elapsedTime = elapsedTime
-    )
-
     override val sessionId = "sidetrack"
-    override val notificationChannelId = SpotifyPlaybackService.CHANNEL_ID
-    override val notificationChannelName = SpotifyPlaybackService.CHANNEL_NAME
-    override val notificationId = SpotifyPlaybackService.NOTIFICATION_ID
+    override val notificationChannelId = PlaybackService.CHANNEL_ID
+    override val notificationChannelName = PlaybackService.CHANNEL_NAME
+    override val notificationId = PlaybackService.NOTIFICATION_ID
 
     @Volatile
     private var playing = false
@@ -72,12 +52,12 @@ class PlaybackController(
     private var positionMs = 0L
 
     @Volatile
-    var current: SpotifyMediaItem? = null
+    var current: MediaItem? = null
         private set
 
     /**
      * The resolved source for [current]. HTTP services keep their stream URL and auth headers
-     * here; Spotify's source is just its URI. [reconfigure] reloads this, not the item's URI.
+     * here; a service's source is just its URI. [reconfigure] reloads this, not the item's URI.
      */
     @Volatile
     var currentSource: PlaybackSource? = null
@@ -193,7 +173,7 @@ class PlaybackController(
         // republished. The service refresh path deliberately does not call publish().
         if (context != null) {
             scope.launch {
-                _sleepTimer.collect { SpotifyPlaybackService.refresh(context, this@PlaybackController) }
+                _sleepTimer.collect { PlaybackService.refresh(context, this@PlaybackController) }
             }
         }
     }
@@ -302,7 +282,7 @@ class PlaybackController(
     }
 
     fun setNowPlaying(
-        item: SpotifyMediaItem?,
+        item: MediaItem?,
         position: Long = 0L,
         source: PlaybackSource? = null
     ) {
@@ -544,7 +524,7 @@ class PlaybackController(
             )
         }
         updateNoisy()
-        context?.let { SpotifyPlaybackService.sync(it, this) }
+        context?.let { PlaybackService.sync(it, this) }
     }
 
     private fun updateNoisy() {

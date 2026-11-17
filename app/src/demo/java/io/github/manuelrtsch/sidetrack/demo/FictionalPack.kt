@@ -1,24 +1,24 @@
 package io.github.manuelrtsch.sidetrack.demo
 
+import io.github.manuelrtsch.sidetrack.Album
+import io.github.manuelrtsch.sidetrack.Artist
+import io.github.manuelrtsch.sidetrack.Collection
+import io.github.manuelrtsch.sidetrack.CollectionType
 import io.github.manuelrtsch.sidetrack.DemoContent
+import io.github.manuelrtsch.sidetrack.Episode
 import io.github.manuelrtsch.sidetrack.LibraryFilter
+import io.github.manuelrtsch.sidetrack.MediaItem
+import io.github.manuelrtsch.sidetrack.Page
+import io.github.manuelrtsch.sidetrack.Playlist
 import io.github.manuelrtsch.sidetrack.R
+import io.github.manuelrtsch.sidetrack.SearchResults
 import io.github.manuelrtsch.sidetrack.SearchScope
-import io.github.manuelrtsch.sidetrack.SpotifyAlbum
-import io.github.manuelrtsch.sidetrack.SpotifyArtist
-import io.github.manuelrtsch.sidetrack.SpotifyCollection
-import io.github.manuelrtsch.sidetrack.SpotifyCollectionType
-import io.github.manuelrtsch.sidetrack.SpotifyEpisode
-import io.github.manuelrtsch.sidetrack.SpotifyMediaItem
-import io.github.manuelrtsch.sidetrack.SpotifyPage
-import io.github.manuelrtsch.sidetrack.SpotifyPlaylist
-import io.github.manuelrtsch.sidetrack.SpotifySearchResults
-import io.github.manuelrtsch.sidetrack.SpotifyShow
-import io.github.manuelrtsch.sidetrack.SpotifyTrack
+import io.github.manuelrtsch.sidetrack.Show
+import io.github.manuelrtsch.sidetrack.Track
+import io.github.manuelrtsch.sidetrack.data.HistoryRepository
+import io.github.manuelrtsch.sidetrack.data.QueueRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
-import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyLibraryWriter
-import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
 
 /**
  * The demo build's original account: a fully fictional pack with a real Spotify URI per item.
@@ -74,9 +74,9 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         albumId: String,
         art: Int,
         explicit: Boolean = false
-    ): SpotifyTrack {
+    ): Track {
         val (uri, durationMs) = donor()
-        return SpotifyTrack(
+        return Track(
             id = id,
             title = title,
             artist = artist,
@@ -98,7 +98,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         published: String,
         art: Int,
         durationMs: Long
-    ) = SpotifyEpisode(id, title, show, showId, published, art, durationMs, uri = episodeDonor)
+    ) = Episode(id, title, show, showId, published, art, durationMs, uri = episodeDonor)
 
     private val nightSignals = listOf(
         t("ns1", "Afterglow", TRIO, "aurora", "night_signals", R.drawable.cover_night_signals),
@@ -177,26 +177,26 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
     )
 
     private val artistList = listOf(
-        SpotifyArtist("aurora", TRIO, R.drawable.cover_aurora_vale, listOf("night_signals", "glass_hours")),
-        SpotifyArtist("mira", "Mira Sol", R.drawable.cover_mira_sol, listOf("coastline")),
-        SpotifyArtist("static", "The Static Coast", R.drawable.cover_static_coast, listOf("rooms_we_left")),
-        SpotifyArtist("ivy", "Ivy & Ash", R.drawable.cover_ivy_ash, listOf("golden_hour")),
-        SpotifyArtist("lumen", "Lumen Park", R.drawable.cover_lumen_park, listOf("soft_focus")),
-        SpotifyArtist("northlight", "Northlight", R.drawable.cover_northlight, listOf("northlight"))
+        Artist("aurora", TRIO, R.drawable.cover_aurora_vale, listOf("night_signals", "glass_hours")),
+        Artist("mira", "Mira Sol", R.drawable.cover_mira_sol, listOf("coastline")),
+        Artist("static", "The Static Coast", R.drawable.cover_static_coast, listOf("rooms_we_left")),
+        Artist("ivy", "Ivy & Ash", R.drawable.cover_ivy_ash, listOf("golden_hour")),
+        Artist("lumen", "Lumen Park", R.drawable.cover_lumen_park, listOf("soft_focus")),
+        Artist("northlight", "Northlight", R.drawable.cover_northlight, listOf("northlight"))
     )
 
     private val albumList = listOf(
-        SpotifyAlbum("night_signals", "Night Signals", TRIO, "aurora", 2024, R.drawable.cover_night_signals, nightSignals),
-        SpotifyAlbum("glass_hours", "Glass Hours", TRIO, "aurora", 2022, R.drawable.cover_glass_hours, glassHours),
-        SpotifyAlbum("coastline", "Coastline", "Mira Sol", "mira", 2023, R.drawable.cover_coastline, coastline),
-        SpotifyAlbum("rooms_we_left", "Rooms We Left", "The Static Coast", "static", 2024, R.drawable.cover_rooms_we_left, roomsWeLeft),
-        SpotifyAlbum("golden_hour", "Golden Hour", "Ivy & Ash", "ivy", 2021, R.drawable.cover_golden_hour, goldenHour),
-        SpotifyAlbum("soft_focus", "Soft Focus", "Lumen Park", "lumen", 2025, R.drawable.cover_soft_focus, softFocus),
-        SpotifyAlbum("northlight", "Northlight", "Northlight", "northlight", 2025, R.drawable.cover_northlight, northlight)
+        Album("night_signals", "Night Signals", TRIO, "aurora", 2024, R.drawable.cover_night_signals, nightSignals),
+        Album("glass_hours", "Glass Hours", TRIO, "aurora", 2022, R.drawable.cover_glass_hours, glassHours),
+        Album("coastline", "Coastline", "Mira Sol", "mira", 2023, R.drawable.cover_coastline, coastline),
+        Album("rooms_we_left", "Rooms We Left", "The Static Coast", "static", 2024, R.drawable.cover_rooms_we_left, roomsWeLeft),
+        Album("golden_hour", "Golden Hour", "Ivy & Ash", "ivy", 2021, R.drawable.cover_golden_hour, goldenHour),
+        Album("soft_focus", "Soft Focus", "Lumen Park", "lumen", 2025, R.drawable.cover_soft_focus, softFocus),
+        Album("northlight", "Northlight", "Northlight", "northlight", 2025, R.drawable.cover_northlight, northlight)
     )
 
     private val playlistList = listOf(
-        SpotifyPlaylist(
+        Playlist(
             "late_night",
             "Late Night Drive",
             "You",
@@ -204,7 +204,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             R.drawable.cover_late_night_drive,
             listOf(nightSignals[0], nightSignals[5], coastline[2], roomsWeLeft[1], softFocus[3], nightSignals[7], glassHours[5], coastline[6])
         ),
-        SpotifyPlaylist(
+        Playlist(
             "sunday_morning",
             "Sunday Morning",
             "You",
@@ -212,7 +212,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             R.drawable.cover_sunday_morning,
             listOf(goldenHour[0], goldenHour[3], glassHours[1], coastline[0], goldenHour[6], softFocus[4], glassHours[6])
         ),
-        SpotifyPlaylist(
+        Playlist(
             "focus",
             "Focus / No Words",
             "You",
@@ -220,7 +220,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             R.drawable.cover_focus_no_words,
             listOf(softFocus[0], softFocus[1], softFocus[5], glassHours[7], coastline[6], roomsWeLeft[5], nightSignals[3])
         ),
-        SpotifyPlaylist(
+        Playlist(
             "kitchen_radio",
             "Kitchen Radio",
             "You",
@@ -228,7 +228,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             R.drawable.cover_kitchen_radio,
             listOf(goldenHour[1], coastline[1], nightSignals[8], goldenHour[4], glassHours[2], coastline[4], roomsWeLeft[0])
         ),
-        SpotifyPlaylist(
+        Playlist(
             "after_hours",
             "After Hours",
             "You",
@@ -236,7 +236,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             R.drawable.cover_after_hours,
             listOf(nightSignals[1], softFocus[6], roomsWeLeft[3], coastline[5], glassHours[4], goldenHour[7])
         ),
-        SpotifyPlaylist(
+        Playlist(
             "slow_sundays",
             "Slow Sundays",
             "You",
@@ -247,7 +247,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
     )
 
     private val showList = listOf(
-        SpotifyShow(
+        Show(
             "long_way_home",
             "Bowie Vale Sessions",
             "Northline Audio",
@@ -260,7 +260,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
                 e("lw5", "The Last Bus", "Bowie Vale Sessions", "long_way_home", "9 Apr 2025", R.drawable.cover_long_way_home, 2_529_000L)
             )
         ),
-        SpotifyShow(
+        Show(
             "small_hours",
             "Small Hours",
             "Northline Audio",
@@ -272,7 +272,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
                 e("sh4", "Room Tone", "Small Hours", "small_hours", "25 Feb 2025", R.drawable.cover_small_hours, 1_788_000L)
             )
         ),
-        SpotifyShow(
+        Show(
             "between_takes",
             "Between Takes",
             "Northline Audio",
@@ -283,7 +283,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
                 e("bt3", "The Cut We Kept", "Between Takes", "between_takes", "20 May 2025", R.drawable.cover_between_takes, 2_115_000L)
             )
         ),
-        SpotifyShow(
+        Show(
             "night_bus",
             "The Night Bus",
             "Northline Audio",
@@ -294,7 +294,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
                 e("nb3", "Home Before Light", "The Night Bus", "night_bus", "17 Jun 2025", R.drawable.cover_the_night_bus, 1_878_000L)
             )
         ),
-        SpotifyShow(
+        Show(
             "signal_lost",
             "Signal Lost",
             "Station Nine",
@@ -305,7 +305,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
                 e("sl3", "The Long Reply", "Signal Lost", "signal_lost", "15 Apr 2025", R.drawable.cover_signal_lost, 2_077_000L)
             )
         ),
-        SpotifyShow(
+        Show(
             "open_studio",
             "Open Studio",
             "Station Nine",
@@ -318,13 +318,13 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         )
     )
 
-    private val likedTracks: List<SpotifyTrack> = listOf(
+    private val likedTracks: List<Track> = listOf(
         nightSignals[0], nightSignals[3], coastline[0], coastline[2], roomsWeLeft[1],
         goldenHour[0], goldenHour[5], softFocus[2], glassHours[3], nightSignals[7]
     )
 
     /** Newest first. Seeded into history so Home and the History screen have rows. */
-    private val recents: List<SpotifyTrack> = listOf(
+    private val recents: List<Track> = listOf(
         nightSignals[0], coastline[2], roomsWeLeft[1], goldenHour[0], softFocus[2],
         nightSignals[5], glassHours[1], coastline[6], roomsWeLeft[5]
     )
@@ -346,7 +346,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
      * not account data, and a recording must always begin from the same rows even when the app was
      * used normally before. A warm restart within one take keeps whatever the take did.
      */
-    override fun seed(history: SpotifyHistoryRepository, queue: SpotifyQueueRepository) {
+    override fun seed(history: HistoryRepository, queue: QueueRepository) {
         history.clear()
         // record() prepends, so insert oldest first to end up newest first.
         val now = System.currentTimeMillis()
@@ -361,7 +361,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
 
     override suspend fun isTrackSaved(id: String): Boolean = synchronized(savedTracks) { id in savedTracks }
 
-    override suspend fun isSaved(type: SpotifyCollectionType, id: String): Boolean = synchronized(savedCollections) { "${type.key}:$id" in savedCollections }
+    override suspend fun isSaved(type: CollectionType, id: String): Boolean = synchronized(savedCollections) { "${type.key}:$id" in savedCollections }
 
     override suspend fun isArtistFollowed(id: String): Boolean = synchronized(followedArtists) { id in followedArtists }
 
@@ -369,7 +369,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         synchronized(savedTracks) { if (saved) savedTracks.add(id) else savedTracks.remove(id) }
     }
 
-    override suspend fun setSaved(type: SpotifyCollectionType, id: String, saved: Boolean) {
+    override suspend fun setSaved(type: CollectionType, id: String, saved: Boolean) {
         val key = "${type.key}:$id"
         synchronized(savedCollections) { if (saved) savedCollections.add(key) else savedCollections.remove(key) }
     }
@@ -378,70 +378,70 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         synchronized(followedArtists) { if (followed) followedArtists.add(id) else followedArtists.remove(id) }
     }
 
-    override suspend fun artist(id: String): SpotifyArtist? = artistList.firstOrNull { it.id == id }
+    override suspend fun artist(id: String): Artist? = artistList.firstOrNull { it.id == id }
 
     override suspend fun collection(
-        type: SpotifyCollectionType,
+        type: CollectionType,
         id: String,
         offset: Int,
         limit: Int
-    ): SpotifyCollection? = when (type) {
-        SpotifyCollectionType.Album -> albumList.firstOrNull { it.id == id }?.let {
+    ): Collection? = when (type) {
+        CollectionType.Album -> albumList.firstOrNull { it.id == id }?.let {
             page(type, it.id, it.title, "${it.artist} · ${it.year} · ${it.tracks.size} tracks", it.artRes, it.tracks, it.artistId, offset, limit)
         }
 
-        SpotifyCollectionType.Playlist -> playlistList.firstOrNull { it.id == id }?.let {
+        CollectionType.Playlist -> playlistList.firstOrNull { it.id == id }?.let {
             page(type, it.id, it.name, "${it.owner} · ${it.tracks.size} tracks", it.artRes, it.tracks, it.ownerId, offset, limit)
         }
 
-        SpotifyCollectionType.Show -> showList.firstOrNull { it.id == id }?.let {
+        CollectionType.Show -> showList.firstOrNull { it.id == id }?.let {
             page(type, it.id, it.name, "${it.publisher} · ${it.episodes.size} episodes", it.artRes, it.episodes, null, offset, limit)
         }
     }
 
     private fun page(
-        type: SpotifyCollectionType,
+        type: CollectionType,
         id: String,
         title: String,
         subtitle: String,
         artRes: Int,
-        all: List<SpotifyMediaItem>,
+        all: List<MediaItem>,
         artistId: String?,
         offset: Int,
         limit: Int
-    ): SpotifyCollection {
+    ): Collection {
         val items = all.drop(offset).take(limit)
-        return SpotifyCollection(
+        return Collection(
             type, id, title, subtitle, artRes, items, artistId,
             totalItems = all.size, hasMore = offset + items.size < all.size
         )
     }
 
-    override suspend fun albumsBy(artist: SpotifyArtist, offset: Int, limit: Int): SpotifyPage<SpotifyAlbum> {
+    override suspend fun albumsBy(artist: Artist, offset: Int, limit: Int): Page<Album> {
         val all = artist.albumIds.mapNotNull { albumId -> albumList.firstOrNull { it.id == albumId } }
-        return SpotifyPage.of(all.drop(offset).take(limit), offset, limit, all.size)
+        return Page.of(all.drop(offset).take(limit), offset, limit, all.size)
     }
 
-    override suspend fun topTracks(artist: SpotifyArtist, offset: Int, limit: Int): SpotifyPage<SpotifyTrack> {
+    override suspend fun topTracks(artist: Artist, offset: Int, limit: Int): Page<Track> {
         val all = albumList.filter { it.id in artist.albumIds }.flatMap { it.tracks }
-        return SpotifyPage.of(all.drop(offset).take(limit), offset, limit, all.size)
+        return Page.of(all.drop(offset).take(limit), offset, limit, all.size)
     }
 
-    override suspend fun songRadio(trackId: String, limit: Int): List<SpotifyTrack> {
+    override suspend fun songRadio(trackId: String, limit: Int): List<Track> {
         val all = albumList.flatMap { it.tracks }
         val seed = all.firstOrNull { it.id == trackId }
         val sameArtist = all.filter { seed != null && it.artistId == seed.artistId }
         return (sameArtist + all).distinctBy { it.id }.filter { it.id != trackId }.take(limit)
     }
 
-    override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> {
+    override suspend fun artistRadio(artistId: String, limit: Int): List<Track> {
         val artist = artistList.firstOrNull { it.id == artistId } ?: return emptyList()
         val own = albumList.filter { it.id in artist.albumIds }.flatMap { it.tracks }
         val rest = albumList.filterNot { it.id in artist.albumIds }.flatMap { it.tracks }
         return (own + rest).distinctBy { it.id }.take(limit)
     }
 
-    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<Any> {
+    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): Page<Any> {
         val all: List<Any> = when (filter) {
             LibraryFilter.LikedSongs -> likedTracks
             LibraryFilter.Playlists -> playlistList
@@ -449,7 +449,7 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
             LibraryFilter.Artists -> artistList
             LibraryFilter.Shows -> showList
         }
-        return SpotifyPage.of(all.drop(offset).take(limit), offset, limit, all.size)
+        return Page.of(all.drop(offset).take(limit), offset, limit, all.size)
     }
 
     override suspend fun search(
@@ -457,13 +457,13 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         scopes: Set<SearchScope>,
         offset: Int,
         limit: Int
-    ): SpotifySearchResults {
+    ): SearchResults {
         val q = query.trim()
-        if (q.length < 2) return SpotifySearchResults()
+        if (q.length < 2) return SearchResults()
         fun match(vararg text: String) = text.any { it.contains(q, ignoreCase = true) }
         fun <T> pageOf(items: List<T>): List<T> = items.drop(offset).take(limit)
         val allTracks = albumList.flatMap { it.tracks }
-        return SpotifySearchResults(
+        return SearchResults(
             tracks = if (SearchScope.Tracks in scopes) pageOf(allTracks.filter { match(it.title, it.artist) }) else emptyList(),
             artists = if (SearchScope.Artists in scopes) pageOf(artistList.filter { match(it.name) }) else emptyList(),
             albums = if (SearchScope.Albums in scopes) pageOf(albumList.filter { match(it.title, it.artist) }) else emptyList(),
@@ -476,9 +476,9 @@ object FictionalPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
     private const val TRIO = "Bowie Vale"
 }
 
-private val SpotifyCollectionType.key: String
+private val CollectionType.key: String
     get() = when (this) {
-        SpotifyCollectionType.Album -> "album"
-        SpotifyCollectionType.Playlist -> "playlist"
-        SpotifyCollectionType.Show -> "show"
+        CollectionType.Album -> "album"
+        CollectionType.Playlist -> "playlist"
+        CollectionType.Show -> "show"
     }

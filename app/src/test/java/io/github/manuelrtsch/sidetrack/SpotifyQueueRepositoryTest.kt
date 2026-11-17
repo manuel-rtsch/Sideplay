@@ -1,6 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
-import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
+import io.github.manuelrtsch.sidetrack.data.QueueRepository
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -16,7 +16,7 @@ class SpotifyQueueRepositoryTest {
     )
 
     @Test fun `play from a row replaces the queue and records the previous item`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.play(tracks, 2)
 
@@ -26,7 +26,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `replaying the current item does not duplicate history`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 1)
         queue.play(tracks, 1)
 
@@ -35,7 +35,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `play next moves an existing upcoming item instead of duplicating it`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.playNext(tracks[2])
 
@@ -43,17 +43,17 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `restore adopts a process-wide snapshot`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         val snapshot = queue.play(tracks, 1)
 
-        val restored = SpotifyQueueRepository(Random(2)).restore(snapshot)
+        val restored = QueueRepository(Random(2)).restore(snapshot)
 
         assertEquals("b", restored.current?.id)
         assertEquals(listOf("c", "d"), restored.upcoming.map { it.id })
     }
 
     @Test fun `add to queue appends`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.addToQueue(track("z"))
 
@@ -61,7 +61,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `adding several items appends them in order`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.addToQueue(listOf(track("x"), track("y")))
 
@@ -69,7 +69,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `items added while shuffled stay in the queue when shuffle is switched off`() {
-        val queue = SpotifyQueueRepository(Random(7))
+        val queue = QueueRepository(Random(7))
         queue.play(tracks, 0)
         queue.setShuffle(true)
 
@@ -80,7 +80,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `next moves the current item into history`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
 
         queue.next(auto = false)
@@ -91,7 +91,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `previous restarts inside the threshold and rewinds outside it`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.next(auto = false)
         assertEquals("b", queue.snapshot.current?.id)
@@ -106,7 +106,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `shuffle only reorders upcoming and restores it when switched off`() {
-        val queue = SpotifyQueueRepository(Random(7))
+        val queue = QueueRepository(Random(7))
         queue.play(tracks, 0)
         val original = queue.snapshot.upcoming.map { it.id }
 
@@ -120,7 +120,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `adopting the same shuffle state does not reorder the tail`() {
-        val queue = SpotifyQueueRepository(Random(7))
+        val queue = QueueRepository(Random(7))
         queue.play(tracks, 0)
 
         queue.setShuffle(true)
@@ -131,7 +131,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `adopting shuffle off restores the original tail`() {
-        val queue = SpotifyQueueRepository(Random(7))
+        val queue = QueueRepository(Random(7))
         queue.play(tracks, 0)
         val original = queue.snapshot.upcoming.map { it.id }
 
@@ -142,7 +142,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `repeat off stops at the end of the queue`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks.take(2), 0)
 
         queue.next(auto = true)
@@ -152,7 +152,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `repeat context replays the collection when the queue runs out`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks.take(2), 0)
         queue.setRepeat(RepeatMode.Context)
 
@@ -164,7 +164,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `repeat track leaves the current item in place`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.setRepeat(RepeatMode.Track)
 
@@ -175,7 +175,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `jump to an upcoming item moves the skipped items into history`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
 
         queue.jumpTo(1)
@@ -186,7 +186,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `removing history only drops the chosen item`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.next(auto = false)
         queue.next(auto = false)
@@ -197,7 +197,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `removed history can be restored at its old position`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.next(auto = false)
         queue.next(auto = false)
@@ -209,7 +209,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `moving an upcoming item reorders only the tail`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
 
         queue.moveUpcoming(from = 2, to = 0)
@@ -220,7 +220,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `moving an upcoming item clamps to the tail and ignores a no-op`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
 
         queue.moveUpcoming(from = 0, to = 99)
@@ -232,7 +232,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `cancelling a manual reorder keeps shuffle and its backup`() {
-        val queue = SpotifyQueueRepository(Random(7))
+        val queue = QueueRepository(Random(7))
         queue.play(tracks, 0)
         queue.setShuffle(true)
         val before = queue.snapshot.upcoming.map { it.id }
@@ -247,7 +247,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `finishing a manual reorder turns shuffle off and keeps the chosen order`() {
-        val queue = SpotifyQueueRepository(Random(7))
+        val queue = QueueRepository(Random(7))
         queue.play(tracks, 0)
         queue.setShuffle(true)
 
@@ -261,7 +261,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `removing one duplicate leaves the others alone`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(listOf(track("a"), track("b"), track("b"), track("c")), 0)
 
         val removed = queue.removeUpcoming(1)
@@ -274,7 +274,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `play next moves one duplicate and keeps the other`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(listOf(track("a"), track("c"), track("b"), track("d"), track("b")), 0)
 
         queue.playNext(track("b"))
@@ -283,7 +283,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `jumping to one duplicate uses the occurrence index`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(listOf(track("a"), track("b"), track("b"), track("c")), 0)
 
         queue.jumpTo(2)
@@ -293,7 +293,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `stop clears the current item, upcoming, history and context`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         queue.next(auto = false)
 
@@ -307,7 +307,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `previous at the first item restarts instead of rewinding`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
 
         queue.previous(1_000L)
@@ -318,7 +318,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `an unplayable item does not replace the queue`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
         val before = queue.snapshot
 
@@ -328,7 +328,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `history is bounded to the most recent twenty items`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         val many = (1..25).map { track("t$it") }
         queue.play(many, 0)
 
@@ -339,7 +339,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `clearing upcoming leaves shuffle off`() {
-        val queue = SpotifyQueueRepository(Random(7))
+        val queue = QueueRepository(Random(7))
         queue.play(tracks, 0)
         queue.setShuffle(true)
 
@@ -350,7 +350,7 @@ class SpotifyQueueRepositoryTest {
     }
 
     @Test fun `clearing upcoming can be undone`() {
-        val queue = SpotifyQueueRepository(Random(1))
+        val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
 
         val removed = queue.clearUpcoming()
@@ -360,7 +360,7 @@ class SpotifyQueueRepositoryTest {
         assertEquals(listOf("b", "c", "d"), queue.snapshot.upcoming.map { it.id })
     }
 
-    private fun track(id: String) = SpotifyTrack(
+    private fun track(id: String) = Track(
         id = id,
         title = "Track $id",
         artist = "Artist",

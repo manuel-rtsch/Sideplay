@@ -20,7 +20,7 @@ import io.github.manuelrtsch.sidetrack.data.AppSessions
  * session in a platform media-style notification and forwards transport actions back to the
  * process-wide player.
  */
-class SpotifyPlaybackService : Service() {
+class PlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -195,7 +195,7 @@ class SpotifyPlaybackService : Service() {
     private fun action(action: String): PendingIntent = PendingIntent.getForegroundService(
         this,
         action.hashCode(),
-        Intent(this, SpotifyPlaybackService::class.java).setAction(action),
+        Intent(this, PlaybackService::class.java).setAction(action),
         PendingIntent.FLAG_IMMUTABLE
     )
 
@@ -213,7 +213,7 @@ class SpotifyPlaybackService : Service() {
         private const val ACTION_PREVIOUS = "io.github.manuelrtsch.sidetrack.PREVIOUS"
         private const val ACTION_STOP = "io.github.manuelrtsch.sidetrack.STOP"
 
-        private var running: SpotifyPlaybackService? = null
+        private var running: PlaybackService? = null
 
         /** Rebuilds the notification for a state-only change, such as a sleep-timer minute tick. */
         fun refresh(context: Context, playback: PlaybackController) {
@@ -229,7 +229,7 @@ class SpotifyPlaybackService : Service() {
             }
             if (!playback.isActive || playback.current == null) return
             try {
-                context.startForegroundService(Intent(context, SpotifyPlaybackService::class.java))
+                context.startForegroundService(Intent(context, PlaybackService::class.java))
             } catch (_: IllegalStateException) {
                 // Not allowed from the background. Playback still works, just without the
                 // foreground-service protection on this edge.

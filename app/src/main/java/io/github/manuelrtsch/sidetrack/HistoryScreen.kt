@@ -21,9 +21,9 @@ fun HistoryScreen(
     playback: PlaybackUiState,
     chrome: ChromeUiState,
     onBack: () -> Unit,
-    onPlay: (SpotifyMediaItem) -> Unit,
-    onAddToQueue: (SpotifyMediaItem) -> Unit,
-    onRemove: (SpotifyMediaItem) -> (() -> Unit)?,
+    onPlay: (MediaItem) -> Unit,
+    onAddToQueue: (MediaItem) -> Unit,
+    onRemove: (MediaItem) -> (() -> Unit)?,
     onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
@@ -50,7 +50,7 @@ fun HistoryScreen(
             itemsIndexed(
                 playback.recent,
                 key = { index, item -> "$index:${item.id}" },
-                contentType = { _, item -> if (item is SpotifyTrack) "track" else "episode" }
+                contentType = { _, item -> if (item is Track) "track" else "episode" }
             ) { index, item ->
                 val key = "$index:${item.id}"
                 HistoryRow(

@@ -32,7 +32,7 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpotifyFallbackStateTest {
     private val dispatcher = StandardTestDispatcher()
-    private val viewModels = mutableListOf<SpotifyViewModel>()
+    private val viewModels = mutableListOf<SidetrackViewModel>()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
 
@@ -45,20 +45,20 @@ class SpotifyFallbackStateTest {
     @Test fun `a failed collection load is retryable`() = runTest(dispatcher) {
         val catalog = FlakyCatalog()
         val vm = viewModel(catalog)
-        val type = SpotifyCollectionType.Album
+        val type = CollectionType.Album
         val id = "night_signals"
 
         vm.ensureCollection(type, id)
         advanceUntilIdle()
 
-        assertEquals("Couldn't reach Spotify", vm.state.value.collectionErrors["spotify:${type.route}:$id"])
+        assertEquals("Couldn't reach the service", vm.state.value.collectionErrors["local:${type.route}:$id"])
         assertNull(vm.collection(type, id))
 
         catalog.failing = false
         vm.retryCollection(type, id)
         advanceUntilIdle()
 
-        assertNull(vm.state.value.collectionErrors["spotify:${type.route}:$id"])
+        assertNull(vm.state.value.collectionErrors["local:${type.route}:$id"])
         assertNotNull(vm.collection(type, id))
     }
 
@@ -70,7 +70,7 @@ class SpotifyFallbackStateTest {
         vm.ensureArtist(id)
         advanceUntilIdle()
 
-        assertEquals("Couldn't reach Spotify", vm.state.value.artistErrors[id])
+        assertEquals("Couldn't reach the service", vm.state.value.artistErrors[id])
         assertNull(vm.artist(id))
 
         catalog.failing = false
@@ -85,7 +85,7 @@ class SpotifyFallbackStateTest {
         val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
         val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = SpotifyStation(station)
+            override suspend fun songRadioStation(trackId: String, limit: Int): Station = Station(station)
         }
         val vm = viewModel(catalog)
 
@@ -104,20 +104,20 @@ class SpotifyFallbackStateTest {
         val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
         val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = SpotifyStation(station, playlistId = "37i9dQZF1DXcBWIGoYBM5M")
+            override suspend fun songRadioStation(trackId: String, limit: Int): Station = Station(station, playlistId = "37i9dQZF1DXcBWIGoYBM5M")
         }
         val writes = mutableListOf<Pair<String, Boolean>>()
         val writer = object : SpotifyLibraryWriter {
             override suspend fun isTrackSaved(id: String): Boolean? = null
-            override suspend fun isSaved(type: SpotifyCollectionType, id: String): Boolean? = false
+            override suspend fun isSaved(type: CollectionType, id: String): Boolean? = false
             override suspend fun isArtistFollowed(id: String): Boolean? = null
             override suspend fun setTrackSaved(id: String, saved: Boolean) = Unit
-            override suspend fun setSaved(type: SpotifyCollectionType, id: String, saved: Boolean) {
+            override suspend fun setSaved(type: CollectionType, id: String, saved: Boolean) {
                 writes += id to saved
             }
             override suspend fun setArtistFollowed(id: String, followed: Boolean) = Unit
         }
-        val vm = SpotifyViewModel(SpotifyMediaCatalog(catalog), SpotifyMediaLibraryWriter(writer), simulatePlayback = false).also { viewModels += it }
+        val vm = SidetrackViewModel(SpotifyMediaCatalog(catalog), SpotifyMediaLibraryWriter(writer), simulatePlayback = false).also { viewModels += it }
 
         vm.playItem(seed)
         advanceUntilIdle()
@@ -148,8 +148,8 @@ class SpotifyFallbackStateTest {
     @Test fun `queueing a collection appends every track as one batch`() = runTest(dispatcher) {
         val vm = viewModel(MockSpotifyDataSource)
         val playlist = MockSpotifyDataSource.playlist("late_night")!!
-        val collection = SpotifyCollection(
-            type = SpotifyCollectionType.Playlist,
+        val collection = Collection(
+            type = CollectionType.Playlist,
             id = playlist.id,
             title = playlist.name,
             subtitle = "You",
@@ -168,13 +168,13 @@ class SpotifyFallbackStateTest {
         val all = (0 until 120).map { base.copy(id = "paged$it", title = "Paged $it") }
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
             override suspend fun collection(
-                type: SpotifyCollectionType,
+                type: CollectionType,
                 id: String,
                 offset: Int,
                 limit: Int
-            ): SpotifyCollection {
+            ): Collection {
                 val items = all.drop(offset).take(limit)
-                return SpotifyCollection(
+                return Collection(
                     type = type,
                     id = id,
                     title = "Long playlist",
@@ -187,12 +187,12 @@ class SpotifyFallbackStateTest {
             }
         }
         val vm = viewModel(catalog)
-        val type = SpotifyCollectionType.Playlist
+        val type = CollectionType.Playlist
         val id = "long"
         vm.ensureCollection(type, id)
         advanceUntilIdle()
         val firstPage = vm.collection(type, id)!!
-        assertEquals(SPOTIFY_PAGE_SIZE, firstPage.items.size)
+        assertEquals(CATALOG_PAGE_SIZE, firstPage.items.size)
         assertTrue(firstPage.hasMore)
 
         vm.queueCollection(firstPage)
@@ -208,13 +208,13 @@ class SpotifyFallbackStateTest {
         val all = (0 until 120).map { base.copy(id = "paged$it", title = "Paged $it") }
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
             override suspend fun collection(
-                type: SpotifyCollectionType,
+                type: CollectionType,
                 id: String,
                 offset: Int,
                 limit: Int
-            ): SpotifyCollection {
+            ): Collection {
                 if (offset > 0) throw SpotifyGatewayException(SpotifyFailure.Network, "offline")
-                return SpotifyCollection(
+                return Collection(
                     type = type,
                     id = id,
                     title = "Long playlist",
@@ -227,7 +227,7 @@ class SpotifyFallbackStateTest {
             }
         }
         val vm = viewModel(catalog)
-        val type = SpotifyCollectionType.Playlist
+        val type = CollectionType.Playlist
         val id = "long"
         vm.ensureCollection(type, id)
         advanceUntilIdle()
@@ -236,7 +236,7 @@ class SpotifyFallbackStateTest {
         advanceUntilIdle()
 
         assertTrue(vm.state.value.upcoming.isEmpty())
-        assertEquals("Couldn't reach Spotify", vm.state.value.notice)
+        assertEquals("Couldn't reach the service", vm.state.value.notice)
         assertFalse(vm.state.value.collectionMorePending.contains("spotify:${type.route}:$id"))
     }
 
@@ -246,9 +246,9 @@ class SpotifyFallbackStateTest {
         val added = MockSpotifyDataSource.playlist("late_night")!!.tracks.last()
         val gate = CompletableDeferred<Unit>()
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation {
+            override suspend fun songRadioStation(trackId: String, limit: Int): Station {
                 gate.await()
-                return SpotifyStation(station)
+                return Station(station)
             }
         }
         val vm = viewModel(catalog)
@@ -291,10 +291,10 @@ class SpotifyFallbackStateTest {
         val artist = MockSpotifyDataSource.artists.first()
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
             override suspend fun topTracks(
-                artist: SpotifyArtist,
+                artist: Artist,
                 offset: Int,
                 limit: Int
-            ): SpotifyPage<SpotifyTrack> = SpotifyPage()
+            ): Page<Track> = Page()
         }
         val vm = viewModel(catalog)
 
@@ -312,7 +312,7 @@ class SpotifyFallbackStateTest {
         val station = MockSpotifyDataSource.topTracks(artist, 4)
         val playing = MockSpotifyDataSource.albums.flatMap { it.tracks }.first { it.artistId != artist.id }
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
-            override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation = SpotifyStation(if (artistId == artist.id) station else emptyList())
+            override suspend fun artistRadioStation(artistId: String, limit: Int): Station = Station(if (artistId == artist.id) station else emptyList())
         }
         val vm = viewModel(catalog)
         vm.playItem(playing)
@@ -333,22 +333,22 @@ class SpotifyFallbackStateTest {
         assertEquals(station.drop(2).map { it.id }, vm.state.value.upcoming.map { it.id })
     }
 
-    private fun viewModel(catalog: SpotifyCatalog) = SpotifyViewModel(SpotifyMediaCatalog(catalog), simulatePlayback = false).also { viewModels += it }
+    private fun viewModel(catalog: SpotifyCatalog) = SidetrackViewModel(SpotifyMediaCatalog(catalog), simulatePlayback = false).also { viewModels += it }
 
     private class FlakyCatalog : SpotifyCatalog by MockSpotifyDataSource {
         var failing = true
 
         override suspend fun collection(
-            type: SpotifyCollectionType,
+            type: CollectionType,
             id: String,
             offset: Int,
             limit: Int
-        ): SpotifyCollection? {
+        ): Collection? {
             if (failing) throw SpotifyGatewayException(SpotifyFailure.Network, "offline")
             return MockSpotifyDataSource.collection(type, id, offset, limit)
         }
 
-        override suspend fun artist(id: String): SpotifyArtist? {
+        override suspend fun artist(id: String): Artist? {
             if (failing) throw SpotifyGatewayException(SpotifyFailure.Network, "offline")
             return MockSpotifyDataSource.artist(id)
         }
