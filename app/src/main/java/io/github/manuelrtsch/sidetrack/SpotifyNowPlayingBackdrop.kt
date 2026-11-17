@@ -265,7 +265,12 @@ internal fun BackdroppedNowPlayingBody(
         Spacer(Modifier.weight(0.7f))
         NowPlayingSleepTimer(sleepTimer)
         Spacer(Modifier.height(6.dp))
-        NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
+        NowPlayingSeek(
+            playbackPositionMs,
+            current.durationMs,
+            onSeek,
+            buffering = playback.isBuffering
+        )
         Spacer(Modifier.height(6.dp))
         SidekitItemRow {
             SpotifyIconTile(

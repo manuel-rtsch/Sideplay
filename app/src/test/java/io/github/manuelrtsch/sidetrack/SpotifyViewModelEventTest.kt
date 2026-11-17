@@ -211,6 +211,51 @@ class SpotifyViewModelEventTest {
         assertEquals(episode.id, vm.state.value.current?.id)
     }
 
+    @Test fun `a stale loading event after a seek does not move the bar back`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:seek1")
+        vm.playItem(track)
+        vm.seekTo(120_000L)
+
+        vm.handlePlaybackEvent("""{"type":"loading","uri":"spotify:track:seek1","positionMs":10000}""")
+
+        assertEquals(120_000L, vm.playbackPositionMs.value)
+        assertEquals(track.id, vm.state.value.current?.id)
+    }
+
+    @Test fun `a seeked event confirms and adopts the new offset`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:seek2")
+        vm.playItem(track)
+        vm.seekTo(120_000L)
+
+        vm.handlePlaybackEvent("""{"type":"seeked","positionMs":120000}""")
+
+        assertEquals(120_000L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `a regular position event cannot cancel a pending seek`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:seek4")
+        vm.playItem(track)
+        vm.seekTo(120_000L)
+
+        vm.handlePlaybackEvent("""{"type":"position","positionMs":121500}""")
+
+        assertEquals(120_000L, vm.playbackPositionMs.value)
+    }
+
+    @Test fun `a position event from the old clock is ignored after a seek`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:seek3")
+        vm.playItem(track)
+        vm.seekTo(120_000L)
+
+        vm.handlePlaybackEvent("""{"type":"position","positionMs":10000}""")
+
+        assertEquals(120_000L, vm.playbackPositionMs.value)
+    }
+
     @Test fun `event for another uri does not change the current item`() = runTest(dispatcher) {
         val vm = viewModel()
         val track = MockSpotifyDataSource.recentlyPlayed.first().copy(uri = "spotify:track:ns1")

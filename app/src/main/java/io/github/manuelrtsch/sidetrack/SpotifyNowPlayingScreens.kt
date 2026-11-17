@@ -95,10 +95,11 @@ internal fun NowPlayingSeek(
     playbackPositionMs: StateFlow<Long>,
     durationMs: Long,
     onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buffering: Boolean = false
 ) {
     val positionMs by playbackPositionMs.collectAsStateWithLifecycle()
-    SpotifySeek(positionMs, durationMs, onSeek, modifier)
+    SpotifySeek(positionMs, durationMs, onSeek, modifier, buffering)
 }
 
 @Composable
@@ -311,7 +312,12 @@ fun SpotifyNowPlayingScreen(
                     // position ticks recompose just this small composable, not the whole screen.
                     // The seek block owns its own height, so the labels can sit close to the artist
                     // line while the bar keeps a little air above the transport row.
-                    NowPlayingSeek(playbackPositionMs, current.durationMs, onSeek)
+                    NowPlayingSeek(
+                        playbackPositionMs,
+                        current.durationMs,
+                        onSeek,
+                        buffering = playback.isBuffering
+                    )
                     if (current is SpotifyEpisode) {
                         // Podcasts do not repeat or shuffle. The two outer tiles are the podcast
                         // controls a song player does not need: rewind and fast-forward by 30 s.

@@ -335,6 +335,7 @@ pub fn stop() -> Result<(), String> {
 }
 
 pub fn seek(position_ms: u32) -> Result<(), String> {
+    log::info!("engine.seek position_ms={position_ms}");
     player()?.seek(position_ms);
     Ok(())
 }
@@ -413,10 +414,17 @@ pub fn poll_event() -> Option<String> {
         } => {
             json!({"type": "unavailable", "uri": uri(&track_id), "playRequestId": play_request_id})
         }
-        PlayerEvent::PositionChanged { position_ms, .. }
-        | PlayerEvent::PositionCorrection { position_ms, .. }
-        | PlayerEvent::Seeked { position_ms, .. } => {
+        // Keep the player's own seek confirmation distinct from its periodic decoder
+        // positions. Kotlin uses Seeked/PositionCorrection to know a local seek landed; a
+        // PositionChanged while the seek is still in flight belongs to the old clock.
+        PlayerEvent::PositionChanged { position_ms, .. } => {
             json!({"type": "position", "positionMs": position_ms})
+        }
+        PlayerEvent::PositionCorrection { position_ms, .. } => {
+            json!({"type": "positionCorrection", "positionMs": position_ms})
+        }
+        PlayerEvent::Seeked { position_ms, .. } => {
+            json!({"type": "seeked", "positionMs": position_ms})
         }
         PlayerEvent::VolumeChanged { volume } => json!({"type": "volume", "volume": volume}),
         PlayerEvent::ShuffleChanged { shuffle } => json!({"type": "shuffle", "shuffle": shuffle}),

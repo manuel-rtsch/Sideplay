@@ -19,6 +19,7 @@ data class PlaybackUiState(
     val history: List<SpotifyMediaItem> = emptyList(),
     val recent: List<SpotifyMediaItem> = emptyList(),
     val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val shuffle: Boolean = false,
     val repeat: RepeatMode = RepeatMode.Off
 )
@@ -99,7 +100,7 @@ data class RadioUiState(
 )
 
 val SpotifyUiState.playback: PlaybackUiState
-    get() = PlaybackUiState(current, upcoming, history, recent, isPlaying, shuffle, repeat)
+    get() = PlaybackUiState(current, upcoming, history, recent, isPlaying, isBuffering, shuffle, repeat)
 
 val SpotifyUiState.library: LibraryUiState
     get() = LibraryUiState(

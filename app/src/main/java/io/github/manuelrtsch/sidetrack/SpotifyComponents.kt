@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,7 +92,10 @@ import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 import io.github.manuelrtsch.sidetrack.playback.tileText
 import io.github.manuelrtsch.sidetrack.ui.LocalSwipeActionRevealed
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Artwork shown beside text inside a 104 dp list tile. 80 dp leaves a 12 dp margin on every side
@@ -749,24 +753,42 @@ fun spotifyBar(
 
 fun repeatLabel(repeat: RepeatMode) = repeat.label
 
+/** Wait for key repeat to pause before asking the native player to seek. */
+private const val KEY_SEEK_DEBOUNCE_MS = 300L
+
 /**
  * The seek row: tap or drag, or step with D-pad left/right. It mirrors Music's seek row so the
  * transport feels the same in both apps.
  */
 @Composable
-fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modifier: Modifier = Modifier) {
+fun SpotifySeek(
+    positionMs: Long,
+    durationMs: Long,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+    buffering: Boolean = false
+) {
     val seekable = durationMs > 0
-    val fraction = if (seekable) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // While the finger is down the bar follows the finger locally. The player is only asked to
     // seek once, on release: issuing a seek for every drag delta floods the native player and
     // makes the bar take seconds to settle on the final position.
     var dragFraction by remember { mutableStateOf<Float?>(null) }
+    // Key repeat sends KeyDown over and over; the target accumulates locally so holding left or
+    // right keeps stepping instead of repeatedly seeking to the same one-step-ahead offset.
+    var keyTargetMs by remember { mutableStateOf<Long?>(null) }
+    var keySeekPending by remember { mutableStateOf(false) }
+    var keySeekJob by remember { mutableStateOf<Job?>(null) }
+    val scope = rememberCoroutineScope()
     // Clicking or dragging the bar puts it in slide mode: left/right then nudge the track instead
     // of moving focus. Losing focus leaves the mode.
     var sliding by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    val shownFraction = dragFraction ?: fraction
-    val shownPositionMs = if (dragFraction != null) (shownFraction * durationMs).toLong() else positionMs
+    val shownPositionMs = when {
+        dragFraction != null -> (dragFraction!! * durationMs).toLong()
+        keyTargetMs != null -> keyTargetMs!!
+        else -> positionMs
+    }
+    val shownFraction = if (seekable) (shownPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     // The position flow ticks at 10 Hz. Animating between those samples keeps the fill and knob
     // moving continuously instead of stepping a couple of pixels at a time. Dragging bypasses
     // the animation so the bar still follows the finger exactly.
@@ -795,11 +817,36 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
         if (seekable) onSeek((target.coerceIn(0f, 1f) * durationMs).toLong())
     }
 
-    // Slide mode always steps 10 s. The first key press enters the mode, so the step is computed
-    // here rather than from the `sliding` value captured before the event.
+    // Slide mode always steps 10 s. The first key press enters the mode, and repeated presses
+    // build on the pending target rather than on a position the UI has not recomposed with yet.
+    // The native player is only asked once the key has been quiet for a moment: seeking on every
+    // repeat drained the audio buffer over and over and left the screen silent while it caught up.
     fun nudge(direction: Float) {
         sliding = true
-        if (seekable) seekTo(fraction + direction * (10_000f / durationMs))
+        if (!seekable) return
+        val target = ((keyTargetMs ?: positionMs) + direction.toLong() * 10_000L)
+            .coerceIn(0L, durationMs)
+        keyTargetMs = target
+        keySeekPending = true
+        keySeekJob?.cancel()
+        keySeekJob = scope.launch {
+            delay(KEY_SEEK_DEBOUNCE_MS)
+            if (keyTargetMs == target && keySeekPending) {
+                keySeekPending = false
+                onSeek(target)
+            }
+        }
+    }
+
+    fun finishKeySeek() {
+        keySeekJob?.cancel()
+        keySeekJob = null
+        val target = keyTargetMs
+        keyTargetMs = null
+        if (target != null && keySeekPending) {
+            keySeekPending = false
+            onSeek(target)
+        }
     }
     Box(
         modifier
@@ -809,6 +856,9 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                 detectTapGestures { offset ->
                     focusRequester.requestFocus()
                     sliding = true
+                    keySeekJob?.cancel()
+                    keyTargetMs = null
+                    keySeekPending = false
                     seekTo(offset.x / size.width)
                 }
             }
@@ -817,6 +867,9 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                     onDragStart = { offset ->
                         focusRequester.requestFocus()
                         sliding = true
+                        keySeekJob?.cancel()
+                        keyTargetMs = null
+                        keySeekPending = false
                         if (seekable) dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
                     },
                     onHorizontalDrag = { change, _ ->
@@ -841,7 +894,10 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                 .padding(horizontal = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            SidekitText(formatDuration(shownPositionMs), style = timeStyle)
+            SidekitText(
+                if (buffering) "Buffering…" else formatDuration(shownPositionMs),
+                style = timeStyle
+            )
             SidekitText(formatDuration(durationMs), style = timeStyle)
         }
         // The focus ring belongs to the bar, not the labels above it. Keeping the focusable node
@@ -852,16 +908,20 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                 .fillMaxWidth()
                 .height(stripHeight)
                 .onKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                     when (event.key) {
-                        Key.DirectionLeft -> {
-                            nudge(-1f)
-                            true
-                        }
+                        Key.DirectionLeft, Key.DirectionRight -> when (event.type) {
+                            KeyEventType.KeyDown -> {
+                                nudge(if (event.key == Key.DirectionLeft) -1f else 1f)
+                                true
+                            }
 
-                        Key.DirectionRight -> {
-                            nudge(1f)
-                            true
+                            // Releasing the key commits the pending target immediately.
+                            KeyEventType.KeyUp -> {
+                                finishKeySeek()
+                                true
+                            }
+
+                            else -> false
                         }
 
                         else -> false
@@ -869,7 +929,10 @@ fun SpotifySeek(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit, modi
                 }
                 .indication(interaction, LocalIndication.current)
                 .focusRequester(focusRequester)
-                .onFocusChanged { sliding = it.isFocused }
+                .onFocusChanged {
+                    sliding = it.isFocused
+                    if (!it.isFocused) finishKeySeek()
+                }
                 .focusable(interactionSource = interaction)
                 .semantics {
                     if (seekable) {

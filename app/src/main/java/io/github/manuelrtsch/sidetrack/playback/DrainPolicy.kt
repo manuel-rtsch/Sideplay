@@ -54,6 +54,9 @@ internal class DrainPolicy(
         return true
     }
 
+    /** How long the drain has gone without receiving PCM. */
+    fun idleFor(nowMs: Long): Long = nowMs - lastDataAtMs
+
     /** True once a *playing* track has received no PCM for the whole stall budget. */
     fun starved(nowMs: Long): Boolean = playing && nowMs - lastDataAtMs >= starveTimeoutMs
 }

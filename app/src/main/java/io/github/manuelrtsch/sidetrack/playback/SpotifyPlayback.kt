@@ -65,6 +65,11 @@ class SpotifyPlayback(
      */
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    private val _buffering = MutableStateFlow(false)
+
+    /** True while the drain has no PCM for the current position. */
+    val buffering: StateFlow<Boolean> = _buffering.asStateFlow()
+
     private val _sleepTimer = MutableStateFlow<SleepTimerState>(SleepTimerState.Off)
 
     /**
@@ -74,6 +79,10 @@ class SpotifyPlayback(
     val sleepTimer: StateFlow<SleepTimerState> = _sleepTimer.asStateFlow()
 
     private var sleepTimerJob: Job? = null
+
+    init {
+        audio?.onBuffering = { _buffering.value = it }
+    }
 
     @Volatile
     var notificationArt: Bitmap? = null
@@ -417,6 +426,7 @@ class SpotifyPlayback(
         // The UI clock owns the position; the decoder's `paused` event is ahead by the PCM
         // buffer and must not be used as the resume point.
         playing = false
+        _buffering.value = false
         lastCommandWasPause = true
         lastCommandAt = SystemClock.elapsedRealtime()
         if (abandonFocus) focus?.abandon()
@@ -488,6 +498,7 @@ class SpotifyPlayback(
     suspend fun stop(keepQueue: Boolean = false) {
         clearSleepTimer()
         playing = false
+        _buffering.value = false
         lastCommandWasPause = true
         lastCommandAt = SystemClock.elapsedRealtime()
         val generation = ++pauseGeneration

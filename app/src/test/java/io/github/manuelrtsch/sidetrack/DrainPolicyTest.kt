@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
 import io.github.manuelrtsch.sidetrack.playback.DrainPolicy
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -58,6 +59,17 @@ class DrainPolicyTest {
 
         assertFalse(policy.starved(nowMs = starveTimeout - 1))
         assertTrue(policy.starved(nowMs = starveTimeout))
+    }
+
+    @Test fun `idle time drives the buffering indicator before the stall budget`() {
+        val policy = policy()
+        policy.begin(nowMs = 0L, playing = true)
+
+        assertEquals(1_500L, policy.idleFor(nowMs = 1_500L))
+
+        policy.onData(4_096, nowMs = 2_000L)
+
+        assertEquals(500L, policy.idleFor(nowMs = 2_500L))
     }
 
     @Test fun `PCM resets the starvation clock`() {

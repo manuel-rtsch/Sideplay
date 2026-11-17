@@ -70,6 +70,9 @@ private const val RESUME_GRACE_MS = 8_000L
 /** An event this far below the resumed offset is the old player state, not a real seek. */
 private const val RESUME_EVENT_SLACK_MS = 2_000L
 
+/** How long a local seek owns the bar while waiting for the player to report the new offset. */
+private const val SEEK_CONFIRM_TIMEOUT_MS = 15_000L
+
 data class SpotifyUiState(
     val signedIn: Boolean = false,
     val current: SpotifyMediaItem? = null,
@@ -103,6 +106,7 @@ data class SpotifyUiState(
     val artistTrackHasMore: Map<String, Boolean> = emptyMap(),
     val artistMorePending: Set<String> = emptySet(),
     val isPlaying: Boolean = false,
+    val isBuffering: Boolean = false,
     val shuffle: Boolean = false,
     val repeat: RepeatMode = RepeatMode.Off,
     val savedTrackIds: Set<String> = emptySet(),
@@ -256,7 +260,6 @@ class SpotifyViewModel(
      */
     private var positionAnchorMs = 0L
     private var positionAnchorAt = 0L
-    private var lastSeekAt = 0L
     private var lastEpisodeProgressAt = 0L
 
     /**
@@ -267,12 +270,26 @@ class SpotifyViewModel(
     private var awaitingPlaybackStart = false
     private var awaitingPlaybackStartAt = 0L
 
+    /**
+     * The target of the most recent local seek. Until the player reports a position near it, the
+     * bar must ignore loading/position events from the previous offset: adopting them made a
+     * large seek snap back and then crawl forward from the old position for minutes.
+     */
+    private data class SeekHold(val targetMs: Long, val atMs: Long)
+    private var seekHold: SeekHold? = null
+
     init {
         session?.let {
             viewModelScope.launch {
                 it.signedIn.collect { signed ->
                     _state.update { state -> state.copy(signedIn = signed) }
                     if (signed) loadAccount() else clearAccount()
+                }
+            }
+            viewModelScope.launch {
+                it.playback.buffering.collect { buffering ->
+                    if (!buffering) anchorPosition(_playbackPositionMs.value)
+                    _state.update { state -> state.copy(isBuffering = buffering) }
                 }
             }
             viewModelScope.launch {
@@ -356,8 +373,10 @@ class SpotifyViewModel(
                 // The seek bar only needs to advance while it is on screen and playing. When the
                 // app is backgrounded or paused this suspends on the flows instead of waking up.
                 while (true) {
-                    uiVisible.combine(_state) { visible, s -> visible && s.isPlaying }.first { it }
-                    while (uiVisible.value && _state.value.isPlaying) {
+                    uiVisible.combine(_state) { visible, s ->
+                        visible && s.isPlaying && !s.isBuffering
+                    }.first { it }
+                    while (uiVisible.value && _state.value.isPlaying && !_state.value.isBuffering) {
                         delay(POSITION_TICK_MS)
                         updatePositionTick()
                     }
@@ -969,6 +988,8 @@ class SpotifyViewModel(
         val s = _state.value
         val item = s.current ?: return
         val play = !s.isPlaying
+        // A paused seek has been delivered by now; let the next event realign the bar again.
+        seekHold = null
         recordEpisodeProgress(force = true)
         anchorPosition(_playbackPositionMs.value)
         _state.update { it.copy(isPlaying = play) }
@@ -1056,7 +1077,9 @@ class SpotifyViewModel(
     fun seekTo(positionMs: Long) {
         val current = _state.value.current ?: return
         val target = positionMs.coerceIn(0L, current.durationMs)
-        lastSeekAt = SystemClock.elapsedRealtime()
+        val now = SystemClock.elapsedRealtime()
+        SidetrackDebug.log("viewModel.seekTo target=$target current=${_playbackPositionMs.value}")
+        seekHold = SeekHold(target, now)
         anchorPosition(target)
         _playbackPositionMs.value = target
         recordEpisodeProgress(force = true)
@@ -1788,7 +1811,9 @@ class SpotifyViewModel(
         // Notes are not part of the queue file; keep them next to the episode that is playing so a
         // restored session can still offer them without another request.
         (snapshot.current as? SpotifyEpisode)?.let(episodeMetaRepository::remember)
+        if (snapshot.current?.id != previous?.id) seekHold = null
         if (positionMs != null) {
+            seekHold = null
             anchorPosition(positionMs)
             _playbackPositionMs.value = positionMs
         }
@@ -1977,9 +2002,13 @@ class SpotifyViewModel(
                 // The player has accepted the new item: the hold can end and the clock may run
                 // from the position the player will actually start at.
                 awaitingPlaybackStart = false
-                anchorPosition(position)
-                session?.playback?.updatePosition(position)
-                _playbackPositionMs.value = position
+                if (activeSeekHold() == null) {
+                    anchorPosition(position)
+                    session?.playback?.updatePosition(position)
+                    _playbackPositionMs.value = position
+                }
+                // A load event is not a seek confirmation. While a local seek is pending it may
+                // still report the old offset, so keep the bar at the target.
             }
 
             "playing" -> if (matchesCurrent(event)) {
@@ -2012,14 +2041,32 @@ class SpotifyViewModel(
                 }
             }
 
+            "seeked", "positionCorrection" -> {
+                // The player itself confirms where it landed. This is the only event that may
+                // end a local seek hold; a regular position event can still describe the old
+                // clock while the seek is queued behind a slow fetch.
+                if (activeSeekHold() != null) {
+                    adoptSeekPosition(position)
+                } else if (!awaitingPlaybackStart && !staleResumeEvent(position)) {
+                    anchorPosition(position)
+                    session?.playback?.updatePosition(position)
+                    _playbackPositionMs.value = position
+                }
+                recordEpisodeProgress(force = true)
+            }
+
             "position" -> {
-                // The 100 ms ticker owns the seek bar. Only adopt an event position when it is
-                // far enough away to be a real seek from another client, not the decoder's
-                // normal lead over the speaker.
+                // Regular decoder updates must not end a pending seek: they can still be from
+                // the generation before the seek, especially on a slow connection.
+                if (activeSeekHold() != null) return
+                // Position events carry no item identity. Ignore them while a newly started item
+                // is still being loaded, otherwise the previous item's clock can rewind the bar.
+                if (awaitingPlaybackStart) return
+                // The ticker owns the seek bar. Only adopt an event position when it is far
+                // enough away to be a real seek from another client, not the decoder's normal
+                // lead over the speaker.
                 val current = _playbackPositionMs.value
-                // Ignore the decoder's stale position events while a local seek is settling.
-                val settling = SystemClock.elapsedRealtime() - lastSeekAt < 1_500L
-                if (!settling && !staleResumeEvent(position) && abs(position - current) > POSITION_EVENT_JUMP_MS) {
+                if (!staleResumeEvent(position) && abs(position - current) > POSITION_EVENT_JUMP_MS) {
                     anchorPosition(position)
                     session?.playback?.updatePosition(position)
                     _playbackPositionMs.value = position
@@ -2040,16 +2087,27 @@ class SpotifyViewModel(
                 applyQueue(queue.setRepeat(mode), syncNowPlaying = false)
             }
 
-            "ended" -> if (matchesCurrent(event)) onPlaybackEnded()
+            "ended" -> if (matchesCurrent(event)) {
+                // A previous generation can report its end while the replacement is still
+                // loading. The queue has already moved on, so this must not advance it again.
+                if (!awaitingPlaybackStart) onPlaybackEnded()
+            }
 
             "stopped" -> if (matchesCurrent(event)) {
                 // Closing the app halts the audio and saves its offset; the player's "stopped"
                 // echo can arrive later, after a recreated ViewModel has restored that offset.
                 // Ignoring it keeps the restored position and leaves the queue untouched.
                 if (session?.consumeHaltStop(eventUri, playRequestId) == true) return
+                // The old generation's stop can arrive after the user already started the next
+                // item (or the same item again). When the shared queue still has a current item,
+                // the player is being replaced, not stopped: clearing here made Now Playing lose
+                // the track while the new audio kept playing. A real notification stop clears the
+                // queue first, so it still falls through.
+                if (awaitingPlaybackStart && queue.snapshot.current != null) return
                 // Stop from the notification or lock screen: clear both the UI and the queue so
                 // reopening Sidetrack cannot restore the track that was stopped.
                 awaitingPlaybackStart = false
+                seekHold = null
                 session?.playback?.updateState(false, 0L)
                 val halting = session?.halting == true
                 applyQueue(if (halting) queue.snapshot else queue.stop(), positionMs = 0L, playing = false)
@@ -2057,6 +2115,7 @@ class SpotifyViewModel(
 
             "unavailable" -> if (matchesCurrent(event)) {
                 awaitingPlaybackStart = false
+                seekHold = null
                 _state.update { it.copy(isPlaying = false).say("This track isn't available") }
             }
         }
@@ -2114,8 +2173,14 @@ class SpotifyViewModel(
      */
     private fun updatePositionTick() {
         val s = _state.value
-        if (!s.isPlaying) return
+        if (!s.isPlaying || s.isBuffering) return
         val current = s.current ?: return
+        // The bar has been running from the seek target. Once the player had ample time to
+        // confirm, stop suppressing unrelated position events.
+        val hold = seekHold
+        if (hold != null && SystemClock.elapsedRealtime() - hold.atMs > SEEK_CONFIRM_TIMEOUT_MS) {
+            seekHold = null
+        }
         if (awaitingPlaybackStart) {
             if (SystemClock.elapsedRealtime() - awaitingPlaybackStartAt < PLAYBACK_START_TIMEOUT_MS) return
             awaitingPlaybackStart = false
@@ -2246,6 +2311,7 @@ class SpotifyViewModel(
         val uri = item.uri ?: return
         val session = session ?: return
         SidetrackDebug.log("viewModel.startRemote uri=$uri positionMs=$positionMs gapless=$gapless resuming=$resuming")
+        seekHold = null
         anchorPosition(positionMs)
         awaitingPlaybackStart = true
         awaitingPlaybackStartAt = SystemClock.elapsedRealtime()
@@ -2286,6 +2352,24 @@ class SpotifyViewModel(
         _state.update { state ->
             if (state.current?.id == item.id) state.copy(isPlaying = true) else state
         }
+    }
+
+    /** The active local seek, or null once the player has had enough time to confirm it. */
+    private fun activeSeekHold(): SeekHold? {
+        val hold = seekHold ?: return null
+        if (SystemClock.elapsedRealtime() - hold.atMs > SEEK_CONFIRM_TIMEOUT_MS) {
+            seekHold = null
+            return null
+        }
+        return hold
+    }
+
+    /** Adopts a confirmed seek position, keeping the UI and media session on the audio clock. */
+    private fun adoptSeekPosition(position: Long) {
+        seekHold = null
+        anchorPosition(position)
+        session?.playback?.updatePosition(position)
+        _playbackPositionMs.value = position
     }
 
     /**

@@ -53,7 +53,14 @@ class SpotifyAudioSink(
      * Reports a drain that stopped making progress. Reassigned by the session that owns the
      * native player: a dead librespot session can only be restarted there, not from the sink.
      */
-    var onFailure: (Throwable) -> Unit = {}
+    var onFailure: (Throwable) -> Unit = {},
+
+    /**
+     * Reports when the drain has no PCM to play (`true`) and when audio is flowing again
+     * (`false`). The UI freezes the seek bar during the gap instead of pretending the track is
+     * advancing while the speaker is silent.
+     */
+    var onBuffering: (Boolean) -> Unit = {}
 ) {
     /** Written by the lifecycle operations, read by the UI and the service on other threads. */
     @Volatile
@@ -220,6 +227,8 @@ class SpotifyAudioSink(
 
     private suspend fun startDrain(output: AudioTrack, startWhenPrefilled: Boolean) {
         stopDrain()
+        // A fresh item and a seek both wait for their first new PCM before they are audible.
+        if (startWhenPrefilled) onBuffering(true)
         val policy = DrainPolicy(
             prefillBytes = prefillBytes(),
             prefillTimeoutMs = PREPLAY_TIMEOUT_MS,
@@ -230,6 +239,7 @@ class SpotifyAudioSink(
             var bytes = 0L
             var buffered = 0L
             var playing = !startWhenPrefilled
+            var buffering = startWhenPrefilled
             var underruns = underrunCount(output)
             var lastUnderrunCheck = SystemClock.elapsedRealtime()
             try {
@@ -240,6 +250,10 @@ class SpotifyAudioSink(
                     reads++
                     bytes += pcm.size
                     buffered += pcm.size
+                    if (buffering) {
+                        buffering = false
+                        onBuffering(false)
+                    }
                     policy.onData(pcm.size, SystemClock.elapsedRealtime())
                 }
                 while (isActive) {
@@ -250,6 +264,10 @@ class SpotifyAudioSink(
                         reads++
                         bytes += pcm.size
                         buffered += pcm.size
+                        if (buffering) {
+                            buffering = false
+                            onBuffering(false)
+                        }
                         policy.onData(pcm.size, now)
                         if (reads == 1) SidetrackDebug.log { "audio first PCM read bytes=${pcm.size}" }
                         if (reads % 100 == 0) SidetrackDebug.log { "audio drained reads=$reads bytes=$bytes" }
@@ -260,6 +278,11 @@ class SpotifyAudioSink(
                         SidetrackDebug.log(
                             "audio.play bufferedBytes=$buffered bufferFrames=${trackBufferBytes / BYTES_PER_FRAME}"
                         )
+                    }
+                    if (playing && !buffering && policy.idleFor(now) >= BUFFERING_TIMEOUT_MS) {
+                        buffering = true
+                        onBuffering(true)
+                        SidetrackDebug.log("audio buffering reads=$reads bytes=$bytes")
                     }
                     if (policy.starved(now)) {
                         throw AudioStalledException(
@@ -420,6 +443,9 @@ class SpotifyAudioSink(
 
         /** Never keep a track silently unplayed for longer than this waiting for the first PCM. */
         const val PREPLAY_TIMEOUT_MS = 1_500L
+
+        /** No PCM for this long means the speaker has run dry and the UI must stop the clock. */
+        const val BUFFERING_TIMEOUT_MS = 1_500L
 
         /** No PCM at all for this long means the pipeline is dead, not merely buffering. */
         const val STARVE_TIMEOUT_MS = 15_000L
