@@ -85,5 +85,24 @@ data class ServiceCapabilities(
             supportsProgressReporting = true,
             supportsScrobbling = true
         )
+
+        /** Navidrome has albums, playlists and artists, but no shows, radio or DSP settings. */
+        val Navidrome = ServiceCapabilities(
+            librarySections = setOf(
+                LibrarySection.Liked,
+                LibrarySection.Playlists,
+                LibrarySection.Albums,
+                LibrarySection.Artists
+            ),
+            searchScopes = setOf(
+                SearchScope.Tracks,
+                SearchScope.Artists,
+                SearchScope.Albums,
+                SearchScope.Playlists
+            ),
+            supportsPlaylistEdit = true,
+            supportsProgressReporting = true,
+            supportsScrobbling = true
+        )
     }
 }

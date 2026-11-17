@@ -90,10 +90,6 @@ class MusicServiceTest {
         override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
 
         override fun createAuth(): ServiceAuth = error("not used")
-        override fun createCatalog(account: ServiceAccount): MediaCatalog = error("not used")
-        override fun createWriter(account: ServiceAccount): MediaLibraryWriter? = null
-        override fun createPlaybackEngine(account: ServiceAccount): PlaybackEngine = error("not used")
-        override suspend fun resolvePlaybackSource(item: MediaItem): PlaybackSource = error("not used")
     }
 
     private class RecordingWriter : SpotifyLibraryWriter {

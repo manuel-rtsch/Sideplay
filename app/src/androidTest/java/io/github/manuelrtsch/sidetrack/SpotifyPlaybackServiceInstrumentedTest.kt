@@ -26,7 +26,7 @@ import org.junit.runner.RunWith
 class SpotifyPlaybackServiceInstrumentedTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val session get() = AppSessions.get(context).spotify
+    private val session get() = AppSessions.get(context).runtime
     private val manager get() = context.getSystemService(NotificationManager::class.java)
     private val notificationId get() = session.playback.notificationId
 

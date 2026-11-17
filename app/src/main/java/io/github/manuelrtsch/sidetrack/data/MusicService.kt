@@ -19,7 +19,6 @@ import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.Show
 import io.github.manuelrtsch.sidetrack.Station
 import io.github.manuelrtsch.sidetrack.Track
-import io.github.manuelrtsch.sidetrack.playback.PlaybackEngine
 import io.github.manuelrtsch.sidetrack.playback.PlaybackSource
 
 /**
@@ -36,7 +35,8 @@ data class ServiceAccount(
 
 /** What a sign-in attempt needs. Spotify opens a browser; a self-hosted server takes a password. */
 sealed interface AuthInput {
-    data class Spotify(val openBrowser: suspend (String) -> Unit) : AuthInput
+    /** A provider that signs in through a browser or custom tab. */
+    data class Browser(val openBrowser: suspend (String) -> Unit) : AuthInput
 
     data class Password(
         val serverUrl: String,
@@ -69,7 +69,12 @@ interface MediaCatalog {
     suspend fun albums(artist: MediaKey, offset: Int, limit: Int): Page<Album>
     suspend fun topTracks(artist: MediaKey, offset: Int, limit: Int): Page<Track>
     suspend fun search(query: String, scopes: Set<SearchScope>, offset: Int, limit: Int): SearchResults
-    suspend fun radio(seed: MediaKey, offset: Int, limit: Int): Page<Track>
+
+    /** Resolves the URL and request headers the playback engine needs for [item]. */
+    suspend fun resolvePlaybackSource(item: MediaItem): PlaybackSource
+
+    /** Services without radio return an empty page; the UI hides the action by capability. */
+    suspend fun radio(seed: MediaKey, offset: Int, limit: Int): Page<Track> = Page()
 
     /** A station plus the playlist that backs it, when the service can report one. */
     suspend fun radioStation(seed: MediaKey, limit: Int): Station = Station(radio(seed, 0, limit).items)
@@ -98,10 +103,6 @@ interface MusicServiceProvider {
     val capabilities: ServiceCapabilities
 
     fun createAuth(): ServiceAuth
-    fun createCatalog(account: ServiceAccount): MediaCatalog
-    fun createWriter(account: ServiceAccount): MediaLibraryWriter?
-    fun createPlaybackEngine(account: ServiceAccount): PlaybackEngine
-    suspend fun resolvePlaybackSource(item: MediaItem): PlaybackSource
 }
 
 /** Maps the neutral library sections onto the Spotify catalog's filters. */
@@ -134,6 +135,11 @@ class SpotifyMediaCatalog(
     }
 
     override suspend fun artist(key: MediaKey): Artist? = catalog.artist(key.id)
+
+    override suspend fun resolvePlaybackSource(item: MediaItem): PlaybackSource {
+        val uri = item.uri ?: throw IllegalStateException("Spotify item ${item.key.encode()} has no URI")
+        return PlaybackSource(id = item.key.encode(), uri = uri)
+    }
 
     override suspend fun albums(artist: MediaKey, offset: Int, limit: Int): Page<Album> {
         val resolved = catalog.artist(artist.id) ?: return Page()
@@ -208,9 +214,9 @@ class SpotifyServiceAuth(
     private val session: SpotifySession
 ) : ServiceAuth {
     override suspend fun signIn(input: AuthInput): ServiceAccount {
-        val spotify = input as? AuthInput.Spotify
+        val browser = input as? AuthInput.Browser
             ?: throw IllegalArgumentException("Spotify needs a browser sign-in")
-        session.signIn(spotify.openBrowser)
+        session.signIn(browser)
         return account()
     }
 
@@ -239,15 +245,4 @@ class SpotifyProvider(
     override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
 
     override fun createAuth(): ServiceAuth = SpotifyServiceAuth(session)
-
-    override fun createCatalog(account: ServiceAccount): MediaCatalog = session.catalog
-
-    override fun createWriter(account: ServiceAccount): MediaLibraryWriter? = session.writer
-
-    override fun createPlaybackEngine(account: ServiceAccount): PlaybackEngine = session.playback.engine
-
-    override suspend fun resolvePlaybackSource(item: MediaItem): PlaybackSource {
-        val uri = item.uri ?: throw IllegalStateException("Spotify item ${item.key.encode()} has no URI")
-        return PlaybackSource(id = item.key.encode(), uri = uri)
-    }
 }

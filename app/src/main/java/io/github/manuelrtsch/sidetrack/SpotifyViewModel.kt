@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import hrln.interactive.sidekit.design.action.NoticeKind
+import io.github.manuelrtsch.sidetrack.data.AuthInput
 import io.github.manuelrtsch.sidetrack.data.MediaCatalog
 import io.github.manuelrtsch.sidetrack.data.MediaLibraryWriter
 import io.github.manuelrtsch.sidetrack.data.ServiceRuntime
@@ -15,6 +16,15 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryEntry
 import io.github.manuelrtsch.sidetrack.data.SpotifyHistoryRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
+import io.github.manuelrtsch.sidetrack.data.cacheSizeBytes
+import io.github.manuelrtsch.sidetrack.data.clearAudioCache
+import io.github.manuelrtsch.sidetrack.data.consumeHaltStop
+import io.github.manuelrtsch.sidetrack.data.halting
+import io.github.manuelrtsch.sidetrack.data.nativeAvailable
+import io.github.manuelrtsch.sidetrack.data.notePlayRequest
+import io.github.manuelrtsch.sidetrack.data.setAudioQuality
+import io.github.manuelrtsch.sidetrack.data.setGapless
+import io.github.manuelrtsch.sidetrack.data.setNormalization
 import io.github.manuelrtsch.sidetrack.playback.PlaybackEvent
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlin.math.abs
@@ -1510,7 +1520,7 @@ class SpotifyViewModel(
         _state.update { it.copy(authPending = true, notice = null) }
         signInJob = viewModelScope.launch {
             try {
-                session.signIn(openBrowser)
+                session.signIn(AuthInput.Browser(openBrowser))
                 _state.update { it.copy(signedIn = true, authPending = false) }
                 loadAccount()
             } catch (e: CancellationException) {

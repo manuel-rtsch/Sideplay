@@ -38,7 +38,10 @@ class SpotifySession(
     private val auth: SpotifyAuth = SpotifyAuth(NoopCredentialStore),
     private val tmpDir: String? = null,
     context: Context? = null
-) : ServiceRuntime {
+) : ServiceRuntime,
+    NativePlaybackRuntime,
+    QualitySettingsRuntime,
+    CacheRuntime {
     override val service: ServiceId = ServiceId.Spotify
     override val capabilities: ServiceCapabilities = ServiceCapabilities.Spotify
 
@@ -240,8 +243,10 @@ class SpotifySession(
         }
     }
 
-    override suspend fun signIn(openBrowser: suspend (String) -> Unit) {
-        auth.signIn(openBrowser)
+    override suspend fun signIn(input: AuthInput) {
+        val browser = input as? AuthInput.Browser
+            ?: throw IllegalArgumentException("Spotify needs a browser sign-in")
+        auth.signIn(browser.openBrowser)
         _signedIn.value = true
     }
 
@@ -291,7 +296,8 @@ class SpotifySession(
         uri: String,
         positionMs: Long = 0L,
         gapless: Boolean = false,
-        forceReconnect: Boolean = false
+        forceReconnect: Boolean = false,
+        headers: Map<String, String> = emptyMap()
     ) {
         SidetrackDebug.log("session.play begin key=${key.encode()} uri=$uri positionMs=$positionMs gapless=$gapless forceReconnect=$forceReconnect")
         // A new start supersedes the close path, even when the old player's stopped event is
@@ -300,15 +306,15 @@ class SpotifySession(
         connectForPlayback(forceReconnect)
         SidetrackDebug.log("session.play connected; starting playback")
         val keepAudioSink = gapless && _settings.value.gapless && positionMs == 0L
-        withContext(Dispatchers.Main.immediate) { playback.start(key, uri, positionMs, keepAudioSink) }
+        withContext(Dispatchers.Main.immediate) { playback.start(key, uri, positionMs, keepAudioSink, headers) }
         preloadNext()
         SidetrackDebug.log("session.play returned")
     }
 
-    /** [ServiceRuntime] entry point: the item's URI is the Spotify playback detail. */
+    /** [ServiceRuntime] entry point: the catalog resolves the item's playback detail. */
     override suspend fun play(item: MediaItem, positionMs: Long, gapless: Boolean) {
-        val uri = item.uri ?: throw IllegalStateException("Spotify item ${item.key.encode()} has no URI")
-        play(item.key, uri, positionMs, gapless)
+        val source = catalog.resolvePlaybackSource(item)
+        play(item.key, source.uri, positionMs, gapless, headers = source.headers)
     }
 
     /** Warms the next queue item so the automatic transition does not have to fetch it cold. */

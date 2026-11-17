@@ -22,6 +22,10 @@ typealias ResumePoint = SpotifyResumePoint
  * [AppSession] keeps one runtime per installed service and exposes the active one, so the UI never
  * reaches into a provider-specific session. Spotify's runtime is [SpotifySession]; a Navidrome
  * runtime implements the same contract.
+ *
+ * The core is deliberately small. Provider-specific abilities live in the optional interfaces
+ * below, so a service that has no native player, no quality settings or no cache does not have to
+ * pretend it does.
  */
 interface ServiceRuntime {
     val service: ServiceId
@@ -37,14 +41,12 @@ interface ServiceRuntime {
 
     val signedIn: StateFlow<Boolean>
     val network: NetworkMonitor?
-    val nativeAvailable: Boolean
     val isOnline: Boolean
-    val halting: Boolean
     val resumePoint: ResumePoint?
     val episodeProgress: EpisodeProgressRepository
     val episodeMeta: EpisodeMetaRepository
 
-    suspend fun signIn(openBrowser: suspend (String) -> Unit)
+    suspend fun signIn(input: AuthInput)
     fun signOut()
 
     /** Resolves the item's playback source and starts it. */
@@ -56,15 +58,60 @@ interface ServiceRuntime {
     fun stopPlayback()
     fun haltPlayback()
 
+    fun setAutoplay(enabled: Boolean)
+    fun clearCaches()
+}
+
+/** A runtime backed by a native player that can report its own availability and halt state. */
+interface NativePlaybackRuntime {
+    val nativeAvailable: Boolean
+    val halting: Boolean
+    fun notePlayRequest(id: Long, uri: String?)
+    fun consumeHaltStop(uri: String?, playRequestId: Long): Boolean
+}
+
+/** A runtime that exposes audio-quality and DSP preferences. */
+interface QualitySettingsRuntime {
     fun setAudioQuality(quality: AudioQuality)
     fun setNormalization(enabled: Boolean)
     fun setGapless(enabled: Boolean)
-    fun setAutoplay(enabled: Boolean)
+}
 
+/** A runtime with a local audio cache. */
+interface CacheRuntime {
     fun cacheSizeBytes(): Long
     fun clearAudioCache()
-    fun clearCaches()
+}
 
-    fun notePlayRequest(id: Long, uri: String?)
-    fun consumeHaltStop(uri: String?, playRequestId: Long): Boolean
+// The UI asks the runtime these questions without caring which optional interface it implements.
+// A service that does not implement one gets the neutral answer instead of a no-op override.
+
+val ServiceRuntime.nativeAvailable: Boolean
+    get() = (this as? NativePlaybackRuntime)?.nativeAvailable ?: false
+
+val ServiceRuntime.halting: Boolean
+    get() = (this as? NativePlaybackRuntime)?.halting ?: false
+
+fun ServiceRuntime.notePlayRequest(id: Long, uri: String?) {
+    (this as? NativePlaybackRuntime)?.notePlayRequest(id, uri)
+}
+
+fun ServiceRuntime.consumeHaltStop(uri: String?, playRequestId: Long): Boolean = (this as? NativePlaybackRuntime)?.consumeHaltStop(uri, playRequestId) ?: false
+
+fun ServiceRuntime.setAudioQuality(quality: AudioQuality) {
+    (this as? QualitySettingsRuntime)?.setAudioQuality(quality)
+}
+
+fun ServiceRuntime.setNormalization(enabled: Boolean) {
+    (this as? QualitySettingsRuntime)?.setNormalization(enabled)
+}
+
+fun ServiceRuntime.setGapless(enabled: Boolean) {
+    (this as? QualitySettingsRuntime)?.setGapless(enabled)
+}
+
+fun ServiceRuntime.cacheSizeBytes(): Long = (this as? CacheRuntime)?.cacheSizeBytes() ?: 0L
+
+fun ServiceRuntime.clearAudioCache() {
+    (this as? CacheRuntime)?.clearAudioCache()
 }

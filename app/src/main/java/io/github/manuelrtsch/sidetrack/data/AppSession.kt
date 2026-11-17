@@ -46,13 +46,16 @@ class ServiceRegistry(
  * service does not add a second data path.
  */
 class AppSession(
-    val spotify: SpotifySession,
     val registry: ServiceRegistry,
-    private val runtimes: Map<ServiceId, ServiceRuntime> = mapOf(ServiceId.Spotify to spotify)
+    runtimes: List<ServiceRuntime>
 ) {
+    private val runtimes: Map<ServiceId, ServiceRuntime> = runtimes.associateBy { it.service }
+
     val activeService: ServiceId get() = registry.active.value
     val provider: MusicServiceProvider get() = registry.provider()
-    val runtime: ServiceRuntime get() = runtimes[activeService] ?: spotify
+    val runtime: ServiceRuntime
+        get() = runtimes[activeService]
+            ?: error("No runtime registered for ${activeService.value}")
     val capabilities: ServiceCapabilities get() = runtime.capabilities
     val account: ServiceAccount?
         get() = registry.account ?: if (runtime.signedIn.value) {
@@ -87,8 +90,8 @@ class AppSession(
     val isOnline: Boolean get() = runtime.isOnline
     val halting: Boolean get() = runtime.halting
 
-    suspend fun signIn(openBrowser: suspend (String) -> Unit) {
-        runtime.signIn(openBrowser)
+    suspend fun signIn(input: AuthInput) {
+        runtime.signIn(input)
         registry.account = provider.createAuth().restore()
     }
 
@@ -135,6 +138,6 @@ object AppSessions {
         if (spotify.signedIn.value) {
             registry.account = ServiceAccount(ServiceId.Spotify, "spotify", "Spotify")
         }
-        return AppSession(spotify, registry)
+        return AppSession(registry, listOf(spotify))
     }
 }
