@@ -7,8 +7,6 @@ Read before starting:
 - `maestro/README.md`
 - `maestro/config.yaml`
 - `maestro/flows/suite/*.yaml`, `maestro/flows/demo/*.yaml`, `maestro/flows/utility/*.yaml`
-- `docs/SIDETRACK.md` — behavior and guardrails
-- `docs/DEVICE-CHECKLIST.md` — what is intentionally manual-only
 - `app/src/main/java/io/github/manuelrtsch/sidetrack/SpotifyGraph.kt` — routes and back labels
 - `SpotifyLibraryScreens.kt`, `SpotifySearchScreen.kt`, `SpotifyNowPlayingScreens.kt`,
   `SpotifyHistoryScreen.kt`, `SpotifySettingsScreens.kt` — screen copy and controls
@@ -288,7 +286,7 @@ Media: music / track.
 
 ### Optional / manual-only
 
-These are listed in `docs/DEVICE-CHECKLIST.md` as manual and may be too brittle for Maestro:
+These are manual-only and may be too brittle for Maestro:
 
 - Long-press drag reorder
 - Keypad lift / step / drop / cancel

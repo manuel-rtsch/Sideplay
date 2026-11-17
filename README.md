@@ -177,13 +177,10 @@ device. The `dev` build installs alongside the normal app as
 redirect with the release app, so signing in opens a chooser and the two entries have to be told
 apart.
 
-More technical notes live in [docs/SIDETRACK.md](docs/SIDETRACK.md).
-
 ## License
 
 MIT. Sidetrack also links librespot; its license and notice ship with the native build.
 
 Exception: `app/src/main/java/io/github/manuelrtsch/sidetrack/auth/` was written with the GPLv3
 Sidespot auth path as a reference and is therefore a derivative of it. That package is pending a
-clean-room rewrite or a GPLv3 notice; see
-[docs/SIDETRACK.md](docs/SIDETRACK.md#4-native-build-provenance-and-licensing).
+clean-room rewrite or a GPLv3 notice.

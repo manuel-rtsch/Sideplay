@@ -390,7 +390,7 @@ fun NowPlayingTile(
  *
  * The Options key is deliberately not a dismiss: Sidekit's `ChromeState.toggleOptions()` owns that
  * key and opens the screen's options instead. A later Sidekit improvement can make Options dismiss
- * an auto-dismiss action before opening options; see docs/SIDETRACK.md.
+ * an auto-dismiss action before opening options.
  */
 fun nowPlayingNoticeActions(
     item: SpotifyMediaItem,
