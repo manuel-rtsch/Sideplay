@@ -39,29 +39,21 @@ runs standalone on any Android 12+ phone with a touchscreen or a physical keypad
 
 ## Screenshots
 
-| Home | Search | Now Playing |
-| --- | --- | --- |
-| ![Home](app/screenshots/sidetrack_home.png) | ![Search](app/screenshots/sidetrack_search.png) | ![Now Playing](app/screenshots/sidetrack_now_playing.png) |
+| Home | Search | Now Playing | Queue |
+| --- | --- | --- | --- |
+| ![Home](app/screenshots/sidetrack_home.png) | ![Search](app/screenshots/sidetrack_search.png) | ![Now Playing](app/screenshots/sidetrack_now_playing.png) | ![Queue](app/screenshots/sidetrack_queue.png) |
 
-| Album | Artist | Queue |
-| --- | --- | --- |
-| ![Album](app/screenshots/sidetrack_album.png) | ![Artist](app/screenshots/sidetrack_artist.png) | ![Queue](app/screenshots/sidetrack_queue.png) |
+| Album | Artist | Library | Show |
+| --- | --- | --- | --- |
+| ![Album](app/screenshots/sidetrack_album.png) | ![Artist](app/screenshots/sidetrack_artist.png) | ![Library](app/screenshots/sidetrack_library.png) | ![Show](app/screenshots/sidetrack_show.png) |
 
-| Library | Show | Notes |
-| --- | --- | --- |
-| ![Library](app/screenshots/sidetrack_library.png) | ![Show](app/screenshots/sidetrack_show.png) | ![Show notes](app/screenshots/sidetrack_notes.png) |
+| Notes | Episode | Welcome | Keyboard |
+| --- | --- | --- | --- |
+| ![Show notes](app/screenshots/sidetrack_notes.png) | ![Now Playing episode](app/screenshots/sidetrack_now_playing_episode.png) | ![Welcome](app/screenshots/sidetrack_welcome.png) | ![Keyboard](app/screenshots/sidetrack_keyboard.png) |
 
-| Welcome | Keyboard | History |
-| --- | --- | --- |
-| ![Welcome](app/screenshots/sidetrack_welcome.png) | ![Keyboard](app/screenshots/sidetrack_keyboard.png) | ![History](app/screenshots/sidetrack_history.png) |
-
-| Episode | Sleep timer | Audio quality |
-| --- | --- | --- |
-| ![Now Playing episode](app/screenshots/sidetrack_now_playing_episode.png) | ![Sleep timer](app/screenshots/sidetrack_sleep_timer.png) | ![Audio quality](app/screenshots/sidetrack_audio_quality.png) |
-
-| Settings | Sign in | About |
-| --- | --- | --- |
-| ![Settings](app/screenshots/sidetrack_settings.png) | ![Sign in](app/screenshots/sidetrack_sign_in.png) | ![About](app/screenshots/sidetrack_about.png) |
+| History | Sleep timer | Settings | Sign in |
+| --- | --- | --- | --- |
+| ![History](app/screenshots/sidetrack_history.png) | ![Sleep timer](app/screenshots/sidetrack_sleep_timer.png) | ![Settings](app/screenshots/sidetrack_settings.png) | ![Sign in](app/screenshots/sidetrack_sign_in.png) |
 
 ## Getting started
 
