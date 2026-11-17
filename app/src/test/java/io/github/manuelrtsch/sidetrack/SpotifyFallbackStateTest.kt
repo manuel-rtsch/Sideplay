@@ -143,6 +143,101 @@ class SpotifyFallbackStateTest {
         assertEquals("Added ${track.title} to queue", vm.state.value.notice)
     }
 
+    @Test fun `queueing a collection appends every track as one batch`() = runTest(dispatcher) {
+        val vm = viewModel(MockSpotifyDataSource)
+        val playlist = MockSpotifyDataSource.playlist("late_night")!!
+        val collection = SpotifyCollection(
+            type = SpotifyCollectionType.Playlist,
+            id = playlist.id,
+            title = playlist.name,
+            subtitle = "You",
+            artRes = playlist.artRes,
+            items = playlist.tracks
+        )
+
+        vm.queueCollection(collection)
+
+        assertEquals(playlist.tracks.map { it.id }, vm.state.value.upcoming.map { it.id })
+        assertEquals("Added ${playlist.tracks.size} tracks to queue", vm.state.value.notice)
+    }
+
+    @Test fun `queueing a paged collection loads every page first`() = runTest(dispatcher) {
+        val base = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
+        val all = (0 until 120).map { base.copy(id = "paged$it", title = "Paged $it") }
+        val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
+            override suspend fun collection(
+                type: SpotifyCollectionType,
+                id: String,
+                offset: Int,
+                limit: Int
+            ): SpotifyCollection {
+                val items = all.drop(offset).take(limit)
+                return SpotifyCollection(
+                    type = type,
+                    id = id,
+                    title = "Long playlist",
+                    subtitle = "You · ${all.size} tracks",
+                    artRes = base.artRes,
+                    items = items,
+                    totalItems = all.size,
+                    hasMore = offset + items.size < all.size
+                )
+            }
+        }
+        val vm = viewModel(catalog)
+        val type = SpotifyCollectionType.Playlist
+        val id = "long"
+        vm.ensureCollection(type, id)
+        advanceUntilIdle()
+        val firstPage = vm.collection(type, id)!!
+        assertEquals(SPOTIFY_PAGE_SIZE, firstPage.items.size)
+        assertTrue(firstPage.hasMore)
+
+        vm.queueCollection(firstPage)
+        advanceUntilIdle()
+
+        assertEquals(all.map { it.id }, vm.state.value.upcoming.map { it.id })
+        assertFalse(vm.state.value.collectionMorePending.contains("${type.route}:$id"))
+        assertEquals("Added ${all.size} tracks to queue", vm.state.value.notice)
+    }
+
+    @Test fun `a failed page load queues nothing`() = runTest(dispatcher) {
+        val base = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
+        val all = (0 until 120).map { base.copy(id = "paged$it", title = "Paged $it") }
+        val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
+            override suspend fun collection(
+                type: SpotifyCollectionType,
+                id: String,
+                offset: Int,
+                limit: Int
+            ): SpotifyCollection {
+                if (offset > 0) throw SpotifyGatewayException(SpotifyFailure.Network, "offline")
+                return SpotifyCollection(
+                    type = type,
+                    id = id,
+                    title = "Long playlist",
+                    subtitle = "You · ${all.size} tracks",
+                    artRes = base.artRes,
+                    items = all.take(limit),
+                    totalItems = all.size,
+                    hasMore = true
+                )
+            }
+        }
+        val vm = viewModel(catalog)
+        val type = SpotifyCollectionType.Playlist
+        val id = "long"
+        vm.ensureCollection(type, id)
+        advanceUntilIdle()
+
+        vm.queueCollection(vm.collection(type, id)!!)
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.upcoming.isEmpty())
+        assertEquals("Couldn't reach Spotify", vm.state.value.notice)
+        assertFalse(vm.state.value.collectionMorePending.contains("${type.route}:$id"))
+    }
+
     @Test fun `a late song radio response does not overwrite queue edits`() = runTest(dispatcher) {
         val seed = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
         val station = MockSpotifyDataSource.playlist("late_night")!!.tracks.drop(1).take(3)

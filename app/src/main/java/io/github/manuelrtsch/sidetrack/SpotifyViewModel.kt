@@ -1361,6 +1361,53 @@ class SpotifyViewModel(
         _state.update { it.copy(notice = "Added ${item.title} to queue") }
     }
 
+    /**
+     * Queues a whole collection. Paged collections are resolved first so the queue always matches
+     * the list the page represents, and the items land as one batch instead of one commit and one
+     * queue-file write per track. If a page cannot be loaded, nothing is queued rather than a
+     * partial playlist.
+     */
+    fun queueCollection(collection: SpotifyCollection) {
+        if (!collection.hasMore) {
+            addToQueue(collection.items)
+            return
+        }
+        val key = collectionKey(collection.type, collection.id)
+        if (key in _state.value.collectionMorePending) {
+            _state.update { it.copy(notice = "This collection is still loading — try again") }
+            return
+        }
+        _state.update { it.copy(collectionMorePending = it.collectionMorePending + key) }
+        viewModelScope.launch {
+            try {
+                val complete = loadAllCollection(collection)
+                if (complete.hasMore) {
+                    _state.update { it.copy(notice = "Couldn't load the whole collection — nothing added") }
+                    return@launch
+                }
+                addToQueue(complete.items)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(notice = playbackNotice(e)) }
+            } finally {
+                _state.update { it.copy(collectionMorePending = it.collectionMorePending - key) }
+            }
+        }
+    }
+
+    /** Appends a batch with one queue commit; the collection screen uses this after paging. */
+    fun addToQueue(items: List<SpotifyMediaItem>) {
+        if (items.isEmpty()) {
+            _state.update { it.copy(notice = "Nothing to queue") }
+            return
+        }
+        applyQueue(queue.addToQueue(items), syncNowPlaying = false)
+        _state.update {
+            it.copy(notice = "Added ${items.size} ${if (items.size == 1) "track" else "tracks"} to queue")
+        }
+    }
+
     fun clearUpcoming(): List<SpotifyMediaItem> {
         val removed = queue.clearUpcoming()
         applyQueue(queue.snapshot, syncNowPlaying = false)

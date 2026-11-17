@@ -391,7 +391,7 @@ fun NavGraphBuilder.sidetrackGraph(
                         collection.artistId.spotifyIdOrNull()?.let { nav.navigate(artistRoute(it)) }
                             ?: vm.notice("This collection has no artist page")
                     },
-                    onAddToQueue = { collection.items.firstOrNull()?.let(vm::addToQueue) },
+                    onAddToQueue = { vm.queueCollection(collection) },
                     onAddItemToQueue = vm::addToQueue,
                     onSaveTrack = { vm.toggleSaved(it) },
                     onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
@@ -630,7 +630,7 @@ fun NavGraphBuilder.sidetrackGraph(
                     onItem = { vm.playRadio(it) },
                     onSave = { vm.toggleSaved(radio) },
                     onArtist = {},
-                    onAddToQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
+                    onAddToQueue = { vm.queueCollection(radio) },
                     onAddItemToQueue = vm::addToQueue,
                     onSaveTrack = { vm.toggleSaved(it) },
                     onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
@@ -694,7 +694,7 @@ fun NavGraphBuilder.sidetrackGraph(
                         onItem = { vm.playArtistRadio(it) },
                         onSave = { vm.toggleSaved(radio) },
                         onArtist = {},
-                        onAddToQueue = { radio.items.firstOrNull()?.let(vm::addToQueue) },
+                        onAddToQueue = { vm.queueCollection(radio) },
                         onAddItemToQueue = vm::addToQueue,
                         onSaveTrack = { vm.toggleSaved(it) },
                         onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },

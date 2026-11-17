@@ -40,7 +40,7 @@ class SpotifyPersistenceTest {
         assertEquals("b", second.snapshot.current?.id)
         assertEquals(listOf("a"), second.snapshot.history.map { it.id })
         assertTrue(second.snapshot.shuffle)
-        assertEquals(listOf("c", "d"), second.snapshot.shuffleBackup?.map { it.id })
+        assertEquals(listOf("c", "d", "e"), second.snapshot.shuffleBackup?.map { it.id })
         assertTrue(second.snapshot.upcoming.last() is SpotifyEpisode)
     }
 

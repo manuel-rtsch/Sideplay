@@ -186,7 +186,21 @@ class SpotifyQueueRepository(
 
     fun addToQueue(item: SpotifyMediaItem): Snapshot = addToQueue(listOf(item))
 
-    fun addToQueue(items: List<SpotifyMediaItem>): Snapshot = commit(snapshot.copy(upcoming = snapshot.upcoming + items))
+    /**
+     * Appends a batch as one commit. When shuffle is on, the pre-shuffle order has to grow too:
+     * otherwise switching shuffle off later would restore the old tail and silently drop every
+     * item added in the meantime.
+     */
+    fun addToQueue(items: List<SpotifyMediaItem>): Snapshot {
+        if (items.isEmpty()) return snapshot
+        val backup = snapshot.shuffleBackup
+        return commit(
+            snapshot.copy(
+                upcoming = snapshot.upcoming + items,
+                shuffleBackup = if (snapshot.shuffle) (backup ?: snapshot.upcoming) + items else backup
+            )
+        )
+    }
 
     /**
      * Removes one upcoming occurrence by index and returns where it was, so the caller can offer

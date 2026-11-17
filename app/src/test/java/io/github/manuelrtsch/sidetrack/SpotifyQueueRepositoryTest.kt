@@ -68,6 +68,17 @@ class SpotifyQueueRepositoryTest {
         assertEquals(listOf("b", "c", "d", "x", "y"), queue.snapshot.upcoming.map { it.id })
     }
 
+    @Test fun `items added while shuffled stay in the queue when shuffle is switched off`() {
+        val queue = SpotifyQueueRepository(Random(7))
+        queue.play(tracks, 0)
+        queue.setShuffle(true)
+
+        queue.addToQueue(listOf(track("x"), track("y")))
+        queue.setShuffle(false)
+
+        assertEquals(listOf("b", "c", "d", "x", "y"), queue.snapshot.upcoming.map { it.id })
+    }
+
     @Test fun `next moves the current item into history`() {
         val queue = SpotifyQueueRepository(Random(1))
         queue.play(tracks, 0)

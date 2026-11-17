@@ -232,9 +232,11 @@ lyrics/Canvas/video, social features, account management, and crossfade/EQ.
 - Queue has two meanings, and they never share a glyph, a label, or a key. Opening the queue is a
   destination: the bare QueueMusic glyph, the noun **Queue**, the key `queue`, and the callback
   `onOpenQueue`, in the screen's action bar or Options. Adding an item is a verb: the PlaylistAdd
-  glyph, the words **Add to queue** (or **Add latest to queue**), the key `addToQueue`, and the
-  callback `onAddToQueue`, on the row or the item's own screen. A queue button's scope is therefore
-  readable from its icon, its words, and its name before it is pressed.
+  glyph, the words **Add to queue**, the key `addToQueue`, and the callback `onAddToQueue`, on the
+  row. A collection's Options entry also says **Add to queue** but appends the whole collection,
+  while a show's says **Add latest to queue**; rows always add exactly that item. A collection add
+  resolves every page first and appends the items as one batch; if a page cannot load, nothing is
+  added instead of a partial playlist.
 - The queue has one primary action per row. Enter or a tap on an upcoming track plays it now; the
   current row opens Now Playing. The focused row reveals its actions trigger after the focus
   settles, so holding Up/Down does not flash a button on every row. A touch swipe and the keypad
