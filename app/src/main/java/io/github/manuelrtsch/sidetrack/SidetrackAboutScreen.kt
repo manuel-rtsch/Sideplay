@@ -6,7 +6,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,6 +24,21 @@ import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 private data class Licence(val software: String, val licence: String)
+
+/** The git-describe tail Gradle puts behind the tag, plus the build-type suffixes. */
+private val buildSuffix = Regex("""-\d+-g[0-9a-f]+(?:-dirty)?$""")
+
+/**
+ * The tag part of the Gradle version name: `0.3.5-11-g55e317f-dirty-dev` becomes `0.3.5`.
+ * The About page shows this, so the screenshot does not change with every build; the commit
+ * count and hash are revealed only when the version card is clicked.
+ */
+internal fun plainVersionName(versionName: String): String = versionName
+    .removeSuffix("-dev")
+    .removeSuffix("-demo")
+    .replace(buildSuffix, "")
+    .removeSuffix("-dirty")
+    .ifBlank { versionName }
 
 private val licences = listOf(
     Licence("Sidetrack", "MIT"),
@@ -40,6 +59,9 @@ fun SidetrackAboutScreen(onBack: () -> Unit, backLabel: String = "Settings") {
     val versionName = packageInfo.versionName.orEmpty()
     val versionCode = packageInfo.longVersionCode
     val listState = rememberLazyListState()
+    // The build number stays out of the screenshot: the plain tag is enough until it is asked
+    // for, and a commit-count build number would change the image on every build.
+    var showBuild by rememberSaveable { mutableStateOf(false) }
 
     SidekitScaffold(
         title = "About",
@@ -47,14 +69,25 @@ fun SidetrackAboutScreen(onBack: () -> Unit, backLabel: String = "Settings") {
     ) { padding ->
         SidekitList(padding, state = listState) {
             item(key = "version") {
-                SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
+                SidekitCard(
+                    Modifier.listFade(listState, 0).fillMaxWidth(),
+                    onClick = { showBuild = true }
+                ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SidekitText("Version", style = SidekitTheme.typography.headline)
                         SidekitText(
-                            "Sidetrack $versionName ($versionCode)",
+                            "Sidetrack ${plainVersionName(versionName)}",
                             style = SidekitTheme.typography.label,
                             maxLines = Int.MAX_VALUE
                         )
+                        if (showBuild) {
+                            SidekitText(
+                                "Build $versionCode",
+                                style = SidekitTheme.typography.caption,
+                                color = SidekitTheme.colors.surfaceA6,
+                                maxLines = Int.MAX_VALUE
+                            )
+                        }
                     }
                 }
             }
