@@ -28,6 +28,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -427,7 +428,11 @@ fun QueueScreen(
     val swipes = rememberSwipeRevealGroup()
     val hasUpcoming = playback.upcoming.isNotEmpty()
     val hasCurrent = playback.current != null
-    val canReorder = playback.upcoming.size > 1
+    val shownUpcoming = remember { mutableIntStateOf(SPOTIFY_PAGE_SIZE) }
+    val visibleUpcoming = remember(playback.upcoming, shownUpcoming.intValue) {
+        playback.upcoming.take(shownUpcoming.intValue)
+    }
+    val canReorder = visibleUpcoming.size > 1
     // Current row, then the "Up next" header when there is a tail. The header is the visible home
     // of shuffle state, so the mode no longer exists only in an icon's content description. Its own
     // top padding is the separation from the now-playing row: no extra spacer is needed.
@@ -437,7 +442,7 @@ fun QueueScreen(
     // Keys are the track's identity, not its position: a row that moves keeps its node, so it
     // keeps focus and never blinks out and back in. Duplicates get an occurrence suffix because
     // the queue may legitimately hold the same track twice.
-    val upcomingKeys = remember(playback.upcoming) { entryKeys(playback.upcoming) }
+    val upcomingKeys = remember(visibleUpcoming) { entryKeys(visibleUpcoming) }
     // Focus state is keyed, not indexed: a shuffle or a move can change every index while the
     // row under the focus ring stays the same. This is what used to let a gutter land on the
     // wrong track after shuffle.
@@ -498,9 +503,9 @@ fun QueueScreen(
     }
     // A reorder must not survive the queue changing underneath it. Commit what was already picked
     // (if anything) and leave the mode; moving back to a stale index could target another track.
-    LaunchedEffect(playback.current?.id, playback.upcoming.size) {
+    LaunchedEffect(playback.current?.id, visibleUpcoming.size) {
         if (!reorderMode) return@LaunchedEffect
-        if (playback.current?.id == reorderCurrentId && playback.upcoming.size == reorderSize) return@LaunchedEffect
+        if (playback.current?.id == reorderCurrentId && visibleUpcoming.size == reorderSize) return@LaunchedEffect
         val moved = reorder.hasMoved
         reorder.end()
         reorderMode = false
@@ -544,7 +549,7 @@ fun QueueScreen(
             val moved = reorder.hasMoved
             val origin = reorder.origin
             val current = reorder.from
-            val sameQueue = playback.current?.id == reorderCurrentId && playback.upcoming.size == reorderSize
+            val sameQueue = playback.current?.id == reorderCurrentId && visibleUpcoming.size == reorderSize
             reorder.cancel()
             if (moved) {
                 if (sameQueue && current != null && origin >= 0 && current != origin) {
@@ -563,15 +568,15 @@ fun QueueScreen(
         if (canReorder && !reorderMode) {
             swipes.closeAll()
             rowActions.close()
-            val target = requested.coerceIn(0, playback.upcoming.lastIndex)
+            val target = requested.coerceIn(0, visibleUpcoming.lastIndex)
             val targetKey = upcomingKeys[target]
             focusedKey = targetKey
             val offset = listState.layoutInfo.visibleItemsInfo
                 .firstOrNull { it.key == targetKey }
                 ?.offset ?: 0
             reorderCurrentId = playback.current?.id
-            reorderSize = playback.upcoming.size
-            reorder.begin(target, playback.upcoming.size, offset.toFloat(), keypad = true)
+            reorderSize = visibleUpcoming.size
+            reorder.begin(target, visibleUpcoming.size, offset.toFloat(), keypad = true)
             reorderMode = true
             focusPending = true
         }
@@ -815,7 +820,7 @@ fun QueueScreen(
                         )
                     }
                     itemsIndexed(
-                        playback.upcoming,
+                        visibleUpcoming,
                         key = { index, _ -> upcomingKeys[index] },
                         contentType = { _, item -> if (item is SpotifyTrack) "track" else "episode" }
                     ) { index, item ->
@@ -874,7 +879,7 @@ fun QueueScreen(
                                     .queueReorder(
                                         state = reorder,
                                         index = index,
-                                        count = playback.upcoming.size,
+                                        count = visibleUpcoming.size,
                                         key = key,
                                         onPickUp = {
                                             swipes.closeAll()
@@ -961,7 +966,7 @@ fun QueueScreen(
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 if (index > 0) ReorderArrow(up = true, size = LiftedIconSize)
-                                                if (index < playback.upcoming.lastIndex) ReorderArrow(up = false, size = LiftedIconSize)
+                                                if (index < visibleUpcoming.lastIndex) ReorderArrow(up = false, size = LiftedIconSize)
                                             }
 
                                             GutterMode.Actions -> GutterSquare(
@@ -976,6 +981,16 @@ fun QueueScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                    if (playback.upcoming.size > visibleUpcoming.size) {
+                        item(key = "queueMore") {
+                            LoadMoreRow(
+                                "Load more",
+                                loading = false,
+                                onLoadMore = { shownUpcoming.intValue += SPOTIFY_PAGE_SIZE },
+                                modifier = Modifier.listFade(listState, firstQueueItem + visibleUpcoming.size)
+                            )
                         }
                     }
                 }

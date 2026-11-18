@@ -264,10 +264,10 @@ fun SpotifySearchScreen(
                         if (SearchScope.Tracks in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreTracks") {
-                                SeeMoreRow(
-                                    "See more tracks",
+                                LoadMoreRow(
+                                    "Load more tracks",
                                     SearchScope.Tracks in search.searchMorePending,
-                                    onClick = { onLoadMore(SearchScope.Tracks) },
+                                    onLoadMore = { onLoadMore(SearchScope.Tracks) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Tracks && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
@@ -299,10 +299,10 @@ fun SpotifySearchScreen(
                         if (SearchScope.Artists in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreArtists") {
-                                SeeMoreRow(
-                                    "See more artists",
+                                LoadMoreRow(
+                                    "Load more artists",
                                     SearchScope.Artists in search.searchMorePending,
-                                    onClick = { onLoadMore(SearchScope.Artists) },
+                                    onLoadMore = { onLoadMore(SearchScope.Artists) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Artists && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
@@ -334,10 +334,10 @@ fun SpotifySearchScreen(
                         if (SearchScope.Albums in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreAlbums") {
-                                SeeMoreRow(
-                                    "See more albums",
+                                LoadMoreRow(
+                                    "Load more albums",
                                     SearchScope.Albums in search.searchMorePending,
-                                    onClick = { onLoadMore(SearchScope.Albums) },
+                                    onLoadMore = { onLoadMore(SearchScope.Albums) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Albums && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
@@ -369,10 +369,10 @@ fun SpotifySearchScreen(
                         if (SearchScope.Playlists in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "morePlaylists") {
-                                SeeMoreRow(
-                                    "See more playlists",
+                                LoadMoreRow(
+                                    "Load more playlists",
                                     SearchScope.Playlists in search.searchMorePending,
-                                    onClick = { onLoadMore(SearchScope.Playlists) },
+                                    onLoadMore = { onLoadMore(SearchScope.Playlists) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Playlists && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )
@@ -404,10 +404,10 @@ fun SpotifySearchScreen(
                         if (SearchScope.Shows in search.searchHasMore) {
                             val moreIndex = rowIndex
                             item(key = "moreShows") {
-                                SeeMoreRow(
-                                    "See more shows",
+                                LoadMoreRow(
+                                    "Load more shows",
                                     SearchScope.Shows in search.searchMorePending,
-                                    onClick = { onLoadMore(SearchScope.Shows) },
+                                    onLoadMore = { onLoadMore(SearchScope.Shows) },
                                     modifier = Modifier.listFade(listState, moreIndex)
                                         .then(if (lastResultScope == SearchScope.Shows && lastResultIsSeeMore) lastRowModifier else Modifier)
                                 )

@@ -87,7 +87,7 @@ data class SpotifyUiState(
     val authPending: Boolean = false,
     val libraryLoading: Boolean = false,
     val librarySectionsLoading: Boolean = false,
-    /** Set when the overview could not load at all, so the Library screen can offer a retry. */
+    /** Set when the startup preload could not load any category. */
     val librarySectionsError: String? = null,
     /** Set when the open category could not load and has no items to show. */
     val libraryError: String? = null,
@@ -446,10 +446,10 @@ class SpotifyViewModel(
         _state.update { it.copy(nowPlayingNotice = null) }
     }
 
-    /** Reloads the Library overview. Called whenever the Library screen is opened. */
+    /** Reloads the open Library category. Called whenever the Library screen is opened. */
     fun refreshLibrary() {
         if (!_state.value.signedIn) return
-        loadLibrarySections()
+        loadLibrary(_state.value.filter)
     }
 
     /** Retries the open library category after a failed load. */
@@ -1505,9 +1505,10 @@ class SpotifyViewModel(
     }
 
     /**
-     * Loads a short preview of every library category for the Library overview. The categories are
+     * Loads a short preview of every library category after sign-in. The categories are
      * requested one after another so the native collection cache is filled once for the shared
-     * sets instead of racing several identical full reads.
+     * sets instead of racing several identical full reads. The previews also seed saved-state
+     * hints and let an offline app know what the account holds.
      */
     private fun loadLibrarySections() {
         if (!_state.value.signedIn) return
@@ -1520,13 +1521,13 @@ class SpotifyViewModel(
                 var notice: String? = null
                 for (filter in LibraryFilter.entries) {
                     try {
-                        val page = catalog.library(filter, 0, LIBRARY_SECTION_SIZE + 1)
+                        val page = catalog.library(filter, 0, LIBRARY_SECTION_SIZE)
                         sections[filter] = page.items.take(LIBRARY_SECTION_SIZE)
                         // Prefer the category total over the delivered rows: a catalog may drop an
                         // entry whose metadata failed to load, and an item-based check would then
                         // hide "See more" for a category that still has more rows.
                         val count = page.total ?: page.items.size
-                        if (count > LIBRARY_SECTION_SIZE) hasMore += filter
+                        if (page.hasMore || count > LIBRARY_SECTION_SIZE) hasMore += filter
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

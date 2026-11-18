@@ -39,61 +39,35 @@ name: Browse & Play (promo)
     waitToSettleTimeoutMs: 200
 
 # 3. Liked songs: play the first one straight from the Library list. This is the
-# third way in — no Now Playing screen involved, only the notice.
+# third way in — no Now Playing screen involved, only the notice. The category row
+# stays fixed under the title, so each category is one tap rather than a scroll.
 - tapOn:
     text: "Library"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Library"
-# The Library remembers its scroll position between takes, so reset to the top
-# section before walking down it in order.
-- scrollUntilVisible:
-    element:
-      text: "LIKED SONGS"
-    direction: UP
-    speed: 80
-    visibilityPercentage: 60
+- tapOn:
+    text: "Liked songs"
     waitToSettleTimeoutMs: 200
 - tapOn:
     text: "[0-9]+:[0-9]{2}"
     index: 0
     waitToSettleTimeoutMs: 200
 
-# 3b. The "See more" row opens the full Liked songs list — one long screen for the
-# gallery, and the only place in the take that scrolls a list of its own.
-- scrollUntilVisible:
-    element:
-      text: "See more liked songs"
-    direction: DOWN
-    speed: 40
-    visibilityPercentage: 60
-    centerElement: true
-    waitToSettleTimeoutMs: 200
-- tapOn:
-    text: "See more liked songs"
-    waitToSettleTimeoutMs: 200
-- assertVisible: "Liked songs"
+# 3b. Scroll the attached liked-songs list for the gallery. The filter row stays
+# in place, so the take does not leave the Library to show a long list.
 - swipe:
     direction: UP
     duration: 400
-- assertVisible: "Liked songs"
-- pressKey: Back
-- assertVisible: "Library"
+- assertVisible: "[0-9]+:[0-9]{2}"
 
 # 4. Playlists: open the first one and play its second track, then come back. The
 # playlist screen is the one long track list in the take.
-# Speed 40 for every section scroll: at 80 the fling passes a short section label
-# between two hierarchy dumps and the scroll runs to the end of the list instead.
-- scrollUntilVisible:
-    element:
-      text: "PLAYLISTS"
-    direction: DOWN
-    speed: 40
-    visibilityPercentage: 60
-    centerElement: true
+- tapOn:
+    text: "Playlists"
     waitToSettleTimeoutMs: 200
 - tapOn:
     below:
-      text: "PLAYLISTS"
+      text: "Playlists"
     waitToSettleTimeoutMs: 200
 - assertVisible: "[0-9]+:[0-9]{2}"
 - tapOn:
@@ -105,17 +79,12 @@ name: Browse & Play (promo)
 
 # 5. Albums: open the first saved album and play from it. The Save button is left
 # alone — promo 02 owns the write actions.
-- scrollUntilVisible:
-    element:
-      text: "ALBUMS"
-    direction: DOWN
-    speed: 40
-    visibilityPercentage: 60
-    centerElement: true
+- tapOn:
+    text: "Albums"
     waitToSettleTimeoutMs: 200
 - tapOn:
     below:
-      text: "ALBUMS"
+      text: "Albums"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Sav(e|ed)"
 - tapOn:
@@ -127,17 +96,12 @@ name: Browse & Play (promo)
 
 # 6. Shows: open the first saved show and look at its episode list. Nothing is
 # played here; the episode beat belongs to promo 02.
-- scrollUntilVisible:
-    element:
-      text: "SHOWS"
-    direction: DOWN
-    speed: 40
-    visibilityPercentage: 60
-    centerElement: true
+- tapOn:
+    text: "Shows"
     waitToSettleTimeoutMs: 200
 - tapOn:
     below:
-      text: "SHOWS"
+      text: "Shows"
     waitToSettleTimeoutMs: 200
 - assertVisible: "[0-9]+:[0-9]{2}(:[0-9]{2})?"
 - pressKey: Back

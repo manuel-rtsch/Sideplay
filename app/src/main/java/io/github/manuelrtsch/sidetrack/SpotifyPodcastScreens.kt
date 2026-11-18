@@ -219,7 +219,12 @@ fun ShowScreen(
             if (collection.hasMore) {
                 val moreIndex = rowIndex
                 item(key = "more") {
-                    PagingFooter(loadingMore, onLoadMore, Modifier.listFade(listState, moreIndex))
+                    LoadMoreRow(
+                        "Load more episodes",
+                        loadingMore,
+                        onLoadMore,
+                        Modifier.listFade(listState, moreIndex)
+                    )
                 }
             }
         }

@@ -2,10 +2,14 @@ package io.github.manuelrtsch.sidetrack
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -18,13 +22,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitIconImage
-import hrln.interactive.sidekit.design.components.SidekitItem
+import hrln.interactive.sidekit.design.components.SidekitIconItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
@@ -130,8 +142,9 @@ fun SidetrackHomeScreen(
 }
 
 /**
- * The Library overview: a short preview of every category with a "See more" row, instead of
- * hiding the categories behind five Options buttons.
+ * The Library: one category at a time, chosen from a row of five square filter buttons under
+ * the title. Moving focus across the row attaches that category's list, so the keypad can
+ * browse the library without opening a second screen per category.
  */
 @Composable
 fun LibraryScreen(
@@ -140,7 +153,7 @@ fun LibraryScreen(
     chrome: ChromeUiState,
     onBack: () -> Unit,
     onSearch: () -> Unit,
-    onSeeMore: (LibraryFilter) -> Unit,
+    onFilter: (LibraryFilter) -> Unit,
     onTrack: (SpotifyTrack) -> Unit,
     onAddToQueue: (SpotifyTrack) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
@@ -149,6 +162,7 @@ fun LibraryScreen(
     onShow: (SpotifyShow) -> Unit,
     onSaveTrack: (SpotifyTrack) -> Unit,
     onEnsureSavedTrack: (SpotifyTrack) -> Unit,
+    onLoadMore: () -> Unit,
     onNowPlaying: () -> Unit,
     onRetry: () -> Unit,
     onDismissNotice: () -> Unit,
@@ -175,60 +189,84 @@ fun LibraryScreen(
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
-        val sections = library.librarySections
-        val isEmpty = sections.values.all { it.isEmpty() }
-        val firstFilter = LibraryFilter.entries.firstOrNull { sections[it].orEmpty().isNotEmpty() }
-        val first = remember { FocusRequester() }
-        LaunchedEffect(firstFilter) { runCatching { first.requestFocus() } }
-        if (isEmpty && library.librarySectionsLoading) {
-            SpotifyLoadingScreen(
-                Modifier.padding(padding),
-                title = "Loading your library…",
-                hint = "Liked songs, playlists and more"
-            )
-            return@SidekitScaffold
+        val filter = library.filter
+        val items = library.libraryItems
+        val filterFocus = remember {
+            LibraryFilter.entries.associateWith { FocusRequester() }
         }
-        if (isEmpty && library.librarySectionsError != null) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                SpotifyStatusScreen(
-                    "Couldn't load your library",
-                    hint = library.librarySectionsError,
-                    actionLabel = "Try again",
-                    onAction = onRetry
-                )
+        // Focus the current category so the row and the list below are one connected target
+        // when the screen opens; its onFocusChanged does not reload the same category.
+        LaunchedEffect(Unit) {
+            runCatching { filterFocus.getValue(library.filter).requestFocus() }
+        }
+        LaunchedEffect(filter) { listState.scrollToItem(0) }
+        // Up from the first row returns to the keyboard row rather than letting focus search pick
+        // the geometrically nearest button, which is the middle one.
+        val firstRowModifier = Modifier.onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+                filterFocus.getValue(filter).requestFocus()
+                true
+            } else {
+                false
             }
-            return@SidekitScaffold
         }
-        SidekitList(padding, state = listState) {
-            var rowIndex = 0
-            if (isEmpty) {
-                val index = rowIndex
-                item(key = "empty") {
-                    SpotifyStatusScreen(
-                        "Your library is empty",
-                        Modifier.listFade(listState, index),
-                        hint = "Search to find something to save"
+        val loading = items.isEmpty() && library.libraryLoading
+        if (loading || (items.isEmpty() && library.libraryError != null)) {
+            Column(Modifier.fillMaxSize()) {
+                LibraryFilterRow(filter, onFilter, filterFocus)
+                Spacer(Modifier.height(SidekitTheme.spacing.pageGap))
+                Box(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (loading) {
+                        SpotifyLoadingScreen(title = "Loading ${filter.label.lowercase()}…", hint = null)
+                    } else {
+                        SpotifyStatusScreen(
+                            "Couldn't load ${filter.label.lowercase()}",
+                            hint = library.libraryError,
+                            actionLabel = "Try again",
+                            onAction = onRetry
+                        )
+                    }
+                }
+            }
+        } else {
+            // The filter row is the first list item, not a header above the list: it scrolls away
+            // with the content and shares the list fade with the rows below it.
+            SidekitList(padding, state = listState) {
+                item(key = "filters") {
+                    LibraryFilterRow(
+                        filter,
+                        onFilter,
+                        filterFocus,
+                        Modifier.listFade(listState, 0)
+                            .padding(bottom = SidekitTheme.spacing.pageGap)
                     )
                 }
-                rowIndex += 1
-            }
-            LibraryFilter.entries.forEach { filter ->
-                val items = sections[filter].orEmpty()
-                if (items.isEmpty()) return@forEach
-                item(key = "label.${filter.name}") {
-                    SectionLabel(filter.label)
+                var rowIndex = 1
+                if (items.isEmpty()) {
+                    val index = rowIndex
+                    item(key = "empty") {
+                        SpotifyStatusScreen(
+                            filter.empty,
+                            Modifier.listFade(listState, index).then(firstRowModifier),
+                            hint = "Search to find something to save"
+                        )
+                    }
+                    rowIndex += 1
                 }
-                rowIndex += 1
+                // Snapshot the offset before registering the items: the lazy DSL runs each item's
+                // content later, after rowIndex has moved past the page, so reading it inside the
+                // lambda would fade every row by the wrong index.
                 val base = rowIndex
                 itemsIndexed(
                     items,
-                    key = { index, item -> "${filter.name}:$index:${libraryKey(item)}" },
+                    key = { index, item -> "$index:${libraryKey(item)}" },
                     contentType = { _, item -> libraryKey(item).take(1) }
                 ) { index, item ->
-                    val modifier = Modifier.listFade(listState, base + index)
-                        .then(
-                            if (filter == firstFilter && index == 0) Modifier.focusRequester(first) else Modifier
-                        )
+                    var modifier: Modifier = Modifier.listFade(listState, base + index)
+                    if (index == 0) modifier = modifier.then(firstRowModifier)
                     LibraryRow(
                         item,
                         modifier,
@@ -241,119 +279,65 @@ fun LibraryScreen(
                     )
                 }
                 rowIndex += items.size
-                if (filter in library.librarySectionHasMore) {
+                if (library.libraryHasMore) {
                     val moreIndex = rowIndex
-                    item(key = "more.${filter.name}") {
-                        SeeMoreRow(
-                            "See more ${filter.label.lowercase()}",
-                            loading = false,
-                            onClick = { onSeeMore(filter) },
-                            modifier = Modifier.listFade(listState, moreIndex)
+                    item(key = "more") {
+                        LoadMoreRow(
+                            "Load more ${filter.label.lowercase()}",
+                            library.libraryMorePending,
+                            onLoadMore,
+                            Modifier.listFade(listState, moreIndex)
                         )
                     }
-                    rowIndex += 1
                 }
             }
         }
     }
 }
 
-/** One category of the library, opened by a "See more" row on the overview. */
+/** Five square category buttons. Focus selects a category; clicking does too. */
 @Composable
-fun LibraryCategoryScreen(
-    filter: LibraryFilter,
-    library: LibraryUiState,
-    saved: SavedUiState,
-    chrome: ChromeUiState,
-    onBack: () -> Unit,
-    onTrack: (SpotifyTrack) -> Unit,
-    onAddToQueue: (SpotifyTrack) -> Unit,
-    onPlaylist: (SpotifyPlaylist) -> Unit,
-    onAlbum: (SpotifyAlbum) -> Unit,
-    onArtist: (SpotifyArtist) -> Unit,
-    onShow: (SpotifyShow) -> Unit,
-    onSaveTrack: (SpotifyTrack) -> Unit,
-    onEnsureSavedTrack: (SpotifyTrack) -> Unit,
-    onLoadMore: () -> Unit,
-    onNowPlaying: () -> Unit,
-    onRetry: () -> Unit,
-    onDismissNotice: () -> Unit,
-    onDismissNowPlaying: () -> Unit
+private fun LibraryFilterRow(
+    selected: LibraryFilter,
+    onFilter: (LibraryFilter) -> Unit,
+    focusRequesters: Map<LibraryFilter, FocusRequester>,
+    modifier: Modifier = Modifier
 ) {
-    val rows = rememberTrackRows(
-        saved,
-        onSaveTrack,
-        onEnsureSavedTrack,
-        onAddToQueue
-    )
-    val baseActions = remember { listOf(spotifyBack("Library", onBack).first()) }
-    val actions = rowActionBarActions(
-        rows.bar,
-        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
-    )
-    SidekitScaffold(
-        title = filter.label,
-        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
-        actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
-    ) { padding ->
-        val listState = rememberLazyListState()
-        rows.bar.dismissOnScroll(listState)
-        val first = remember { FocusRequester() }
-        LaunchedEffect(filter) { runCatching { first.requestFocus() } }
-        val items = library.libraryItems
-        if (items.isEmpty() && library.libraryLoading) {
-            SpotifyLoadingScreen(
-                Modifier.padding(padding),
-                title = "Loading ${filter.label.lowercase()}…",
-                hint = null
-            )
-            return@SidekitScaffold
-        }
-        if (items.isEmpty() && library.libraryError != null) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                SpotifyStatusScreen(
-                    "Couldn't load ${filter.label.lowercase()}",
-                    hint = library.libraryError,
-                    actionLabel = "Try again",
-                    onAction = onRetry
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val columns = LibraryFilter.entries.size
+        val cell = (maxWidth - SidekitTheme.spacing.itemOuterGap * (columns - 1)) / columns.toFloat()
+        SidekitItemRow {
+            LibraryFilter.entries.forEach { filter ->
+                val isSelected = filter == selected
+                SidekitIconItem(
+                    icon = filter.icon,
+                    contentDescription = filter.label,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(cell)
+                        .focusRequester(focusRequesters.getValue(filter))
+                        .onFocusChanged { state ->
+                            if (state.isFocused && !isSelected) onFilter(filter)
+                        }
+                        .semantics { this.selected = isSelected },
+                    color = (if (isSelected) SpotifyTileTone.Library else SpotifyTileTone.Neutral)
+                        .colour(SidekitTheme.colors),
+                    iconSize = SidekitTheme.spacing.tileIconSize,
+                    onClick = { onFilter(filter) }
                 )
-            }
-            return@SidekitScaffold
-        }
-        SidekitList(padding, state = listState) {
-            var rowIndex = 0
-            if (items.isEmpty()) {
-                val index = rowIndex
-                item(key = "empty") {
-                    SpotifyStatusScreen(
-                        filter.empty,
-                        Modifier.listFade(listState, index),
-                        hint = "Search to find something to save"
-                    )
-                }
-                rowIndex += 1
-            }
-            val base = rowIndex
-            itemsIndexed(
-                items,
-                key = { index, item -> "$index:${libraryKey(item)}" },
-                contentType = { _, item -> libraryKey(item).take(1) }
-            ) { index, item ->
-                val modifier = Modifier.listFade(listState, base + index)
-                    .then(if (index == 0) Modifier.focusRequester(first) else Modifier)
-                LibraryRow(item, modifier, rows, onTrack, onPlaylist, onAlbum, onArtist, onShow)
-            }
-            rowIndex += items.size
-            if (library.libraryHasMore) {
-                val moreIndex = rowIndex
-                item(key = "more") {
-                    PagingFooter(library.libraryMorePending, onLoadMore, Modifier.listFade(listState, moreIndex))
-                }
             }
         }
     }
 }
+
+private val LibraryFilter.icon: SidekitIcon
+    get() = when (this) {
+        LibraryFilter.LikedSongs -> SidekitIcon.Favorite
+        LibraryFilter.Playlists -> SidekitIcon.QueueMusic
+        LibraryFilter.Albums -> SidekitIcon.Album
+        LibraryFilter.Artists -> SidekitIcon.Artist
+        LibraryFilter.Shows -> SidekitIcon.SmartDisplay
+    }
 
 @Composable
 private fun LibraryRow(
@@ -545,7 +529,12 @@ fun CollectionScreen(
             if (collection.hasMore) {
                 val moreIndex = rowIndex
                 item(key = "more") {
-                    PagingFooter(loadingMore, onLoadMore, Modifier.listFade(listState, moreIndex))
+                    LoadMoreRow(
+                        if (collection.type == SpotifyCollectionType.Show) "Load more episodes" else "Load more tracks",
+                        loadingMore,
+                        onLoadMore,
+                        Modifier.listFade(listState, moreIndex)
+                    )
                 }
             }
         }
@@ -659,8 +648,8 @@ fun ArtistScreen(
             if (trackHasMore) {
                 val moreIndex = rowIndex
                 item(key = "tracksMore") {
-                    SeeMoreRow(
-                        "See more tracks",
+                    LoadMoreRow(
+                        "Load more tracks",
                         loadingMore,
                         onLoadMoreTracks,
                         Modifier.listFade(listState, moreIndex)
@@ -690,8 +679,8 @@ fun ArtistScreen(
             if (albumHasMore) {
                 val moreIndex = rowIndex
                 item(key = "albumsMore") {
-                    SeeMoreRow(
-                        "See more albums",
+                    LoadMoreRow(
+                        "Load more albums",
                         loadingMore,
                         onLoadMoreAlbums,
                         Modifier.listFade(listState, moreIndex)

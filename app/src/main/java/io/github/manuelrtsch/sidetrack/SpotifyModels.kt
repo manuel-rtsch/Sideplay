@@ -151,16 +151,21 @@ data class SpotifyStation(
     val playlistId: String? = null
 )
 
-/** How many rows a catalog request asks for. Kept small for the Sidephone's weak CPU. */
-const val SPOTIFY_PAGE_SIZE = 50
-const val SPOTIFY_SEARCH_PAGE_SIZE = 5
+/**
+ * How many rows every catalog request and every on-screen list asks for. One batch size keeps
+ * the list, the network and the local history in step: 20 rows, then a Load more button.
+ */
+const val SPOTIFY_PAGE_SIZE = 20
 
-/** Rows shown per category on the Library overview before "See more". */
-const val LIBRARY_SECTION_SIZE = 5
+/** Search reuses the shared page size so every scope fills the same visible batch. */
+const val SPOTIFY_SEARCH_PAGE_SIZE = SPOTIFY_PAGE_SIZE
+
+/** Rows cached per category while the Library preloads, and used for saved-state hints. */
+const val LIBRARY_SECTION_SIZE = SPOTIFY_PAGE_SIZE
 
 /** Recently played rows on Home before "See more history". */
-const val RECENT_PREVIEW_SIZE = 5
-const val SPOTIFY_ARTIST_PAGE_SIZE = 5
+const val RECENT_PREVIEW_SIZE = SPOTIFY_PAGE_SIZE
+const val SPOTIFY_ARTIST_PAGE_SIZE = SPOTIFY_PAGE_SIZE
 
 /** One page of a catalog list. [total] is null when the endpoint doesn't report it. */
 data class SpotifyPage<T>(
