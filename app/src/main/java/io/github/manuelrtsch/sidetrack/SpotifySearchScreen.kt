@@ -17,7 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -96,6 +95,7 @@ fun SpotifySearchScreen(
     val searchFocus = remember { FocusRequester() }
     val scopesFocus = remember { FocusRequester() }
     val filterFocus = remember { SearchScope.entries.associateWith { FocusRequester() } }
+    val moreFocus = rememberLoadMoreFocus()
     // The category buttons only choose which result list is shown. Which categories get queried is
     // still decided on the "Search in" page, and that page is reached from the idle/typing state.
     // The selection survives a trip into a result and back.
@@ -117,6 +117,9 @@ fun SpotifySearchScreen(
             scope = populated
         }
     }
+    // A failed search replaces the list with the retry body. Drop a page that was in flight so a
+    // later retry cannot mistake its larger result set for a page that just arrived.
+    LaunchedEffect(failed) { if (failed) moreFocus.reset() }
     // Enter in the search field hands the keypad to the result categories. Up walks back out: first
     // result to the category buttons, category buttons to the field, so typing and browsing never
     // fight over keys. Preview handlers run before the focused row's own D-pad handling, which
@@ -147,9 +150,8 @@ fun SpotifySearchScreen(
             false
         }
     }
-    // The category row sits above the list, so a Down from the last row must not wrap back into
-    // it. Cancel Down there; the row is only reachable by walking Up out of the list.
-    val lastRowModifier = Modifier.focusProperties { down = FocusRequester.Cancel }
+    // The category row sits above the list, so Up from the first result returns to it. Down from
+    // the last row is left to focus search, which finds the action bar below the list.
     SidekitScaffold(
         title = null,
         modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
@@ -185,7 +187,10 @@ fun SpotifySearchScreen(
         rows.bar.dismissOnScroll(listState)
         // A new scope or query shows a different page from the top; keeping the old scroll offset
         // would open it in the middle.
-        LaunchedEffect(search.query, scope) { listState.scrollToItem(0) }
+        LaunchedEffect(search.query, scope) {
+            moreFocus.reset()
+            listState.scrollToItem(0)
+        }
         if (failed) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 SpotifyStatusScreen(
@@ -197,6 +202,10 @@ fun SpotifySearchScreen(
             }
             return@SidekitScaffold
         }
+        val items = results.itemsFor(scope)
+        val hasMore = scope in search.searchHasMore
+        val morePending = scope in search.searchMorePending
+        LoadMoreFocus(moreFocus, listState, items.size, morePending, firstItemListIndex = 1)
         SidekitList(padding, state = listState) {
             if (!showFilters) {
                 // Idle and short-query states keep the "Search in" row: this is where the user
@@ -205,8 +214,7 @@ fun SpotifySearchScreen(
                     TerminalRow(
                         "Search in",
                         modifier = Modifier.listFade(listState, 0)
-                            .then(scopesModifier)
-                            .then(lastRowModifier),
+                            .then(scopesModifier),
                         secondary = scopeSummary,
                         onClick = onScopes
                     )
@@ -257,7 +265,6 @@ fun SpotifySearchScreen(
                             .then(filterRowModifier)
                     )
                 }
-                val items = results.itemsFor(scope)
                 if (items.isEmpty()) {
                     item(key = "empty") {
                         EmptyMessage(
@@ -267,21 +274,21 @@ fun SpotifySearchScreen(
                         )
                     }
                 } else {
-                    val hasMore = scope in search.searchHasMore
                     itemsIndexed(
                         items,
                         key = { _, item -> searchItemKey(item) },
                         contentType = { _, item -> searchItemKey(item).take(1) }
                     ) { index, item ->
-                        val modifier = Modifier.listFade(listState, index + 1)
+                        val baseModifier = Modifier.listFade(listState, index + 1)
                             .then(if (index == 0) firstResultModifier else Modifier)
-                            .then(if (index == items.lastIndex && !hasMore) lastRowModifier else Modifier)
+                        val modifier = baseModifier.then(moreFocus.rowModifier(index))
                         when (item) {
                             is SpotifyTrack -> TrackRow(
                                 searchItemKey(item),
                                 item,
                                 rows,
-                                modifier
+                                baseModifier,
+                                focusRequester = moreFocus.requesterFor(index)
                             ) { onTrack(item) }
 
                             is SpotifyArtist -> SpotifyLibraryRow(
@@ -321,10 +328,13 @@ fun SpotifySearchScreen(
                         item(key = "more") {
                             LoadMoreRow(
                                 "Load more ${scope.label.lowercase()}",
-                                scope in search.searchMorePending,
-                                onLoadMore = { onLoadMore(scope) },
-                                modifier = Modifier.listFade(listState, items.size + 1)
-                                    .then(lastRowModifier)
+                                morePending,
+                                onLoadMore = {
+                                    moreFocus.onLoadMore(items.size)
+                                    onLoadMore(scope)
+                                },
+                                modifier = Modifier.listFade(listState, items.size + 1),
+                                focusState = moreFocus
                             )
                         }
                     }

@@ -465,6 +465,7 @@ fun QueueScreen(
     val rowFocus = remember { FocusRequester() }
     val currentFocus = remember { FocusRequester() }
     val firstUpcomingFocus = remember { FocusRequester() }
+    val moreFocus = rememberLoadMoreFocus()
     val focusManager = LocalFocusManager.current
     // The focused row owns the gutter, but only once focus has settled: holding Up/Down through
     // the queue must not flash a button on every row it passes.
@@ -807,6 +808,13 @@ fun QueueScreen(
             }
             return@SidekitScaffold
         }
+        LoadMoreFocus(
+            moreFocus,
+            listState,
+            visibleUpcoming.size,
+            loading = false,
+            firstItemListIndex = firstQueueItem
+        )
         SidekitList(padding, state = listState) {
             val current = playback.current
             if (current != null) {
@@ -947,7 +955,8 @@ fun QueueScreen(
                                             } else {
                                                 Modifier
                                             }
-                                        ),
+                                        )
+                                        .then(moreFocus.rowModifier(index)),
                                     secondary = item.creator,
                                     // The side control gets the right edge while it is visible.
                                     trailing = if (gutter > 0.dp) null else formatDuration(item.durationMs),
@@ -998,8 +1007,12 @@ fun QueueScreen(
                         LoadMoreRow(
                             "Load more",
                             loading = false,
-                            onLoadMore = { shownUpcoming.intValue += SPOTIFY_PAGE_SIZE },
-                            modifier = Modifier.listFade(listState, firstQueueItem + visibleUpcoming.size)
+                            onLoadMore = {
+                                moreFocus.onLoadMore(visibleUpcoming.size)
+                                shownUpcoming.intValue += SPOTIFY_PAGE_SIZE
+                            },
+                            modifier = Modifier.listFade(listState, firstQueueItem + visibleUpcoming.size),
+                            focusState = moreFocus
                         )
                     }
                 }

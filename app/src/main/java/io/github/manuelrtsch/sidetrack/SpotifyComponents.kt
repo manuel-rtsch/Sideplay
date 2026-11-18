@@ -34,15 +34,18 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -732,16 +735,114 @@ fun TerminalRow(
 }
 
 /**
+ * Keeps the keypad on the Load more row while the next page is in flight, then hands focus to the
+ * first row the page added. A Load more row that turns non-clickable while loading is no longer
+ * focusable, so Compose drops focus and the next focus search lands somewhere up the list.
+ */
+@Stable
+class LoadMoreFocusState {
+    private var pendingFrom: Int? = null
+
+    /** The data index of the first row the last page added, while it still needs focus. */
+    var targetIndex: Int? by mutableStateOf(null)
+        private set
+
+    val moreFocus = FocusRequester()
+    val firstNewFocus = FocusRequester()
+
+    /** Call before requesting the next page, with the number of rows currently shown. */
+    fun onLoadMore(itemCount: Int) {
+        pendingFrom = itemCount
+    }
+
+    /** Call whenever the row count or the loading flag changes. */
+    fun onItems(itemCount: Int, loading: Boolean) {
+        val from = pendingFrom ?: return
+        if (loading) return
+        pendingFrom = null
+        if (itemCount > from) targetIndex = from
+    }
+
+    fun clearTarget() {
+        targetIndex = null
+    }
+
+    /** Forget a page that was requested for a list that is no longer on screen. */
+    fun reset() {
+        pendingFrom = null
+        targetIndex = null
+    }
+}
+
+@Composable
+fun rememberLoadMoreFocus(): LoadMoreFocusState = remember { LoadMoreFocusState() }
+
+/** The modifier for the row at [index] that should take focus after a page loads. */
+fun LoadMoreFocusState.rowModifier(index: Int): Modifier =
+    if (index == targetIndex) Modifier.focusRequester(firstNewFocus) else Modifier
+
+/**
+ * The requester for the row at [index] that should take focus after a page loads, or null. Row
+ * wrappers that hide their focusable element behind another layout pass pass this down instead of
+ * putting [rowModifier] on the wrapper, where it would have no focus target to attach to.
+ */
+fun LoadMoreFocusState.requesterFor(index: Int): FocusRequester? =
+    if (index == targetIndex) firstNewFocus else null
+
+/**
+ * Watches [itemCount] and [loading] for a page requested through [state], then scrolls to the
+ * first new row and focuses it. [firstItemListIndex] is the list index of data row 0, so the
+ * effect can scroll to a row that the lazy list has not composed yet.
+ */
+@Composable
+fun LoadMoreFocus(
+    state: LoadMoreFocusState,
+    listState: LazyListState,
+    itemCount: Int,
+    loading: Boolean,
+    firstItemListIndex: Int
+) {
+    LaunchedEffect(itemCount, loading) { state.onItems(itemCount, loading) }
+    LaunchedEffect(state.targetIndex) {
+        val index = state.targetIndex ?: return@LaunchedEffect
+        listState.scrollToItem(firstItemListIndex + index)
+        // The scroll composes the row; give the frame a chance to attach the requester.
+        repeat(3) {
+            withFrameNanos { }
+            if (runCatching { state.firstNewFocus.requestFocus() }.isSuccess) {
+                state.clearTarget()
+                return@LaunchedEffect
+            }
+        }
+        state.clearTarget()
+    }
+}
+
+/**
  * The one pagination footer every list uses. It only asks for the next batch when the user
  * presses it, so a list never fetches or composes rows the user has not asked to see.
  */
 @Composable
-fun LoadMoreRow(label: String, loading: Boolean, onLoadMore: () -> Unit, modifier: Modifier = Modifier) {
+fun LoadMoreRow(
+    label: String,
+    loading: Boolean,
+    onLoadMore: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusState: LoadMoreFocusState? = null
+) {
+    val rowModifier = if (focusState != null) {
+        modifier.focusRequester(focusState.moreFocus)
+    } else {
+        modifier
+    }
     TerminalRow(
         label,
-        modifier = modifier,
+        modifier = rowModifier,
         secondary = if (loading) "Loading…" else null,
-        onClick = if (loading) null else onLoadMore
+        // Keep the row clickable while the page is in flight. A non-clickable row is not
+        // focusable, so turning it off would drop the keypad and let focus search land up the
+        // list. The view model ignores a second press; the local pages simply load another page.
+        onClick = if (loading) ({}) else onLoadMore
     )
 }
 
