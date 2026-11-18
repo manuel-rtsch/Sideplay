@@ -411,6 +411,7 @@ fun SearchScopesScreen(
                             included -> "On"
                             else -> "Off"
                         },
+                        secondaryToEnd = true,
                         icon = if (included) SidekitIcon.Check else null,
                         toggleable = included,
                         toggleRole = Role.Checkbox,

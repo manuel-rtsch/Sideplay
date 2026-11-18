@@ -778,16 +778,14 @@ class LoadMoreFocusState {
 fun rememberLoadMoreFocus(): LoadMoreFocusState = remember { LoadMoreFocusState() }
 
 /** The modifier for the row at [index] that should take focus after a page loads. */
-fun LoadMoreFocusState.rowModifier(index: Int): Modifier =
-    if (index == targetIndex) Modifier.focusRequester(firstNewFocus) else Modifier
+fun LoadMoreFocusState.rowModifier(index: Int): Modifier = if (index == targetIndex) Modifier.focusRequester(firstNewFocus) else Modifier
 
 /**
  * The requester for the row at [index] that should take focus after a page loads, or null. Row
  * wrappers that hide their focusable element behind another layout pass pass this down instead of
  * putting [rowModifier] on the wrapper, where it would have no focus target to attach to.
  */
-fun LoadMoreFocusState.requesterFor(index: Int): FocusRequester? =
-    if (index == targetIndex) firstNewFocus else null
+fun LoadMoreFocusState.requesterFor(index: Int): FocusRequester? = if (index == targetIndex) firstNewFocus else null
 
 /**
  * Watches [itemCount] and [loading] for a page requested through [state], then scrolls to the
