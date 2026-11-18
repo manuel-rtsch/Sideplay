@@ -176,16 +176,21 @@ data class Station(
     val playlistId: String? = null
 )
 
-/** How many rows a catalog request asks for. Kept small for the Sidephone's weak CPU. */
-const val CATALOG_PAGE_SIZE = 50
-const val SPOTIFY_SEARCH_PAGE_SIZE = 5
+/**
+ * How many rows every catalog request and every on-screen list asks for. One batch size keeps
+ * the list, the network and the local history in step: 20 rows, then a Load more button.
+ */
+const val CATALOG_PAGE_SIZE = 20
 
-/** Rows shown per category on the Library overview before "See more". */
-const val LIBRARY_SECTION_SIZE = 5
+/** Search reuses the shared page size so every scope fills the same visible batch. */
+const val SPOTIFY_SEARCH_PAGE_SIZE = CATALOG_PAGE_SIZE
+
+/** Rows cached per category while the Library preloads, and used for saved-state hints. */
+const val LIBRARY_SECTION_SIZE = CATALOG_PAGE_SIZE
 
 /** Recently played rows on Home before "See more history". */
-const val RECENT_PREVIEW_SIZE = 5
-const val SPOTIFY_ARTIST_PAGE_SIZE = 5
+const val RECENT_PREVIEW_SIZE = CATALOG_PAGE_SIZE
+const val SPOTIFY_ARTIST_PAGE_SIZE = CATALOG_PAGE_SIZE
 
 /** One page of a catalog list. [total] is null when the endpoint doesn't report it. */
 data class Page<T>(
@@ -226,6 +231,16 @@ enum class SearchScope(val label: String) {
     Albums("Albums"),
     Playlists("Playlists"),
     Shows("Shows")
+}
+
+/**
+ * Toggles one category of the search scope, but always keeps at least one. An empty set has no
+ * result list to show, and the native catalog used to read it as "search everything".
+ */
+fun toggledSearchScopes(current: Set<SearchScope>, scope: SearchScope): Set<SearchScope> = when {
+    scope !in current -> current + scope
+    current.size > 1 -> current - scope
+    else -> current
 }
 
 enum class RepeatMode(val label: String) {

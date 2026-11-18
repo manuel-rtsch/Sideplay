@@ -124,6 +124,33 @@ class SpotifyAuthTest {
         assertTrue(!session.signedIn.value)
     }
 
+    @Test fun `an unreadable store yields no access token`() = runTest {
+        val store = object : SpotifyCredentialStore {
+            override fun read(): SpotifyCredentials? = throw javax.crypto.AEADBadTagException("invalidated")
+            override fun save(credentials: SpotifyCredentials) = Unit
+            override fun clear() = Unit
+        }
+        val auth = SpotifyAuth(store, FakeTokens(), nowMs = { now })
+
+        assertNull(auth.accessToken())
+        assertTrue(!auth.hasCredentials())
+    }
+
+    @Test fun `a refresh that cannot be stored still returns the new token`() = runTest {
+        val store = object : SpotifyCredentialStore {
+            var saved: SpotifyCredentials? = credentials(expiresAt = now + 10_000L)
+            override fun read(): SpotifyCredentials? = saved
+            override fun save(credentials: SpotifyCredentials): Unit = throw javax.crypto.AEADBadTagException("invalidated")
+
+            override fun clear() {
+                saved = null
+            }
+        }
+        val tokens = FakeTokens(refreshed = credentials(access = "new-access", expiresAt = now + 3_600_000L))
+
+        assertEquals("new-access", SpotifyAuth(store, tokens, nowMs = { now }).accessToken())
+    }
+
     private fun credentials(
         access: String = "old-access",
         refresh: String? = "refresh",

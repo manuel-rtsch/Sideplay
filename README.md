@@ -1,6 +1,17 @@
-# Sidetrack
+<p align="center">
+  <img src="design/app-icon/sidetrack-icon-512.png" width="128" alt="Sidetrack icon">
+</p>
 
-**Spotify for your Sidephone, built for the keypad.**
+<h1 align="center">Sidetrack</h1>
+
+<p align="center"><strong>Spotify for your Sidephone, built for the keypad.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/manuel-rtsch/Sidetrack/releases/latest"><img src="https://img.shields.io/github/v/release/manuel-rtsch/Sidetrack?label=release&color=1db954" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/manuel-rtsch/Sidetrack?color=1db954" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/platform-Android%2012%2B-3ddc84" alt="Platform: Android 12+">
+  <a href="https://www.sidephone.com/"><img src="https://img.shields.io/badge/made%20for-Sidephone%20SP--01-1db954" alt="Made for Sidephone SP-01"></a>
+</p>
 
 Sidetrack is a Spotify player for [Sidekit](https://github.com/HarlenPostill/Sidekit), the
 keypad-first launcher and app suite for the [Sidephone SP-01](https://www.sidephone.com/). It
@@ -28,17 +39,21 @@ runs standalone on any Android 12+ phone with a touchscreen or a physical keypad
 
 ## Screenshots
 
-| Home | Search | Artist |
-| --- | --- | --- |
-| ![Home](app/screenshots/sidetrack_home.png) | ![Search](app/screenshots/sidetrack_search.png) | ![Artist](app/screenshots/sidetrack_artist.png) |
+| Home | Search | Now Playing | Queue |
+| --- | --- | --- | --- |
+| ![Home](app/screenshots/sidetrack_home.png) | ![Search](app/screenshots/sidetrack_search.png) | ![Now Playing](app/screenshots/sidetrack_now_playing.png) | ![Queue](app/screenshots/sidetrack_queue.png) |
 
-| Album | Now Playing | Queue |
-| --- | --- | --- |
-| ![Album](app/screenshots/sidetrack_album.png) | ![Now Playing](app/screenshots/sidetrack_now_playing.png) | ![Queue](app/screenshots/sidetrack_queue.png) |
+| Album | Artist | Library | Show |
+| --- | --- | --- | --- |
+| ![Album](app/screenshots/sidetrack_album.png) | ![Artist](app/screenshots/sidetrack_artist.png) | ![Library](app/screenshots/sidetrack_library.png) | ![Show](app/screenshots/sidetrack_show.png) |
 
-| Library | Settings | Sign in |
-| --- | --- | --- |
-| ![Library](app/screenshots/sidetrack_library.png) | ![Settings](app/screenshots/sidetrack_settings.png) | ![Sign in](app/screenshots/sidetrack_sign_in.png) |
+| Notes | Episode | Welcome | Keyboard |
+| --- | --- | --- | --- |
+| ![Show notes](app/screenshots/sidetrack_notes.png) | ![Now Playing episode](app/screenshots/sidetrack_now_playing_episode.png) | ![Welcome](app/screenshots/sidetrack_welcome.png) | ![Keyboard](app/screenshots/sidetrack_keyboard.png) |
+
+| History | Sleep timer | Settings | Sign in |
+| --- | --- | --- | --- |
+| ![History](app/screenshots/sidetrack_history.png) | ![Sleep timer](app/screenshots/sidetrack_sleep_timer.png) | ![Settings](app/screenshots/sidetrack_settings.png) | ![Sign in](app/screenshots/sidetrack_sign_in.png) |
 
 ## Getting started
 

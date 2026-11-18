@@ -21,6 +21,7 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -33,13 +34,18 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,18 +85,19 @@ import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.action.withNotice
 import hrln.interactive.sidekit.design.components.ItemColour
-import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitIconItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.SidekitTile
+import hrln.interactive.sidekit.design.components.container
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtworkImage
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 import io.github.manuelrtsch.sidetrack.playback.tileText
+import io.github.manuelrtsch.sidetrack.ui.LinkArrow
 import io.github.manuelrtsch.sidetrack.ui.LocalSwipeActionRevealed
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -596,6 +603,11 @@ fun LoadingScreen(
  * The settled counterpart to [LoadingScreen]: the same record, but still, with an optional
  * retry action. Used for empty and failed library loads so those states look intentional instead
  * of like a blank list.
+ *
+ * The block fills whatever space it is given and centres in it. The record shrinks with the
+ * available height, and disappears when there is no room for it, so the title, hint and retry
+ * action always fit: on a 480 x 640 Sidephone the area under a library filter row is less than
+ * half a page, and a full-size record would push the text off the bottom.
  */
 @Composable
 fun StatusScreen(
@@ -603,40 +615,75 @@ fun StatusScreen(
     modifier: Modifier = Modifier,
     hint: String? = null,
     actionLabel: String? = null,
-    onAction: (() -> Unit)? = null
+    onAction: (() -> Unit)? = null,
+    artwork: Boolean = true
 ) {
     val colors = SidekitTheme.colors
-    Column(
-        modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    BoxWithConstraints(
+        modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        VinylRecord(
-            0f,
-            Modifier
-                .size(132.dp)
-                .semantics { contentDescription = title }
-        )
-        Spacer(Modifier.height(20.dp))
-        SidekitText(
-            title,
-            style = SidekitTheme.typography.bodySmall,
-            color = colors.light,
-            textAlign = TextAlign.Center
-        )
-        if (hint != null) {
-            Spacer(Modifier.height(4.dp))
-            SidekitText(
-                hint,
-                style = SidekitTheme.typography.caption,
-                color = colors.surfaceA6,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
+        val hasAction = actionLabel != null && onAction != null
+        val record = when {
+            !artwork -> null
+
+            // The retry button is an item-height target, so an error needs the space more than
+            // the record does. Below a full page it gives way entirely.
+            hasAction && maxHeight < 360.dp -> null
+
+            maxHeight < 240.dp -> null
+
+            maxHeight < 300.dp -> 64.dp
+
+            maxHeight < 380.dp -> 80.dp
+
+            maxHeight < 460.dp -> 104.dp
+
+            else -> 132.dp
         }
-        if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(20.dp))
-            CenteredLineButton(actionLabel, onAction)
+        // Scroll only when the host gives a bounded height. A list item measures with an
+        // infinite maximum height, and a scrollable column there would crash the list.
+        val scrollState = rememberScrollState()
+        val fit = if (maxHeight == Dp.Infinity) {
+            Modifier
+        } else {
+            Modifier.verticalScroll(scrollState)
+        }
+        Column(
+            Modifier.fillMaxWidth().then(fit),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (record != null) {
+                VinylRecord(
+                    0f,
+                    Modifier
+                        .size(record)
+                        .semantics { contentDescription = title }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+            SidekitText(
+                title,
+                style = SidekitTheme.typography.bodySmall,
+                color = colors.light,
+                textAlign = TextAlign.Center,
+                maxLines = 3
+            )
+            if (hint != null) {
+                Spacer(Modifier.height(4.dp))
+                SidekitText(
+                    hint,
+                    style = SidekitTheme.typography.caption,
+                    color = colors.surfaceA6,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3
+                )
+            }
+            if (actionLabel != null && onAction != null) {
+                Spacer(Modifier.height(16.dp))
+                CenteredLineButton(actionLabel, onAction)
+            }
         }
     }
 }
@@ -649,7 +696,9 @@ fun StatusScreen(
 @Composable
 private fun CenteredLineButton(label: String, onClick: () -> Unit) {
     SidekitTile(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(SidekitTheme.spacing.compactRowHeight),
         color = SidekitTheme.colors.surfaceA3,
         onClick = onClick,
         contentAlignment = Alignment.Center
@@ -666,37 +715,172 @@ private fun CenteredLineButton(label: String, onClick: () -> Unit) {
 }
 
 /**
- * A compact navigation row for list-level actions such as "See more" and "Search in".
- * The SDK renders the short row, the success fill and the type scale.
+ * A compact navigation row for list-level actions such as "See more", "Search in" and the
+ * pagination footer. It mirrors Sidekit's compact item on the same primitives, because the SDK
+ * draws its link arrow at `spacing.iconSize` and Sidetrack rows share a narrower one.
+ *
+ * [linkArrow] defaults to showing the arrow only when the row has no [secondary] value beside it:
+ * a row that already shows something on the right ("Search in" with its scope) reads as a value,
+ * not as a link. A footer that reports a status in [secondary] passes `true` to keep its arrow.
+ * A row that cannot be pressed never shows one.
  */
 @Composable
 fun TerminalRow(
     label: String,
     modifier: Modifier = Modifier,
     secondary: String? = null,
+    linkArrow: Boolean = secondary == null,
     onClick: (() -> Unit)? = null
 ) {
-    SidekitCompactItem(
-        title = label,
-        modifier = modifier,
-        secondary = secondary,
-        colour = ItemColour.Success,
-        showLinkArrow = secondary == null && onClick != null,
-        onClick = onClick
-    )
+    SidekitTile(
+        modifier.fillMaxWidth().height(SidekitTheme.spacing.compactRowHeight),
+        color = ItemColour.Success.container(),
+        onClick = onClick,
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            Modifier.padding(horizontal = SidekitTheme.spacing.itemPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SidekitTheme.spacing.itemContentGap)
+        ) {
+            SidekitText(
+                label,
+                style = SidekitTheme.typography.bodySmall,
+                maxLines = 1
+            )
+            if (secondary != null) {
+                SidekitText(
+                    secondary,
+                    Modifier.weight(1f),
+                    style = SidekitTheme.typography.small,
+                    color = SidekitTheme.colors.surfaceA6,
+                    maxLines = 1,
+                    textAlign = TextAlign.End
+                )
+            }
+            if (linkArrow && onClick != null) {
+                // Without a value beside it the arrow takes the slack and sits at the end; with one
+                // it keeps its own width so the value is not squeezed into half the row.
+                Box(
+                    if (secondary == null) Modifier.weight(1f) else Modifier,
+                    contentAlignment = Alignment.CenterEnd
+                ) { LinkArrow() }
+            }
+        }
+    }
 }
 
 /**
- * Loads the next page when the footer enters composition. Lazy lists only compose visible rows
- * (plus a small prefetch window), so this keeps both network and rendering work proportional to
- * what the user is actually looking at.
+ * Keeps the keypad on the Load more row while the next page is in flight, then hands focus to the
+ * first row the page added. A Load more row that turns non-clickable while loading is no longer
+ * focusable, so Compose drops focus and the next focus search lands somewhere up the list.
+ */
+@Stable
+class LoadMoreFocusState {
+    private var pendingFrom: Int? = null
+
+    /** The data index of the first row the last page added, while it still needs focus. */
+    var targetIndex: Int? by mutableStateOf(null)
+        private set
+
+    val moreFocus = FocusRequester()
+    val firstNewFocus = FocusRequester()
+
+    /** Call before requesting the next page, with the number of rows currently shown. */
+    fun onLoadMore(itemCount: Int) {
+        pendingFrom = itemCount
+    }
+
+    /** Call whenever the row count or the loading flag changes. */
+    fun onItems(itemCount: Int, loading: Boolean) {
+        val from = pendingFrom ?: return
+        if (loading) return
+        pendingFrom = null
+        if (itemCount > from) targetIndex = from
+    }
+
+    fun clearTarget() {
+        targetIndex = null
+    }
+
+    /** Forget a page that was requested for a list that is no longer on screen. */
+    fun reset() {
+        pendingFrom = null
+        targetIndex = null
+    }
+}
+
+@Composable
+fun rememberLoadMoreFocus(): LoadMoreFocusState = remember { LoadMoreFocusState() }
+
+/** The modifier for the row at [index] that should take focus after a page loads. */
+fun LoadMoreFocusState.rowModifier(index: Int): Modifier = if (index == targetIndex) Modifier.focusRequester(firstNewFocus) else Modifier
+
+/**
+ * The requester for the row at [index] that should take focus after a page loads, or null. Row
+ * wrappers that hide their focusable element behind another layout pass pass this down instead of
+ * putting [rowModifier] on the wrapper, where it would have no focus target to attach to.
+ */
+fun LoadMoreFocusState.requesterFor(index: Int): FocusRequester? = if (index == targetIndex) firstNewFocus else null
+
+/**
+ * Watches [itemCount] and [loading] for a page requested through [state], then scrolls to the
+ * first new row and focuses it. [firstItemListIndex] is the list index of data row 0, so the
+ * effect can scroll to a row that the lazy list has not composed yet.
  */
 @Composable
-fun PagingFooter(loading: Boolean, onLoadMore: () -> Unit, modifier: Modifier = Modifier) {
-    LaunchedEffect(loading) {
-        if (!loading) onLoadMore()
+fun LoadMoreFocus(
+    state: LoadMoreFocusState,
+    listState: LazyListState,
+    itemCount: Int,
+    loading: Boolean,
+    firstItemListIndex: Int
+) {
+    LaunchedEffect(itemCount, loading) { state.onItems(itemCount, loading) }
+    LaunchedEffect(state.targetIndex) {
+        val index = state.targetIndex ?: return@LaunchedEffect
+        listState.scrollToItem(firstItemListIndex + index)
+        // The scroll composes the row; give the frame a chance to attach the requester.
+        repeat(3) {
+            withFrameNanos { }
+            if (runCatching { state.firstNewFocus.requestFocus() }.isSuccess) {
+                state.clearTarget()
+                return@LaunchedEffect
+            }
+        }
+        state.clearTarget()
     }
-    EmptyMessage(if (loading) "Loading more…" else "More", modifier, hint = null)
+}
+
+/**
+ * The one pagination footer every list uses. It only asks for the next batch when the user
+ * presses it, so a list never fetches or composes rows the user has not asked to see.
+ */
+@Composable
+fun LoadMoreRow(
+    label: String,
+    loading: Boolean,
+    onLoadMore: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusState: LoadMoreFocusState? = null
+) {
+    val rowModifier = if (focusState != null) {
+        modifier.focusRequester(focusState.moreFocus)
+    } else {
+        modifier
+    }
+    TerminalRow(
+        label,
+        modifier = rowModifier,
+        secondary = if (loading) "Loading…" else null,
+        // The arrow stays while the page is in flight: the row is still the thing the user pressed,
+        // and the status sits beside it rather than in place of it.
+        linkArrow = true,
+        // Keep the row clickable while the page is in flight. A non-clickable row is not
+        // focusable, so turning it off would drop the keypad and let focus search land up the
+        // list. The view model ignores a second press; the local pages simply load another page.
+        onClick = if (loading) ({}) else onLoadMore
+    )
 }
 
 /** A shallow terminal row that loads the next page only when the user presses it. */
@@ -706,7 +890,10 @@ fun SeeMoreRow(label: String, loading: Boolean, onClick: () -> Unit, modifier: M
         label,
         modifier = modifier,
         secondary = if (loading) "Loading…" else null,
-        onClick = if (loading) null else onClick
+        linkArrow = true,
+        // Same rule as the Load more row: a row that turns non-clickable while loading also stops
+        // being focusable, which drops the keypad off the footer.
+        onClick = if (loading) ({}) else onClick
     )
 }
 
@@ -1053,7 +1240,7 @@ fun LibraryRow(
                 SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
                 SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)
             }
-            SidekitIconImage(SidekitIcon.ArrowRightAlt, size = 30.dp, contentDescription = null)
+            LinkArrow()
         }
     }
 }

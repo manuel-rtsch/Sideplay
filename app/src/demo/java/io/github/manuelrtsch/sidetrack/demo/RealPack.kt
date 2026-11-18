@@ -6,6 +6,7 @@ import io.github.manuelrtsch.sidetrack.Collection
 import io.github.manuelrtsch.sidetrack.CollectionType
 import io.github.manuelrtsch.sidetrack.DemoContent
 import io.github.manuelrtsch.sidetrack.Episode
+import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.Page
@@ -388,8 +389,8 @@ object RealPack : DemoContent, SpotifyCatalog, SpotifyLibraryWriter {
         return (own + rest).distinctBy { it.id }.take(limit)
     }
 
-    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): Page<Any> {
-        val all: List<Any> = when (filter) {
+    override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): Page<LibraryEntry> {
+        val all: List<LibraryEntry> = when (filter) {
             LibraryFilter.LikedSongs -> likedTracks
             LibraryFilter.Playlists -> playlistList
             LibraryFilter.Albums -> albumList

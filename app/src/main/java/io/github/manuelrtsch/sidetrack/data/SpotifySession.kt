@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack.data
 
 import android.content.Context
 import android.os.SystemClock
+import android.util.Log
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.DemoContentSource
@@ -44,7 +45,9 @@ class SpotifySession(
     override val service: ServiceId = ServiceId.Spotify
     override val capabilities: ServiceCapabilities = ServiceCapabilities.All
 
-    private val _signedIn = MutableStateFlow(auth.hasCredentials())
+    // The credential store is read while the UI composes. Anything it cannot answer counts as
+    // signed out, so a device that lost its keystore key still opens and offers sign-in.
+    private val _signedIn = MutableStateFlow(runCatching { auth.hasCredentials() }.getOrDefault(false))
     override val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
 
     private val appContext = context?.applicationContext
@@ -70,7 +73,7 @@ class SpotifySession(
     private val storageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Where the last session stopped: the item and the offset, so reopening resumes it. */
-    @Volatile override var resumePoint: ResumePoint? = positionStore?.read()
+    @Volatile override var resumePoint: ResumePoint? = runCatching { positionStore?.read() }.getOrNull()
         private set
 
     /** Per-episode podcast offsets, independent of the single-session resume point. */
@@ -86,7 +89,9 @@ class SpotifySession(
         save = { episodeMetaStore?.write(it) },
         saveScope = storageScope
     )
-    private val _settings = MutableStateFlow(settingsStore?.read() ?: PlaybackSettings())
+    private val _settings = MutableStateFlow(
+        runCatching { settingsStore?.read() }.getOrNull() ?: PlaybackSettings()
+    )
     override val settings: StateFlow<PlaybackSettings> = _settings.asStateFlow()
 
     override val nativeAvailable: Boolean get() = NativeBridge.isAvailable

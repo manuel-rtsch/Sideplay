@@ -38,6 +38,13 @@ class LibrespotPlaybackEngine(
     /** Serializes player rebuilds so two settings toggles cannot install an old config last. */
     private val reconfigureLock = Mutex()
 
+    /**
+     * A setting changed that needs a new native player while something was playing. A rebuild
+     * stops the sink and fetches the item again, which is audible, so the change waits for a
+     * moment that is already silent: the next start that resets the sink, or the next pause.
+     */
+    private var reconfigurePending = false
+
     init {
         audio?.onBuffering = { buffering ->
             _state.update { it.copy(isBuffering = buffering) }
@@ -56,7 +63,12 @@ class LibrespotPlaybackEngine(
         // processed. The AudioTrack itself is kept for the next item: recreating it re-configures
         // the output route, which is audible as a gap on Bluetooth.
         val sinkKept = keepAudioSink && audio?.isRunning == true
-        if (!sinkKept) audio?.reset()
+        if (!sinkKept) {
+            // A setting changed while the previous item was playing. This start resets the sink
+            // anyway, so the new player costs no extra silence; the load below gives it a source.
+            recreatePlayerIfPending()
+            audio?.reset()
+        }
         if (generation != commandGeneration) return
         try {
             SidetrackDebug.log("engine.start calling gateway.load")
@@ -75,12 +87,12 @@ class LibrespotPlaybackEngine(
         }
     }
 
-    override suspend fun resume(positionMs: Long): Boolean {
+    override suspend fun resume(positionMs: Long): Boolean = reconfigureLock.withLock {
         SidetrackDebug.log("engine.resume positionMs=$positionMs audio=${audio != null}")
         val generation = ++commandGeneration
         _state.update { it.copy(isPlaying = true, positionMs = positionMs) }
         val reused = audio?.resume(positionMs) ?: false
-        if (generation != commandGeneration) return false
+        if (generation != commandGeneration) return@withLock false
         if (!reused) {
             // The AudioTrack buffer was lost (for example after a long pause). Realign the
             // player with the UI position before playing, otherwise it resumes from its decoder
@@ -88,11 +100,11 @@ class LibrespotPlaybackEngine(
             SidetrackDebug.log("engine.resume audio buffer lost; seeking to $positionMs")
             runCatching { gateway.seek(positionMs) }
         }
-        if (generation != commandGeneration) return false
+        if (generation != commandGeneration) return@withLock false
         SidetrackDebug.log("engine.resume calling gateway.play")
         gateway.play()
         SidetrackDebug.log("engine.resume gateway.play returned")
-        return true
+        true
     }
 
     override suspend fun pause() {
@@ -106,7 +118,12 @@ class LibrespotPlaybackEngine(
         if (generation != commandGeneration) return
         runCatching { gateway.pause() }
         delay(PAUSE_DRAIN_GRACE_MS)
-        if (generation == commandGeneration && _state.value.isPlaying.not()) audio?.pause()
+        if (generation == commandGeneration && _state.value.isPlaying.not()) {
+            audio?.pause()
+            // The player is silent now, so a deferred setting change can rebuild it here
+            // instead of cutting into the next track.
+            applyPendingReconfigure()
+        }
     }
 
     override suspend fun stop() {
@@ -137,6 +154,24 @@ class LibrespotPlaybackEngine(
         positionMs: Long,
         wasPlaying: Boolean
     ): Boolean = reconfigureLock.withLock {
+        if (_state.value.isPlaying && source != null) {
+            reconfigurePending = true
+            SidetrackDebug.log("engine.reconfigure deferred until playback is silent")
+            return@withLock false
+        }
+        rebuildWhileSilent(source, positionMs, wasPlaying)
+    }
+
+    /**
+     * Rebuilds the player and reloads the item at [positionMs]. Only called while the sink is
+     * silent: the rebuild releases the AudioTrack and fetches the item again, so it must never
+     * run under a playing track.
+     */
+    private suspend fun rebuildWhileSilent(
+        source: PlaybackSource?,
+        positionMs: Long,
+        wasPlaying: Boolean
+    ): Boolean {
         val generation = ++commandGeneration
         SidetrackDebug.log(
             "engine.reconfigure uri=${source?.uri} positionMs=$positionMs wasPlaying=$wasPlaying"
@@ -144,19 +179,43 @@ class LibrespotPlaybackEngine(
         audio?.stop()
         try {
             // No native player yet: the next connect picks the new settings up.
-            if (!gateway.recreatePlayer()) return@withLock false
+            if (!gateway.recreatePlayer()) return false
             if (source != null) gateway.load(source.uri, positionMs, autoplay = wasPlaying)
         } catch (t: Throwable) {
             SidetrackDebug.log("engine.reconfigure failed", t)
             _state.update { it.copy(isPlaying = false) }
             throw t
         }
-        if (generation != commandGeneration) return@withLock false
+        if (generation != commandGeneration) return false
         _state.update {
             it.copy(source = source, isPlaying = wasPlaying, positionMs = positionMs)
         }
         if (wasPlaying && source != null) audio?.start(positionMs)
-        true
+        return true
+    }
+
+    /** Applies a deferred rebuild at a moment that is already silent. */
+    private suspend fun applyPendingReconfigure() {
+        reconfigureLock.withLock {
+            if (!reconfigurePending) return@withLock
+            reconfigurePending = false
+            val state = _state.value
+            runCatching { rebuildWhileSilent(state.source, state.positionMs, wasPlaying = false) }
+                .onFailure { SidetrackDebug.log("deferred reconfigure failed", it) }
+        }
+    }
+
+    /**
+     * Rebuilds the player for a deferred setting change without reloading anything: the caller
+     * loads the next item itself, so the new player gets its source from that load.
+     */
+    private suspend fun recreatePlayerIfPending() {
+        reconfigureLock.withLock {
+            if (!reconfigurePending) return@withLock
+            reconfigurePending = false
+            runCatching { gateway.recreatePlayer() }
+                .onFailure { SidetrackDebug.log("deferred player rebuild failed", it) }
+        }
     }
 
     override suspend fun disconnect() {

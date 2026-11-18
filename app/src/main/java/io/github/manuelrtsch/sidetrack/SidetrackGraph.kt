@@ -1,7 +1,9 @@
 package io.github.manuelrtsch.sidetrack
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -26,6 +28,7 @@ import androidx.navigation.navArgument
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.data.AppSessions
+import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 
 const val SIDE_PLAY_ROOT = "sidetrack"
@@ -38,7 +41,6 @@ private const val HOME = SIDE_PLAY_START
 private const val ONBOARDING = SIDE_PLAY_ONBOARDING
 private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
-private val LIBRARY_FILTER = "$ROOT/library/{filter}"
 private val COLLECTION = "$ROOT/collection/{key}"
 private val ARTIST = "$ROOT/artist/{key}"
 private val SEARCH = SIDE_PLAY_SEARCH
@@ -58,7 +60,6 @@ private val ABOUT = "$ROOT/about"
 private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={ratio}"
 private val NOTES = "$ROOT/notes/{key}"
 
-private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
 private fun collectionRoute(key: MediaKey) = "$ROOT/collection/${Uri.encode(key.encode())}"
 private fun artistRoute(key: MediaKey) = "$ROOT/artist/${Uri.encode(key.encode())}"
 private fun artistRadioRoute(key: MediaKey) = "$ROOT/artist-radio/${Uri.encode(key.encode())}"
@@ -74,7 +75,6 @@ private fun notesRoute(key: String) = "$ROOT/notes/${Uri.encode(key)}"
 private val KEYPAD_BACK_ROUTES = setOf(
     HISTORY,
     LIBRARY,
-    LIBRARY_FILTER,
     COLLECTION,
     ARTIST,
     SEARCH,
@@ -240,8 +240,8 @@ fun NavGraphBuilder.sidetrackGraph(
             val library by vm.libraryState.collectAsStateWithLifecycle()
             val saved by vm.savedState.collectAsStateWithLifecycle()
             val chrome by vm.chromeState.collectAsStateWithLifecycle()
-            // The startup pre-cache may have run offline. Opening the Library is the natural
-            // moment to refresh it, and it also recovers from a failed first load.
+            // The startup pre-cache may have run offline. Opening the Library refreshes the
+            // selected category, and also recovers from a failed first load.
             LaunchedEffect(Unit) { vm.refreshLibrary() }
             LibraryScreen(
                 library,
@@ -249,38 +249,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 chrome,
                 onBack = { nav.popBackStack() },
                 onSearch = { nav.navigate(SEARCH) },
-                onSeeMore = { nav.navigate(libraryFilterRoute(it)) },
-                onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
-                onAddToQueue = vm::addToQueue,
-                onPlaylist = { nav.navigate(collectionRoute(it.key)) },
-                onAlbum = { nav.navigate(collectionRoute(it.key)) },
-                onArtist = { nav.navigate(artistRoute(it.key)) },
-                onShow = { nav.navigate(collectionRoute(it.key)) },
-                onSaveTrack = { vm.toggleSaved(it) },
-                onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
-                onNowPlaying = { nav.openNowPlaying(vm) },
-                onRetry = vm::refreshLibrary,
-                onDismissNotice = vm::dismissNotice,
-                onDismissNowPlaying = vm::dismissNowPlayingNotice
-            )
-        }
-        composable(
-            LIBRARY_FILTER,
-            arguments = listOf(navArgument("filter") { type = NavType.StringType })
-        ) { entry ->
-            val vm = entry.sidetrackViewModel(nav)
-            val library by vm.libraryState.collectAsStateWithLifecycle()
-            val saved by vm.savedState.collectAsStateWithLifecycle()
-            val chrome by vm.chromeState.collectAsStateWithLifecycle()
-            val filter = LibraryFilter.entries.firstOrNull { it.name == entry.arguments?.getString("filter") }
-                ?: LibraryFilter.LikedSongs
-            LaunchedEffect(filter) { vm.setFilter(filter) }
-            LibraryCategoryScreen(
-                filter,
-                library,
-                saved,
-                chrome,
-                onBack = { nav.popBackStack() },
+                onFilter = vm::setFilter,
                 onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onAddToQueue = vm::addToQueue,
                 onPlaylist = { nav.navigate(collectionRoute(it.key)) },
@@ -884,7 +853,8 @@ private fun MissingCollectionScreen(
 ) {
     SidekitScaffold(title = title, actions = spotifyBack("Back", onBack)) { padding ->
         androidx.compose.foundation.layout.Box(
-            androidx.compose.ui.Modifier.padding(padding)
+            androidx.compose.ui.Modifier.fillMaxSize().padding(padding),
+            contentAlignment = androidx.compose.ui.Alignment.Center
         ) {
             when {
                 loading -> LoadingScreen(title = loadingTitle)
@@ -915,9 +885,15 @@ private fun NavBackStackEntry.sidetrackViewModel(nav: NavHostController): Sidetr
     val runtime = appSession.runtime
     val openBrowser: suspend (String) -> Unit = remember(context) {
         { url ->
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
+            // A ROM without a browser (a bare GSI, a stripped keypad build) has nothing to hand
+            // the sign-in page to. Say so instead of surfacing ActivityNotFoundException.
+            try {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (e: ActivityNotFoundException) {
+                throw IOException("No browser is installed to finish sign-in", e)
+            }
         }
     }
     val vm = viewModel<SidetrackViewModel>(

@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +28,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -187,22 +188,32 @@ fun NowPlayingScreen(
             // The artwork is the screen: behind the scaffold, so it can run under the chrome,
             // which the canvas paints after the screens. The body has no cover tile of its own.
             ArtworkBackdrop(current, onOpenAlbum = onAlbum, modifier = Modifier.matchParentSize())
-            // Full-bleed transport scrim. It lives outside the scaffold's content padding so it
-            // reaches both screen edges; the action bar and the body draw on top of it.
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.42f)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.45f to Color.Black.copy(alpha = 0.55f),
-                            0.8f to Color.Black,
-                            1f to Color.Black
+            // Full-bleed transport scrim, anchored to the real chrome rather than a fraction of
+            // the screen: solid black from the bottom edge to the action bar's top, then a fade
+            // from black there to transparent at the top of the five-tile transport row, where
+            // the backdrop starts. The body's transport row is the last thing in the content, so
+            // its top is the content bottom less one item height. Measuring here instead of on the
+            // whole screen keeps the scaffold out of this subcomposition.
+            BoxWithConstraints(Modifier.matchParentSize()) {
+                val spacing = SidekitTheme.spacing
+                val actionBarTop = maxHeight - spacing.pagePadding - spacing.actionBarHeight
+                val transportTop = actionBarTop - spacing.pageGap - spacing.itemHeight
+                val scrimHeight = maxHeight - transportTop
+                val blackAt = ((actionBarTop - transportTop) / scrimHeight).coerceIn(0f, 1f)
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(scrimHeight)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                blackAt to Color.Black,
+                                1f to Color.Black
+                            )
                         )
-                    )
-            )
+                )
+            }
         }
         SidekitScaffold(title = null, actions = actions, options = options) { padding ->
             if (current == null) {
@@ -427,7 +438,11 @@ fun QueueScreen(
     val swipes = rememberSwipeRevealGroup()
     val hasUpcoming = playback.upcoming.isNotEmpty()
     val hasCurrent = playback.current != null
-    val canReorder = playback.upcoming.size > 1
+    val shownUpcoming = remember { mutableIntStateOf(CATALOG_PAGE_SIZE) }
+    val visibleUpcoming = remember(playback.upcoming, shownUpcoming.intValue) {
+        playback.upcoming.take(shownUpcoming.intValue)
+    }
+    val canReorder = visibleUpcoming.size > 1
     // Current row, then the "Up next" header when there is a tail. The header is the visible home
     // of shuffle state, so the mode no longer exists only in an icon's content description. Its own
     // top padding is the separation from the now-playing row: no extra spacer is needed.
@@ -437,7 +452,7 @@ fun QueueScreen(
     // Keys are the track's identity, not its position: a row that moves keeps its node, so it
     // keeps focus and never blinks out and back in. Duplicates get an occurrence suffix because
     // the queue may legitimately hold the same track twice.
-    val upcomingKeys = remember(playback.upcoming) { entryKeys(playback.upcoming) }
+    val upcomingKeys = remember(visibleUpcoming) { entryKeys(visibleUpcoming) }
     // Focus state is keyed, not indexed: a shuffle or a move can change every index while the
     // row under the focus ring stays the same. This is what used to let a gutter land on the
     // wrong track after shuffle.
@@ -450,6 +465,7 @@ fun QueueScreen(
     val rowFocus = remember { FocusRequester() }
     val currentFocus = remember { FocusRequester() }
     val firstUpcomingFocus = remember { FocusRequester() }
+    val moreFocus = rememberLoadMoreFocus()
     val focusManager = LocalFocusManager.current
     // The focused row owns the gutter, but only once focus has settled: holding Up/Down through
     // the queue must not flash a button on every row it passes.
@@ -498,9 +514,9 @@ fun QueueScreen(
     }
     // A reorder must not survive the queue changing underneath it. Commit what was already picked
     // (if anything) and leave the mode; moving back to a stale index could target another track.
-    LaunchedEffect(playback.current?.id, playback.upcoming.size) {
+    LaunchedEffect(playback.current?.id, visibleUpcoming.size) {
         if (!reorderMode) return@LaunchedEffect
-        if (playback.current?.id == reorderCurrentId && playback.upcoming.size == reorderSize) return@LaunchedEffect
+        if (playback.current?.id == reorderCurrentId && visibleUpcoming.size == reorderSize) return@LaunchedEffect
         val moved = reorder.hasMoved
         reorder.end()
         reorderMode = false
@@ -544,7 +560,7 @@ fun QueueScreen(
             val moved = reorder.hasMoved
             val origin = reorder.origin
             val current = reorder.from
-            val sameQueue = playback.current?.id == reorderCurrentId && playback.upcoming.size == reorderSize
+            val sameQueue = playback.current?.id == reorderCurrentId && visibleUpcoming.size == reorderSize
             reorder.cancel()
             if (moved) {
                 if (sameQueue && current != null && origin >= 0 && current != origin) {
@@ -563,15 +579,15 @@ fun QueueScreen(
         if (canReorder && !reorderMode) {
             swipes.closeAll()
             rowActions.close()
-            val target = requested.coerceIn(0, playback.upcoming.lastIndex)
+            val target = requested.coerceIn(0, visibleUpcoming.lastIndex)
             val targetKey = upcomingKeys[target]
             focusedKey = targetKey
             val offset = listState.layoutInfo.visibleItemsInfo
                 .firstOrNull { it.key == targetKey }
                 ?.offset ?: 0
             reorderCurrentId = playback.current?.id
-            reorderSize = playback.upcoming.size
-            reorder.begin(target, playback.upcoming.size, offset.toFloat(), keypad = true)
+            reorderSize = visibleUpcoming.size
+            reorder.begin(target, visibleUpcoming.size, offset.toFloat(), keypad = true)
             reorderMode = true
             focusPending = true
         }
@@ -783,200 +799,221 @@ fun QueueScreen(
         // The keypad lift commits as it steps, so cancelling is a move back to where it started.
         BackHandler(enabled = reorderMode) { cancelReorder() }
         BackHandler(enabled = rowActions.selection != null) { rowActions.close() }
+        if (!hasCurrent && !hasUpcoming) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                StatusScreen(
+                    "Nothing queued",
+                    hint = "Search to find something to play"
+                )
+            }
+            return@SidekitScaffold
+        }
+        LoadMoreFocus(
+            moreFocus,
+            listState,
+            visibleUpcoming.size,
+            loading = false,
+            firstItemListIndex = firstQueueItem
+        )
         SidekitList(padding, state = listState) {
             val current = playback.current
-            if (current == null && !hasUpcoming) {
-                item(key = "empty") {
-                    StatusScreen(
-                        "Nothing queued",
-                        Modifier.listFade(listState, 0),
-                        hint = "Search to find something to play"
+            if (current != null) {
+                item(key = "current") {
+                    MediaRow(
+                        current,
+                        Modifier
+                            .listFade(listState, 0)
+                            .focusRequester(currentFocus)
+                            .onFocusChanged { if (it.isFocused) focusedKey = null },
+                        secondary = "Now playing",
+                        onClick = onNowPlaying
                     )
                 }
-            } else {
-                if (current != null) {
-                    item(key = "current") {
-                        MediaRow(
-                            current,
-                            Modifier
-                                .listFade(listState, 0)
-                                .focusRequester(currentFocus)
-                                .onFocusChanged { if (it.isFocused) focusedKey = null },
-                            secondary = "Now playing",
-                            onClick = onNowPlaying
-                        )
-                    }
+            }
+            if (hasUpcoming) {
+                item(key = "queueHeader") {
+                    QueueSectionHeader(
+                        count = playback.upcoming.size,
+                        shuffled = playback.shuffle
+                    )
                 }
-                if (hasUpcoming) {
-                    item(key = "queueHeader") {
-                        QueueSectionHeader(
-                            count = playback.upcoming.size,
-                            shuffled = playback.shuffle
-                        )
+                itemsIndexed(
+                    visibleUpcoming,
+                    key = { index, _ -> upcomingKeys[index] },
+                    contentType = { _, item -> if (item is Track) "track" else "episode" }
+                ) { index, item ->
+                    val key = upcomingKeys[index]
+                    val selected = rowActions.selection?.key == key
+                    CloseRowActionsWhenDisposed(selected, rowActions)
+                    val pickedUp = reorder.from == index
+                    // A swiped-open row already shows its Remove button; the gutter would be
+                    // a second copy of the same action.
+                    val focused = gutterKey == key && !pickedUp && !reorderMode && swipes.openKey == null
+                    val square = SidekitTheme.spacing.itemHeight
+                    val targetGutter = when {
+                        pickedUp -> LiftedGutter
+                        focused -> square
+                        else -> 0.dp
                     }
-                    itemsIndexed(
-                        playback.upcoming,
-                        key = { index, _ -> upcomingKeys[index] },
-                        contentType = { _, item -> if (item is Track) "track" else "episode" }
-                    ) { index, item ->
-                        val key = upcomingKeys[index]
-                        val selected = rowActions.selection?.key == key
-                        CloseRowActionsWhenDisposed(selected, rowActions)
-                        val pickedUp = reorder.from == index
-                        // A swiped-open row already shows its Remove button; the gutter would be
-                        // a second copy of the same action.
-                        val focused = gutterKey == key && !pickedUp && !reorderMode && swipes.openKey == null
-                        val square = SidekitTheme.spacing.itemHeight
-                        val targetGutter = when {
-                            pickedUp -> LiftedGutter
-                            focused -> square
-                            else -> 0.dp
-                        }
-                        // The gutter opens and closes rather than snapping: the row narrows as the
-                        // control slides in, and widens again as it leaves.
-                        val gutter by animateDpAsState(targetGutter, tween(GUTTER_ANIM_MS), label = "gutter")
-                        val gutterAlpha by animateFloatAsState(
-                            if (targetGutter > 0.dp) 1f else 0f,
-                            tween(GUTTER_ANIM_MS),
-                            label = "gutterAlpha"
-                        )
-                        // The control stays composed while it fades out, so it has something to animate.
-                        val gutterMode = when {
-                            pickedUp -> GutterMode.Lifted
-                            focused -> GutterMode.Actions
-                            else -> null
-                        }
-                        var lastGutterMode by remember { mutableStateOf<GutterMode?>(null) }
-                        if (gutterMode != null) lastGutterMode = gutterMode
-                        val shownGutter = gutterMode ?: lastGutterMode
-                        val gutterPx = with(density) { gutter.toPx() }
-                        CompositionLocalProvider(LocalIndication provides QueueIndication) {
-                            Box(
-                                Modifier
-                                    // The picked-up row is the thing being looked at: never fade it.
-                                    .then(
-                                        if (pickedUp) {
-                                            Modifier
-                                        } else {
-                                            Modifier.listFade(listState, firstQueueItem + index)
-                                        }
-                                    )
-                                    .zIndex(if (pickedUp) 1f else 0f)
-                                    .graphicsLayer {
-                                        // The queue reorders as the finger crosses each row, so only
-                                        // the picked-up row is offset: it is the one under the finger.
-                                        translationY = if (pickedUp) reorder.translation else 0f
-                                        if (pickedUp) {
-                                            scaleX = 1.02f
-                                            scaleY = 1.02f
-                                        }
+                    // The gutter opens and closes rather than snapping: the row narrows as the
+                    // control slides in, and widens again as it leaves.
+                    val gutter by animateDpAsState(targetGutter, tween(GUTTER_ANIM_MS), label = "gutter")
+                    val gutterAlpha by animateFloatAsState(
+                        if (targetGutter > 0.dp) 1f else 0f,
+                        tween(GUTTER_ANIM_MS),
+                        label = "gutterAlpha"
+                    )
+                    // The control stays composed while it fades out, so it has something to animate.
+                    val gutterMode = when {
+                        pickedUp -> GutterMode.Lifted
+                        focused -> GutterMode.Actions
+                        else -> null
+                    }
+                    var lastGutterMode by remember { mutableStateOf<GutterMode?>(null) }
+                    if (gutterMode != null) lastGutterMode = gutterMode
+                    val shownGutter = gutterMode ?: lastGutterMode
+                    val gutterPx = with(density) { gutter.toPx() }
+                    CompositionLocalProvider(LocalIndication provides QueueIndication) {
+                        Box(
+                            Modifier
+                                // The picked-up row is the thing being looked at: never fade it.
+                                .then(
+                                    if (pickedUp) {
+                                        Modifier
+                                    } else {
+                                        Modifier.listFade(listState, firstQueueItem + index)
                                     }
-                                    .queueReorder(
-                                        state = reorder,
-                                        index = index,
-                                        count = playback.upcoming.size,
-                                        key = key,
-                                        onPickUp = {
-                                            swipes.closeAll()
-                                            view.longPressHaptic()
-                                        },
-                                        onDrop = onMoveUpcoming,
-                                        onDropEnd = { if (!reorderMode) onCommitReorder() }
-                                    )
-                            ) {
-                                SidekitSwipeRow(
-                                    key = key,
-                                    group = swipes,
-                                    // A focused or picked-up row slides left to leave the gutter free
-                                    // on its right; its width stays the same, as with a touch swipe.
-                                    modifier = Modifier.graphicsLayer { translationX = -gutterPx },
-                                    action = SwipeAction(
-                                        label = "Actions for ${item.title}",
-                                        icon = SidekitIcon.Apps,
-                                        iconRes = R.drawable.ic_more_horiz,
-                                        color = SidekitTheme.colors.surfaceA4,
-                                        onClick = { openRowActions(index, item) }
-                                    ),
-                                    // The gutter is the keypad's Remove; a second focus-revealed
-                                    // delete square would crowd the same edge.
-                                    revealOnFocus = false
-                                ) {
-                                    MediaRow(
-                                        item,
-                                        Modifier
-                                            .onFocusChanged {
-                                                if (it.isFocused) {
-                                                    focusedKey = key
-                                                    // Never fight a lift: the drag and the keypad both
-                                                    // scroll the row themselves.
-                                                    if (reorder.from == null) keepRowInBand(index, key)
-                                                }
-                                            }
-                                            .then(
-                                                if (selected) {
-                                                    Modifier.border(2.dp, SidekitTheme.colors.light, SidekitTheme.shapes.item)
-                                                } else {
-                                                    Modifier
-                                                }
-                                            )
-                                            .then(
-                                                if (focusedKey == key) {
-                                                    Modifier.focusRequester(rowFocus)
-                                                } else {
-                                                    Modifier
-                                                }
-                                            )
-                                            .then(
-                                                if (current == null && index == 0) {
-                                                    Modifier.focusRequester(firstUpcomingFocus)
-                                                } else {
-                                                    Modifier
-                                                }
-                                            ),
-                                        secondary = item.creator,
-                                        // The side control gets the right edge while it is visible.
-                                        trailing = if (gutter > 0.dp) null else formatDuration(item.durationMs),
-                                        // Enter has one meaning on every row: play it now. Reorder
-                                        // lives in Options, so the row body never turns into a menu.
-                                        onClick = { onJump(index) }
-                                    )
+                                )
+                                .zIndex(if (pickedUp) 1f else 0f)
+                                .graphicsLayer {
+                                    // The queue reorders as the finger crosses each row, so only
+                                    // the picked-up row is offset: it is the one under the finger.
+                                    translationY = if (pickedUp) reorder.translation else 0f
+                                    if (pickedUp) {
+                                        scaleX = 1.02f
+                                        scaleY = 1.02f
+                                    }
                                 }
-                                // Composed only while the gutter has width, so a faded-out control
-                                // can never be tapped.
-                                if (gutter > 0.dp) {
-                                    Box(
-                                        Modifier
-                                            .matchParentSize()
-                                            .graphicsLayer {
-                                                alpha = gutterAlpha
-                                                translationX = (1f - gutterAlpha) * GUTTER_SLIDE.toPx()
-                                            },
-                                        contentAlignment = Alignment.CenterEnd
-                                    ) {
-                                        when (shownGutter) {
-                                            // A lifted row shows the bare arrows, as Arrange apps does:
-                                            // the row is the thing being moved, the arrows show where.
-                                            GutterMode.Lifted -> Column(
-                                                Modifier.align(Alignment.CenterEnd).width(LiftedGutter),
-                                                horizontalAlignment = Alignment.CenterHorizontally
-                                            ) {
-                                                if (index > 0) ReorderArrow(up = true, size = LiftedIconSize)
-                                                if (index < playback.upcoming.lastIndex) ReorderArrow(up = false, size = LiftedIconSize)
+                                .queueReorder(
+                                    state = reorder,
+                                    index = index,
+                                    count = visibleUpcoming.size,
+                                    key = key,
+                                    onPickUp = {
+                                        swipes.closeAll()
+                                        view.longPressHaptic()
+                                    },
+                                    onDrop = onMoveUpcoming,
+                                    onDropEnd = { if (!reorderMode) onCommitReorder() }
+                                )
+                        ) {
+                            SidekitSwipeRow(
+                                key = key,
+                                group = swipes,
+                                // A focused or picked-up row slides left to leave the gutter free
+                                // on its right; its width stays the same, as with a touch swipe.
+                                modifier = Modifier.graphicsLayer { translationX = -gutterPx },
+                                action = SwipeAction(
+                                    label = "Actions for ${item.title}",
+                                    icon = SidekitIcon.Apps,
+                                    iconRes = R.drawable.ic_more_horiz,
+                                    color = SidekitTheme.colors.surfaceA4,
+                                    onClick = { openRowActions(index, item) }
+                                ),
+                                // The gutter is the keypad's Remove; a second focus-revealed
+                                // delete square would crowd the same edge.
+                                revealOnFocus = false
+                            ) {
+                                MediaRow(
+                                    item,
+                                    Modifier
+                                        .onFocusChanged {
+                                            if (it.isFocused) {
+                                                focusedKey = key
+                                                // Never fight a lift: the drag and the keypad both
+                                                // scroll the row themselves.
+                                                if (reorder.from == null) keepRowInBand(index, key)
                                             }
-
-                                            GutterMode.Actions -> GutterSquare(
-                                                color = SidekitTheme.colors.surfaceA4,
-                                                label = "Actions for ${item.title}",
-                                                content = { MeatballIcon() },
-                                                onClick = { openRowActions(index, item) }
-                                            )
-
-                                            null -> Unit
                                         }
+                                        .then(
+                                            if (selected) {
+                                                Modifier.border(2.dp, SidekitTheme.colors.light, SidekitTheme.shapes.item)
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                        .then(
+                                            if (focusedKey == key) {
+                                                Modifier.focusRequester(rowFocus)
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                        .then(
+                                            if (current == null && index == 0) {
+                                                Modifier.focusRequester(firstUpcomingFocus)
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                        .then(moreFocus.rowModifier(index)),
+                                    secondary = item.creator,
+                                    // The side control gets the right edge while it is visible.
+                                    trailing = if (gutter > 0.dp) null else formatDuration(item.durationMs),
+                                    // Enter has one meaning on every row: play it now. Reorder
+                                    // lives in Options, so the row body never turns into a menu.
+                                    onClick = { onJump(index) }
+                                )
+                            }
+                            // Composed only while the gutter has width, so a faded-out control
+                            // can never be tapped.
+                            if (gutter > 0.dp) {
+                                Box(
+                                    Modifier
+                                        .matchParentSize()
+                                        .graphicsLayer {
+                                            alpha = gutterAlpha
+                                            translationX = (1f - gutterAlpha) * GUTTER_SLIDE.toPx()
+                                        },
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    when (shownGutter) {
+                                        // A lifted row shows the bare arrows, as Arrange apps does:
+                                        // the row is the thing being moved, the arrows show where.
+                                        GutterMode.Lifted -> Column(
+                                            Modifier.align(Alignment.CenterEnd).width(LiftedGutter),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            if (index > 0) ReorderArrow(up = true, size = LiftedIconSize)
+                                            if (index < visibleUpcoming.lastIndex) ReorderArrow(up = false, size = LiftedIconSize)
+                                        }
+
+                                        GutterMode.Actions -> GutterSquare(
+                                            color = SidekitTheme.colors.surfaceA4,
+                                            label = "Actions for ${item.title}",
+                                            content = { MeatballIcon() },
+                                            onClick = { openRowActions(index, item) }
+                                        )
+
+                                        null -> Unit
                                     }
                                 }
                             }
                         }
+                    }
+                }
+                if (playback.upcoming.size > visibleUpcoming.size) {
+                    item(key = "queueMore") {
+                        LoadMoreRow(
+                            "Load more",
+                            loading = false,
+                            onLoadMore = {
+                                moreFocus.onLoadMore(visibleUpcoming.size)
+                                shownUpcoming.intValue += CATALOG_PAGE_SIZE
+                            },
+                            modifier = Modifier.listFade(listState, firstQueueItem + visibleUpcoming.size),
+                            focusState = moreFocus
+                        )
                     }
                 }
             }

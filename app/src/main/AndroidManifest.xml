@@ -68,7 +68,7 @@
         </activity>
 
         <service
-            android:name=".playback.SpotifyPlaybackService"
+            android:name=".playback.PlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 

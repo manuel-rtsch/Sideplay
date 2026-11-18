@@ -15,7 +15,7 @@ coroutines = "1.11.0"
 media3 = "1.11.1"
 ktlint = "1.8.0"
 spotless = "8.11.0"
-sidekit = "1.7.2-2-gd09fe36"
+sidekit = "1.8.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

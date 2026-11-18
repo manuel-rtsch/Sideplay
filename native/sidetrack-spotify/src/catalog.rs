@@ -824,6 +824,11 @@ fn section_items<'a>(root: &'a Value, name: &str) -> &'a [Value] {
         .unwrap_or(&[])
 }
 
+/// Whether a search section was asked for. An empty scope list means no section, never "all".
+fn wants_scope(scopes: &[String], scope: &str) -> bool {
+    scopes.iter().any(|value| value.eq_ignore_ascii_case(scope))
+}
+
 async fn pathfinder_search(
     session: &Session,
     token: &str,
@@ -877,9 +882,7 @@ pub async fn search(
     limit: i32,
     scopes: &[String],
 ) -> Result<String, String> {
-    let want = |scope: &str| {
-        scopes.is_empty() || scopes.iter().any(|value| value.eq_ignore_ascii_case(scope))
-    };
+    let want = |scope: &str| wants_scope(scopes, scope);
     match pathfinder_search(session, token, query, offset.max(0), limit.clamp(1, 50)).await {
         Ok(value) => {
             let tracks = if want("Tracks") {
@@ -2266,12 +2269,19 @@ mod tests {
     use super::{
         library_page, owner_display, percent_decode, playlist_add_changes, playlist_id_of,
         playlist_item_indices, playlist_remove_changes, radio_playlist_uri, radio_track_uris,
-        rootlist_folder_name, sort_newest_first, CollectionItem,
+        rootlist_folder_name, sort_newest_first, wants_scope, CollectionItem,
     };
     use librespot_core::SpotifyUri;
     use librespot_protocol::playlist4_external::Item as PlaylistItem;
     use protobuf::Message;
     use serde_json::json;
+
+    #[test]
+    fn wants_scope_never_treats_an_empty_list_as_everything() {
+        assert!(!wants_scope(&[], "Tracks"));
+        assert!(wants_scope(&["Tracks".to_string()], "tracks"));
+        assert!(!wants_scope(&["Artists".to_string()], "Tracks"));
+    }
 
     #[test]
     fn radio_playlist_uri_skips_non_playlists() {

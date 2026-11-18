@@ -125,29 +125,7 @@ class SidetrackScreenshotTest {
             state.chrome,
             onBack = {},
             onSearch = {},
-            onSeeMore = {},
-            onTrack = {},
-            onAddToQueue = {},
-            onPlaylist = {},
-            onAlbum = {},
-            onArtist = {},
-            onShow = {},
-            onSaveTrack = {},
-            onEnsureSavedTrack = {},
-            onNowPlaying = {},
-            onRetry = {},
-            onDismissNotice = {},
-            onDismissNowPlaying = {}
-        )
-    }
-
-    @Test fun libraryCategory() = shoot("sidetrack_library_albums") {
-        LibraryCategoryScreen(
-            LibraryFilter.Albums,
-            state.library,
-            state.saved,
-            state.chrome,
-            onBack = {},
+            onFilter = {},
             onTrack = {},
             onAddToQueue = {},
             onPlaylist = {},

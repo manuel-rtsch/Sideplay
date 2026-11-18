@@ -72,6 +72,7 @@ fun TrackRow(
     index: Int? = null,
     showArt: Boolean = true,
     secondary: String = track.artist,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     val saved = rows.saved(track)
@@ -83,6 +84,7 @@ fun TrackRow(
             track,
             Modifier
                 .focusRequester(rowFocus)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .onFocusChanged { state ->
                     if (state.isFocused) rows.focus.rowFocused(key) else rows.focus.rowUnfocused(key)
                 }
@@ -173,15 +175,18 @@ fun GutterMediaRow(
     index: Int? = null,
     showArt: Boolean = true,
     secondary: String = item.creator,
+    focusRequester: FocusRequester? = null,
     onAddToQueue: (MediaItem) -> Unit,
     onClick: () -> Unit
 ) {
     GutterRow(key, focus, squares = 1, modifier = modifier, content = { gutterVisible ->
         MediaRow(
             item,
-            Modifier.onFocusChanged { state ->
-                if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
-            },
+            Modifier
+                .onFocusChanged { state ->
+                    if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
+                }
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
             index = index,
             showArt = showArt,
             secondary = secondary,
@@ -219,6 +224,7 @@ fun HistoryRow(
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
     secondary: String = item.creator,
+    focusRequester: FocusRequester? = null,
     onAddToQueue: (MediaItem) -> Unit,
     onRemove: (MediaItem) -> (() -> Unit)?,
     onClick: () -> Unit
@@ -231,6 +237,7 @@ fun HistoryRow(
             item,
             Modifier
                 .focusRequester(rowFocus)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .onFocusChanged { state ->
                     if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
                 }

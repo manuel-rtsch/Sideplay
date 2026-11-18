@@ -30,7 +30,11 @@ class SpotifyAuth(
 ) {
     private val refreshLock = Mutex()
 
-    fun hasCredentials(): Boolean = store.read() != null
+    /**
+     * True when a stored session exists. Never throws: a store that cannot be read is treated as
+     * signed out, so a lost keystore key lands on the sign-in screen instead of a crash.
+     */
+    fun hasCredentials(): Boolean = runCatching { store.read() }.getOrNull() != null
 
     /**
      * Runs the browser round trip and stores the resulting tokens. Throws with a user-facing
@@ -53,24 +57,43 @@ class SpotifyAuth(
             openBrowser(url)
             val code = awaitCode(server, state)
             val credentials = tokens.exchange(CLIENT_ID, code, verifier, redirectUri)
-            store.save(credentials)
+            persist(credentials)
             return credentials
+        }
+    }
+
+    /**
+     * Stores the session, reporting a device that cannot keep it as a user-facing failure. The
+     * sign-in itself succeeded, so the caller keeps the user signed in for this run.
+     */
+    private fun persist(credentials: SpotifyCredentials) {
+        try {
+            store.save(credentials)
+        } catch (e: CredentialPersistenceException) {
+            throw e
+        } catch (e: Exception) {
+            throw CredentialPersistenceException(
+                "Signed in, but this device could not store the session securely. " +
+                    "You will need to sign in again next time.",
+                e
+            )
         }
     }
 
     /** Returns a usable access token, refreshing it first when it is inside the expiry window. */
     suspend fun accessToken(): String? = refreshLock.withLock {
-        val credentials = store.read() ?: return@withLock null
+        val credentials = runCatching { store.read() }.getOrNull() ?: return@withLock null
         if (!credentials.isExpired(nowMs())) return@withLock credentials.accessToken
         val refreshToken = credentials.refreshToken ?: return@withLock null
         runCatching { tokens.refresh(CLIENT_ID, refreshToken) }
             .getOrNull()
             ?.let { it.copy(scope = it.scope.ifEmpty { credentials.scope }) }
-            ?.also(store::save)
+            // A refresh that cannot be stored still yields a usable token for this run.
+            ?.also { runCatching { store.save(it) } }
             ?.accessToken
     }
 
-    fun clear() = store.clear()
+    fun clear() = runCatching { store.clear() }
 
     private suspend fun awaitCode(server: ServerSocket, expectedState: String): String {
         val closeOnCancel = coroutineContext[Job]?.invokeOnCompletion {

@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import hrln.interactive.sidekit.design.action.NoticeKind
+import io.github.manuelrtsch.sidetrack.auth.CredentialPersistenceException
 import io.github.manuelrtsch.sidetrack.data.AuthInput
 import io.github.manuelrtsch.sidetrack.data.EpisodeMetaRepository
 import io.github.manuelrtsch.sidetrack.data.EpisodeProgress
@@ -97,7 +98,7 @@ data class SidetrackUiState(
     val authPending: Boolean = false,
     val libraryLoading: Boolean = false,
     val librarySectionsLoading: Boolean = false,
-    /** Set when the overview could not load at all, so the Library screen can offer a retry. */
+    /** Set when the startup preload could not load any category. */
     val librarySectionsError: String? = null,
     /** Set when the open category could not load and has no items to show. */
     val libraryError: String? = null,
@@ -472,10 +473,10 @@ class SidetrackViewModel(
         _state.update { it.copy(nowPlayingNotice = null) }
     }
 
-    /** Reloads the Library overview. Called whenever the Library screen is opened. */
+    /** Reloads the open Library category. Called whenever the Library screen is opened. */
     fun refreshLibrary() {
         if (!_state.value.signedIn) return
-        loadLibrarySections()
+        loadLibrary(_state.value.filter)
     }
 
     /** Retries the open library category after a failed load. */
@@ -1325,10 +1326,10 @@ class SidetrackViewModel(
     }
 
     fun toggleScope(scope: SearchScope) {
-        _state.update {
-            val scopes = if (scope in it.searchScopes) it.searchScopes - scope else it.searchScopes + scope
-            it.copy(searchScopes = scopes)
-        }
+        val current = _state.value.searchScopes
+        val next = toggledSearchScopes(current, scope)
+        if (next == current) return
+        _state.update { it.copy(searchScopes = next) }
         search(debounceMs = 0L)
     }
 
@@ -1527,7 +1528,13 @@ class SidetrackViewModel(
                 loadAccount()
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: CredentialPersistenceException) {
+                // The session is live for this run; only keeping it for the next launch failed.
+                _state.update { it.copy(signedIn = true, authPending = false).say(e.message ?: "Sign-in failed") }
+                loadAccount()
+            } catch (e: Throwable) {
+                // Sign-in runs on the main thread and touches the keystore, the browser and the
+                // network. Anything that escapes here used to kill the process; report it instead.
                 _state.update {
                     it.copy(authPending = false).say(e.message ?: "Sign-in failed")
                 }
@@ -1545,9 +1552,10 @@ class SidetrackViewModel(
     }
 
     /**
-     * Loads a short preview of every library category for the Library overview. The categories are
+     * Loads a short preview of every library category after sign-in. The categories are
      * requested one after another so the native collection cache is filled once for the shared
-     * sets instead of racing several identical full reads.
+     * sets instead of racing several identical full reads. The previews also seed saved-state
+     * hints and let an offline app know what the account holds.
      */
     private fun loadLibrarySections() {
         if (!_state.value.signedIn) return
@@ -1566,7 +1574,7 @@ class SidetrackViewModel(
                         // entry whose metadata failed to load, and an item-based check would then
                         // hide "See more" for a category that still has more rows.
                         val count = page.total ?: page.items.size
-                        if (count > LIBRARY_SECTION_SIZE) hasMore += filter
+                        if (page.hasMore || count > LIBRARY_SECTION_SIZE) hasMore += filter
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

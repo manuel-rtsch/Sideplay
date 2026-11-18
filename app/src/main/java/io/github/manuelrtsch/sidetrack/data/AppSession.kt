@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack.data
 
 import android.content.Context
+import android.util.Log
 import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.MediaKey
@@ -129,11 +130,18 @@ object AppSessions {
     }
 
     private fun create(context: Context): AppSession {
-        val spotify = SpotifySession(
-            SpotifyAuth(EncryptedSpotifyCredentialStore(context)),
-            context.cacheDir.absolutePath,
-            context
-        )
+        // A session that cannot be built must not take the launch down with it: the context-free
+        // fallback still composes a signed-out app, and the next launch retries the real store.
+        val spotify = try {
+            SpotifySession(
+                SpotifyAuth(EncryptedSpotifyCredentialStore(context)),
+                context.cacheDir.absolutePath,
+                context
+            )
+        } catch (e: Exception) {
+            Log.w("SidetrackSession", "Falling back to a signed-out session", e)
+            SpotifySession()
+        }
         val registry = ServiceRegistry(listOf(SpotifyProvider(spotify)))
         if (spotify.signedIn.value) {
             registry.account = ServiceAccount(ServiceId.Spotify, "spotify", "Spotify")

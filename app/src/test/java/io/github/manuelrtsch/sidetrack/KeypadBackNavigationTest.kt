@@ -10,7 +10,6 @@ class KeypadBackNavigationTest {
         listOf(
             "sidetrack/history",
             "sidetrack/library",
-            "sidetrack/library/{filter}",
             "sidetrack/collection/{key}",
             "sidetrack/artist/{key}",
             "sidetrack/search",

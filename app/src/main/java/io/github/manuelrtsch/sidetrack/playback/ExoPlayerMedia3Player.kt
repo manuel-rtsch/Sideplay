@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
  *
  * ExoPlayer is single-threaded: create and use this from the main thread.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ExoPlayerMedia3Player(
     context: Context,
     /** Applied to every request, so authenticated streams need no token in the URL. */
