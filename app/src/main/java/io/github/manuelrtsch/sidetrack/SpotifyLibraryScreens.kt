@@ -251,7 +251,8 @@ fun LibraryScreen(
                     if (library.libraryHasMore) {
                         val moreIndex = rowIndex
                         item(key = "more") {
-                            PagingFooter(
+                            LoadMoreRow(
+                                "Load more ${filter.label.lowercase()}",
                                 library.libraryMorePending,
                                 onLoadMore,
                                 Modifier.listFade(listState, moreIndex)
@@ -498,7 +499,12 @@ fun CollectionScreen(
             if (collection.hasMore) {
                 val moreIndex = rowIndex
                 item(key = "more") {
-                    PagingFooter(loadingMore, onLoadMore, Modifier.listFade(listState, moreIndex))
+                    LoadMoreRow(
+                        if (collection.type == SpotifyCollectionType.Show) "Load more episodes" else "Load more tracks",
+                        loadingMore,
+                        onLoadMore,
+                        Modifier.listFade(listState, moreIndex)
+                    )
                 }
             }
         }
@@ -612,8 +618,8 @@ fun ArtistScreen(
             if (trackHasMore) {
                 val moreIndex = rowIndex
                 item(key = "tracksMore") {
-                    SeeMoreRow(
-                        "See more tracks",
+                    LoadMoreRow(
+                        "Load more tracks",
                         loadingMore,
                         onLoadMoreTracks,
                         Modifier.listFade(listState, moreIndex)
@@ -643,8 +649,8 @@ fun ArtistScreen(
             if (albumHasMore) {
                 val moreIndex = rowIndex
                 item(key = "albumsMore") {
-                    SeeMoreRow(
-                        "See more albums",
+                    LoadMoreRow(
+                        "Load more albums",
                         loadingMore,
                         onLoadMoreAlbums,
                         Modifier.listFade(listState, moreIndex)

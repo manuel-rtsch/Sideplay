@@ -687,16 +687,17 @@ fun TerminalRow(
 }
 
 /**
- * Loads the next page when the footer enters composition. Lazy lists only compose visible rows
- * (plus a small prefetch window), so this keeps both network and rendering work proportional to
- * what the user is actually looking at.
+ * The one pagination footer every list uses. It only asks for the next batch when the user
+ * presses it, so a list never fetches or composes rows the user has not asked to see.
  */
 @Composable
-fun PagingFooter(loading: Boolean, onLoadMore: () -> Unit, modifier: Modifier = Modifier) {
-    LaunchedEffect(loading) {
-        if (!loading) onLoadMore()
-    }
-    EmptyMessage(if (loading) "Loading more…" else "More", modifier, hint = null)
+fun LoadMoreRow(label: String, loading: Boolean, onLoadMore: () -> Unit, modifier: Modifier = Modifier) {
+    TerminalRow(
+        label,
+        modifier = modifier,
+        secondary = if (loading) "Loading…" else null,
+        onClick = if (loading) null else onLoadMore
+    )
 }
 
 /** A shallow terminal row that loads the next page only when the user presses it. */
