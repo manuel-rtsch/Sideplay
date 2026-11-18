@@ -53,6 +53,8 @@ class LibraryFilterRowTest {
                         onLoadMore = {},
                         onNowPlaying = {},
                         onRetry = {},
+                        onCreatePlaylist = {},
+                        canCreatePlaylist = false,
                         onDismissNotice = {},
                         onDismissNowPlaying = {}
                     )

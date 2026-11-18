@@ -108,6 +108,12 @@ interface MediaLibraryWriter {
     suspend fun addToPlaylist(playlist: MediaKey, item: MediaItem): Int? = null
 
     suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem) = Unit
+
+    /**
+     * Creates a new empty playlist named [name] and returns it, or null when the service cannot
+     * (the app never creates playlists it owns on a service that does not support it).
+     */
+    suspend fun createPlaylist(name: String): Playlist? = null
 }
 
 /**

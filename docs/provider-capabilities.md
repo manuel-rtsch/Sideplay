@@ -27,6 +27,7 @@ off / returned as unsupported) · ❌ not supported.
 | Song radio | ✅ | ✅ |
 | Follow artist | ✅ | ❌ |
 | Playlist editing (add/remove items) | ✅ | ✅ |
+| Playlist creation | ❌ (pending transport) | ✅ |
 | Loudness normalization | ✅ | ✅ |
 | Gapless playback | ✅ | ❌ |
 | Quality selection | ✅ | ✅ |
@@ -80,6 +81,11 @@ narrower capability set below.
   playlist.
 - **Radio**: `similarSongs` with a `randomSongs` fallback for servers without Last.fm, surfaced
   because `supportsRadio` is now true.
+- **Create playlist**: a *New playlist* action in the Library → Playlists options menu opens a
+  name-entry screen and, on success, opens the new playlist. On the wire it is Subsonic
+  `createPlaylist`; `supportsPlaylistCreate` gates the entry point. Spotify's create transport
+  (the native bridge has no endpoint) is still undecided, so `ServiceCapabilities.All` leaves the
+  flag off for it.
 - **Audio quality / bitrate**: the selected `AudioQuality` maps to Subsonic `maxBitRate` on the
   `stream` URL. `High` (the default) leaves the server free to pick its best bitrate so FLAC
   isn't silently capped; `Normal` → 96 kbit/s and `Max` → 320 kbit/s force a transcode ceiling.
@@ -105,6 +111,7 @@ narrower capability set below.
   `ServiceFailure` mapping, artist/album/playlist mapping with authenticated cover URLs, `search3`
   scope mapping, album pagination, stream/cover URL auth (no password), starred/saved state,
   catalog stream resolution + playlist pagination, `stream` `maxBitRate`/`replayGain` params,
+  `createPlaylist` mapping,
   catalog applying quality/normalization from settings to the stream, and writer star/edit.
 - `MusicServiceTest.kt` — asserts `ServiceCapabilities.Navidrome` advertises the delivered parity
   capabilities (radio, quality selection, normalization, playlist edit, progress, scrobbling) and

@@ -138,6 +138,8 @@ class SidetrackScreenshotTest {
             onLoadMore = {},
             onNowPlaying = {},
             onRetry = {},
+            onCreatePlaylist = {},
+            canCreatePlaylist = false,
             onDismissNotice = {},
             onDismissNowPlaying = {}
         )

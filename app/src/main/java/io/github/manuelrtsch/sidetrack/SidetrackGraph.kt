@@ -10,6 +10,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
@@ -31,6 +32,7 @@ import io.github.manuelrtsch.sidetrack.data.AppSessions
 import io.github.manuelrtsch.sidetrack.data.KnownServices
 import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 const val SIDE_PLAY_ROOT = "sidetrack"
 private const val ROOT = SIDE_PLAY_ROOT
@@ -45,6 +47,7 @@ private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
 private val COLLECTION = "$ROOT/collection/{key}"
 private val ARTIST = "$ROOT/artist/{key}"
+private val CREATE_PLAYLIST = "$ROOT/playlist/create"
 private val SEARCH = SIDE_PLAY_SEARCH
 private val SEARCH_SCOPES = "$ROOT/search/scopes"
 private val NOW_PLAYING = "$ROOT/now-playing"
@@ -78,6 +81,7 @@ private val KEYPAD_BACK_ROUTES = setOf(
     HISTORY,
     LIBRARY,
     COLLECTION,
+    CREATE_PLAYLIST,
     ARTIST,
     SEARCH,
     SEARCH_SCOPES,
@@ -264,8 +268,28 @@ fun NavGraphBuilder.sidetrackGraph(
                 onLoadMore = vm::loadMoreLibrary,
                 onNowPlaying = { nav.openNowPlaying(vm) },
                 onRetry = vm::retryLibrary,
+                onCreatePlaylist = { nav.navigate(CREATE_PLAYLIST) },
+                canCreatePlaylist = vm.capabilities.supportsPlaylistCreate,
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
+            )
+        }
+        composable(CREATE_PLAYLIST) { entry ->
+            val vm = entry.sidetrackViewModel(nav)
+            val scope = rememberCoroutineScope()
+            CreatePlaylistScreen(
+                onBack = { nav.popBackStack() },
+                onSubmit = { name ->
+                    scope.launch {
+                        val playlist = runCatching { vm.createPlaylist(name) }.getOrNull()
+                        if (playlist != null) {
+                            nav.navigate(collectionRoute(playlist.key)) {
+                                launchSingleTop = true
+                                popUpTo(CREATE_PLAYLIST) { inclusive = true }
+                            }
+                        }
+                    }
+                }
             )
         }
         composable(COLLECTION, arguments = collectionArgs) { entry ->

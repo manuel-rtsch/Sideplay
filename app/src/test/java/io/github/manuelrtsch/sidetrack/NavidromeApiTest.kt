@@ -180,6 +180,19 @@ class NavidromeApiTest {
         assertTrue(source.uri.contains("replayGain=true"))
     }
 
+    @Test fun `createPlaylist maps the new playlist`() = runTest {
+        val transport = FakeTransport { ok("""{"status":"ok","playlist":{"id":"p-new","name":"Road Trip"}}""") }
+        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+
+        val playlist = api.createPlaylist("Road Trip")
+
+        assertEquals("p-new", playlist.id)
+        assertEquals("Road Trip", playlist.name)
+        assertEquals(ServiceId.Navidrome, playlist.service)
+        assertTrue(transport.urls.single().contains("createPlaylist"))
+        assertTrue(transport.urls.single().contains("name=Road+Trip"))
+    }
+
     @Test fun `saved state reads the starred marker`() = runTest {
         val api = NavidromeApi(
             NavidromeCredentials("http://nas.local", "joe", "sesame"),

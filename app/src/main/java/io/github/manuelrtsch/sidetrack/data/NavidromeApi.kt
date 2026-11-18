@@ -156,6 +156,13 @@ class NavidromeApi(
         else -> call("getSong", "id" to item.id).optJSONObject("song").starred()
     }
 
+    suspend fun createPlaylist(name: String): Playlist {
+        val playlist = call("createPlaylist", "name" to name).optJSONObject("playlist")
+            ?.toPlaylist { coverUrl(it) }
+            ?: throw ServiceException(ServiceFailure.Unknown, "Navidrome did not return the new playlist")
+        return playlist
+    }
+
     suspend fun addToPlaylist(playlistId: String, songId: String): Int {
         val before = playlist(playlistId)?.tracks?.size ?: 0
         call("updatePlaylist", "playlistId" to playlistId, "songIdToAdd" to songId)
@@ -494,6 +501,10 @@ class NavidromeCatalog(
     override suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem) {
         client().removeFromPlaylist(playlist.id, item.id)
     }
+
+    override suspend fun createPlaylist(name: String): Playlist? = runCatching {
+        client().createPlaylist(name)
+    }.getOrNull()
 
     private companion object {
         const val MAX_ARTIST_ALBUMS = 25

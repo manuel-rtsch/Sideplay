@@ -479,6 +479,19 @@ class SidetrackViewModel(
         loadLibrary(_state.value.filter)
     }
 
+    /**
+     * Creates a new empty playlist named [name] on the active service and refreshes the Library so
+     * it is visible. Returns the created [Playlist] for the caller to open, or null when the
+     * service cannot create playlists.
+     */
+    suspend fun createPlaylist(name: String): Playlist? {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return null
+        val playlist = session?.writer?.createPlaylist(trimmed) ?: return null
+        refreshLibrary()
+        return playlist
+    }
+
     /** Retries the open library category after a failed load. */
     fun retryLibrary() {
         if (!_state.value.signedIn) return
