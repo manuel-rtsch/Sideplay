@@ -36,7 +36,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.SideAction
-import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitIconItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -46,6 +45,8 @@ import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
+import io.github.manuelrtsch.sidetrack.ui.InlineLinkArrowSize
+import io.github.manuelrtsch.sidetrack.ui.LinkArrow
 import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 import kotlinx.coroutines.flow.StateFlow
 
@@ -889,10 +890,6 @@ private fun CollectionArtistLine(
                 textAlign = TextAlign.End
             )
         }
-        SidekitIconImage(
-            SidekitIcon.ArrowRightAlt,
-            Modifier.padding(start = 8.dp),
-            size = 18.dp
-        )
+        LinkArrow(Modifier.padding(start = 8.dp), size = InlineLinkArrowSize)
     }
 }

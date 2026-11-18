@@ -85,18 +85,19 @@ import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.action.withNotice
 import hrln.interactive.sidekit.design.components.ItemColour
-import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitIconItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.SidekitTile
+import hrln.interactive.sidekit.design.components.container
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtworkImage
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 import io.github.manuelrtsch.sidetrack.playback.tileText
+import io.github.manuelrtsch.sidetrack.ui.LinkArrow
 import io.github.manuelrtsch.sidetrack.ui.LocalSwipeActionRevealed
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -714,24 +715,59 @@ private fun SpotifyCenteredLineButton(label: String, onClick: () -> Unit) {
 }
 
 /**
- * A compact navigation row for list-level actions such as "See more" and "Search in".
- * The SDK renders the short row, the success fill and the type scale.
+ * A compact navigation row for list-level actions such as "See more", "Search in" and the
+ * pagination footer. It mirrors Sidekit's compact item on the same primitives, because the SDK
+ * draws its link arrow at `spacing.iconSize` and Sidetrack rows share a narrower one.
+ *
+ * [linkArrow] defaults to showing the arrow only when the row has no [secondary] value beside it:
+ * a row that already shows something on the right ("Search in" with its scope) reads as a value,
+ * not as a link. A footer that reports a status in [secondary] passes `true` to keep its arrow.
+ * A row that cannot be pressed never shows one.
  */
 @Composable
 fun TerminalRow(
     label: String,
     modifier: Modifier = Modifier,
     secondary: String? = null,
+    linkArrow: Boolean = secondary == null,
     onClick: (() -> Unit)? = null
 ) {
-    SidekitCompactItem(
-        title = label,
-        modifier = modifier,
-        secondary = secondary,
-        colour = ItemColour.Success,
-        showLinkArrow = secondary == null && onClick != null,
-        onClick = onClick
-    )
+    SidekitTile(
+        modifier.fillMaxWidth().height(SidekitTheme.spacing.compactRowHeight),
+        color = ItemColour.Success.container(),
+        onClick = onClick,
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            Modifier.padding(horizontal = SidekitTheme.spacing.itemPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SidekitTheme.spacing.itemContentGap)
+        ) {
+            SidekitText(
+                label,
+                style = SidekitTheme.typography.bodySmall,
+                maxLines = 1
+            )
+            if (secondary != null) {
+                SidekitText(
+                    secondary,
+                    Modifier.weight(1f),
+                    style = SidekitTheme.typography.small,
+                    color = SidekitTheme.colors.surfaceA6,
+                    maxLines = 1,
+                    textAlign = TextAlign.End
+                )
+            }
+            if (linkArrow && onClick != null) {
+                // Without a value beside it the arrow takes the slack and sits at the end; with one
+                // it keeps its own width so the value is not squeezed into half the row.
+                Box(
+                    if (secondary == null) Modifier.weight(1f) else Modifier,
+                    contentAlignment = Alignment.CenterEnd
+                ) { LinkArrow() }
+            }
+        }
+    }
 }
 
 /**
@@ -837,6 +873,9 @@ fun LoadMoreRow(
         label,
         modifier = rowModifier,
         secondary = if (loading) "Loading…" else null,
+        // The arrow stays while the page is in flight: the row is still the thing the user pressed,
+        // and the status sits beside it rather than in place of it.
+        linkArrow = true,
         // Keep the row clickable while the page is in flight. A non-clickable row is not
         // focusable, so turning it off would drop the keypad and let focus search land up the
         // list. The view model ignores a second press; the local pages simply load another page.
@@ -851,7 +890,10 @@ fun SeeMoreRow(label: String, loading: Boolean, onClick: () -> Unit, modifier: M
         label,
         modifier = modifier,
         secondary = if (loading) "Loading…" else null,
-        onClick = if (loading) null else onClick
+        linkArrow = true,
+        // Same rule as the Load more row: a row that turns non-clickable while loading also stops
+        // being focusable, which drops the keypad off the footer.
+        onClick = if (loading) ({}) else onClick
     )
 }
 
@@ -1198,7 +1240,7 @@ fun SpotifyLibraryRow(
                 SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
                 SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)
             }
-            SidekitIconImage(SidekitIcon.ArrowRightAlt, size = 30.dp, contentDescription = null)
+            LinkArrow()
         }
     }
 }
