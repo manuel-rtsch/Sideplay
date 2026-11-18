@@ -107,8 +107,8 @@ internal fun rememberArtworkBackdropSetting(): ArtworkBackdropSetting {
 /**
  * The cover, scaled to cover the panel's width (cropped at the long axis, never letterboxed) and
  * blurred. The cover is square and the panel is 480 x 640, so the square grows past the width and
- * the sides run off the edge. It stops short of the action bar, where the transport gradient is
- * already black.
+ * the sides run off the edge. It runs down to the action bar's top edge, where the transport scrim
+ * is solid black, so its bottom edge is never visible.
  *
  * The blurred image is its own composable taking only the primitives of the track. The screen
  * re-composes once a second while the sleep timer ticks (it reads the timer for the Options
@@ -135,10 +135,12 @@ internal fun ArtworkBackdrop(
         )
     }
     BoxWithConstraints(modifier.clipToBounds()) {
-        // The lower controls sit on a black gradient, so the cover only has to reach the top of
-        // that gradient. Keeping the square shorter saves a fifth of the decoded pixels without
-        // leaving a visible edge: the bottom of the image is already under the scrim.
-        val side = maxOf(maxWidth, maxHeight * 0.75f)
+        // The image runs down to the action bar's top edge, where the transport scrim is solid
+        // black, so its bottom edge is never visible. Stopping higher left a hard line under a
+        // half-black scrim on covers with a bright bottom.
+        val spacing = SidekitTheme.spacing
+        val actionBarTop = maxHeight - spacing.pagePadding - spacing.actionBarHeight
+        val side = maxOf(maxWidth, actionBarTop)
         BackdropImage(item.artRes, item.artUrl, side, Modifier.align(Alignment.TopCenter))
         // A tap on the empty screen still opens the album, as tapping the cover did on the old
         // layout. It is pointer input rather than clickable so the 480 dp area never becomes a

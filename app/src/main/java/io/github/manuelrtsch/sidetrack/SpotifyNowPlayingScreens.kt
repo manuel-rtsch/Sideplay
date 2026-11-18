@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -188,22 +188,32 @@ fun SpotifyNowPlayingScreen(
             // The artwork is the screen: behind the scaffold, so it can run under the chrome,
             // which the canvas paints after the screens. The body has no cover tile of its own.
             ArtworkBackdrop(current, onOpenAlbum = onAlbum, modifier = Modifier.matchParentSize())
-            // Full-bleed transport scrim. It lives outside the scaffold's content padding so it
-            // reaches both screen edges; the action bar and the body draw on top of it.
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.42f)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.45f to Color.Black.copy(alpha = 0.55f),
-                            0.8f to Color.Black,
-                            1f to Color.Black
+            // Full-bleed transport scrim, anchored to the real chrome rather than a fraction of
+            // the screen: solid black from the bottom edge to the action bar's top, then a fade
+            // from black there to transparent at the top of the five-tile transport row, where
+            // the backdrop starts. The body's transport row is the last thing in the content, so
+            // its top is the content bottom less one item height. Measuring here instead of on the
+            // whole screen keeps the scaffold out of this subcomposition.
+            BoxWithConstraints(Modifier.matchParentSize()) {
+                val spacing = SidekitTheme.spacing
+                val actionBarTop = maxHeight - spacing.pagePadding - spacing.actionBarHeight
+                val transportTop = actionBarTop - spacing.pageGap - spacing.itemHeight
+                val scrimHeight = maxHeight - transportTop
+                val blackAt = ((actionBarTop - transportTop) / scrimHeight).coerceIn(0f, 1f)
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(scrimHeight)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                blackAt to Color.Black,
+                                1f to Color.Black
+                            )
                         )
-                    )
-            )
+                )
+            }
         }
         SidekitScaffold(title = null, actions = actions, options = options) { padding ->
             if (current == null) {
