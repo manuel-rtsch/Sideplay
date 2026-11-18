@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import hrln.interactive.sidekit.design.action.NoticeKind
+import io.github.manuelrtsch.sidetrack.auth.CredentialPersistenceException
 import io.github.manuelrtsch.sidetrack.data.SpotifyCatalog
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeMetaRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifyEpisodeProgress
@@ -1487,7 +1488,13 @@ class SpotifyViewModel(
                 loadAccount()
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: CredentialPersistenceException) {
+                // The session is live for this run; only keeping it for the next launch failed.
+                _state.update { it.copy(signedIn = true, authPending = false).say(e.message ?: "Sign-in failed") }
+                loadAccount()
+            } catch (e: Throwable) {
+                // Sign-in runs on the main thread and touches the keystore, the browser and the
+                // network. Anything that escapes here used to kill the process; report it instead.
                 _state.update {
                     it.copy(authPending = false).say(e.message ?: "Sign-in failed")
                 }

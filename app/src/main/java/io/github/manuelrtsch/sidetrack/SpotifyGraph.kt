@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +21,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import java.io.IOException
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
@@ -848,9 +850,15 @@ private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyV
     val session = remember(context) { SpotifySessions.get(context) }
     val openBrowser: suspend (String) -> Unit = remember(context) {
         { url ->
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
+            // A ROM without a browser (a bare GSI, a stripped keypad build) has nothing to hand
+            // the sign-in page to. Say so instead of surfacing ActivityNotFoundException.
+            try {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (e: ActivityNotFoundException) {
+                throw IOException("No browser is installed to finish sign-in", e)
+            }
         }
     }
     val vm = viewModel<SpotifyViewModel>(

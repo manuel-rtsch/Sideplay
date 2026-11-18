@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack.data
 
 import android.content.Context
 import android.os.SystemClock
+import android.util.Log
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.DemoContentSource
@@ -35,7 +36,9 @@ class SpotifySession(
     private val tmpDir: String? = null,
     context: Context? = null
 ) {
-    private val _signedIn = MutableStateFlow(auth.hasCredentials())
+    // The credential store is read while the UI composes. Anything it cannot answer counts as
+    // signed out, so a device that lost its keystore key still opens and offers sign-in.
+    private val _signedIn = MutableStateFlow(runCatching { auth.hasCredentials() }.getOrDefault(false))
     val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
 
     private val appContext = context?.applicationContext
@@ -61,7 +64,7 @@ class SpotifySession(
     private val storageScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Where the last session stopped: the item and the offset, so reopening resumes it. */
-    @Volatile var resumePoint: SpotifyResumePoint? = positionStore?.read()
+    @Volatile var resumePoint: SpotifyResumePoint? = runCatching { positionStore?.read() }.getOrNull()
         private set
 
     /** Per-episode podcast offsets, independent of the single-session resume point. */
@@ -77,7 +80,9 @@ class SpotifySession(
         save = { episodeMetaStore?.write(it) },
         saveScope = storageScope
     )
-    private val _settings = MutableStateFlow(settingsStore?.read() ?: SpotifySettings())
+    private val _settings = MutableStateFlow(
+        runCatching { settingsStore?.read() }.getOrNull() ?: SpotifySettings()
+    )
     val settings: StateFlow<SpotifySettings> = _settings.asStateFlow()
 
     val nativeAvailable: Boolean get() = NativeBridge.isAvailable
@@ -518,10 +523,21 @@ object SpotifySessions {
     private var instance: SpotifySession? = null
 
     fun get(context: Context): SpotifySession = instance ?: synchronized(this) {
-        instance ?: SpotifySession(
-            SpotifyAuth(EncryptedSpotifyCredentialStore(context.applicationContext)),
-            context.applicationContext.cacheDir.absolutePath,
-            context.applicationContext
-        ).also { instance = it }
+        instance ?: build(context.applicationContext).also { instance = it }
+    }
+
+    /**
+     * A session that cannot be built must not take the launch down with it: the context-free
+     * fallback still composes a signed-out app, and the next launch retries the real store.
+     */
+    private fun build(context: Context): SpotifySession = try {
+        SpotifySession(
+            SpotifyAuth(EncryptedSpotifyCredentialStore(context)),
+            context.cacheDir.absolutePath,
+            context
+        )
+    } catch (e: Exception) {
+        Log.w("SidetrackSession", "Falling back to a signed-out session", e)
+        SpotifySession()
     }
 }
