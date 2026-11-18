@@ -1,12 +1,16 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.text.format.Formatter
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,8 +20,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
@@ -28,6 +36,7 @@ import hrln.interactive.sidekit.design.components.SidekitCard
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitText
+import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
@@ -317,13 +326,23 @@ fun SignInScreen(
     onAbout: () -> Unit,
     onSignIn: () -> Unit,
     onDismissNotice: () -> Unit,
-    serviceName: String = "your music service"
+    serviceName: String = "your music service",
+    passwordAuth: Boolean = false,
+    onPasswordSignIn: (serverUrl: String, username: String, password: String) -> Unit = { _, _, _ -> }
 ) {
     val colors = SidekitTheme.colors
-    val baseActions = remember {
+    var serverUrl by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val submit = if (passwordAuth) {
+        { onPasswordSignIn(serverUrl, username, password) }
+    } else {
+        onSignIn
+    }
+    val baseActions = remember(passwordAuth) {
         listOf(
             SideAction("about", "About", tone = ActionTone.Muted, motion = ActionMotion.Up, onClick = onAbout),
-            SideAction.forward("signIn", "Sign in", onSignIn)
+            SideAction.forward("signIn", "Sign in", submit)
         )
     }
     val actions = withNotice(chrome.notice, onDismissNotice, baseActions, chrome.noticeKind)
@@ -342,7 +361,11 @@ fun SignInScreen(
                             maxLines = Int.MAX_VALUE
                         )
                         SidekitText(
-                            "Sidetrack never sees your password or sensitive information.",
+                            if (passwordAuth) {
+                                "Your password is stored encrypted on this device and only used to sign requests to your server."
+                            } else {
+                                "Sidetrack never sees your password or sensitive information."
+                            },
                             style = SidekitTheme.typography.caption,
                             color = colors.surfaceA6,
                             maxLines = Int.MAX_VALUE
@@ -350,12 +373,36 @@ fun SignInScreen(
                     }
                 }
             }
+            if (passwordAuth) {
+                item(key = "server") {
+                    SidekitTextField(
+                        serverUrl,
+                        { serverUrl = it },
+                        Modifier.listFade(listState, 1).fillMaxWidth(),
+                        placeholder = "Server, e.g. 192.168.1.10:4533",
+                        singleLine = true,
+                        dictation = true
+                    )
+                }
+                item(key = "username") {
+                    SidekitTextField(
+                        username,
+                        { username = it },
+                        Modifier.listFade(listState, 2).fillMaxWidth(),
+                        placeholder = "Username",
+                        singleLine = true
+                    )
+                }
+                item(key = "password") {
+                    PasswordField(password, { password = it }, Modifier.listFade(listState, 3).fillMaxWidth())
+                }
+            }
             item(key = "status") {
                 SidetrackItem(
                     "Status",
                     Modifier.listFade(listState, 1),
                     secondary = when {
-                        account.authPending -> "Waiting for browser"
+                        account.authPending -> if (passwordAuth) "Signing in" else "Waiting for browser"
                         account.signedIn -> "Connected"
                         else -> "Waiting"
                     },
@@ -364,5 +411,41 @@ fun SignInScreen(
                 )
             }
         }
+    }
+}
+
+/** A masked password field; the keypad's T9 bar is for search, not secrets. */
+@Composable
+private fun PasswordField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = SidekitTheme.colors
+    Box(
+        modifier
+            .background(colors.surfaceA2)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        if (value.isEmpty()) {
+            SidekitText(
+                "Password",
+                style = SidekitTheme.typography.body,
+                color = colors.surfaceA6
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            textStyle = SidekitTheme.typography.body.copy(color = colors.light),
+            singleLine = true,
+            cursorBrush = SolidColor(colors.light),
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done
+            )
+        )
     }
 }

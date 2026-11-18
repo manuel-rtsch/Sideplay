@@ -10,6 +10,7 @@ import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.auth.EncryptedSpotifyCredentialStore
 import io.github.manuelrtsch.sidetrack.auth.SpotifyAuth
 import io.github.manuelrtsch.sidetrack.playback.PlaybackController
+import io.github.manuelrtsch.sidetrack.storage.GuardedEncryptedStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -20,7 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
  */
 class ServiceRegistry(
     providers: List<MusicServiceProvider>,
-    initial: ServiceId = ServiceId.Spotify
+    initial: ServiceId = ServiceId.Spotify,
+    private val onActiveChanged: (ServiceId) -> Unit = {}
 ) {
     private val byId = providers.associateBy { it.id }
     private val _active = MutableStateFlow(initial)
@@ -37,6 +39,7 @@ class ServiceRegistry(
     fun switchTo(id: ServiceId): Boolean {
         if (id !in byId) return false
         _active.value = id
+        onActiveChanged(id)
         return true
     }
 }
@@ -59,8 +62,9 @@ class AppSession(
             ?: error("No runtime registered for ${activeService.value}")
     val capabilities: ServiceCapabilities get() = runtime.capabilities
     val account: ServiceAccount?
-        get() = registry.account ?: if (runtime.signedIn.value) {
-            ServiceAccount(runtime.service, runtime.service.value, provider.displayName)
+        get() = if (runtime.signedIn.value) {
+            registry.account?.takeIf { it.service == activeService }
+                ?: ServiceAccount(runtime.service, runtime.service.value, provider.displayName)
         } else {
             null
         }
@@ -98,7 +102,7 @@ class AppSession(
 
     fun signOut() {
         runtime.signOut()
-        registry.account = null
+        if (registry.account?.service == activeService) registry.account = null
     }
 
     fun pause() = runtime.pause()
@@ -118,6 +122,24 @@ class AppSession(
     fun clearCaches() = runtime.clearCaches()
     fun notePlayRequest(id: Long, uri: String?) = runtime.notePlayRequest(id, uri)
     fun consumeHaltStop(uri: String?, playRequestId: Long): Boolean = runtime.consumeHaltStop(uri, playRequestId)
+}
+
+/** Remembers the last selected service; not secret, but it belongs with the other encrypted state. */
+private class ActiveServiceStore(context: Context) {
+    private val store = GuardedEncryptedStore(context, "sidetracks_service")
+
+    fun read(): ServiceId? = runCatching {
+        val value = store.read().optString(KEY_ACTIVE).takeIf { it.isNotEmpty() } ?: return null
+        ServiceId(value).takeIf { it == ServiceId.Spotify || it == ServiceId.Navidrome }
+    }.getOrNull()
+
+    fun write(id: ServiceId) {
+        runCatching { store.write(org.json.JSONObject().put(KEY_ACTIVE, id.value)) }
+    }
+
+    private companion object {
+        const val KEY_ACTIVE = "active"
+    }
 }
 
 /** Lazily creates the one app session for the process, matching how Sidekit owns local playback. */
@@ -142,10 +164,26 @@ object AppSessions {
             Log.w("SidetrackSession", "Falling back to a signed-out session", e)
             SpotifySession()
         }
-        val registry = ServiceRegistry(listOf(SpotifyProvider(spotify)))
+        // Navidrome is always installed, signed in or not: the service picker must be able to offer
+        // it on a fresh install. Its encrypted store is read lazily, so a lost key is signed out.
+        val navidrome = runCatching { NavidromeRuntime(context) }
+            .onFailure { Log.w("SidetrackSession", "Could not build the Navidrome session", it) }
+            .getOrNull()
+        val serviceStore = runCatching { ActiveServiceStore(context) }.getOrNull()
+        val initial = serviceStore?.read()
+            ?.takeIf { id -> id == ServiceId.Spotify || (id == ServiceId.Navidrome && navidrome != null) }
+            ?: ServiceId.Spotify
+        val registry = ServiceRegistry(
+            listOfNotNull(
+                SpotifyProvider(spotify),
+                navidrome?.let(::NavidromeProvider)
+            ),
+            initial = initial,
+            onActiveChanged = { serviceStore?.write(it) }
+        )
         if (spotify.signedIn.value) {
             registry.account = ServiceAccount(ServiceId.Spotify, "spotify", "Spotify")
         }
-        return AppSession(registry, listOf(spotify))
+        return AppSession(registry, listOfNotNull(spotify, navidrome))
     }
 }

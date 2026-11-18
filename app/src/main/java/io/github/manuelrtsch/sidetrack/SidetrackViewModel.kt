@@ -339,7 +339,7 @@ class SidetrackViewModel(
             // would only deliver silence. Restore already anchored the saved offset here.
             it.playback.onResumeWithoutSource = {
                 val item = _state.value.current
-                if (item?.uri != null) {
+                if (item != null && session != null && item.service != ServiceId.Local) {
                     val resume = _playbackPositionMs.value
                     _state.update { state -> state.copy(isPlaying = true) }
                     startRemote(item, resume, resuming = resume > 0L)
@@ -1029,7 +1029,7 @@ class SidetrackViewModel(
         recordEpisodeProgress(force = true)
         anchorPosition(_playbackPositionMs.value)
         _state.update { it.copy(isPlaying = play) }
-        if (item.uri == null || session == null) return
+        if (session == null || item.service == ServiceId.Local) return
         viewModelScope.launch {
             try {
                 if (play && session.playback.current == null) {
@@ -1086,7 +1086,7 @@ class SidetrackViewModel(
         }
         if (_playbackPositionMs.value > 3_000L) {
             _playbackPositionMs.value = 0L
-            s.current?.uri?.let { uri ->
+            if (s.current?.service != ServiceId.Local) {
                 session?.let { session ->
                     viewModelScope.launch { runCatching { session.seek(0L) } }
                 }
@@ -1102,7 +1102,7 @@ class SidetrackViewModel(
             previous?.let { startRemote(it, resume, resuming = resume > 0L) }
         } else {
             _playbackPositionMs.value = 0L
-            s.current?.uri?.let { uri ->
+            if (s.current?.service != ServiceId.Local) {
                 session?.let { session ->
                     viewModelScope.launch { runCatching { session.seek(0L) } }
                 }
@@ -1119,7 +1119,7 @@ class SidetrackViewModel(
         anchorPosition(target)
         _playbackPositionMs.value = target
         recordEpisodeProgress(force = true)
-        if (current.uri != null && session != null) {
+        if (session != null && current.service != ServiceId.Local) {
             viewModelScope.launch { runCatching { session.seek(target) } }
         }
     }
@@ -1510,9 +1510,25 @@ class SidetrackViewModel(
     }
 
     fun signIn() {
-        val session = session
         val openBrowser = openBrowser
         if (session == null || openBrowser == null) {
+            _state.update { it.say("Sign-in is unavailable in this build") }
+            return
+        }
+        startSignIn(AuthInput.Browser(openBrowser))
+    }
+
+    /** Navidrome's self-hosted flow: server URL, username and password instead of a browser. */
+    fun signIn(serverUrl: String, username: String, password: String) {
+        if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
+            _state.update { it.say("Enter the server, username and password") }
+            return
+        }
+        startSignIn(AuthInput.Password(serverUrl.trim(), username.trim(), password))
+    }
+
+    private fun startSignIn(input: AuthInput) {
+        val session = session ?: run {
             _state.update { it.say("Sign-in is unavailable in this build") }
             return
         }
@@ -1523,7 +1539,7 @@ class SidetrackViewModel(
         _state.update { it.copy(authPending = true, notice = null) }
         signInJob = viewModelScope.launch {
             try {
-                session.signIn(AuthInput.Browser(openBrowser))
+                session.signIn(input)
                 _state.update { it.copy(signedIn = true, authPending = false) }
                 loadAccount()
             } catch (e: CancellationException) {
@@ -2182,7 +2198,9 @@ class SidetrackViewModel(
 
     private fun matchesCurrent(uri: String?): Boolean {
         if (uri.isNullOrEmpty()) return true
-        return _state.value.current?.uri?.equals(uri, ignoreCase = true) ?: true
+        // HTTP services have no stable MediaItem.uri; their event URI is the resolved stream URL.
+        val current = _state.value.current?.uri ?: session?.playback?.currentSource?.uri
+        return current?.equals(uri, ignoreCase = true) ?: true
     }
 
     private fun onPlaybackEnded() {
@@ -2367,9 +2385,9 @@ class SidetrackViewModel(
         gapless: Boolean = false,
         resuming: Boolean = false
     ) {
-        val uri = item.uri ?: return
         val session = session ?: return
-        SidetrackDebug.log("viewModel.startRemote uri=$uri positionMs=$positionMs gapless=$gapless resuming=$resuming")
+        if (item.service == ServiceId.Local) return
+        SidetrackDebug.log("viewModel.startRemote key=${item.key.encode()} positionMs=$positionMs gapless=$gapless resuming=$resuming")
         seekHold = null
         anchorPosition(positionMs)
         awaitingPlaybackStart = true

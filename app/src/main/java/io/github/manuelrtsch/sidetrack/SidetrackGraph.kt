@@ -760,6 +760,9 @@ fun NavGraphBuilder.sidetrackGraph(
                 onSelect = { id ->
                     appSession.switchService(id)
                     nav.popBackStack()
+                    if (!appSession.signedIn.value) {
+                        nav.navigate(SIGN_IN) { launchSingleTop = true }
+                    }
                 }
             )
         }
@@ -828,13 +831,16 @@ fun NavGraphBuilder.sidetrackGraph(
                     }
                 }
             }
+            val provider = AppSessions.get(context).provider
             SignInScreen(
                 account,
                 chrome,
                 onAbout = { nav.navigate(ABOUT) },
                 onSignIn = vm::signIn,
                 onDismissNotice = vm::dismissNotice,
-                serviceName = AppSessions.get(context).provider.displayName
+                serviceName = provider.displayName,
+                passwordAuth = provider.id == ServiceId.Navidrome,
+                onPasswordSignIn = vm::signIn
             )
         }
     }
