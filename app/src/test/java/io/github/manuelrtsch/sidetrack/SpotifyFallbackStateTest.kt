@@ -271,7 +271,7 @@ class SpotifyFallbackStateTest {
     @Test fun `play artist queues every top track, not just the loaded page`() = runTest(dispatcher) {
         val artist = MockSpotifyDataSource.artists.first { it.id == "aurora" }
         val base = MockSpotifyDataSource.playlist("late_night")!!.tracks.first()
-        val all = (0 until SPOTIFY_ARTIST_PAGE_SIZE * 2 + 5).map {
+        val all = (0 until ARTIST_PAGE_SIZE * 2 + 5).map {
             base.copy(id = "top$it", title = "Top $it")
         }
         val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
@@ -290,7 +290,7 @@ class SpotifyFallbackStateTest {
 
         vm.ensureArtist(artist.id)
         advanceUntilIdle()
-        assertEquals(SPOTIFY_ARTIST_PAGE_SIZE, vm.topTracks(artist).size)
+        assertEquals(ARTIST_PAGE_SIZE, vm.topTracks(artist).size)
         assertTrue(vm.state.value.artistTrackHasMore.getValue(artist.id))
 
         vm.playArtist(artist)

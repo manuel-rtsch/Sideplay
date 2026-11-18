@@ -65,7 +65,7 @@ fun SidetrackAboutScreen(onBack: () -> Unit, backLabel: String = "Settings") {
 
     SidekitScaffold(
         title = "About",
-        actions = spotifyBack(backLabel, onBack)
+        actions = sidetrackBack(backLabel, onBack)
     ) { padding ->
         SidekitList(padding, state = listState) {
             item(key = "version") {

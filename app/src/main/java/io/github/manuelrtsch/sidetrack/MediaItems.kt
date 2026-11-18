@@ -183,14 +183,14 @@ data class Station(
 const val CATALOG_PAGE_SIZE = 20
 
 /** Search reuses the shared page size so every scope fills the same visible batch. */
-const val SPOTIFY_SEARCH_PAGE_SIZE = CATALOG_PAGE_SIZE
+const val SEARCH_PAGE_SIZE = CATALOG_PAGE_SIZE
 
 /** Rows cached per category while the Library preloads, and used for saved-state hints. */
 const val LIBRARY_SECTION_SIZE = CATALOG_PAGE_SIZE
 
 /** Recently played rows on Home before "See more history". */
 const val RECENT_PREVIEW_SIZE = CATALOG_PAGE_SIZE
-const val SPOTIFY_ARTIST_PAGE_SIZE = CATALOG_PAGE_SIZE
+const val ARTIST_PAGE_SIZE = CATALOG_PAGE_SIZE
 
 /** One page of a catalog list. [total] is null when the endpoint doesn't report it. */
 data class Page<T>(

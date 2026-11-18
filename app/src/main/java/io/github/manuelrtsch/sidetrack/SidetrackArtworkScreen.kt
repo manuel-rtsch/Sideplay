@@ -49,7 +49,7 @@ fun SidetrackArtworkScreen(
 
     // No title: the image is the page, and the 640 px panel cannot fit a full-width square plus
     // a header above the action bar.
-    SidekitScaffold(title = null, actions = spotifyBack("Back", onBack)) { padding ->
+    SidekitScaffold(title = null, actions = sidetrackBack("Back", onBack)) { padding ->
         SidekitList(padding, state = listState) {
             item(key = "artwork") {
                 Box(

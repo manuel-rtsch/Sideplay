@@ -901,7 +901,7 @@ fun SeeMoreRow(label: String, loading: Boolean, onClick: () -> Unit, modifier: M
  * The screen's action bar, with the transient now-playing confirmation taking precedence over the
  * normal actions. A real notice (an error or confirmation) wins over the now-playing confirmation.
  */
-fun spotifyActions(
+fun sidetrackActions(
     chrome: ChromeUiState,
     onDismissNotice: () -> Unit,
     onOpenNowPlaying: () -> Unit,
@@ -918,10 +918,10 @@ fun spotifyActions(
     else -> actions
 }
 
-fun spotifyBack(label: String, onBack: () -> Unit) = listOf(SideAction.back("back", label, onBack))
+fun sidetrackBack(label: String, onBack: () -> Unit) = listOf(SideAction.back("back", label, onBack))
 
 /** The action bar for screens that can change saved state, plus any important notice. */
-fun spotifyBar(
+fun sidetrackBar(
     chrome: ChromeUiState,
     onDismissNotice: () -> Unit,
     onOpenNowPlaying: () -> Unit,
@@ -929,7 +929,7 @@ fun spotifyBar(
     continueWith: SideAction,
     extra: List<SideAction> = emptyList(),
     showNowPlayingNotice: Boolean = true
-): List<SideAction> = spotifyActions(
+): List<SideAction> = sidetrackActions(
     chrome,
     onDismissNotice,
     onOpenNowPlaying,

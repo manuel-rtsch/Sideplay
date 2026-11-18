@@ -75,11 +75,11 @@ fun ShowScreen(
 ) {
     val colors = SidekitTheme.colors
     val savedCollection = collection.key.encode() in saved.savedCollectionKeys
-    val back = remember { spotifyBack("Back", onBack).first() }
+    val back = remember { sidetrackBack("Back", onBack).first() }
     val rowActions = rememberRowActionBarState()
     val actions = rowActionBarActions(
         rowActions,
-        spotifyBar(
+        sidetrackBar(
             chrome,
             onDismissNotice,
             onNowPlaying,
@@ -439,7 +439,7 @@ fun NotesScreen(
     }
     SidekitScaffold(
         title = label,
-        actions = spotifyBack("Back", onBack)
+        actions = sidetrackBack("Back", onBack)
     ) { padding ->
         SidekitList(padding, state = listState) {
             item(key = "title") {

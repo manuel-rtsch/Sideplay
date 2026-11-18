@@ -68,7 +68,7 @@ fun SettingsScreen(
     UndoWindowLifecycle(undoWindow) { historyCleared = false }
     val backdrop = rememberArtworkBackdropSetting()
     val context = LocalContext.current
-    val back = remember { spotifyBack("Back", onBack).first() }
+    val back = remember { sidetrackBack("Back", onBack).first() }
     val baseActions = remember(back) { listOf(back, SideAction.forward("about", "About", onClick = onAbout)) }
     val normal = withNotice(chrome.notice, onDismissNotice, baseActions, chrome.noticeKind)
     val undo = if (historyCleared) {

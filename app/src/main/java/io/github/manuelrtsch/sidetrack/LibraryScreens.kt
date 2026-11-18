@@ -81,7 +81,7 @@ fun SidetrackHomeScreen(
     }
     val bar = rowActionBarActions(
         rowActions,
-        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+        sidetrackActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     )
     SidekitScaffold(
         title = "Sidetrack",
@@ -177,11 +177,11 @@ fun LibraryScreen(
         onAddToQueue
     )
     val baseActions = remember {
-        listOf(spotifyBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
+        listOf(sidetrackBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     }
     val actions = rowActionBarActions(
         rows.bar,
-        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+        sidetrackActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     )
     SidekitScaffold(
         title = "Library",
@@ -517,10 +517,10 @@ fun CollectionScreen(
         onAddItemToQueue
     )
     val savedCollection = collection.key.encode() in saved.savedCollectionKeys
-    val back = remember { spotifyBack("Back", onBack).first() }
+    val back = remember { sidetrackBack("Back", onBack).first() }
     val actions = rowActionBarActions(
         rows.bar,
-        spotifyBar(
+        sidetrackBar(
             chrome,
             onDismissNotice,
             onNowPlaying,
@@ -706,10 +706,10 @@ fun ArtistScreen(
         onEnsureSavedTrack,
         onAddToQueue
     )
-    val back = remember { spotifyBack("Back", onBack).first() }
+    val back = remember { sidetrackBack("Back", onBack).first() }
     val actions = rowActionBarActions(
         rows.bar,
-        spotifyBar(
+        sidetrackBar(
             chrome,
             onDismissNotice,
             onNowPlaying,

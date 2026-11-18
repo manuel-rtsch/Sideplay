@@ -147,8 +147,8 @@ fun NowPlayingScreen(
             )
         }
     }
-    val back = remember { spotifyBack("Back", onBack).first() }
-    val actions = spotifyBar(
+    val back = remember { sidetrackBack("Back", onBack).first() }
+    val actions = sidetrackBar(
         chrome,
         onDismissNotice,
         onOpenNowPlaying = {},
@@ -524,7 +524,7 @@ fun QueueScreen(
         focusedKey = null
         clearFocusPending = true
     }
-    val back = remember { spotifyBack("Back", onBack).first() }
+    val back = remember { sidetrackBack("Back", onBack).first() }
     // Removing a track offers Undo in the bar but drops the focus: the list must not choose a
     // neighbour for the user. The index identifies the occurrence, so duplicates are safe.
     val removeFromQueue: (Int, MediaItem) -> Unit = { index, item ->
@@ -643,7 +643,7 @@ fun QueueScreen(
     }
     // The queue's own top row is the current item, so the now-playing confirmation would only
     // repeat it. Errors and confirmations still replace the bar.
-    val normal = spotifyActions(
+    val normal = sidetrackActions(
         chrome,
         onDismissNotice,
         onNowPlaying,

@@ -70,13 +70,13 @@ fun SearchScreen(
     )
     val baseActions = remember(search.query) {
         buildList {
-            add(spotifyBack("Back", onBack).first())
+            add(sidetrackBack("Back", onBack).first())
             if (search.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
         }
     }
     val actions = rowActionBarActions(
         rows.bar,
-        spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+        sidetrackActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     )
     // The right side of the "Search in" row must stay on one line. The only selection that
     // overflows is four of five scopes, so name the one that is left out instead of listing four.
@@ -383,8 +383,8 @@ fun SearchScopesScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
-    val baseActions = remember { listOf(spotifyBack("Search", onBack).first()) }
-    val actions = spotifyActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
+    val baseActions = remember { listOf(sidetrackBack("Search", onBack).first()) }
+    val actions = sidetrackActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     SidekitScaffold(
         title = "Search in",
         actions = actions,

@@ -594,7 +594,7 @@ class SidetrackViewModel(
         _state.update { it.copy(artistMorePending = it.artistMorePending + id) }
         viewModelScope.launch {
             try {
-                val page = catalog.albums(artist.key, snapshot.artistAlbums[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
+                val page = catalog.albums(artist.key, snapshot.artistAlbums[id].orEmpty().size, ARTIST_PAGE_SIZE)
                 _state.update {
                     it.copy(
                         artistAlbums = it.artistAlbums + (id to (it.artistAlbums[id].orEmpty() + page.items).distinctBy { album -> album.id }),
@@ -622,7 +622,7 @@ class SidetrackViewModel(
         _state.update { it.copy(artistMorePending = it.artistMorePending + id) }
         viewModelScope.launch {
             try {
-                val page = catalog.topTracks(artist.key, snapshot.artistTracks[id].orEmpty().size, SPOTIFY_ARTIST_PAGE_SIZE)
+                val page = catalog.topTracks(artist.key, snapshot.artistTracks[id].orEmpty().size, ARTIST_PAGE_SIZE)
                 _state.update {
                     it.copy(
                         artistTracks = it.artistTracks + (id to (it.artistTracks[id].orEmpty() + page.items).distinctBy { track -> track.id }),
@@ -672,8 +672,8 @@ class SidetrackViewModel(
                     _state.update { it.copy(pendingArtists = it.pendingArtists - id) }
                     return@launch
                 }
-                val albums = catalog.albums(artist.key, 0, SPOTIFY_ARTIST_PAGE_SIZE)
-                val tracks = catalog.topTracks(artist.key, 0, SPOTIFY_ARTIST_PAGE_SIZE)
+                val albums = catalog.albums(artist.key, 0, ARTIST_PAGE_SIZE)
+                val tracks = catalog.topTracks(artist.key, 0, ARTIST_PAGE_SIZE)
                 val followed = runCatching { writer?.isFollowed(artistKey(id)) }
                     .onFailure { SidetrackDebug.log("viewModel.ensureArtist id=$id followed lookup failed", it) }
                     .getOrNull()
@@ -998,7 +998,7 @@ class SidetrackViewModel(
         var tracks = topTracks(artist)
         var hasMore = _state.value.artistTrackHasMore[id] == true
         while (hasMore) {
-            val page = catalog.topTracks(artist.key, tracks.size, SPOTIFY_ARTIST_PAGE_SIZE)
+            val page = catalog.topTracks(artist.key, tracks.size, ARTIST_PAGE_SIZE)
             tracks = (tracks + page.items).distinctBy { track -> track.id }
             hasMore = page.hasMore
             val updated = tracks
@@ -1953,7 +1953,7 @@ class SidetrackViewModel(
             val scopes = _state.value.searchScopes
             var failure: String? = null
             val results = try {
-                if (_state.value.signedIn) catalog.search(query, scopes, 0, SPOTIFY_SEARCH_PAGE_SIZE) else SearchResults()
+                if (_state.value.signedIn) catalog.search(query, scopes, 0, SEARCH_PAGE_SIZE) else SearchResults()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1967,7 +1967,7 @@ class SidetrackViewModel(
                         searchResults = results,
                         searchPending = false,
                         searchError = if (empty) failure else null,
-                        searchHasMore = scopes.filterTo(mutableSetOf()) { scope -> results.sizeFor(scope) >= SPOTIFY_SEARCH_PAGE_SIZE }
+                        searchHasMore = scopes.filterTo(mutableSetOf()) { scope -> results.sizeFor(scope) >= SEARCH_PAGE_SIZE }
                     )
                     // A failed search with old results stays a notice; an empty one becomes the
                     // screen's fallback so the retry action is visible.
@@ -1992,12 +1992,12 @@ class SidetrackViewModel(
         _state.update { it.copy(searchMorePending = it.searchMorePending + scope) }
         viewModelScope.launch {
             try {
-                val more = catalog.search(query, setOf(scope), offset, SPOTIFY_SEARCH_PAGE_SIZE)
+                val more = catalog.search(query, setOf(scope), offset, SEARCH_PAGE_SIZE)
                 _state.update {
                     if (it.query != query) {
                         it.copy(searchMorePending = it.searchMorePending - scope)
                     } else {
-                        val hasMore = if (more.sizeFor(scope) >= SPOTIFY_SEARCH_PAGE_SIZE) {
+                        val hasMore = if (more.sizeFor(scope) >= SEARCH_PAGE_SIZE) {
                             it.searchHasMore + scope
                         } else {
                             it.searchHasMore - scope
