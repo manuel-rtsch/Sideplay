@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack.auth
 
 import io.github.manuelrtsch.sidetrack.BuildConfig
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -34,19 +35,25 @@ class SpotifyAuth(
      * True when a stored session exists. Never throws: a store that cannot be read is treated as
      * signed out, so a lost keystore key lands on the sign-in screen instead of a crash.
      */
-    fun hasCredentials(): Boolean = runCatching { store.read() }.getOrNull() != null
+    fun hasCredentials(): Boolean {
+        val credentials = runCatching { store.read() }.getOrNull()
+        TriageLog.i("auth", "hasCredentials=${credentials != null}")
+        return credentials != null
+    }
 
     /**
      * Runs the browser round trip and stores the resulting tokens. Throws with a user-facing
      * message when Spotify denies the request, the state does not match, or the callback times out.
      */
     suspend fun signIn(openBrowser: suspend (String) -> Unit): SpotifyCredentials {
+        TriageLog.i("auth", "signIn: start")
         val verifier = SpotifyPkce.verifier()
         val state = SpotifyPkce.state()
 
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             server.soTimeout = CALLBACK_TIMEOUT_MS
             val redirectUri = "http://127.0.0.1:${server.localPort}$REDIRECT_PATH"
+            TriageLog.i("auth", "signIn: loopback listening on ${server.localPort}")
             val url = SpotifyPkce.authorizationUrl(
                 clientId = CLIENT_ID,
                 redirectUri = redirectUri,
@@ -54,10 +61,18 @@ class SpotifyAuth(
                 state = state,
                 scopes = SCOPES
             )
+            TriageLog.i("auth", "signIn: opening the browser")
             openBrowser(url)
+            TriageLog.i("auth", "signIn: browser handed off, waiting for the callback")
             val code = awaitCode(server, state)
-            val credentials = tokens.exchange(CLIENT_ID, code, verifier, redirectUri)
+            TriageLog.i("auth", "signIn: code received (${code.take(4)}…, ${code.length} chars)")
+            val credentials = runCatching { tokens.exchange(CLIENT_ID, code, verifier, redirectUri) }
+                .onFailure { TriageLog.e("auth", "signIn: token exchange failed", it) }
+                .getOrThrow()
+            TriageLog.i("auth", "signIn: token exchange ok, expiresAt=${credentials.expiresAtMs} " +
+                "refresh=${credentials.refreshToken != null} scope=${credentials.scope}")
             persist(credentials)
+            TriageLog.i("auth", "signIn: done")
             return credentials
         }
     }
@@ -69,9 +84,12 @@ class SpotifyAuth(
     private fun persist(credentials: SpotifyCredentials) {
         try {
             store.save(credentials)
+            TriageLog.i("auth", "persist: session stored")
         } catch (e: CredentialPersistenceException) {
+            TriageLog.e("auth", "persist: session could not be stored", e)
             throw e
         } catch (e: Exception) {
+            TriageLog.e("auth", "persist: unexpected failure", e)
             throw CredentialPersistenceException(
                 "Signed in, but this device could not store the session securely. " +
                     "You will need to sign in again next time.",
@@ -82,15 +100,34 @@ class SpotifyAuth(
 
     /** Returns a usable access token, refreshing it first when it is inside the expiry window. */
     suspend fun accessToken(): String? = refreshLock.withLock {
-        val credentials = runCatching { store.read() }.getOrNull() ?: return@withLock null
-        if (!credentials.isExpired(nowMs())) return@withLock credentials.accessToken
-        val refreshToken = credentials.refreshToken ?: return@withLock null
-        runCatching { tokens.refresh(CLIENT_ID, refreshToken) }
+        val credentials = runCatching { store.read() }.getOrNull()
+        if (credentials == null) {
+            TriageLog.w("auth", "accessToken: no stored session")
+            return@withLock null
+        }
+        val now = nowMs()
+        if (!credentials.isExpired(now)) {
+            TriageLog.i("auth", "accessToken: reusing the stored token (expires in ${credentials.expiresAtMs - now} ms)")
+            return@withLock credentials.accessToken
+        }
+        val refreshToken = credentials.refreshToken
+        if (refreshToken == null) {
+            TriageLog.w("auth", "accessToken: expired and no refresh token")
+            return@withLock null
+        }
+        TriageLog.i("auth", "accessToken: refreshing (expired ${now - credentials.expiresAtMs} ms ago)")
+        val refreshed = runCatching { tokens.refresh(CLIENT_ID, refreshToken) }
+            .onFailure { TriageLog.e("auth", "accessToken: refresh failed", it) }
             .getOrNull()
             ?.let { it.copy(scope = it.scope.ifEmpty { credentials.scope }) }
             // A refresh that cannot be stored still yields a usable token for this run.
-            ?.also { runCatching { store.save(it) } }
-            ?.accessToken
+            ?.also {
+                runCatching { store.save(it) }
+                    .onSuccess { TriageLog.i("auth", "accessToken: refreshed token stored") }
+                    .onFailure { error -> TriageLog.e("auth", "accessToken: refreshed token not stored", error) }
+            }
+        TriageLog.i("auth", "accessToken: refresh ${if (refreshed != null) "ok" else "gave no token"}")
+        refreshed?.accessToken
     }
 
     fun clear() = runCatching { store.clear() }
@@ -105,16 +142,23 @@ class SpotifyAuth(
                     val socket = try {
                         server.accept()
                     } catch (e: SocketTimeoutException) {
+                        TriageLog.e("auth", "signIn: callback timed out after $CALLBACK_TIMEOUT_MS ms", e)
                         throw IOException("Sign-in timed out — please try again", e)
                     } catch (e: IOException) {
                         coroutineContext.ensureActive()
+                        TriageLog.e("auth", "signIn: loopback accept failed", e)
                         throw e
                     }
+                    TriageLog.i("auth", "signIn: callback connection accepted")
                     socket.use {
                         when (val result = readCallback(it, expectedState)) {
                             is SpotifyPkce.Callback.Code -> return@withContext result.code
-                            is SpotifyPkce.Callback.Failure -> throw IOException(result.message)
-                            SpotifyPkce.Callback.Ignored -> Unit
+                            is SpotifyPkce.Callback.Failure -> {
+                                TriageLog.e("auth", "signIn: callback reported a failure: ${result.message}")
+                                throw IOException(result.message)
+                            }
+
+                            SpotifyPkce.Callback.Ignored -> TriageLog.w("auth", "signIn: ignored a callback request")
                         }
                     }
                 }

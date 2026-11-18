@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +19,7 @@ import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
 import hrln.interactive.sidekit.sdk.input.applyInputMode
 import hrln.interactive.sidekit.sdk.system.KeypadSystemBack
 import io.github.manuelrtsch.sidetrack.data.SpotifySessions
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 
 /**
  * The Sidetrack shell. It reads Sidekit's configuration when a compatible host is installed and
@@ -60,6 +62,9 @@ class SidetrackActivity : SidekitActivity() {
     }
 
     override fun onSidekitCreate(savedInstanceState: Bundle?) {
+        TriageLog.i("activity", "onSidekitCreate restored=${savedInstanceState != null}")
+        // Triage build: tell the user where the log is, so it can be shared from a file manager.
+        Toast.makeText(this, "Triage log: ${TriageLog.location}", Toast.LENGTH_LONG).show()
         if (savedInstanceState == null) SidetrackLinks.handle(intent)
     }
 

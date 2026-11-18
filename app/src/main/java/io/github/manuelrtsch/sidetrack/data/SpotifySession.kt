@@ -15,6 +15,7 @@ import io.github.manuelrtsch.sidetrack.auth.SpotifyAuth
 import io.github.manuelrtsch.sidetrack.bridge.NativeBridge
 import io.github.manuelrtsch.sidetrack.playback.SpotifyAudioSink
 import io.github.manuelrtsch.sidetrack.playback.SpotifyPlayback
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,12 @@ class SpotifySession(
 ) {
     // The credential store is read while the UI composes. Anything it cannot answer counts as
     // signed out, so a device that lost its keystore key still opens and offers sign-in.
-    private val _signedIn = MutableStateFlow(runCatching { auth.hasCredentials() }.getOrDefault(false))
+    private val _signedIn = MutableStateFlow(
+        runCatching { auth.hasCredentials() }
+            .onFailure { TriageLog.e("session", "signedIn: credential read threw", it) }
+            .getOrDefault(false)
+            .also { TriageLog.i("session", "signedIn resolved to $it") }
+    )
     val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
 
     private val appContext = context?.applicationContext
@@ -531,13 +537,14 @@ object SpotifySessions {
      * fallback still composes a signed-out app, and the next launch retries the real store.
      */
     private fun build(context: Context): SpotifySession = try {
+        TriageLog.i("session", "building the session")
         SpotifySession(
             SpotifyAuth(EncryptedSpotifyCredentialStore(context)),
             context.cacheDir.absolutePath,
             context
-        )
+        ).also { TriageLog.i("session", "session built") }
     } catch (e: Exception) {
-        Log.w("SidetrackSession", "Falling back to a signed-out session", e)
+        TriageLog.e("session", "session construction failed — falling back to signed out", e)
         SpotifySession()
     }
 }

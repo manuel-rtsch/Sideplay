@@ -1,8 +1,9 @@
 package io.github.manuelrtsch.sidetrack.storage
 
 import android.content.Context
-import android.util.Log
 import hrln.interactive.sidekit.sdk.crypto.EncryptedFileStore
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
+import java.io.File
 import org.json.JSONObject
 
 /** The small surface Sidetrack needs from an encrypted, atomic JSON store. */
@@ -35,24 +36,33 @@ class GuardedEncryptedStore(
     private val name: String
 ) : JsonStore {
     private val file = EncryptedFileStore(context.applicationContext, name)
+    private val sealed = File(context.applicationContext.noBackupFilesDir, "$name.sealed")
 
-    override fun read(): JSONObject = runCatching { file.read() }.getOrElse { error ->
-        Log.w(TAG, "Dropping unreadable encrypted store '$name'", error)
-        runCatching { file.clear() }
-        JSONObject()
+    override fun read(): JSONObject {
+        TriageLog.i(TAG, "read '$name' present=${sealed.exists()} bytes=${if (sealed.exists()) sealed.length() else -1}")
+        return runCatching { file.read() }
+            .onSuccess { TriageLog.i(TAG, "read '$name' ok keys=${it.length()}") }
+            .getOrElse { error ->
+                TriageLog.e(TAG, "read '$name' failed — dropping the unreadable store", error)
+                runCatching { file.clear() }
+                JSONObject()
+            }
     }
 
     override fun write(value: JSONObject) {
         try {
             file.write(value)
+            TriageLog.i(TAG, "write '$name' ok keys=${value.length()}")
         } catch (e: Exception) {
+            TriageLog.e(TAG, "write '$name' failed", e)
             throw EncryptedStoreException("This device could not save Sidetrack's data securely", e)
         }
     }
 
     override fun clear() {
         runCatching { file.clear() }
-            .onFailure { Log.w(TAG, "Could not clear encrypted store '$name'", it) }
+            .onSuccess { TriageLog.i(TAG, "clear '$name' ok") }
+            .onFailure { TriageLog.w(TAG, "clear '$name' failed", it) }
     }
 
     private companion object {

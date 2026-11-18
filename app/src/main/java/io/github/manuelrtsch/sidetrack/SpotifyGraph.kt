@@ -29,6 +29,7 @@ import androidx.navigation.navArgument
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.data.SpotifySessions
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 import kotlinx.coroutines.flow.MutableStateFlow
 
 const val SIDE_PLAY_ROOT = "sidetrack"
@@ -853,10 +854,13 @@ private fun NavBackStackEntry.spotifyViewModel(nav: NavHostController): SpotifyV
             // A ROM without a browser (a bare GSI, a stripped keypad build) has nothing to hand
             // the sign-in page to. Say so instead of surfacing ActivityNotFoundException.
             try {
+                TriageLog.i("browser", "opening the sign-in page")
                 context.startActivity(
                     Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
+                TriageLog.i("browser", "sign-in page handed to the system")
             } catch (e: ActivityNotFoundException) {
+                TriageLog.e("browser", "no activity can open the sign-in page", e)
                 throw IOException("No browser is installed to finish sign-in", e)
             }
         }

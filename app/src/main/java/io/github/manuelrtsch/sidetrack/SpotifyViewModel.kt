@@ -17,6 +17,7 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyLibraryWriter
 import io.github.manuelrtsch.sidetrack.data.SpotifyQueueRepository
 import io.github.manuelrtsch.sidetrack.data.SpotifySession
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -1482,19 +1483,24 @@ class SpotifyViewModel(
         signInJob?.cancel()
         _state.update { it.copy(authPending = true, notice = null) }
         signInJob = viewModelScope.launch {
+            TriageLog.i("signin", "requested")
             try {
                 session.signIn(openBrowser)
+                TriageLog.i("signin", "succeeded")
                 _state.update { it.copy(signedIn = true, authPending = false) }
                 loadAccount()
             } catch (e: CancellationException) {
+                TriageLog.w("signin", "cancelled")
                 throw e
             } catch (e: CredentialPersistenceException) {
                 // The session is live for this run; only keeping it for the next launch failed.
+                TriageLog.e("signin", "signed in, but the session was not stored", e)
                 _state.update { it.copy(signedIn = true, authPending = false).say(e.message ?: "Sign-in failed") }
                 loadAccount()
             } catch (e: Throwable) {
                 // Sign-in runs on the main thread and touches the keystore, the browser and the
                 // network. Anything that escapes here used to kill the process; report it instead.
+                TriageLog.e("signin", "failed", e)
                 _state.update {
                     it.copy(authPending = false).say(e.message ?: "Sign-in failed")
                 }
