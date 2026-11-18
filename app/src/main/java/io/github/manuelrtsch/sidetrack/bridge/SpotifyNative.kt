@@ -12,6 +12,13 @@ interface SpotifyNative {
     fun connect(accessToken: String): Boolean
     fun setAccessToken(accessToken: String): Boolean
     fun disconnect()
+
+    /**
+     * Whether a player is attached to the live session. A reconnect replaces the session and drops
+     * the player, so this is the only reliable answer; a cached flag on the Kotlin side can be
+     * stale.
+     */
+    fun hasPlayer(): Boolean
     fun createPlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean
     fun recreatePlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean
     fun preload(uri: String): Boolean

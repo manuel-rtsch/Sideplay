@@ -95,6 +95,18 @@ pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_
 }
 
 #[no_mangle]
+pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_nativeHasPlayer(
+    _env: JNIEnv,
+    _this: JObject,
+) -> jboolean {
+    if engine::has_player() {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_nativeCreatePlayer(
     _env: JNIEnv,
     _this: JObject,
@@ -517,9 +529,12 @@ pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_
 }
 
 fn bool_result(result: Result<(), String>) -> jboolean {
-    if result.is_ok() {
-        JNI_TRUE
-    } else {
-        JNI_FALSE
+    match result {
+        Ok(()) => JNI_TRUE,
+        Err(error) => {
+            // The Kotlin side only sees a boolean, so the reason has to reach logcat from here.
+            log::warn!("native call failed: {error}");
+            JNI_FALSE
+        }
     }
 }

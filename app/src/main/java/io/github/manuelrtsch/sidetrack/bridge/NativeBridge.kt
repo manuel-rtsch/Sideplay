@@ -30,6 +30,8 @@ object NativeBridge : SpotifyNative {
         if (isAvailable) runCatching { nativeDisconnect() }
     }
 
+    override fun hasPlayer(): Boolean = isAvailable && runCatching { nativeHasPlayer() }.getOrDefault(false)
+
     override fun createPlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean = isAvailable && runCatching { nativeCreatePlayer(bitrateKbps, normalization, gapless) }.getOrDefault(false)
 
     override fun recreatePlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean = isAvailable && runCatching { nativeRecreatePlayer(bitrateKbps, normalization, gapless) }.getOrDefault(false)
@@ -103,6 +105,7 @@ object NativeBridge : SpotifyNative {
     private external fun nativeConnect(accessToken: String): Boolean
     private external fun nativeSetAccessToken(accessToken: String): Boolean
     private external fun nativeDisconnect()
+    private external fun nativeHasPlayer(): Boolean
     private external fun nativeCreatePlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean
     private external fun nativeRecreatePlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean
     private external fun nativePreload(uri: String): Boolean
