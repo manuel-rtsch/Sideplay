@@ -8,7 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -21,9 +26,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -90,32 +95,32 @@ fun SpotifySearchScreen(
     }
     val searchFocus = remember { FocusRequester() }
     val scopesFocus = remember { FocusRequester() }
-    val firstResultFocus = remember { FocusRequester() }
-    val firstResultScope = if (search.query.trim().length < 2 || results.isEmpty) {
-        null
-    } else {
-        when {
-            results.tracks.isNotEmpty() -> SearchScope.Tracks
-            results.artists.isNotEmpty() -> SearchScope.Artists
-            results.albums.isNotEmpty() -> SearchScope.Albums
-            results.playlists.isNotEmpty() -> SearchScope.Playlists
-            results.shows.isNotEmpty() -> SearchScope.Shows
-            else -> null
+    val filterFocus = remember { SearchScope.entries.associateWith { FocusRequester() } }
+    // The category buttons only choose which result list is shown. Which categories get queried is
+    // still decided on the "Search in" page, and that page is reached from the idle/typing state.
+    // The selection survives a trip into a result and back.
+    var scope by rememberSaveable { mutableStateOf(SearchScope.Tracks) }
+    val hasQuery = search.query.trim().length >= 2
+    val loading = hasQuery && search.searchPending && results.isEmpty
+    val failed = hasQuery && !search.searchPending && search.searchError != null && results.isEmpty
+    // Once there is a query the page is about browsing results: either the list or the reason there
+    // is none. The "Search in" row belongs to the state where the query is still being typed.
+    val showFilters = hasQuery && !loading && !failed
+    val populated = SearchScope.entries.firstOrNull { it in search.searchScopes && results.sizeFor(it) > 0 }
+    // A query may return nothing in the selected category, and toggling scopes can remove the
+    // selected category entirely. Move to an included category with results first, then to any
+    // included category, so the buttons and the list never disagree.
+    LaunchedEffect(search.query, search.searchScopes, populated) {
+        if (scope !in search.searchScopes) {
+            SearchScope.entries.firstOrNull { it in search.searchScopes }?.let { scope = it }
+        } else if (populated != null && results.sizeFor(scope) == 0) {
+            scope = populated
         }
     }
-    val lastResultScope = when {
-        results.shows.isNotEmpty() -> SearchScope.Shows
-        results.playlists.isNotEmpty() -> SearchScope.Playlists
-        results.albums.isNotEmpty() -> SearchScope.Albums
-        results.artists.isNotEmpty() -> SearchScope.Artists
-        results.tracks.isNotEmpty() -> SearchScope.Tracks
-        else -> null
-    }
-    val lastResultIsSeeMore = lastResultScope != null && lastResultScope in search.searchHasMore
-    // Enter in the search field hands the keypad to the results. Up walks back out: first result
-    // to "Search in", then "Search in" to the field, so typing and browsing never fight over keys.
-    // Preview handlers run before the focused row's own D-pad handling, which would otherwise
-    // consume Up and let focus search fall back to the search field.
+    // Enter in the search field hands the keypad to the result categories. Up walks back out: first
+    // result to the category buttons, category buttons to the field, so typing and browsing never
+    // fight over keys. Preview handlers run before the focused row's own D-pad handling, which
+    // would otherwise consume Up and let focus search fall back to the search field.
     val scopesModifier = Modifier
         .focusRequester(scopesFocus)
         .onPreviewKeyEvent { event ->
@@ -126,25 +131,25 @@ fun SpotifySearchScreen(
                 false
             }
         }
-    val firstResultModifier = Modifier
-        .focusRequester(firstResultFocus)
-        .onPreviewKeyEvent { event ->
-            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
-                scopesFocus.requestFocus()
-                true
-            } else {
-                false
-            }
+    val filterRowModifier = Modifier.onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+            searchFocus.requestFocus()
+            true
+        } else {
+            false
         }
-    // The search field sits above the list, so a Down from the last row must not wrap back into
-    // it. Cancel Down there; the field is only reachable by walking Up out of the list.
-    val lastRowModifier = Modifier.focusProperties { down = FocusRequester.Cancel }
-    fun resultModifier(scope: SearchScope, index: Int, lastIndex: Int): Modifier {
-        var modifier: Modifier = Modifier
-        if (firstResultScope == scope && index == 0) modifier = modifier.then(firstResultModifier)
-        if (lastResultScope == scope && !lastResultIsSeeMore && index == lastIndex) modifier = modifier.then(lastRowModifier)
-        return modifier
     }
+    val firstResultModifier = Modifier.onPreviewKeyEvent { event ->
+        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+            filterFocus.getValue(scope).requestFocus()
+            true
+        } else {
+            false
+        }
+    }
+    // The category row sits above the list, so a Down from the last row must not wrap back into
+    // it. Cancel Down there; the row is only reachable by walking Up out of the list.
+    val lastRowModifier = Modifier.focusProperties { down = FocusRequester.Cancel }
     SidekitScaffold(
         title = null,
         modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
@@ -163,7 +168,13 @@ fun SpotifySearchScreen(
                     focusOnKeypad = true,
                     singleLine = true,
                     autoFocus = true,
-                    onDone = { if (firstResultScope == null) scopesFocus.requestFocus() else firstResultFocus.requestFocus() }
+                    onDone = {
+                        when {
+                            showFilters -> filterFocus.getValue(scope).requestFocus()
+                            !hasQuery -> scopesFocus.requestFocus()
+                            else -> Unit
+                        }
+                    }
                 )
             }
         },
@@ -172,7 +183,10 @@ fun SpotifySearchScreen(
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
-        if (search.query.trim().length >= 2 && !search.searchPending && search.searchError != null && results.isEmpty) {
+        // A new scope or query shows a different page from the top; keeping the old scroll offset
+        // would open it in the middle.
+        LaunchedEffect(search.query, scope) { listState.scrollToItem(0) }
+        if (failed) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 SpotifyStatusScreen(
                     "Couldn't search Spotify",
@@ -184,234 +198,134 @@ fun SpotifySearchScreen(
             return@SidekitScaffold
         }
         SidekitList(padding, state = listState) {
-            var rowIndex = 0
-            val scopeIndex = rowIndex
-            item(key = "scopes") {
-                TerminalRow(
-                    "Search in",
-                    modifier = Modifier.listFade(listState, scopeIndex)
-                        .then(scopesModifier)
-                        .then(if (lastResultScope == null) lastRowModifier else Modifier),
-                    secondary = scopeSummary,
-                    onClick = onScopes
-                )
-            }
-            rowIndex += 1
-            when {
-                search.query.isBlank() -> {
-                    val index = rowIndex
-                    item(key = "idle") {
-                        EmptyMessage(
-                            "Type at least two letters",
-                            Modifier.listFade(listState, index)
-                        )
+            if (!showFilters) {
+                // Idle and short-query states keep the "Search in" row: this is where the user
+                // decides what the next search will look at.
+                item(key = "scopes") {
+                    TerminalRow(
+                        "Search in",
+                        modifier = Modifier.listFade(listState, 0)
+                            .then(scopesModifier)
+                            .then(lastRowModifier),
+                        secondary = scopeSummary,
+                        onClick = onScopes
+                    )
+                }
+                when {
+                    search.query.isBlank() -> {
+                        item(key = "idle") {
+                            EmptyMessage(
+                                "Type at least two letters",
+                                Modifier.listFade(listState, 1)
+                            )
+                        }
+                    }
+
+                    search.query.trim().length < 2 -> {
+                        item(key = "short") {
+                            EmptyMessage(
+                                "Keep typing",
+                                Modifier.listFade(listState, 1)
+                            )
+                        }
+                    }
+
+                    else -> {
+                        item(key = "loading") {
+                            EmptyMessage(
+                                "Searching…",
+                                Modifier.listFade(listState, 1),
+                                hint = "Looking on Spotify"
+                            )
+                        }
                     }
                 }
-
-                search.query.trim().length < 2 -> {
-                    val index = rowIndex
-                    item(key = "short") {
-                        EmptyMessage(
-                            "Keep typing",
-                            Modifier.listFade(listState, index)
-                        )
-                    }
+            } else {
+                // Like the library, the category row is the first list item: it scrolls away with
+                // the content and one category's list is shown at a time.
+                item(key = "filters") {
+                    ContentFilterRow(
+                        filters = SearchScope.entries,
+                        selected = scope,
+                        icon = { it.icon },
+                        label = { it.label },
+                        onSelect = { scope = it },
+                        focusRequesters = filterFocus,
+                        enabled = { it in search.searchScopes },
+                        modifier = Modifier.listFade(listState, 0)
+                            .padding(bottom = SidekitTheme.spacing.pageGap)
+                            .then(filterRowModifier)
+                    )
                 }
-
-                search.searchPending && results.isEmpty -> {
-                    val index = rowIndex
-                    item(key = "loading") {
+                val items = results.itemsFor(scope)
+                if (items.isEmpty()) {
+                    item(key = "empty") {
                         EmptyMessage(
-                            "Searching…",
-                            Modifier.listFade(listState, index),
-                            hint = "Looking on Spotify"
-                        )
-                    }
-                }
-
-                results.isEmpty -> {
-                    val index = rowIndex
-                    item(key = "noResults") {
-                        EmptyMessage(
-                            "No results for \"${search.query.trim()}\"",
-                            Modifier.listFade(listState, index),
+                            "No ${scope.label.lowercase()} for \"${search.query.trim()}\"",
+                            Modifier.listFade(listState, 1),
                             hint = "Try another spelling or keyword"
                         )
                     }
-                }
-
-                else -> {
-                    if (results.tracks.isNotEmpty()) {
-                        item(key = "tracksLabel") {
-                            SectionLabel("Tracks")
-                        }
-                        rowIndex += 1
-                        val base = rowIndex
-                        itemsIndexed(
-                            results.tracks,
-                            key = { _, track -> "t${track.id}" },
-                            contentType = { _, _ -> "track" }
-                        ) { index, track ->
-                            TrackRow(
-                                "t${track.id}",
-                                track,
+                } else {
+                    val hasMore = scope in search.searchHasMore
+                    itemsIndexed(
+                        items,
+                        key = { _, item -> searchItemKey(item) },
+                        contentType = { _, item -> searchItemKey(item).take(1) }
+                    ) { index, item ->
+                        val modifier = Modifier.listFade(listState, index + 1)
+                            .then(if (index == 0) firstResultModifier else Modifier)
+                            .then(if (index == items.lastIndex && !hasMore) lastRowModifier else Modifier)
+                        when (item) {
+                            is SpotifyTrack -> TrackRow(
+                                searchItemKey(item),
+                                item,
                                 rows,
-                                Modifier.listFade(listState, base + index)
-                                    .then(resultModifier(SearchScope.Tracks, index, results.tracks.lastIndex))
-                            ) { onTrack(track) }
-                        }
-                        rowIndex += results.tracks.size
-                        if (SearchScope.Tracks in search.searchHasMore) {
-                            val moreIndex = rowIndex
-                            item(key = "moreTracks") {
-                                LoadMoreRow(
-                                    "Load more tracks",
-                                    SearchScope.Tracks in search.searchMorePending,
-                                    onLoadMore = { onLoadMore(SearchScope.Tracks) },
-                                    modifier = Modifier.listFade(listState, moreIndex)
-                                        .then(if (lastResultScope == SearchScope.Tracks && lastResultIsSeeMore) lastRowModifier else Modifier)
-                                )
-                            }
-                            rowIndex += 1
-                        }
-                    }
-                    if (results.artists.isNotEmpty()) {
-                        item(key = "artistsLabel") {
-                            SectionLabel("Artists")
-                        }
-                        rowIndex += 1
-                        val base = rowIndex
-                        itemsIndexed(
-                            results.artists,
-                            key = { _, artist -> "r${artist.id}" },
-                            contentType = { _, _ -> "artist" }
-                        ) { index, artist ->
-                            SpotifyLibraryRow(
-                                artist.artRes,
-                                artist.name,
+                                modifier
+                            ) { onTrack(item) }
+
+                            is SpotifyArtist -> SpotifyLibraryRow(
+                                item.artRes,
+                                item.name,
                                 "Artist",
-                                Modifier.listFade(listState, base + index)
-                                    .then(resultModifier(SearchScope.Artists, index, results.artists.lastIndex)),
-                                artUrl = artist.artUrl
-                            ) { onArtist(artist) }
-                        }
-                        rowIndex += results.artists.size
-                        if (SearchScope.Artists in search.searchHasMore) {
-                            val moreIndex = rowIndex
-                            item(key = "moreArtists") {
-                                LoadMoreRow(
-                                    "Load more artists",
-                                    SearchScope.Artists in search.searchMorePending,
-                                    onLoadMore = { onLoadMore(SearchScope.Artists) },
-                                    modifier = Modifier.listFade(listState, moreIndex)
-                                        .then(if (lastResultScope == SearchScope.Artists && lastResultIsSeeMore) lastRowModifier else Modifier)
-                                )
-                            }
-                            rowIndex += 1
-                        }
-                    }
-                    if (results.albums.isNotEmpty()) {
-                        item(key = "albumsLabel") {
-                            SectionLabel("Albums")
-                        }
-                        rowIndex += 1
-                        val base = rowIndex
-                        itemsIndexed(
-                            results.albums,
-                            key = { _, album -> "a${album.id}" },
-                            contentType = { _, _ -> "album" }
-                        ) { index, album ->
-                            SpotifyLibraryRow(
-                                album.artRes,
-                                album.title,
-                                if (album.year > 0) "${album.artist} · ${album.year}" else album.artist,
-                                Modifier.listFade(listState, base + index)
-                                    .then(resultModifier(SearchScope.Albums, index, results.albums.lastIndex)),
-                                artUrl = album.artUrl
-                            ) { onAlbum(album) }
-                        }
-                        rowIndex += results.albums.size
-                        if (SearchScope.Albums in search.searchHasMore) {
-                            val moreIndex = rowIndex
-                            item(key = "moreAlbums") {
-                                LoadMoreRow(
-                                    "Load more albums",
-                                    SearchScope.Albums in search.searchMorePending,
-                                    onLoadMore = { onLoadMore(SearchScope.Albums) },
-                                    modifier = Modifier.listFade(listState, moreIndex)
-                                        .then(if (lastResultScope == SearchScope.Albums && lastResultIsSeeMore) lastRowModifier else Modifier)
-                                )
-                            }
-                            rowIndex += 1
+                                modifier,
+                                artUrl = item.artUrl
+                            ) { onArtist(item) }
+
+                            is SpotifyAlbum -> SpotifyLibraryRow(
+                                item.artRes,
+                                item.title,
+                                if (item.year > 0) "${item.artist} · ${item.year}" else item.artist,
+                                modifier,
+                                artUrl = item.artUrl
+                            ) { onAlbum(item) }
+
+                            is SpotifyPlaylist -> SpotifyLibraryRow(
+                                item.artRes,
+                                item.name,
+                                playlistSubtitle(item),
+                                modifier,
+                                artUrl = item.artUrl
+                            ) { onPlaylist(item) }
+
+                            is SpotifyShow -> SpotifyLibraryRow(
+                                item.artRes,
+                                item.name,
+                                item.publisher,
+                                modifier,
+                                artUrl = item.artUrl
+                            ) { onShow(item) }
                         }
                     }
-                    if (results.playlists.isNotEmpty()) {
-                        item(key = "playlistsLabel") {
-                            SectionLabel("Playlists")
-                        }
-                        rowIndex += 1
-                        val base = rowIndex
-                        itemsIndexed(
-                            results.playlists,
-                            key = { _, playlist -> "p${playlist.id}" },
-                            contentType = { _, _ -> "playlist" }
-                        ) { index, playlist ->
-                            SpotifyLibraryRow(
-                                playlist.artRes,
-                                playlist.name,
-                                playlistSubtitle(playlist),
-                                Modifier.listFade(listState, base + index)
-                                    .then(resultModifier(SearchScope.Playlists, index, results.playlists.lastIndex)),
-                                artUrl = playlist.artUrl
-                            ) { onPlaylist(playlist) }
-                        }
-                        rowIndex += results.playlists.size
-                        if (SearchScope.Playlists in search.searchHasMore) {
-                            val moreIndex = rowIndex
-                            item(key = "morePlaylists") {
-                                LoadMoreRow(
-                                    "Load more playlists",
-                                    SearchScope.Playlists in search.searchMorePending,
-                                    onLoadMore = { onLoadMore(SearchScope.Playlists) },
-                                    modifier = Modifier.listFade(listState, moreIndex)
-                                        .then(if (lastResultScope == SearchScope.Playlists && lastResultIsSeeMore) lastRowModifier else Modifier)
-                                )
-                            }
-                            rowIndex += 1
-                        }
-                    }
-                    if (results.shows.isNotEmpty()) {
-                        item(key = "showsLabel") {
-                            SectionLabel("Shows")
-                        }
-                        rowIndex += 1
-                        val base = rowIndex
-                        itemsIndexed(
-                            results.shows,
-                            key = { _, show -> "s${show.id}" },
-                            contentType = { _, _ -> "show" }
-                        ) { index, show ->
-                            SpotifyLibraryRow(
-                                show.artRes,
-                                show.name,
-                                show.publisher,
-                                Modifier.listFade(listState, base + index)
-                                    .then(resultModifier(SearchScope.Shows, index, results.shows.lastIndex)),
-                                artUrl = show.artUrl
-                            ) { onShow(show) }
-                        }
-                        rowIndex += results.shows.size
-                        if (SearchScope.Shows in search.searchHasMore) {
-                            val moreIndex = rowIndex
-                            item(key = "moreShows") {
-                                LoadMoreRow(
-                                    "Load more shows",
-                                    SearchScope.Shows in search.searchMorePending,
-                                    onLoadMore = { onLoadMore(SearchScope.Shows) },
-                                    modifier = Modifier.listFade(listState, moreIndex)
-                                        .then(if (lastResultScope == SearchScope.Shows && lastResultIsSeeMore) lastRowModifier else Modifier)
-                                )
-                            }
+                    if (hasMore) {
+                        item(key = "more") {
+                            LoadMoreRow(
+                                "Load more ${scope.label.lowercase()}",
+                                scope in search.searchMorePending,
+                                onLoadMore = { onLoadMore(scope) },
+                                modifier = Modifier.listFade(listState, items.size + 1)
+                                    .then(lastRowModifier)
+                            )
                         }
                     }
                 }
@@ -419,6 +333,34 @@ fun SpotifySearchScreen(
         }
     }
 }
+
+private fun SpotifySearchResults.itemsFor(scope: SearchScope): List<Any> = when (scope) {
+    SearchScope.Tracks -> tracks
+    SearchScope.Artists -> artists
+    SearchScope.Albums -> albums
+    SearchScope.Playlists -> playlists
+    SearchScope.Shows -> shows
+}
+
+private fun SpotifySearchResults.sizeFor(scope: SearchScope): Int = itemsFor(scope).size
+
+private fun searchItemKey(item: Any): String = when (item) {
+    is SpotifyTrack -> "t${item.id}"
+    is SpotifyArtist -> "r${item.id}"
+    is SpotifyAlbum -> "a${item.id}"
+    is SpotifyPlaylist -> "p${item.id}"
+    is SpotifyShow -> "s${item.id}"
+    else -> item.toString()
+}
+
+private val SearchScope.icon: SidekitIcon
+    get() = when (this) {
+        SearchScope.Tracks -> SidekitIcon.MusicNote2
+        SearchScope.Artists -> SidekitIcon.Artist
+        SearchScope.Albums -> SidekitIcon.Album
+        SearchScope.Playlists -> SidekitIcon.QueueMusic
+        SearchScope.Shows -> SidekitIcon.SmartDisplay
+    }
 
 /** Lets the user choose which search categories are queried without hiding them in Options. */
 @Composable
@@ -446,14 +388,23 @@ fun SearchScopesScreen(
             SearchScope.entries.forEachIndexed { index, scope ->
                 item(key = scope.name) {
                     val included = scope in search.searchScopes
+                    // Never let the last category be turned off: the search page has no list to
+                    // show without one, and an empty scope set used to mean "everything". The row
+                    // stays focusable so its checked, disabled state is still announced.
+                    val locked = included && search.searchScopes.size == 1
                     SidetrackItem(
                         scope.label,
-                        modifier = Modifier.listFade(listState, index + 1),
-                        secondary = if (included) "On" else "Off",
+                        modifier = Modifier.listFade(listState, index + 1)
+                            .semantics { if (locked) disabled() },
+                        secondary = when {
+                            locked -> "On, required"
+                            included -> "On"
+                            else -> "Off"
+                        },
                         icon = if (included) SidekitIcon.Check else null,
                         toggleable = included,
                         toggleRole = Role.Checkbox,
-                        onClick = { onToggleScope(scope) }
+                        onClick = { if (!locked) onToggleScope(scope) }
                     )
                 }
             }

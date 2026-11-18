@@ -1286,10 +1286,10 @@ class SpotifyViewModel(
     }
 
     fun toggleScope(scope: SearchScope) {
-        _state.update {
-            val scopes = if (scope in it.searchScopes) it.searchScopes - scope else it.searchScopes + scope
-            it.copy(searchScopes = scopes)
-        }
+        val current = _state.value.searchScopes
+        val next = toggledSearchScopes(current, scope)
+        if (next == current) return
+        _state.update { it.copy(searchScopes = next) }
         search(debounceMs = 0L)
     }
 

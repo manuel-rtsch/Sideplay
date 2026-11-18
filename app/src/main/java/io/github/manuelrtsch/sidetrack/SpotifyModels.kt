@@ -208,6 +208,16 @@ enum class SearchScope(val label: String) {
     Shows("Shows")
 }
 
+/**
+ * Toggles one category of the search scope, but always keeps at least one. An empty set has no
+ * result list to show, and the native catalog used to read it as "search everything".
+ */
+fun toggledSearchScopes(current: Set<SearchScope>, scope: SearchScope): Set<SearchScope> = when {
+    scope !in current -> current + scope
+    current.size > 1 -> current - scope
+    else -> current
+}
+
 enum class RepeatMode(val label: String) {
     Off("Repeat: off"),
     Context("Repeat: context"),

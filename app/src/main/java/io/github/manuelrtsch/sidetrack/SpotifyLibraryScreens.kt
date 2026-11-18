@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -311,40 +312,69 @@ private fun LibraryFilterRow(
     focusRequesters: Map<LibraryFilter, FocusRequester>,
     modifier: Modifier = Modifier
 ) {
+    ContentFilterRow(
+        filters = LibraryFilter.entries,
+        selected = selected,
+        icon = { it.icon },
+        label = { it.label },
+        onSelect = onFilter,
+        focusRequesters = focusRequesters,
+        modifier = modifier
+    )
+}
+
+/**
+ * A row of equally wide square category buttons, one per entry of [filters]. Moving focus with
+ * Left/Right (or clicking) selects a category; the screen then shows that category's content.
+ * Library and Search share the row so both pages behave the same under the pointer and keypad.
+ */
+@Composable
+internal fun <T> ContentFilterRow(
+    filters: List<T>,
+    selected: T,
+    icon: (T) -> SidekitIcon,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    focusRequesters: Map<T, FocusRequester>,
+    modifier: Modifier = Modifier,
+    enabled: (T) -> Boolean = { true }
+) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val filters = LibraryFilter.entries
         val columns = filters.size
         val cell = (maxWidth - SidekitTheme.spacing.itemOuterGap * (columns - 1)) / columns.toFloat()
         SidekitItemRow {
             filters.forEachIndexed { index, filter ->
                 val isSelected = filter == selected
+                val isEnabled = enabled(filter)
                 SidekitIconItem(
-                    icon = filter.icon,
-                    contentDescription = filter.label,
+                    icon = icon(filter),
+                    // An excluded category keeps its slot so the row never reflows; it only loses
+                    // its click, its muted colour says why.
+                    contentDescription = if (isEnabled) label(filter) else "${label(filter)}, off",
                     modifier = Modifier
                         .weight(1f)
                         .height(cell)
                         .focusRequester(focusRequesters.getValue(filter))
                         .onFocusChanged { state ->
-                            if (state.isFocused && !isSelected) onFilter(filter)
+                            if (isEnabled && state.isFocused && !isSelected) onSelect(filter)
                         }
-                        // Left/Right move to the adjacent category by request. Geometric focus
-                        // search picked the action bar (below and to the right) instead of the
-                        // neighbouring button, and the loading swap re-created the row, so the
+                        // Left/Right move to the adjacent enabled category by request. Geometric
+                        // focus search picked the action bar (below and to the right) instead of
+                        // the neighbouring button, and the loading swap re-created the row, so the
                         // buttons to the right were unreachable. Down/Up keep their default path
-                        // into and out of the content below.
+                        // into and out of the content below. Disabled buttons are skipped.
                         .onPreviewKeyEvent { event ->
                             if (event.type != KeyEventType.KeyDown) {
                                 false
                             } else {
                                 when (event.key) {
                                     Key.DirectionRight -> {
-                                        filters.getOrNull(index + 1)?.let { focusRequesters[it]?.requestFocus() }
+                                        focusAdjacent(filters, index, 1, enabled, focusRequesters)
                                         true
                                     }
 
                                     Key.DirectionLeft -> {
-                                        filters.getOrNull(index - 1)?.let { focusRequesters[it]?.requestFocus() }
+                                        focusAdjacent(filters, index, -1, enabled, focusRequesters)
                                         true
                                     }
 
@@ -352,14 +382,39 @@ private fun LibraryFilterRow(
                                 }
                             }
                         }
-                        .semantics { this.selected = isSelected },
-                    color = (if (isSelected) SpotifyTileTone.Library else SpotifyTileTone.Neutral)
-                        .colour(SidekitTheme.colors),
+                        .semantics {
+                            this.selected = isSelected
+                            if (!isEnabled) disabled()
+                        },
+                    color = when {
+                        !isEnabled -> SpotifyTileTone.Muted
+                        isSelected -> SpotifyTileTone.Library
+                        else -> SpotifyTileTone.Neutral
+                    }.colour(SidekitTheme.colors),
                     iconSize = SidekitTheme.spacing.tileIconSize,
-                    onClick = { onFilter(filter) }
+                    onClick = if (isEnabled) ({ onSelect(filter) }) else null
                 )
             }
         }
+    }
+}
+
+/** Moves focus past disabled entries in the row; stays put when there is no enabled one left. */
+private fun <T> focusAdjacent(
+    filters: List<T>,
+    from: Int,
+    step: Int,
+    enabled: (T) -> Boolean,
+    focusRequesters: Map<T, FocusRequester>
+) {
+    var index = from + step
+    while (index in filters.indices) {
+        val candidate = filters[index]
+        if (enabled(candidate)) {
+            focusRequesters[candidate]?.requestFocus()
+            return
+        }
+        index += step
     }
 }
 
