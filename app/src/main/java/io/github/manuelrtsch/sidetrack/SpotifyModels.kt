@@ -155,7 +155,7 @@ data class SpotifyStation(
 const val SPOTIFY_PAGE_SIZE = 50
 const val SPOTIFY_SEARCH_PAGE_SIZE = 5
 
-/** Rows shown per category on the Library overview before "See more". */
+/** Rows cached per category while the Library preloads, and used for saved-state hints. */
 const val LIBRARY_SECTION_SIZE = 5
 
 /** Recently played rows on Home before "See more history". */

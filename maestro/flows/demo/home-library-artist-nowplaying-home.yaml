@@ -6,14 +6,10 @@ name: Home -> Library -> Artist -> Now Playing -> Home
 - launchApp
 - assertVisible: "Sidetrack"
 
-# 1. Open the Library and scroll to the followed artists.
+# 1. Open the Library and attach the followed artists list.
 - tapOn: "Library"
 - assertVisible: "Library"
-- scrollUntilVisible:
-    element:
-      text: "Artist"
-      index: 1
-    direction: DOWN
+- tapOn: "Followed artists"
 - waitForAnimationToEnd
 
 # 2. Open the second followed artist.

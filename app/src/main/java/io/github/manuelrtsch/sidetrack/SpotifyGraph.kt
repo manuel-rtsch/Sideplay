@@ -38,7 +38,6 @@ private const val HOME = SIDE_PLAY_START
 private const val ONBOARDING = SIDE_PLAY_ONBOARDING
 private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
-private val LIBRARY_FILTER = "$ROOT/library/{filter}"
 private val COLLECTION = "$ROOT/collection/{type}/{id}"
 private val ARTIST = "$ROOT/artist/{id}"
 private val SEARCH = SIDE_PLAY_SEARCH
@@ -57,7 +56,6 @@ private val ABOUT = "$ROOT/about"
 private val ARTWORK = "$ROOT/artwork/{artRes}?url={url}&label={label}&ratio={ratio}"
 private val NOTES = "$ROOT/notes/{key}"
 
-private fun libraryFilterRoute(filter: LibraryFilter) = "$ROOT/library/${filter.name}"
 private fun collectionRoute(type: SpotifyCollectionType, id: String) = "$ROOT/collection/${type.route}/${Uri.encode(id)}"
 private fun artistRoute(id: String) = "$ROOT/artist/${Uri.encode(id)}"
 private fun artistRadioRoute(id: String) = "$ROOT/artist-radio/${Uri.encode(id)}"
@@ -72,7 +70,6 @@ private fun notesRoute(key: String) = "$ROOT/notes/${Uri.encode(key)}"
 private val KEYPAD_BACK_ROUTES = setOf(
     HISTORY,
     LIBRARY,
-    LIBRARY_FILTER,
     COLLECTION,
     ARTIST,
     SEARCH,
@@ -234,8 +231,8 @@ fun NavGraphBuilder.sidetrackGraph(
             val library by vm.libraryState.collectAsStateWithLifecycle()
             val saved by vm.savedState.collectAsStateWithLifecycle()
             val chrome by vm.chromeState.collectAsStateWithLifecycle()
-            // The startup pre-cache may have run offline. Opening the Library is the natural
-            // moment to refresh it, and it also recovers from a failed first load.
+            // The startup pre-cache may have run offline. Opening the Library refreshes the
+            // selected category, and also recovers from a failed first load.
             LaunchedEffect(Unit) { vm.refreshLibrary() }
             LibraryScreen(
                 library,
@@ -243,38 +240,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 chrome,
                 onBack = { nav.popBackStack() },
                 onSearch = { nav.navigate(SEARCH) },
-                onSeeMore = { nav.navigate(libraryFilterRoute(it)) },
-                onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
-                onAddToQueue = vm::addToQueue,
-                onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },
-                onAlbum = { nav.navigate(collectionRoute(SpotifyCollectionType.Album, it.id)) },
-                onArtist = { nav.navigate(artistRoute(it.id)) },
-                onShow = { nav.navigate(collectionRoute(SpotifyCollectionType.Show, it.id)) },
-                onSaveTrack = { vm.toggleSaved(it) },
-                onEnsureSavedTrack = { vm.ensureTrackSaved(it.id) },
-                onNowPlaying = { nav.openNowPlaying(vm) },
-                onRetry = vm::refreshLibrary,
-                onDismissNotice = vm::dismissNotice,
-                onDismissNowPlaying = vm::dismissNowPlayingNotice
-            )
-        }
-        composable(
-            LIBRARY_FILTER,
-            arguments = listOf(navArgument("filter") { type = NavType.StringType })
-        ) { entry ->
-            val vm = entry.spotifyViewModel(nav)
-            val library by vm.libraryState.collectAsStateWithLifecycle()
-            val saved by vm.savedState.collectAsStateWithLifecycle()
-            val chrome by vm.chromeState.collectAsStateWithLifecycle()
-            val filter = LibraryFilter.entries.firstOrNull { it.name == entry.arguments?.getString("filter") }
-                ?: LibraryFilter.LikedSongs
-            LaunchedEffect(filter) { vm.setFilter(filter) }
-            LibraryCategoryScreen(
-                filter,
-                library,
-                saved,
-                chrome,
-                onBack = { nav.popBackStack() },
+                onFilter = vm::setFilter,
                 onTrack = { track -> nav.openTrack(vm, track) { vm.playItem(track) } },
                 onAddToQueue = vm::addToQueue,
                 onPlaylist = { nav.navigate(collectionRoute(SpotifyCollectionType.Playlist, it.id)) },

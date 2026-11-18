@@ -17,35 +17,12 @@ name: Browse & Play
     text: "Library"
     waitToSettleTimeoutMs: 200
 - assertVisible: "Library"
-# Scroll to the section heading, not to a row label: a clipped row is still
-# reported as fully visible, and the index over visible matches changes with the
-# scroll position. The second "Artist" label below the heading is the second
-# followed artist.
-#
-# The Library remembers its scroll position between runs, so first reset to the
-# top section, then come down to the artists. Without the reset, a Library left
-# at the artists makes a DOWN-only scroll miss the header.
-- scrollUntilVisible:
-    element:
-      text: "LIKED SONGS"
-    direction: UP
-    speed: 80
-    visibilityPercentage: 60
+# The category row selects what the list below shows. Tapping "Followed artists"
+# attaches the artists list; the filter row stays put, so no scrolling is needed
+# to reach the second artist row.
+- tapOn:
+    text: "Followed artists"
     waitToSettleTimeoutMs: 200
-- scrollUntilVisible:
-    element:
-      text: "FOLLOWED ARTISTS"
-    direction: DOWN
-    speed: 80
-    visibilityPercentage: 60
-    waitToSettleTimeoutMs: 200
-# The heading stops at the bottom of the viewport, where only one artist row is
-# fully visible. Move the section up a fixed amount so the first two "Artist"
-# labels are on screen, then index 1 is reliably the second followed artist.
-- swipe:
-    start: "50%, 55%"
-    end: "50%, 30%"
-    duration: 300
 - tapOn:
     text: "Artist"
     index: 1
