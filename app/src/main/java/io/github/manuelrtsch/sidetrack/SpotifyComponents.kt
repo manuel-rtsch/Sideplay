@@ -21,6 +21,7 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -33,6 +34,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -596,6 +599,11 @@ fun SpotifyLoadingScreen(
  * The settled counterpart to [SpotifyLoadingScreen]: the same record, but still, with an optional
  * retry action. Used for empty and failed library loads so those states look intentional instead
  * of like a blank list.
+ *
+ * The block fills whatever space it is given and centres in it. The record shrinks with the
+ * available height, and disappears when there is no room for it, so the title, hint and retry
+ * action always fit: on a 480 x 640 Sidephone the area under a library filter row is less than
+ * half a page, and a full-size record would push the text off the bottom.
  */
 @Composable
 fun SpotifyStatusScreen(
@@ -603,40 +611,75 @@ fun SpotifyStatusScreen(
     modifier: Modifier = Modifier,
     hint: String? = null,
     actionLabel: String? = null,
-    onAction: (() -> Unit)? = null
+    onAction: (() -> Unit)? = null,
+    artwork: Boolean = true
 ) {
     val colors = SidekitTheme.colors
-    Column(
-        modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    BoxWithConstraints(
+        modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        VinylRecord(
-            0f,
-            Modifier
-                .size(132.dp)
-                .semantics { contentDescription = title }
-        )
-        Spacer(Modifier.height(20.dp))
-        SidekitText(
-            title,
-            style = SidekitTheme.typography.bodySmall,
-            color = colors.light,
-            textAlign = TextAlign.Center
-        )
-        if (hint != null) {
-            Spacer(Modifier.height(4.dp))
-            SidekitText(
-                hint,
-                style = SidekitTheme.typography.caption,
-                color = colors.surfaceA6,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
+        val hasAction = actionLabel != null && onAction != null
+        val record = when {
+            !artwork -> null
+
+            // The retry button is an item-height target, so an error needs the space more than
+            // the record does. Below a full page it gives way entirely.
+            hasAction && maxHeight < 360.dp -> null
+
+            maxHeight < 240.dp -> null
+
+            maxHeight < 300.dp -> 64.dp
+
+            maxHeight < 380.dp -> 80.dp
+
+            maxHeight < 460.dp -> 104.dp
+
+            else -> 132.dp
         }
-        if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(20.dp))
-            SpotifyCenteredLineButton(actionLabel, onAction)
+        // Scroll only when the host gives a bounded height. A list item measures with an
+        // infinite maximum height, and a scrollable column there would crash the list.
+        val scrollState = rememberScrollState()
+        val fit = if (maxHeight == Dp.Infinity) {
+            Modifier
+        } else {
+            Modifier.verticalScroll(scrollState)
+        }
+        Column(
+            Modifier.fillMaxWidth().then(fit),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (record != null) {
+                VinylRecord(
+                    0f,
+                    Modifier
+                        .size(record)
+                        .semantics { contentDescription = title }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+            SidekitText(
+                title,
+                style = SidekitTheme.typography.bodySmall,
+                color = colors.light,
+                textAlign = TextAlign.Center,
+                maxLines = 3
+            )
+            if (hint != null) {
+                Spacer(Modifier.height(4.dp))
+                SidekitText(
+                    hint,
+                    style = SidekitTheme.typography.caption,
+                    color = colors.surfaceA6,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3
+                )
+            }
+            if (actionLabel != null && onAction != null) {
+                Spacer(Modifier.height(16.dp))
+                SpotifyCenteredLineButton(actionLabel, onAction)
+            }
         }
     }
 }
@@ -649,7 +692,9 @@ fun SpotifyStatusScreen(
 @Composable
 private fun SpotifyCenteredLineButton(label: String, onClick: () -> Unit) {
     SidekitTile(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(SidekitTheme.spacing.compactRowHeight),
         color = SidekitTheme.colors.surfaceA3,
         onClick = onClick,
         contentAlignment = Alignment.Center

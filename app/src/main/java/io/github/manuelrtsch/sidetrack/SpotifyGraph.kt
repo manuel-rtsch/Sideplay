@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -818,7 +819,8 @@ private fun MissingCollectionScreen(
 ) {
     SidekitScaffold(title = title, actions = spotifyBack("Back", onBack)) { padding ->
         androidx.compose.foundation.layout.Box(
-            androidx.compose.ui.Modifier.padding(padding)
+            androidx.compose.ui.Modifier.fillMaxSize().padding(padding),
+            contentAlignment = androidx.compose.ui.Alignment.Center
         ) {
             when {
                 loading -> SpotifyLoadingScreen(title = loadingTitle)
