@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import java.io.File
@@ -41,10 +42,21 @@ object TriageLog {
     var location: String = "unavailable"
         private set
 
+    /**
+     * Wall-clock time this process started, so a keystore key created after it can be told apart
+     * from one that predates the launch. `Process.getStartElapsedRealtime` gives the real start
+     * instead of the moment the first log line ran.
+     */
+    @Volatile
+    var processStartedAtMs: Long = 0L
+        private set
+
     fun init(context: Context) {
         synchronized(lock) {
             if (started) return
             started = true
+            processStartedAtMs = System.currentTimeMillis() -
+                (SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime())
             val app = context.applicationContext
             val fileSink = openFileSink(app)
             val downloadsSink = openDownloadsSink(app)

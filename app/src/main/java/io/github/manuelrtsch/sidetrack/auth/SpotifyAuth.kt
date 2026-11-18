@@ -69,8 +69,11 @@ class SpotifyAuth(
             val credentials = runCatching { tokens.exchange(CLIENT_ID, code, verifier, redirectUri) }
                 .onFailure { TriageLog.e("auth", "signIn: token exchange failed", it) }
                 .getOrThrow()
-            TriageLog.i("auth", "signIn: token exchange ok, expiresAt=${credentials.expiresAtMs} " +
-                "refresh=${credentials.refreshToken != null} scope=${credentials.scope}")
+            TriageLog.i(
+                "auth",
+                "signIn: token exchange ok, expiresAt=${credentials.expiresAtMs} " +
+                    "refresh=${credentials.refreshToken != null} scope=${credentials.scope}"
+            )
             persist(credentials)
             TriageLog.i("auth", "signIn: done")
             return credentials
@@ -153,6 +156,7 @@ class SpotifyAuth(
                     socket.use {
                         when (val result = readCallback(it, expectedState)) {
                             is SpotifyPkce.Callback.Code -> return@withContext result.code
+
                             is SpotifyPkce.Callback.Failure -> {
                                 TriageLog.e("auth", "signIn: callback reported a failure: ${result.message}")
                                 throw IOException(result.message)
