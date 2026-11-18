@@ -169,12 +169,18 @@ class NavidromeRuntime(
     }
 }
 
+/** Navidrome's identity and label, available without building a session or a runtime. */
+object NavidromeService {
+    val id: ServiceId get() = ServiceId.Navidrome
+    const val DISPLAY_NAME: String = "Navidrome"
+}
+
 /** Navidrome as a registered service, including the auth object [AppSession] asks for after sign-in. */
 class NavidromeProvider(
     private val session: NavidromeRuntime
 ) : MusicServiceProvider {
-    override val id: ServiceId = ServiceId.Navidrome
-    override val displayName: String = "Navidrome"
+    override val id: ServiceId = NavidromeService.id
+    override val displayName: String = NavidromeService.DISPLAY_NAME
     override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
 
     override fun createAuth(): ServiceAuth = session.auth

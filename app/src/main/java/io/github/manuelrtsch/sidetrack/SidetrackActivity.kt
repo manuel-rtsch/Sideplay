@@ -100,12 +100,15 @@ class SidetrackActivity : SidekitActivity() {
         val context = LocalContext.current
         val nav = rememberNavController()
         // Pick the first screen before the NavHost composes, so a signed-out launch never draws
-        // Home for a frame and then replaces it with Sign in. A signed-in install that has not
-        // finished the welcome yet starts there once; that includes existing users after an update.
+        // Home for a frame and then replaces it with Sign in. A fresh install starts at the
+        // service picker, which is the only place a service is chosen; a signed-in install that
+        // has not finished the welcome yet starts there once, including existing users after an
+        // update.
         val start = remember(context) {
-            val signedIn = AppSessions.get(context).signedIn.value
+            val session = AppSessions.get(context)
             when {
-                !signedIn -> SIDE_PLAY_SIGN_IN
+                !session.provisioned -> SIDE_PLAY_SERVICE_PICKER
+                !session.signedIn.value -> SIDE_PLAY_SIGN_IN
                 SidetrackLocalSettings(context).needsOnboarding() -> SIDE_PLAY_ONBOARDING
                 else -> SIDE_PLAY_START
             }

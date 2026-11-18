@@ -60,7 +60,16 @@ class PlaybackService : Service() {
             foreground = true
         }
         val session = AppSessions.get(this)
-        val playback = session.playback
+        // A notification can outlive a signed-out session: signing out pauses playback and pops
+        // the picker, but the platform may still deliver a transport press. Without a selected
+        // service there is nothing to control, so drop the foreground notification.
+        val playback = session.playbackOrNull
+        if (playback == null) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            foreground = false
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_PLAY_PAUSE -> session.togglePlayback()
             ACTION_NEXT -> playback.requestNext()

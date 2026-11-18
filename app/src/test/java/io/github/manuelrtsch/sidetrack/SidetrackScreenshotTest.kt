@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import hrln.interactive.sidekit.design.input.KeypadModule
 import io.github.manuelrtsch.sidetrack.data.EpisodeProgress
+import io.github.manuelrtsch.sidetrack.data.KnownServices
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
@@ -356,6 +357,7 @@ class SidetrackScreenshotTest {
             state.account,
             state.chrome,
             state.recent.size,
+            serviceName = "Spotify",
             onBack = {},
             onAudioQuality = {},
             onNormalization = {},
@@ -413,6 +415,27 @@ class SidetrackScreenshotTest {
             onAbout = {},
             onSignIn = {},
             onDismissNotice = {}
+        )
+    }
+
+    @Test fun servicePicker() = shoot("sidetrack_service_picker") {
+        ServicePickerScreen(
+            services = KnownServices,
+            selected = null,
+            onSelect = { true }
+        )
+    }
+
+    @Test fun navidromeSignIn() = shoot("sidetrack_sign_in_navidrome") {
+        SignInScreen(
+            SidetrackUiState(signedIn = false).account,
+            SidetrackUiState(signedIn = false).chrome,
+            onAbout = {},
+            onSignIn = {},
+            onDismissNotice = {},
+            onChangeService = {},
+            serviceName = "Navidrome",
+            passwordAuth = true
         )
     }
 }

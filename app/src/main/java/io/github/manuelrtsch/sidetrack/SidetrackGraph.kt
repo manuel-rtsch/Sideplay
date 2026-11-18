@@ -28,6 +28,7 @@ import androidx.navigation.navArgument
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.data.AppSessions
+import io.github.manuelrtsch.sidetrack.data.KnownServices
 import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -36,6 +37,7 @@ private const val ROOT = SIDE_PLAY_ROOT
 const val SIDE_PLAY_START = "sidetrack/home"
 const val SIDE_PLAY_ONBOARDING = "sidetrack/welcome"
 const val SIDE_PLAY_SIGN_IN = "sidetrack/sign-in"
+const val SIDE_PLAY_SERVICE_PICKER = "sidetrack/service"
 const val SIDE_PLAY_SEARCH = "sidetrack/search"
 private const val HOME = SIDE_PLAY_START
 private const val ONBOARDING = SIDE_PLAY_ONBOARDING
@@ -51,7 +53,7 @@ private val RADIO = "$ROOT/song-radio"
 private val ARTIST_RADIO = "$ROOT/artist-radio/{key}"
 private val SLEEP_TIMER = "$ROOT/sleep-timer"
 private val SETTINGS = "$ROOT/settings"
-private val SERVICE_PICKER = "$ROOT/service"
+private val SERVICE_PICKER = SIDE_PLAY_SERVICE_PICKER
 private val AUDIO_QUALITY = "$ROOT/audio-quality"
 private val SIGN_IN = SIDE_PLAY_SIGN_IN
 private val APPEARANCE = "$ROOT/appearance"
@@ -85,6 +87,7 @@ private val KEYPAD_BACK_ROUTES = setOf(
     ARTIST_RADIO,
     SLEEP_TIMER,
     SETTINGS,
+    SERVICE_PICKER,
     AUDIO_QUALITY,
     APPEARANCE,
     KEYBOARD,
@@ -719,16 +722,13 @@ fun NavGraphBuilder.sidetrackGraph(
             val playback by vm.playbackState.collectAsStateWithLifecycle()
             val context = LocalContext.current
             val appSession = remember(context) { AppSessions.get(context) }
-            val activeService by appSession.registry.active.collectAsStateWithLifecycle()
-            val activeProvider = appSession.availableServices.firstOrNull { it.id == activeService }
             LaunchedEffect(Unit) { vm.refreshCacheSize() }
             SettingsScreen(
                 account,
                 chrome,
                 playback.recent.size,
-                serviceName = activeProvider?.displayName ?: "Music",
+                serviceName = appSession.serviceName,
                 capabilities = vm.capabilities,
-                onService = { nav.navigate(SERVICE_PICKER) },
                 onBack = { nav.popBackStack() },
                 onAudioQuality = { nav.navigate(AUDIO_QUALITY) },
                 onNormalization = vm::toggleNormalization,
@@ -739,7 +739,12 @@ fun NavGraphBuilder.sidetrackGraph(
                 onUndoClearHistory = vm::undoClearHistory,
                 onSignOut = {
                     vm.signOut()
-                    nav.navigate(SIGN_IN) { launchSingleTop = true }
+                    // Signing out is the only route back to the picker: choosing a service is a
+                    // provisioning step, not a setting, so it must not happen behind a live app.
+                    nav.navigate(SERVICE_PICKER) {
+                        popUpTo(ROOT) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 },
                 onDismissNotice = vm::dismissNotice,
                 // A host-backed Sidekit owns appearance and keyboard settings. Passing null hides
@@ -752,16 +757,27 @@ fun NavGraphBuilder.sidetrackGraph(
         composable(SERVICE_PICKER) {
             val context = LocalContext.current
             val appSession = remember(context) { AppSessions.get(context) }
-            val activeService by appSession.registry.active.collectAsStateWithLifecycle()
+            val active by appSession.active.collectAsStateWithLifecycle()
+            // The picker is the first screen on a fresh install, where there is nothing to go
+            // back to; from Sign in it goes back there, and it has no entry in Settings.
+            val previous = nav.previousBackStackEntry?.destination?.route
             ServicePickerScreen(
-                services = appSession.availableServices,
-                active = activeService,
-                onBack = { nav.popBackStack() },
+                services = KnownServices,
+                selected = active,
+                backLabel = if (previous == SIGN_IN) "Sign in" else "Back",
+                onBack = if (previous != null) ({ nav.popBackStack() }) else null,
                 onSelect = { id ->
-                    appSession.switchService(id)
-                    nav.popBackStack()
-                    if (!appSession.signedIn.value) {
-                        nav.navigate(SIGN_IN) { launchSingleTop = true }
+                    if (!AppSessions.select(context, id)) {
+                        false
+                    } else {
+                        // A service that still holds credentials goes straight in; a new one starts
+                        // at sign-in, exactly as it would on the next launch.
+                        val next = if (appSession.signedIn.value) HOME else SIGN_IN
+                        nav.navigate(next) {
+                            popUpTo(ROOT) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                        true
                     }
                 }
             )
@@ -831,15 +847,16 @@ fun NavGraphBuilder.sidetrackGraph(
                     }
                 }
             }
-            val provider = AppSessions.get(context).provider
+            val appSession = AppSessions.get(context)
             SignInScreen(
                 account,
                 chrome,
                 onAbout = { nav.navigate(ABOUT) },
                 onSignIn = vm::signIn,
                 onDismissNotice = vm::dismissNotice,
-                serviceName = provider.displayName,
-                passwordAuth = provider.id == ServiceId.Navidrome,
+                onChangeService = { nav.navigate(SERVICE_PICKER) { launchSingleTop = true } },
+                serviceName = appSession.serviceName.ifEmpty { "your music service" },
+                passwordAuth = appSession.provider?.id == ServiceId.Navidrome,
                 onPasswordSignIn = vm::signIn
             )
         }
@@ -886,8 +903,8 @@ private fun NavBackStackEntry.sidetrackViewModel(nav: NavHostController): Sidetr
     val parent = remember(this) { nav.getBackStackEntry(ROOT) }
     val context = LocalContext.current.applicationContext
     val appSession = remember(context) { AppSessions.get(context) }
-    // Observe the active service so switching it recreates the ViewModel for the new runtime.
-    appSession.registry.active.collectAsStateWithLifecycle()
+    // Observe the selected service so provisioning it recreates the ViewModel for its runtime.
+    appSession.active.collectAsStateWithLifecycle()
     val runtime = appSession.runtime
     val openBrowser: suspend (String) -> Unit = remember(context) {
         { url ->

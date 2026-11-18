@@ -1,38 +1,28 @@
 package io.github.manuelrtsch.sidetrack
 
-import io.github.manuelrtsch.sidetrack.data.MediaCatalog
-import io.github.manuelrtsch.sidetrack.data.MediaLibraryWriter
-import io.github.manuelrtsch.sidetrack.data.MusicServiceProvider
-import io.github.manuelrtsch.sidetrack.data.ServiceAccount
-import io.github.manuelrtsch.sidetrack.data.ServiceAuth
-import io.github.manuelrtsch.sidetrack.data.ServiceRegistry
+import io.github.manuelrtsch.sidetrack.data.KnownServices
 import io.github.manuelrtsch.sidetrack.data.SpotifyLibraryWriter
 import io.github.manuelrtsch.sidetrack.data.SpotifyMediaCatalog
 import io.github.manuelrtsch.sidetrack.data.SpotifyMediaLibraryWriter
+import io.github.manuelrtsch.sidetrack.data.serviceChoice
 import io.github.manuelrtsch.sidetrack.playback.PlaybackEngine
 import io.github.manuelrtsch.sidetrack.playback.PlaybackSource
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MusicServiceTest {
-    @Test fun `registry starts on Spotify and switches only to installed services`() {
-        val spotify = FakeProvider(ServiceId.Spotify, "Spotify")
-        val navidrome = FakeProvider(ServiceId.Navidrome, "Navidrome")
-        val registry = ServiceRegistry(listOf(spotify, navidrome))
-
-        assertEquals(ServiceId.Spotify, registry.active.value)
-        assertSame(spotify, registry.provider())
-
-        assertTrue(registry.switchTo(ServiceId.Navidrome))
-        assertEquals(ServiceId.Navidrome, registry.active.value)
-        assertSame(navidrome, registry.provider())
-
-        assertFalse(registry.switchTo(ServiceId("unknown")))
-        assertEquals(ServiceId.Navidrome, registry.active.value)
+    @Test fun `the picker offers every service this build can provision`() {
+        assertEquals(
+            listOf(ServiceId.Spotify, ServiceId.Navidrome),
+            KnownServices.map { it.id }
+        )
+        // The label comes from the provider's own constant, so the picker cannot drift from it.
+        assertEquals("Spotify", KnownServices.first { it.id == ServiceId.Spotify }.displayName)
+        assertEquals("Navidrome", KnownServices.first { it.id == ServiceId.Navidrome }.displayName)
+        assertNull(serviceChoice(ServiceId("unknown")))
     }
 
     @Test fun `Spotify catalog adapter maps neutral sections and keys`() = runTest {
@@ -81,15 +71,6 @@ class MusicServiceTest {
         assertEquals(listOf("a1" to true), writer.followedArtists)
         assertEquals(listOf("p1" to "spotify:track:t1"), writer.added)
         assertEquals(listOf("p1" to "spotify:track:t1"), writer.removed)
-    }
-
-    private class FakeProvider(
-        override val id: ServiceId,
-        override val displayName: String
-    ) : MusicServiceProvider {
-        override val capabilities: ServiceCapabilities = ServiceCapabilities.All
-
-        override fun createAuth(): ServiceAuth = error("not used")
     }
 
     private class RecordingWriter : SpotifyLibraryWriter {

@@ -149,15 +149,21 @@ class SpotifyServiceAuth(
     )
 }
 
+/** Spotify's identity and label, available without building a session or a runtime. */
+object SpotifyService {
+    val id: ServiceId get() = ServiceId.Spotify
+    const val DISPLAY_NAME: String = "Spotify"
+}
+
 /**
  * The Spotify provider. It wraps the existing session, catalog, writer and librespot engine so
- * the registry can treat Spotify as one service among several without changing playback.
+ * the app can treat Spotify as one service among several without changing playback.
  */
 class SpotifyProvider(
     private val session: SpotifySession
 ) : MusicServiceProvider {
-    override val id: ServiceId = ServiceId.Spotify
-    override val displayName: String = "Spotify"
+    override val id: ServiceId = SpotifyService.id
+    override val displayName: String = SpotifyService.DISPLAY_NAME
     override val capabilities: ServiceCapabilities = ServiceCapabilities.All
 
     override fun createAuth(): ServiceAuth = SpotifyServiceAuth(session)

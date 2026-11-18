@@ -32,6 +32,9 @@ class SpotifyPlaybackServiceInstrumentedTest {
 
     @Before
     fun grantNotifications() {
+        // A fresh install opens at the service picker, so this suite has to provision Spotify
+        // before it can drive the runtime it tests.
+        if (!AppSessions.get(context).provisioned) AppSessions.select(context, ServiceId.Spotify)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {

@@ -42,7 +42,7 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
-import io.github.manuelrtsch.sidetrack.data.MusicServiceProvider
+import io.github.manuelrtsch.sidetrack.data.ServiceChoice
 
 private enum class SettingsConfirmation { SignOut }
 
@@ -53,7 +53,6 @@ fun SettingsScreen(
     recentCount: Int,
     serviceName: String = "",
     capabilities: ServiceCapabilities = ServiceCapabilities.All,
-    onService: () -> Unit = {},
     onBack: () -> Unit,
     onAudioQuality: () -> Unit,
     onNormalization: () -> Unit,
@@ -124,14 +123,14 @@ fun SettingsScreen(
                 )
             }
             item(key = "service") {
+                // Informational, deliberately not a link: a service is chosen once, before sign-in,
+                // and changing it means signing out. One service at a time is the whole point.
                 SidetrackItem(
                     "Service",
                     Modifier.listFade(listState, 10),
                     secondary = serviceName,
                     secondaryToEnd = true,
-                    showLinkArrow = true,
-                    showLinkArrowWithSecondary = true,
-                    onClick = onService
+                    colour = ItemColour.Muted
                 )
             }
             if (capabilities.supportsQualitySelection) {
@@ -238,38 +237,67 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * The one place a service is chosen: first run, and again after signing out.
+ *
+ * Selection is deliberately not reachable while signed in. The app runs one service at a time,
+ * so a picker in Settings would promise a switch that would have to tear down a live session.
+ */
 @Composable
 fun ServicePickerScreen(
-    services: List<MusicServiceProvider>,
-    active: ServiceId,
-    onBack: () -> Unit,
-    onSelect: (ServiceId) -> Unit
+    services: List<ServiceChoice>,
+    selected: ServiceId?,
+    backLabel: String = "Back",
+    onBack: (() -> Unit)? = null,
+    onSelect: (ServiceId) -> Boolean
 ) {
-    val baseActions = remember { listOf(SideAction.back("back", "Settings", onBack)) }
+    // A service that cannot be opened stays selected nowhere and says so on its own row, so the
+    // tap is never silently lost.
+    var unavailable by remember { mutableStateOf<ServiceId?>(null) }
+    val baseActions = remember(backLabel, onBack) {
+        listOfNotNull(onBack?.let { SideAction.back("back", backLabel, it) })
+    }
     SidekitScaffold(
-        title = "Service",
+        title = "Choose service",
         actions = baseActions
     ) { padding ->
         val listState = rememberLazyListState()
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
         SidekitList(padding, modifier = Modifier.selectableGroup(), state = listState) {
+            item(key = "explain") {
+                SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
+                    SidekitText(
+                        "Pick the service your library lives on. Sidetrack plays one at a time; " +
+                            "signing out brings you back here.",
+                        style = SidekitTheme.typography.caption,
+                        color = SidekitTheme.colors.surfaceA6,
+                        maxLines = Int.MAX_VALUE
+                    )
+                }
+            }
             services.forEachIndexed { index, provider ->
-                val selected = provider.id == active
+                val isSelected = provider.id == selected
                 item(key = provider.id.value) {
                     SidetrackItem(
                         provider.displayName,
-                        Modifier.listFade(listState, index).then(
+                        Modifier.listFade(listState, index + 1).then(
                             if (index == 0) Modifier.focusRequester(first) else Modifier
                         ),
-                        secondary = if (selected) "Active" else null,
+                        secondary = when {
+                            isSelected -> "Selected"
+                            unavailable == provider.id -> "Unavailable"
+                            else -> null
+                        },
                         secondaryToEnd = true,
-                        icon = if (selected) SidekitIcon.Check else null,
-                        containerColor = if (selected) SidekitTheme.colors.successA1 else null,
-                        secondaryColor = if (selected) SidekitTheme.colors.light else null,
-                        selected = selected,
+                        icon = if (isSelected) SidekitIcon.Check else null,
+                        containerColor = if (isSelected) SidekitTheme.colors.successA1 else null,
+                        secondaryColor = if (isSelected) SidekitTheme.colors.light else null,
+                        selected = isSelected,
                         selectionRole = Role.RadioButton,
-                        onClick = { onSelect(provider.id) }
+                        onClick = {
+                            if (onSelect(provider.id)) unavailable = null else unavailable = provider.id
+                        }
                     )
                 }
             }
@@ -326,6 +354,7 @@ fun SignInScreen(
     onAbout: () -> Unit,
     onSignIn: () -> Unit,
     onDismissNotice: () -> Unit,
+    onChangeService: (() -> Unit)? = null,
     serviceName: String = "your music service",
     passwordAuth: Boolean = false,
     onPasswordSignIn: (serverUrl: String, username: String, password: String) -> Unit = { _, _, _ -> }
@@ -346,9 +375,19 @@ fun SignInScreen(
         )
     }
     val actions = withNotice(chrome.notice, onDismissNotice, baseActions, chrome.noticeKind)
+    // The picker is only ever behind this screen, so the escape hatch from a wrong choice lives
+    // here rather than in Settings.
+    val options = remember(onChangeService) {
+        listOfNotNull(
+            onChangeService?.let {
+                SideAction("changeService", "Change service", tone = ActionTone.Muted, onClick = it)
+            }
+        )
+    }
     SidekitScaffold(
         title = "Sign in",
-        actions = actions
+        actions = actions,
+        options = options
     ) { padding ->
         val listState = rememberLazyListState()
         SidekitList(padding, state = listState) {

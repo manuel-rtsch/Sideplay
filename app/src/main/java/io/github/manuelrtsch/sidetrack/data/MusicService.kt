@@ -111,7 +111,16 @@ interface MediaLibraryWriter {
 }
 
 /**
- * One music service. The registry owns the active provider; the UI asks the provider's
+ * A service this build can provision, whether or not it is the selected one.
+ *
+ * The picker needs a name before any runtime exists, so identity and label live here rather than
+ * on [MusicServiceProvider]. Both come from the same constants the provider uses, so a name can
+ * never drift between the picker and the running service.
+ */
+data class ServiceChoice(val id: ServiceId, val displayName: String)
+
+/**
+ * One music service. The app owns exactly one selected provider; the UI asks the provider's
  * [capabilities] instead of asking which service is running.
  */
 interface MusicServiceProvider {
