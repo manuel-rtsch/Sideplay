@@ -194,9 +194,18 @@ fun LibraryScreen(
         val filterFocus = remember {
             LibraryFilter.entries.associateWith { FocusRequester() }
         }
-        // Focus the current category so the row and the list below are one connected target
-        // when the screen opens; its onFocusChanged does not reload the same category.
-        LaunchedEffect(Unit) {
+        val loading = items.isEmpty() && library.libraryLoading
+        // Switching category swaps this screen between the status body and the list, which
+        // re-creates the filter row and drops focus. Re-attach focus to the selected category
+        // whenever the category or the body branch changes, so keyboard navigation across the row
+        // never falls through to the action bar.
+        val branch = when {
+            loading -> "loading"
+            items.isEmpty() && library.libraryError != null -> "error"
+            items.isEmpty() -> "empty"
+            else -> "list"
+        }
+        LaunchedEffect(filter, branch) {
             runCatching { filterFocus.getValue(library.filter).requestFocus() }
         }
         LaunchedEffect(filter) { listState.scrollToItem(0) }
@@ -210,23 +219,33 @@ fun LibraryScreen(
                 false
             }
         }
-        val loading = items.isEmpty() && library.libraryLoading
-        if (loading || (items.isEmpty() && library.libraryError != null)) {
-            Column(Modifier.fillMaxSize()) {
+        if (items.isEmpty()) {
+            // The filter row stays above the status block, and the block centres in what is left
+            // of the page. It shrinks its record to fit; a full-size one would push the text off
+            // the bottom under the five square filters.
+            Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
                 LibraryFilterRow(filter, onFilter, filterFocus)
                 Spacer(Modifier.height(SidekitTheme.spacing.pageGap))
                 Box(
                     Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (loading) {
-                        SpotifyLoadingScreen(title = "Loading ${filter.label.lowercase()}…", hint = null)
-                    } else {
-                        SpotifyStatusScreen(
+                    when {
+                        loading -> SpotifyLoadingScreen(
+                            title = "Loading ${filter.label.lowercase()}…",
+                            hint = null
+                        )
+
+                        library.libraryError != null -> SpotifyStatusScreen(
                             "Couldn't load ${filter.label.lowercase()}",
                             hint = library.libraryError,
                             actionLabel = "Try again",
                             onAction = onRetry
+                        )
+
+                        else -> SpotifyStatusScreen(
+                            filter.empty,
+                            hint = "Search to find something to save"
                         )
                     }
                 }
@@ -245,17 +264,6 @@ fun LibraryScreen(
                     )
                 }
                 var rowIndex = 1
-                if (items.isEmpty()) {
-                    val index = rowIndex
-                    item(key = "empty") {
-                        SpotifyStatusScreen(
-                            filter.empty,
-                            Modifier.listFade(listState, index).then(firstRowModifier),
-                            hint = "Search to find something to save"
-                        )
-                    }
-                    rowIndex += 1
-                }
                 // Snapshot the offset before registering the items: the lazy DSL runs each item's
                 // content later, after rowIndex has moved past the page, so reading it inside the
                 // lambda would fade every row by the wrong index.
@@ -304,10 +312,11 @@ private fun LibraryFilterRow(
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val columns = LibraryFilter.entries.size
+        val filters = LibraryFilter.entries
+        val columns = filters.size
         val cell = (maxWidth - SidekitTheme.spacing.itemOuterGap * (columns - 1)) / columns.toFloat()
         SidekitItemRow {
-            LibraryFilter.entries.forEach { filter ->
+            filters.forEachIndexed { index, filter ->
                 val isSelected = filter == selected
                 SidekitIconItem(
                     icon = filter.icon,
@@ -318,6 +327,30 @@ private fun LibraryFilterRow(
                         .focusRequester(focusRequesters.getValue(filter))
                         .onFocusChanged { state ->
                             if (state.isFocused && !isSelected) onFilter(filter)
+                        }
+                        // Left/Right move to the adjacent category by request. Geometric focus
+                        // search picked the action bar (below and to the right) instead of the
+                        // neighbouring button, and the loading swap re-created the row, so the
+                        // buttons to the right were unreachable. Down/Up keep their default path
+                        // into and out of the content below.
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) {
+                                false
+                            } else {
+                                when (event.key) {
+                                    Key.DirectionRight -> {
+                                        filters.getOrNull(index + 1)?.let { focusRequesters[it]?.requestFocus() }
+                                        true
+                                    }
+
+                                    Key.DirectionLeft -> {
+                                        filters.getOrNull(index - 1)?.let { focusRequesters[it]?.requestFocus() }
+                                        true
+                                    }
+
+                                    else -> false
+                                }
+                            }
                         }
                         .semantics { this.selected = isSelected },
                     color = (if (isSelected) SpotifyTileTone.Library else SpotifyTileTone.Neutral)
