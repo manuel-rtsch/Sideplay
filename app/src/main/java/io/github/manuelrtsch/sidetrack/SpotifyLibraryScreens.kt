@@ -36,7 +36,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.SideAction
-import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitIconItem
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -46,6 +45,8 @@ import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
+import io.github.manuelrtsch.sidetrack.ui.InlineLinkArrowSize
+import io.github.manuelrtsch.sidetrack.ui.LinkArrow
 import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 import kotlinx.coroutines.flow.StateFlow
 
@@ -195,6 +196,7 @@ fun LibraryScreen(
         val filterFocus = remember {
             LibraryFilter.entries.associateWith { FocusRequester() }
         }
+        val moreFocus = rememberLoadMoreFocus()
         val loading = items.isEmpty() && library.libraryLoading
         // Switching category swaps this screen between the status body and the list, which
         // re-creates the filter row and drops focus. Re-attach focus to the selected category
@@ -207,9 +209,13 @@ fun LibraryScreen(
             else -> "list"
         }
         LaunchedEffect(filter, branch) {
+            if (branch != "list") moreFocus.reset()
             runCatching { filterFocus.getValue(library.filter).requestFocus() }
         }
-        LaunchedEffect(filter) { listState.scrollToItem(0) }
+        LaunchedEffect(filter) {
+            moreFocus.reset()
+            listState.scrollToItem(0)
+        }
         // Up from the first row returns to the keyboard row rather than letting focus search pick
         // the geometrically nearest button, which is the middle one.
         val firstRowModifier = Modifier.onPreviewKeyEvent { event ->
@@ -254,6 +260,13 @@ fun LibraryScreen(
         } else {
             // The filter row is the first list item, not a header above the list: it scrolls away
             // with the content and shares the list fade with the rows below it.
+            LoadMoreFocus(
+                moreFocus,
+                listState,
+                items.size,
+                library.libraryMorePending,
+                firstItemListIndex = 1
+            )
             SidekitList(padding, state = listState) {
                 item(key = "filters") {
                     LibraryFilterRow(
@@ -280,11 +293,12 @@ fun LibraryScreen(
                         item,
                         modifier,
                         rows,
-                        onTrack,
-                        onPlaylist,
-                        onAlbum,
-                        onArtist,
-                        onShow
+                        focusRequester = moreFocus.requesterFor(index),
+                        onTrack = onTrack,
+                        onPlaylist = onPlaylist,
+                        onAlbum = onAlbum,
+                        onArtist = onArtist,
+                        onShow = onShow
                     )
                 }
                 rowIndex += items.size
@@ -294,8 +308,12 @@ fun LibraryScreen(
                         LoadMoreRow(
                             "Load more ${filter.label.lowercase()}",
                             library.libraryMorePending,
-                            onLoadMore,
-                            Modifier.listFade(listState, moreIndex)
+                            onLoadMore = {
+                                moreFocus.onLoadMore(items.size)
+                                onLoadMore()
+                            },
+                            Modifier.listFade(listState, moreIndex),
+                            focusState = moreFocus
                         )
                     }
                 }
@@ -432,30 +450,35 @@ private fun LibraryRow(
     item: Any,
     modifier: Modifier,
     rows: TrackRows,
+    focusRequester: FocusRequester? = null,
     onTrack: (SpotifyTrack) -> Unit,
     onPlaylist: (SpotifyPlaylist) -> Unit,
     onAlbum: (SpotifyAlbum) -> Unit,
     onArtist: (SpotifyArtist) -> Unit,
     onShow: (SpotifyShow) -> Unit
 ) {
+    // SpotifyLibraryRow applies its modifier to the focusable tile, so the requester can ride on
+    // the modifier there. TrackRow wraps the focusable row in a gutter, so it takes the requester
+    // directly.
+    val rowModifier = if (focusRequester != null) modifier.focusRequester(focusRequester) else modifier
     when (item) {
         // Library rows carry no list index: a track can appear once per category, so its id is
         // already unique here.
-        is SpotifyTrack -> TrackRow(item.id, item, rows, modifier) { onTrack(item) }
+        is SpotifyTrack -> TrackRow(item.id, item, rows, modifier, focusRequester = focusRequester) { onTrack(item) }
 
-        is SpotifyPlaylist -> SpotifyLibraryRow(item.artRes, item.name, playlistSubtitle(item), modifier, artUrl = item.artUrl) { onPlaylist(item) }
+        is SpotifyPlaylist -> SpotifyLibraryRow(item.artRes, item.name, playlistSubtitle(item), rowModifier, artUrl = item.artUrl) { onPlaylist(item) }
 
         is SpotifyAlbum -> SpotifyLibraryRow(
             item.artRes,
             item.title,
             if (item.year > 0) "${item.artist} · ${item.year}" else item.artist,
-            modifier,
+            rowModifier,
             artUrl = item.artUrl
         ) { onAlbum(item) }
 
-        is SpotifyArtist -> SpotifyLibraryRow(item.artRes, item.name, "Artist", modifier, artUrl = item.artUrl) { onArtist(item) }
+        is SpotifyArtist -> SpotifyLibraryRow(item.artRes, item.name, "Artist", rowModifier, artUrl = item.artUrl) { onArtist(item) }
 
-        is SpotifyShow -> SpotifyLibraryRow(item.artRes, item.name, item.publisher, modifier, artUrl = item.artUrl) { onShow(item) }
+        is SpotifyShow -> SpotifyLibraryRow(item.artRes, item.name, item.publisher, rowModifier, artUrl = item.artUrl) { onShow(item) }
 
         else -> Unit
     }
@@ -527,8 +550,19 @@ fun CollectionScreen(
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
         val playFocus = remember { FocusRequester() }
+        val moreFocus = rememberLoadMoreFocus()
         val playIds = remember(collection.items) { collection.items.mapTo(mutableSetOf()) { it.id } }
-        LaunchedEffect(collection.type, collection.id) { runCatching { playFocus.requestFocus() } }
+        LaunchedEffect(collection.type, collection.id) {
+            moreFocus.reset()
+            runCatching { playFocus.requestFocus() }
+        }
+        LoadMoreFocus(
+            moreFocus,
+            listState,
+            collection.items.size,
+            loadingMore,
+            firstItemListIndex = 2
+        )
         SidekitList(padding, state = listState) {
             var rowIndex = 0
             item(key = "tiles") {
@@ -597,7 +631,8 @@ fun CollectionScreen(
                         rows,
                         modifier,
                         index = if (showTrackArt) null else index,
-                        showArt = showTrackArt
+                        showArt = showTrackArt,
+                        focusRequester = moreFocus.requesterFor(index)
                     ) { onItem(index) }
                 } else {
                     GutterMediaRow(
@@ -608,6 +643,7 @@ fun CollectionScreen(
                         index = if (showTrackArt) null else index,
                         showArt = showTrackArt,
                         secondary = if (item is SpotifyEpisode) formatPublishedDate(item.published) else item.creator,
+                        focusRequester = moreFocus.requesterFor(index),
                         onAddToQueue = onAddItemToQueue,
                         onClick = { onItem(index) }
                     )
@@ -620,8 +656,12 @@ fun CollectionScreen(
                     LoadMoreRow(
                         if (collection.type == SpotifyCollectionType.Show) "Load more episodes" else "Load more tracks",
                         loadingMore,
-                        onLoadMore,
-                        Modifier.listFade(listState, moreIndex)
+                        onLoadMore = {
+                            moreFocus.onLoadMore(collection.items.size)
+                            onLoadMore()
+                        },
+                        Modifier.listFade(listState, moreIndex),
+                        focusState = moreFocus
                     )
                 }
             }
@@ -687,6 +727,18 @@ fun ArtistScreen(
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
         val playIds = remember(tracks) { tracks.mapTo(mutableSetOf()) { it.id } }
+        val tracksFocus = rememberLoadMoreFocus()
+        val albumsFocus = rememberLoadMoreFocus()
+        // Tiles, then the "Top tracks" label, then the tracks. The album section follows the
+        // tracks and their Load more row, so its base moves with the track page.
+        val tracksBase = 2
+        val albumsBase = tracksBase + tracks.size + (if (trackHasMore) 1 else 0) + 1
+        LaunchedEffect(artist.id) {
+            tracksFocus.reset()
+            albumsFocus.reset()
+        }
+        LoadMoreFocus(tracksFocus, listState, tracks.size, loadingMore, firstItemListIndex = tracksBase)
+        LoadMoreFocus(albumsFocus, listState, albums.size, loadingMore, firstItemListIndex = albumsBase)
         SidekitList(padding, state = listState) {
             var rowIndex = 0
             item(key = "tiles") {
@@ -719,7 +771,6 @@ fun ArtistScreen(
                 SectionLabel("Top tracks")
             }
             rowIndex += 1
-            val tracksBase = rowIndex
             itemsIndexed(
                 tracks,
                 key = { index, track -> "$index:${track.id}" },
@@ -729,7 +780,8 @@ fun ArtistScreen(
                     "$index:${track.id}",
                     track,
                     rows,
-                    Modifier.listFade(listState, tracksBase + index)
+                    Modifier.listFade(listState, tracksBase + index),
+                    focusRequester = tracksFocus.requesterFor(index)
                 ) { onTrack(track) }
             }
             rowIndex += tracks.size
@@ -739,8 +791,12 @@ fun ArtistScreen(
                     LoadMoreRow(
                         "Load more tracks",
                         loadingMore,
-                        onLoadMoreTracks,
-                        Modifier.listFade(listState, moreIndex)
+                        onLoadMore = {
+                            tracksFocus.onLoadMore(tracks.size)
+                            onLoadMoreTracks()
+                        },
+                        Modifier.listFade(listState, moreIndex),
+                        focusState = tracksFocus
                     )
                 }
                 rowIndex += 1
@@ -749,7 +805,6 @@ fun ArtistScreen(
                 SectionLabel("Albums")
             }
             rowIndex += 1
-            val albumsBase = rowIndex
             itemsIndexed(
                 albums,
                 key = { index, album -> "$index:${album.id}" },
@@ -759,7 +814,8 @@ fun ArtistScreen(
                     album.artRes,
                     album.title,
                     "${album.year}" + if (album.trackCount > 0) " · ${album.trackCount} tracks" else "",
-                    Modifier.listFade(listState, albumsBase + index),
+                    Modifier.listFade(listState, albumsBase + index)
+                        .then(albumsFocus.rowModifier(index)),
                     artUrl = album.artUrl
                 ) { onAlbum(album) }
             }
@@ -770,8 +826,12 @@ fun ArtistScreen(
                     LoadMoreRow(
                         "Load more albums",
                         loadingMore,
-                        onLoadMoreAlbums,
-                        Modifier.listFade(listState, moreIndex)
+                        onLoadMore = {
+                            albumsFocus.onLoadMore(albums.size)
+                            onLoadMoreAlbums()
+                        },
+                        Modifier.listFade(listState, moreIndex),
+                        focusState = albumsFocus
                     )
                 }
             }
@@ -830,10 +890,6 @@ private fun CollectionArtistLine(
                 textAlign = TextAlign.End
             )
         }
-        SidekitIconImage(
-            SidekitIcon.ArrowRightAlt,
-            Modifier.padding(start = 8.dp),
-            size = 18.dp
-        )
+        LinkArrow(Modifier.padding(start = 8.dp), size = InlineLinkArrowSize)
     }
 }

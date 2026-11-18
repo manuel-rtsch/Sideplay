@@ -128,6 +128,13 @@ class SpotifyPlayback(
 
     /** Serializes player rebuilds so a rapid pair of setting toggles cannot install an old config last. */
     private val reconfigureLock = Mutex()
+
+    /**
+     * A setting changed that needs a new native player while something was playing. A rebuild
+     * stops the sink and fetches the item again, which is audible, so the change waits for a
+     * moment that is already silent: the next start that resets the sink, or the next pause.
+     */
+    private var reconfigurePending = false
     private var lastSessionUpdate = 0L
     private var noisyRegistered = false
 
@@ -348,7 +355,12 @@ class SpotifyPlayback(
         // processed. The AudioTrack itself is kept for the next item: recreating it re-configures
         // the output route, which is audible as a gap on Bluetooth.
         val sinkKept = keepAudioSink && audio?.isRunning == true
-        if (!sinkKept) audio?.reset()
+        if (!sinkKept) {
+            // A setting changed while the previous item was playing. This start resets the sink
+            // anyway, so the new player costs no extra silence; the load below gives it a source.
+            recreatePlayerIfPending()
+            audio?.reset()
+        }
         if (generation != pauseGeneration) return
         publish()
         try {
@@ -383,6 +395,12 @@ class SpotifyPlayback(
             start?.invoke()
             return start != null
         }
+        // A deferred setting change may be rebuilding the player right now. Wait for it, so this
+        // resume plays the new player instead of the one being replaced.
+        return reconfigureLock.withLock { resumeCurrent() }
+    }
+
+    private suspend fun resumeCurrent(): Boolean {
         val generation = ++pauseGeneration
         lastCommandWasPause = false
         lastCommandAt = SystemClock.elapsedRealtime()
@@ -441,7 +459,12 @@ class SpotifyPlayback(
             if (generation != pauseGeneration) return@launch
             runCatching { gateway.pause() }
             delay(PAUSE_DRAIN_GRACE_MS)
-            if (generation == pauseGeneration && !playing) audio?.pause()
+            if (generation == pauseGeneration && !playing) {
+                audio?.pause()
+                // The player is silent now, so a deferred setting change can rebuild it here
+                // instead of cutting into the next track.
+                applyPendingReconfigure()
+            }
         }
     }
 
@@ -462,32 +485,68 @@ class SpotifyPlayback(
     fun requestPrevious() = (onPrevious ?: fallbackPrevious)?.invoke()
 
     /**
-     * Rebuilds the native player after an audio-setting change. The current item is reloaded at
-     * the same position and the pause/play state is preserved.
+     * Rebuilds the native player after an audio-setting change.
+     *
+     * A rebuild releases the AudioTrack and fetches the item again, so doing it mid-track is
+     * audible as a halt. While something is playing the change is remembered instead and applied
+     * at the next silent moment: a start that resets the sink anyway, or a pause.
      */
     suspend fun reconfigure() {
         reconfigureLock.withLock {
-            val item = current
-            val uri = item?.uri
-            val position = positionMs
-            val wasPlaying = playing
-            val generation = ++pauseGeneration
-            SidetrackDebug.log("reconfigure uri=$uri positionMs=$position wasPlaying=$wasPlaying")
-            audio?.stop()
-            try {
-                // No native player yet: the next connect picks the new settings up.
-                if (!gateway.recreatePlayer()) return@withLock
-                if (uri != null) gateway.load(uri, position, autoplay = wasPlaying)
-            } catch (t: Throwable) {
-                SidetrackDebug.log("reconfigure failed", t)
-                playing = false
-                publish()
-                throw t
+            if (playing && current != null) {
+                reconfigurePending = true
+                SidetrackDebug.log("reconfigure deferred until playback is silent")
+                return@withLock
             }
-            if (generation != pauseGeneration) return@withLock
-            playing = wasPlaying
-            if (wasPlaying && uri != null) audio?.start(position)
+            rebuildPlayerWhileSilent()
+        }
+    }
+
+    /**
+     * Rebuilds the native player and reloads the current item at the same position, paused. Only
+     * called while the sink is silent: the rebuild releases the AudioTrack and fetches the item
+     * again, so it must never run under a playing track.
+     */
+    private suspend fun rebuildPlayerWhileSilent() {
+        val uri = current?.uri
+        val position = positionMs
+        val generation = ++pauseGeneration
+        SidetrackDebug.log("rebuildPlayer uri=$uri positionMs=$position")
+        audio?.stop()
+        try {
+            // No native player yet: the next connect picks the new settings up.
+            if (!gateway.recreatePlayer()) return
+            if (uri != null) gateway.load(uri, position, autoplay = false)
+        } catch (t: Throwable) {
+            SidetrackDebug.log("rebuildPlayer failed", t)
+            playing = false
             publish()
+            throw t
+        }
+        if (generation != pauseGeneration) return
+        publish()
+    }
+
+    /** Applies a deferred rebuild at a moment that is already silent. */
+    private suspend fun applyPendingReconfigure() {
+        reconfigureLock.withLock {
+            if (!reconfigurePending) return@withLock
+            reconfigurePending = false
+            runCatching { rebuildPlayerWhileSilent() }
+                .onFailure { SidetrackDebug.log("deferred reconfigure failed", it) }
+        }
+    }
+
+    /**
+     * Rebuilds the player for a deferred setting change without reloading anything: the caller
+     * loads the next item itself, so the new player gets its source from that load.
+     */
+    private suspend fun recreatePlayerIfPending() {
+        reconfigureLock.withLock {
+            if (!reconfigurePending) return@withLock
+            reconfigurePending = false
+            runCatching { gateway.recreatePlayer() }
+                .onFailure { SidetrackDebug.log("deferred player rebuild failed", it) }
         }
     }
 

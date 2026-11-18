@@ -47,6 +47,8 @@ fun HistoryScreen(
         val gutters = rememberRowGutterState()
         val shown = remember { mutableIntStateOf(SPOTIFY_PAGE_SIZE) }
         val visible = playback.recent.take(shown.intValue)
+        val moreFocus = rememberLoadMoreFocus()
+        LoadMoreFocus(moreFocus, listState, visible.size, loading = false, firstItemListIndex = 0)
         SidekitList(padding, state = listState) {
             // History is local-only and has no empty state: with no entries the list is simply blank.
             // A track can be played again, so the id alone repeats; index keeps keys unique.
@@ -62,6 +64,7 @@ fun HistoryScreen(
                     gutters,
                     rowActions,
                     Modifier.listFade(listState, index),
+                    focusRequester = moreFocus.requesterFor(index),
                     onAddToQueue = onAddToQueue,
                     onRemove = onRemove,
                     onClick = { onPlay(item) }
@@ -73,8 +76,12 @@ fun HistoryScreen(
                     LoadMoreRow(
                         "Load more history",
                         loading = false,
-                        onLoadMore = { shown.intValue += SPOTIFY_PAGE_SIZE },
-                        modifier = Modifier.listFade(listState, moreIndex)
+                        onLoadMore = {
+                            moreFocus.onLoadMore(visible.size)
+                            shown.intValue += SPOTIFY_PAGE_SIZE
+                        },
+                        modifier = Modifier.listFade(listState, moreIndex),
+                        focusState = moreFocus
                     )
                 }
             }

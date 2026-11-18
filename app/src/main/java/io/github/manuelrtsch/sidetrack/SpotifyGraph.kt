@@ -21,7 +21,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import java.io.IOException
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
@@ -30,6 +29,7 @@ import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.data.SpotifySessions
 import io.github.manuelrtsch.sidetrack.triage.TriageLog
+import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 
 const val SIDE_PLAY_ROOT = "sidetrack"

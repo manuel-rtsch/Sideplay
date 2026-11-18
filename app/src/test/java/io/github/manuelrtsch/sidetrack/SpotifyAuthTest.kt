@@ -140,9 +140,7 @@ class SpotifyAuthTest {
         val store = object : SpotifyCredentialStore {
             var saved: SpotifyCredentials? = credentials(expiresAt = now + 10_000L)
             override fun read(): SpotifyCredentials? = saved
-            override fun save(credentials: SpotifyCredentials) {
-                throw javax.crypto.AEADBadTagException("invalidated")
-            }
+            override fun save(credentials: SpotifyCredentials): Unit = throw javax.crypto.AEADBadTagException("invalidated")
 
             override fun clear() {
                 saved = null

@@ -85,9 +85,13 @@ class SidetrackActivity : SidekitActivity() {
         KeypadSystemBack.delegate = systemBack
     }
 
-    override fun onPause() {
+    // The delegate is process-global, so it must not outlive the screen. Clearing it on pause was
+    // too eager: a dialog on top only pauses the activity, and Back handling then stayed gone until
+    // the next resume. onStop still fires when Sidetrack is backgrounded, which is the case that
+    // actually needs the delegate released.
+    override fun onStop() {
         if (KeypadSystemBack.delegate === systemBack) KeypadSystemBack.delegate = null
-        super.onPause()
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {

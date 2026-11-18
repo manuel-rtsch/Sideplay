@@ -27,10 +27,12 @@ import hrln.interactive.sidekit.design.components.container
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.design.theme.contentColorFor
+import io.github.manuelrtsch.sidetrack.ui.LinkArrow
 
 /**
- * Sidetrack's own copy of the settings row while the published design library lacks the
- * trailing-arrow and end-aligned-secondary options.
+ * Sidetrack's own copy of the settings row. The published design library covers the trailing-arrow
+ * and end-aligned-secondary options, but it has no switch/selection exposure, no per-row container
+ * or secondary colour and no non-ellipsised secondary, which the settings screens rely on.
  */
 @Composable
 fun SidetrackItem(
@@ -82,7 +84,7 @@ fun SidetrackItem(
                     if (secondary == null) Modifier.weight(1f) else Modifier,
                     contentAlignment = Alignment.CenterEnd
                 ) {
-                    SidekitIconImage(SidekitIcon.ArrowRightAlt, tint = contentColor)
+                    LinkArrow(tint = contentColor)
                 }
             }
         }

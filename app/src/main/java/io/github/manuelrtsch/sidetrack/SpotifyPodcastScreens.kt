@@ -106,9 +106,13 @@ fun ShowScreen(
         val listState = rememberLazyListState()
         rowActions.dismissOnScroll(listState)
         val playFocus = remember { FocusRequester() }
+        val moreFocus = rememberLoadMoreFocus()
         val gutters = rememberRowGutterState()
         val playIds = remember(collection.items) { collection.items.mapTo(mutableSetOf()) { it.id } }
-        LaunchedEffect(collection.id) { runCatching { playFocus.requestFocus() } }
+        LaunchedEffect(collection.id) {
+            moreFocus.reset()
+            runCatching { playFocus.requestFocus() }
+        }
         val latest = collection.items.firstOrNull() as? SpotifyEpisode
         val latestProgress = latest?.let { episodeProgress[it.id] }
         val playLabel = if (latestProgress != null && !latestProgress.completed && latestProgress.positionMs >= 30_000L) {
@@ -116,6 +120,15 @@ fun ShowScreen(
         } else {
             "Play latest episode"
         }
+        // Tiles and the metadata line, then the optional show-notes block, then the episodes.
+        val itemsBase = 2 + (if (showNotes.isNotBlank()) 2 else 0)
+        LoadMoreFocus(
+            moreFocus,
+            listState,
+            collection.items.size,
+            loadingMore,
+            firstItemListIndex = itemsBase
+        )
         SidekitList(padding, state = listState) {
             var rowIndex = 0
             item(key = "tiles") {
@@ -181,7 +194,7 @@ fun ShowScreen(
                 }
                 rowIndex += 1
             }
-            val base = rowIndex
+            val base = itemsBase
             // Keyed by episode id, not position: the list is newest-first, so a newly published
             // episode prepends and every index shifts.
             itemsIndexed(
@@ -199,6 +212,7 @@ fun ShowScreen(
                         gutters,
                         rowActions,
                         modifier,
+                        focusRequester = moreFocus.requesterFor(index),
                         onAddToQueue = onAddItemToQueue,
                         onNotes = { onEpisodeNotes(item) },
                         onClick = { onItem(index) }
@@ -222,8 +236,12 @@ fun ShowScreen(
                     LoadMoreRow(
                         "Load more episodes",
                         loadingMore,
-                        onLoadMore,
-                        Modifier.listFade(listState, moreIndex)
+                        onLoadMore = {
+                            moreFocus.onLoadMore(collection.items.size)
+                            onLoadMore()
+                        },
+                        Modifier.listFade(listState, moreIndex),
+                        focusState = moreFocus
                     )
                 }
             }
@@ -244,6 +262,7 @@ private fun EpisodeRow(
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
     onAddToQueue: (SpotifyMediaItem) -> Unit,
     onNotes: () -> Unit,
     onClick: () -> Unit
@@ -262,6 +281,7 @@ private fun EpisodeRow(
             Modifier
                 .fillMaxWidth()
                 .focusRequester(rowFocus)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .onFocusChanged { state ->
                     if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
                 }

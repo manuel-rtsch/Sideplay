@@ -111,7 +111,41 @@ class SpotifyPlaybackTest {
         assertTrue(stopped)
     }
 
-    @Test fun `reconfigure rebuilds the player and reloads the current item`() = runTest {
+    @Test fun `reconfigure while paused rebuilds the player and reloads the current item`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(
+            gateway,
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            MediaSessionRegistry()
+        )
+        playback.setNowPlaying(
+            SpotifyTrack(
+                id = "a",
+                title = "A",
+                artist = "Artist",
+                artistId = "artist",
+                albumId = "album",
+                artRes = 0,
+                durationMs = 180_000L,
+                uri = "spotify:track:a"
+            ),
+            12_000L
+        )
+        playback.start("spotify:track:a", 12_000L)
+        playback.pause()
+        advanceTimeBy(1_000L)
+        runCurrent()
+
+        playback.reconfigure()
+
+        assertTrue(gateway.recreated)
+        assertEquals("spotify:track:a", gateway.loadedUri)
+        assertEquals(2, gateway.loads)
+        assertFalse(gateway.autoplay)
+        assertFalse(playback.isActive)
+    }
+
+    @Test fun `reconfigure while playing waits for the next start`() = runTest {
         val gateway = FakeGateway()
         val playback = SpotifyPlayback(
             gateway,
@@ -135,10 +169,49 @@ class SpotifyPlaybackTest {
 
         playback.reconfigure()
 
+        // A rebuild would stop the sink and fetch the item again, which is audible mid-track.
+        assertFalse(gateway.recreated)
+        assertEquals(1, gateway.loads)
+        assertTrue(playback.isActive)
+
+        playback.start("spotify:track:b", 0L)
+
+        assertTrue(gateway.recreated)
+        assertEquals("spotify:track:b", gateway.loadedUri)
+        assertEquals(2, gateway.loads)
+    }
+
+    @Test fun `a deferred reconfigure applies on pause`() = runTest {
+        val gateway = FakeGateway()
+        val playback = SpotifyPlayback(
+            gateway,
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            MediaSessionRegistry()
+        )
+        playback.setNowPlaying(
+            SpotifyTrack(
+                id = "a",
+                title = "A",
+                artist = "Artist",
+                artistId = "artist",
+                albumId = "album",
+                artRes = 0,
+                durationMs = 180_000L,
+                uri = "spotify:track:a"
+            ),
+            12_000L
+        )
+        playback.start("spotify:track:a", 12_000L)
+        playback.reconfigure()
+
+        playback.pause()
+        advanceTimeBy(1_000L)
+        runCurrent()
+
         assertTrue(gateway.recreated)
         assertEquals("spotify:track:a", gateway.loadedUri)
         assertEquals(2, gateway.loads)
-        assertTrue(playback.isActive)
+        assertFalse(gateway.autoplay)
     }
 
     @Test fun `requestNext prefers the attached UI owner`() {
