@@ -101,7 +101,10 @@ data class ServiceCapabilities(
                 SearchScope.Albums,
                 SearchScope.Playlists
             ),
+            supportsRadio = true,
             supportsPlaylistEdit = true,
+            supportsNormalization = true,
+            supportsQualitySelection = true,
             supportsProgressReporting = true,
             supportsScrobbling = true
         )

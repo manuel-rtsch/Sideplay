@@ -24,12 +24,12 @@ off / returned as unsupported) · ❌ not supported.
 | Library sections | Liked, Playlists, Albums, Artists, Shows | Liked, Playlists, Albums, Artists |
 | Search scopes | Tracks, Artists, Albums, Playlists, Shows | Tracks, Artists, Albums, Playlists |
 | Podcasts / shows | ✅ | ❌ |
-| Song radio | ✅ | ⚠️ |
+| Song radio | ✅ | ✅ |
 | Follow artist | ✅ | ❌ |
 | Playlist editing (add/remove items) | ✅ | ✅ |
-| Loudness normalization | ✅ | ❌ |
+| Loudness normalization | ✅ | ✅ |
 | Gapless playback | ✅ | ❌ |
-| Quality selection | ✅ | ❌ |
+| Quality selection | ✅ | ✅ |
 | Progress reporting (resume) | ✅ | ✅ |
 | Scrobbling | ✅ | ✅ |
 | Sign-in | OAuth (PKCE) via browser | Username/password against a `ping` |
@@ -61,8 +61,8 @@ instrumentation lands under `app/src/androidTest` (`SpotifyPlaybackServiceInstru
 ## Navidrome (Subsonic adapter)
 
 Navidrome is implemented through the Subsonic API. It is **not** feature-complete; it covers
-music library, search, library editing and Media3 playback, with the narrower capability set
-below.
+music library, search, library editing, quality/DSP settings and Media3 playback, with the
+narrower capability set below.
 
 ### Implemented
 
@@ -78,31 +78,37 @@ below.
   behave exactly as for Spotify.
 - **Library editing** (`MediaLibraryWriter`): star/unstar (like/save), add to / remove from
   playlist.
+- **Radio**: `similarSongs` with a `randomSongs` fallback for servers without Last.fm, surfaced
+  because `supportsRadio` is now true.
+- **Audio quality / bitrate**: the selected `AudioQuality` maps to Subsonic `maxBitRate` on the
+  `stream` URL. `High` (the default) leaves the server free to pick its best bitrate so FLAC
+  isn't silently capped; `Normal` → 96 kbit/s and `Max` → 320 kbit/s force a transcode ceiling.
+  The ceiling applies to the next track, not the one already playing.
+- **Normalization**: Subsonic `stream` gets `replayGain=true` when the *Normalize volume* toggle
+  is on.
 - **Progress & scrobbling**: resume points and scrobble reporting flags are on.
 - **Isolation**: separate queue, history, resume and settings stores, so switching services never
   mixes two accounts.
 
-### Present in the catalog but not surfaced
-
-- **Radio** ⚠️: `NavidromeCatalog.radio` exists, built on `similarSongs` with a `randomSongs`
-  fallback for servers without Last.fm, but `supportsRadio` is false in `ServiceCapabilities.
-  Navidrome`, so the UI hides the radio action.
-
-### Not supported
+### Not supported (not yet)
 
 - **Podcasts / shows**: no `Shows` library section and no `Shows` search scope; `supportsPodcasts`
   is false.
 - **Follow artist** ❌: `isFollowed` returns `null` and `setFollowed` is a no-op;
   `supportsFollowArtist` is false.
-- **DSP settings** ❌: `supportsNormalization`, `supportsGapless` and `supportsQualitySelection`
-  are all false.
+- **Gapless** ❌: `supportsGapless` stays false until the Media3 engine applies per-track
+  seamless handoff. The preference is already persisted (`setGapless`) so it is ready to flip on.
 
 ### Coverage
 
 - `NavidromeApiTest.kt` — unit tests: host normalization, ping/token auth, Subsonic error →
   `ServiceFailure` mapping, artist/album/playlist mapping with authenticated cover URLs, `search3`
   scope mapping, album pagination, stream/cover URL auth (no password), starred/saved state,
-  catalog stream resolution + playlist pagination, and writer star/edit.
+  catalog stream resolution + playlist pagination, `stream` `maxBitRate`/`replayGain` params,
+  catalog applying quality/normalization from settings to the stream, and writer star/edit.
+- `MusicServiceTest.kt` — asserts `ServiceCapabilities.Navidrome` advertises the delivered parity
+  capabilities (radio, quality selection, normalization, playlist edit, progress, scrobbling) and
+  keeps the not-yet-supported ones off (podcasts, follow-artist, gapless).
 - `NavidromeIntegrationTest.kt` — opt-in smoke tests against a real Navidrome/Subsonic server
   (env: `NAVIDROME_TEST_URL` / `_USER` / `_PASSWORD`; skipped when absent): reads artists/albums/
   tracks, resolves stream and artwork URLs, pages the library and writes stars, reads and edits a

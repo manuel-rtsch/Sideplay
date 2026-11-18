@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack.data
 
 import android.content.Context
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
+import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.ServiceCapabilities
 import io.github.manuelrtsch.sidetrack.ServiceId
@@ -32,7 +33,8 @@ class NavidromeRuntime(
     context: Context,
     val auth: NavidromeAuth = NavidromeAuth(NavidromeCredentialStore(context))
 ) : ServiceRuntime,
-    CacheRuntime {
+    CacheRuntime,
+    QualitySettingsRuntime {
     private val appContext = context.applicationContext
 
     override val service: ServiceId = ServiceId.Navidrome
@@ -41,7 +43,10 @@ class NavidromeRuntime(
     private val _signedIn = MutableStateFlow(runCatching { auth.hasCredentials() }.getOrDefault(false))
     override val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
 
-    override val catalog: MediaCatalog = NavidromeCatalog { auth.api() }
+    override val catalog: MediaCatalog = NavidromeCatalog(
+        api = { auth.api() },
+        settings = { _settings.value }
+    )
     override val writer: MediaLibraryWriter get() = catalog as MediaLibraryWriter
 
     override val network: NetworkMonitor = NetworkMonitor(appContext)
@@ -144,6 +149,23 @@ class NavidromeRuntime(
 
     override fun setAutoplay(enabled: Boolean) {
         _settings.update { it.copy(autoplay = enabled) }
+        settingsStore.write(_settings.value)
+    }
+
+    override fun setAudioQuality(quality: AudioQuality) {
+        _settings.update { it.copy(audioQuality = quality) }
+        settingsStore.write(_settings.value)
+    }
+
+    override fun setNormalization(enabled: Boolean) {
+        _settings.update { it.copy(normalization = enabled) }
+        settingsStore.write(_settings.value)
+    }
+
+    override fun setGapless(enabled: Boolean) {
+        // Gapless is not surfaced until the Media3 engine applies per-track seamless handoff;
+        // persist the preference so it is ready when that lands.
+        _settings.update { it.copy(gapless = enabled) }
         settingsStore.write(_settings.value)
     }
 

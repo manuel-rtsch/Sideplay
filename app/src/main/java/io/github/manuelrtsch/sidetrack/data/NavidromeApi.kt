@@ -3,6 +3,7 @@ package io.github.manuelrtsch.sidetrack.data
 import android.util.Log
 import io.github.manuelrtsch.sidetrack.Album
 import io.github.manuelrtsch.sidetrack.Artist
+import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.Collection
 import io.github.manuelrtsch.sidetrack.CollectionType
 import io.github.manuelrtsch.sidetrack.LibraryEntry
@@ -167,7 +168,18 @@ class NavidromeApi(
         call("updatePlaylist", "playlistId" to playlistId, "songIndexToRemove" to index.toString())
     }
 
-    suspend fun streamUrl(songId: String): String = url("stream", "id" to songId)
+    suspend fun streamUrl(
+        songId: String,
+        maxBitRateKbps: Int? = null,
+        replayGain: Boolean = false
+    ): String {
+        val params = buildList {
+            add("id" to songId)
+            if (maxBitRateKbps != null) add("maxBitRate" to maxBitRateKbps.toString())
+            if (replayGain) add("replayGain" to "true")
+        }
+        return url("stream", *params.toTypedArray())
+    }
 
     fun coverUrl(coverArt: String?, size: Int = 600): String? {
         if (coverArt.isNullOrBlank()) return null
@@ -345,7 +357,8 @@ private fun JSONObject.toPlaylist(cover: (String?) -> String?): Playlist {
  * the Subsonic id inside [MediaKey], never the URL.
  */
 class NavidromeCatalog(
-    private val api: () -> NavidromeApi?
+    private val api: () -> NavidromeApi?,
+    private val settings: () -> PlaybackSettings = { PlaybackSettings() }
 ) : MediaCatalog,
     MediaLibraryWriter {
     override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
@@ -432,9 +445,23 @@ class NavidromeCatalog(
         if (item.service != ServiceId.Navidrome) {
             throw ServiceException(ServiceFailure.TrackUnavailable, "This item belongs to another service")
         }
+        val current = settings()
+        // High is the app default; leave the server free to pick its best bitrate so an
+        // existing FLAC stream is not silently capped at 160 kbps. Only an explicit Normal or
+        // Max choice forces a transcode ceiling. The selected ceiling applies to the next track;
+        // the playing one keeps the source it started with.
+        val maxBitRateKbps = when (current.audioQuality) {
+            AudioQuality.Normal -> 96
+            AudioQuality.High -> null
+            AudioQuality.VeryHigh -> 320
+        }
         return PlaybackSource(
             id = item.key.encode(),
-            uri = client().streamUrl(item.id)
+            uri = client().streamUrl(
+                item.id,
+                maxBitRateKbps = maxBitRateKbps,
+                replayGain = current.normalization
+            )
         )
     }
 

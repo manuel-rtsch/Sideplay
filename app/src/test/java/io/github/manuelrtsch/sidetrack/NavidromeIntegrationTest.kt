@@ -80,7 +80,7 @@ class NavidromeIntegrationTest {
     @Test fun `catalog pages the library and writes stars`() = runTest {
         requireServer()
         val api = api()
-        val catalog = NavidromeCatalog { api }
+        val catalog = NavidromeCatalog(api = { api })
 
         val artists = catalog.library(LibrarySection.Artists, 0, 5)
         assertTrue(artists.items.isNotEmpty())
@@ -108,7 +108,7 @@ class NavidromeIntegrationTest {
     @Test fun `catalog reads and edits a playlist`() = runTest {
         requireServer()
         val api = api()
-        val catalog = NavidromeCatalog { api }
+        val catalog = NavidromeCatalog(api = { api })
 
         val playlists = catalog.library(LibrarySection.Playlists, 0, 20).items.filterIsInstance<Playlist>()
         val playlist = playlists.firstOrNull { it.name.startsWith("Sidetrack Test") }

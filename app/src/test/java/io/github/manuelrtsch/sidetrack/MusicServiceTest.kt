@@ -25,6 +25,20 @@ class MusicServiceTest {
         assertNull(serviceChoice(ServiceId("unknown")))
     }
 
+    @Test fun `Navidrome advertises the parity capabilities it can deliver`() {
+        val caps = ServiceCapabilities.Navidrome
+        assertTrue(caps.supportsRadio)
+        assertTrue(caps.supportsQualitySelection)
+        assertTrue(caps.supportsNormalization)
+        assertTrue(caps.supportsPlaylistEdit)
+        assertTrue(caps.supportsProgressReporting)
+        assertTrue(caps.supportsScrobbling)
+        // Not yet available for Navidrome: podcasts, artist-follow and gapless.
+        assertTrue(!caps.supportsPodcasts)
+        assertTrue(!caps.supportsFollowArtist)
+        assertTrue(!caps.supportsGapless)
+    }
+
     @Test fun `Spotify catalog adapter maps neutral sections and keys`() = runTest {
         val catalog = SpotifyMediaCatalog(MockSpotifyDataSource)
 

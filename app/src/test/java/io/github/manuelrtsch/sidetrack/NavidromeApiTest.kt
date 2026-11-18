@@ -8,6 +8,7 @@ import io.github.manuelrtsch.sidetrack.data.NavidromeApi
 import io.github.manuelrtsch.sidetrack.data.NavidromeCatalog
 import io.github.manuelrtsch.sidetrack.data.NavidromeCredentials
 import io.github.manuelrtsch.sidetrack.data.NavidromeTransport
+import io.github.manuelrtsch.sidetrack.data.PlaybackSettings
 import io.github.manuelrtsch.sidetrack.data.ServiceException
 import io.github.manuelrtsch.sidetrack.data.ServiceFailure
 import io.github.manuelrtsch.sidetrack.data.normalized
@@ -140,6 +141,45 @@ class NavidromeApiTest {
         assertFalse(stream.contains("sesame"))
     }
 
+    @Test fun `stream url honors maxBitRate and replay gain`() = runTest {
+        val transport = FakeTransport { ok("""{"status":"ok"}""") }
+        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+
+        val capped = api.streamUrl("s1", maxBitRateKbps = 96, replayGain = true)
+        assertTrue(capped.contains("/rest/stream"))
+        assertTrue(capped.contains("id=s1"))
+        assertTrue(capped.contains("maxBitRate=96"))
+        assertTrue(capped.contains("replayGain=true"))
+
+        val plain = api.streamUrl("s2")
+        assertFalse(plain.contains("maxBitRate"))
+        assertFalse(plain.contains("replayGain"))
+    }
+
+    @Test fun `catalog applies quality and normalization from settings to the stream`() = runTest {
+        val transport = FakeTransport { ok("""{"status":"ok"}""") }
+        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val catalog = NavidromeCatalog(
+            { api },
+            { PlaybackSettings(audioQuality = AudioQuality.Normal, normalization = true) }
+        )
+
+        val track = Track(
+            id = "s1",
+            title = "One",
+            artist = "A",
+            artistId = "a1",
+            albumId = "al1",
+            artRes = 0,
+            durationMs = 60_000,
+            service = ServiceId.Navidrome
+        )
+
+        val source = catalog.resolvePlaybackSource(track)
+        assertTrue(source.uri.contains("maxBitRate=96"))
+        assertTrue(source.uri.contains("replayGain=true"))
+    }
+
     @Test fun `saved state reads the starred marker`() = runTest {
         val api = NavidromeApi(
             NavidromeCredentials("http://nas.local", "joe", "sesame"),
@@ -187,7 +227,7 @@ class NavidromeApiTest {
             }
         }
         val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
-        val catalog = NavidromeCatalog { api }
+        val catalog = NavidromeCatalog(api = { api })
 
         val playlist = catalog.collection(MediaKey(ServiceId.Navidrome, MediaType.Playlist, "p1"), 1, 1)!!
         assertEquals(listOf("s2"), playlist.items.map { it.id })
@@ -212,7 +252,7 @@ class NavidromeApiTest {
             }
         }
         val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
-        val catalog = NavidromeCatalog { api }
+        val catalog = NavidromeCatalog(api = { api })
         val key = MediaKey(ServiceId.Navidrome, MediaType.Track, "s2")
 
         catalog.setSaved(key, true)
