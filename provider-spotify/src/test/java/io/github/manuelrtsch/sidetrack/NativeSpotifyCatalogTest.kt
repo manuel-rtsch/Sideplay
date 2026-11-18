@@ -325,6 +325,7 @@ class NativeSpotifyCatalogTest {
         override fun connect(accessToken: String) = true
         override fun setAccessToken(accessToken: String) = true
         override fun disconnect() = Unit
+        override fun hasPlayer() = false
         override fun createPlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean) = true
         override fun recreatePlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean) = true
         override fun preload(uri: String) = true

@@ -193,6 +193,47 @@ class NativeSpotifyGatewayTest {
         assertEquals(2, native.connects)
     }
 
+    @Test fun `catalog session rebuild leaves playback without a player until the next play`() = runTest {
+        val native = FakeNative()
+        val gateway = NativeSpotifyGateway(native) { "token" }
+        gateway.connect("token")
+        assertTrue(native.playerCreated)
+        // The session went invalid while the app sat idle, so a catalog read rebuilds it. The
+        // engine drops the player with the old session and the catalog path does not create one.
+        native.setTokenOk = false
+
+        gateway.ensureSession()
+
+        assertEquals(false, native.playerCreated)
+        // The next play has to notice and create a player, otherwise every load fails with
+        // PLAYER_NOT_CREATED ("Track unavailable") until the app is restarted.
+        assertTrue(gateway.ensureConnected())
+        assertTrue(native.playerCreated)
+    }
+
+    @Test fun `ensureConnected recreates a player the engine lost`() = runTest {
+        val native = FakeNative()
+        val gateway = NativeSpotifyGateway(native) { "token" }
+        gateway.connect("token")
+        native.dropPlayer()
+
+        assertTrue(gateway.ensureConnected())
+
+        assertTrue(native.playerCreated)
+        assertEquals(1, native.connects)
+    }
+
+    @Test fun `ensureConnected keeps a live player and only refreshes the token`() = runTest {
+        val native = FakeNative()
+        val gateway = NativeSpotifyGateway(native) { "token" }
+        gateway.connect("token")
+
+        assertEquals(false, gateway.ensureConnected())
+
+        assertEquals(1, native.connects)
+        assertTrue(native.playerCreated)
+    }
+
     private class FakeNative(override val isAvailable: Boolean = true) : SpotifyNative {
         var token: String? = null
         var playerCreated = false
@@ -206,12 +247,19 @@ class NativeSpotifyGatewayTest {
         var gapless = true
         var connects = 0
 
+        /** Simulates the engine dropping the player without telling the Kotlin side. */
+        fun dropPlayer() {
+            playerCreated = false
+        }
+
         override fun initialize() = isAvailable
         override fun setTmpDir(path: String) = Unit
         override fun setCacheDir(path: String, sizeLimitBytes: Long) = Unit
         override fun connect(accessToken: String): Boolean {
             connects++
             token = accessToken
+            // Model the engine: a new session cannot keep the player created for the old one.
+            playerCreated = false
             return connectOk && isAvailable
         }
         override fun setAccessToken(accessToken: String): Boolean {
@@ -219,6 +267,7 @@ class NativeSpotifyGatewayTest {
             return setTokenOk && isAvailable
         }
         override fun disconnect() = Unit
+        override fun hasPlayer() = playerCreated
         override fun createPlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean {
             playerCreated = true
             this.bitrateKbps = bitrateKbps

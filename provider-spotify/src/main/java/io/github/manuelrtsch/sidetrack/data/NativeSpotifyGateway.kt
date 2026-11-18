@@ -15,6 +15,8 @@ class NativeSpotifyGateway(
     private val networkAvailable: () -> Boolean = { true },
     private val accessToken: suspend () -> String?
 ) : SpotifyGateway {
+    /** True when a player is attached to the live session; see [ensureConnected] for why that is
+     * not the same as "the session is connected". */
     @Volatile
     private var connected = false
 
@@ -26,7 +28,9 @@ class NativeSpotifyGateway(
 
     override suspend fun connect(accessToken: String) = onIo {
         requireNative()
-        if (connected) return@onIo
+        // `connected` alone is not enough: a session rebuilt by the catalog path drops the player
+        // without touching the flag, and returning here would leave playback without one.
+        if (connected && native.hasPlayer()) return@onIo
         // A session that is invalid, or was opened with a different OAuth token, must be rebuilt
         // before a player is attached to it. Otherwise the player would load tracks through a
         // dead access-point connection and every load would fail.
@@ -111,6 +115,11 @@ class NativeSpotifyGateway(
      * changed token as a rejection: the live session holds the access point's reusable stored
      * credential, which login5 needs, so a refreshed OAuth token must rebuild the session rather
      * than overwrite that credential.
+     *
+     * The player is checked against the engine rather than trusted from [connected]: the catalog
+     * path ([ensureSession]) rebuilds the session without creating a player, and rebuilding a
+     * session always drops the existing one. Without that check every track would fail with
+     * PLAYER_NOT_CREATED until the user restarted the app.
      */
     suspend fun ensureConnected(forceReconnect: Boolean = false): Boolean {
         if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
@@ -130,7 +139,7 @@ class NativeSpotifyGateway(
             connect(token)
             return true
         }
-        if (!connected) {
+        if (!connected || !playerAttached()) {
             SidetrackDebug.log("ensureConnected: no player, connecting")
             connect(token)
             return true
@@ -185,7 +194,16 @@ class NativeSpotifyGateway(
         SidetrackDebug.log("connectSession connected")
         sessionConnected = true
         sessionToken = token
+        // The player belongs to the session it was created with, so the native connect above
+        // dropped it. Clearing the flag matters for the catalog path ([ensureSession]), which
+        // connects without creating a player: leaving it set would make [ensureConnected] skip
+        // the player and every load would fail with PLAYER_NOT_CREATED.
+        if (connected) SidetrackDebug.log("connectSession: previous player dropped")
+        connected = false
     }
+
+    /** Native truth, so a session rebuilt outside the playback path cannot leave [connected] stale. */
+    private suspend fun playerAttached(): Boolean = withContext(Dispatchers.IO) { native.hasPlayer() }
 
     private fun createPlayer() {
         val current = settings()

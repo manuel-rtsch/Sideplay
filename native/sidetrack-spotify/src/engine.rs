@@ -146,6 +146,10 @@ pub(crate) fn with_session_and_token<T>(
 }
 
 pub fn connect(access_token: &str) -> Result<(), String> {
+    // A player is bound to the session it was created with, so rebuilding the session always
+    // drops it here. Callers have to create a new player before they load a track again; the
+    // Kotlin gateway asks `has_player` instead of remembering this on its own.
+    log::info!("engine.connect: rebuilding session, dropping any existing player");
     disconnect();
     let rt = runtime();
     let _guard = rt.enter();
@@ -300,21 +304,30 @@ pub fn preload(uri: &str) -> Result<(), String> {
 
 pub fn load(uri: &str, position_ms: u32, autoplay: bool) -> Result<(), String> {
     log::info!("engine.load begin uri={uri} position_ms={position_ms} autoplay={autoplay}");
-    let uri = SpotifyUri::from_uri(uri).map_err(|e| format!("INVALID_URI: {e}"))?;
+    let uri = SpotifyUri::from_uri(uri).map_err(|e| {
+        log::warn!("engine.load rejected: invalid uri: {e}");
+        format!("INVALID_URI: {e}")
+    })?;
     if !uri.is_playable() {
         log::warn!("engine.load rejected: not playable");
         return Err("NOT_PLAYABLE".to_string());
     }
-    let player = {
-        let guard = state().lock().map_err(|_| "STATE_LOCK".to_string())?;
-        guard
-            .player
-            .clone()
-            .ok_or_else(|| "PLAYER_NOT_CREATED".to_string())?
-    };
+    let player = player()?;
     player.load(uri, autoplay, position_ms);
     log::info!("engine.load command queued");
     Ok(())
+}
+
+/// Whether a player is attached to the current session.
+///
+/// Every reconnect replaces the session and therefore drops the player, so a cached "connected"
+/// flag on the Kotlin side can go stale. Asking the engine keeps playback from loading tracks
+/// into a player that no longer exists.
+pub fn has_player() -> bool {
+    state()
+        .lock()
+        .map(|guard| guard.player.is_some())
+        .unwrap_or(false)
 }
 
 pub fn play() -> Result<(), String> {
@@ -448,11 +461,14 @@ fn uri(value: &SpotifyUri) -> String {
 }
 
 fn player() -> Result<Arc<Player>, String> {
-    let guard = state().lock().map_err(|_| "STATE_LOCK".to_string())?;
-    guard
-        .player
-        .clone()
-        .ok_or_else(|| "PLAYER_NOT_CREATED".to_string())
+    let guard = state().lock().map_err(|_| {
+        log::warn!("engine: state lock poisoned");
+        "STATE_LOCK".to_string()
+    })?;
+    guard.player.clone().ok_or_else(|| {
+        log::warn!("engine: no player attached to the current session");
+        "PLAYER_NOT_CREATED".to_string()
+    })
 }
 
 #[cfg(test)]
