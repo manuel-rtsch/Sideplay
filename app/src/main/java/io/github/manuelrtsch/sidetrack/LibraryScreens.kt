@@ -175,6 +175,7 @@ fun LibraryScreen(
     onRetry: () -> Unit,
     onCreatePlaylist: () -> Unit,
     canCreatePlaylist: Boolean,
+    supportedFilters: Set<LibraryFilter> = LibraryFilter.entries.toSet(),
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
@@ -246,7 +247,7 @@ fun LibraryScreen(
             // of the page. It shrinks its record to fit; a full-size one would push the text off
             // the bottom under the five square filters.
             Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                LibraryFilterRow(filter, onFilter, filterFocus)
+                LibraryFilterRow(filter, onFilter, filterFocus, supportedFilters = supportedFilters)
                 Spacer(Modifier.height(SidekitTheme.spacing.pageGap))
                 Box(
                     Modifier.weight(1f).fillMaxWidth(),
@@ -289,7 +290,8 @@ fun LibraryScreen(
                         onFilter,
                         filterFocus,
                         Modifier.listFade(listState, 0)
-                            .padding(bottom = SidekitTheme.spacing.pageGap)
+                            .padding(bottom = SidekitTheme.spacing.pageGap),
+                        supportedFilters
                     )
                 }
                 var rowIndex = 1
@@ -337,13 +339,18 @@ fun LibraryScreen(
     }
 }
 
-/** Five square category buttons. Focus selects a category; clicking does too. */
+/**
+ * Five square category buttons. Focus selects a category; clicking does too. A category the
+ * connected service cannot fill keeps its slot but is muted and skipped, so the row never reflows
+ * and no button leads to an empty page.
+ */
 @Composable
 private fun LibraryFilterRow(
     selected: LibraryFilter,
     onFilter: (LibraryFilter) -> Unit,
     focusRequesters: Map<LibraryFilter, FocusRequester>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    supportedFilters: Set<LibraryFilter> = LibraryFilter.entries.toSet()
 ) {
     ContentFilterRow(
         filters = LibraryFilter.entries,
@@ -352,7 +359,11 @@ private fun LibraryFilterRow(
         label = { it.label },
         onSelect = onFilter,
         focusRequesters = focusRequesters,
-        modifier = modifier
+        modifier = modifier,
+        enabled = { it in supportedFilters },
+        // Unlike a search category that is merely switched off, this one cannot be switched on
+        // anywhere: it is a fact about the service, not a setting.
+        disabledLabel = { "not available" }
     )
 }
 
@@ -370,7 +381,9 @@ internal fun <T> ContentFilterRow(
     onSelect: (T) -> Unit,
     focusRequesters: Map<T, FocusRequester>,
     modifier: Modifier = Modifier,
-    enabled: (T) -> Boolean = { true }
+    enabled: (T) -> Boolean = { true },
+    /** How a disabled button is announced: "off" when it could be switched on, otherwise why not. */
+    disabledLabel: (T) -> String = { "off" }
 ) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val columns = filters.size
@@ -383,7 +396,7 @@ internal fun <T> ContentFilterRow(
                     icon = icon(filter),
                     // An excluded category keeps its slot so the row never reflows; it only loses
                     // its click, its muted colour says why.
-                    contentDescription = if (isEnabled) label(filter) else "${label(filter)}, off",
+                    contentDescription = if (isEnabled) label(filter) else "${label(filter)}, ${disabledLabel(filter)}",
                     modifier = Modifier
                         .weight(1f)
                         .height(cell)

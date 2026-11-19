@@ -42,6 +42,7 @@ fun SearchScreen(
     search: SearchUiState,
     saved: SavedUiState,
     chrome: ChromeUiState,
+    supportedScopes: Set<SearchScope> = SearchScope.entries.toSet(),
     onBack: () -> Unit,
     onQuery: (String) -> Unit,
     onClear: () -> Unit,
@@ -78,19 +79,19 @@ fun SearchScreen(
         rows.bar,
         sidetrackActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     )
-    // The right side of the "Search in" row must stay on one line. The only selection that
-    // overflows is four of five scopes, so name the one that is left out instead of listing four.
-    val scopeSummary = when (search.searchScopes.size) {
-        SearchScope.entries.size -> "Everything"
-
-        0 -> "Nothing"
-
-        1 -> SearchScope.entries.first { it in search.searchScopes }.label
-
-        SearchScope.entries.size - 1 ->
-            "All but " + SearchScope.entries.first { it !in search.searchScopes }.label
-
-        else -> SearchScope.entries.filter { it in search.searchScopes }.joinToString(", ") { it.label }
+    // The summary describes what the next search will actually look at: a category the service
+    // cannot answer is never part of the choice, so all of the answerable ones in means
+    // "Everything". The right side must stay on one line, so when one category is left out it is
+    // named instead of listing the rest.
+    val pickedScopes = SearchScope.entries.filter { it in supportedScopes && it in search.searchScopes }
+    val leftOutScopes = SearchScope.entries.filter { it in supportedScopes && it !in search.searchScopes }
+    val scopeSummary = when {
+        supportedScopes.isEmpty() -> "Nothing"
+        pickedScopes.size == supportedScopes.size -> "Everything"
+        pickedScopes.isEmpty() -> "Nothing"
+        pickedScopes.size == 1 -> pickedScopes.single().label
+        leftOutScopes.size == 1 -> "All but " + leftOutScopes.single().label
+        else -> pickedScopes.joinToString(", ") { it.label }
     }
     val searchFocus = remember { FocusRequester() }
     val scopesFocus = remember { FocusRequester() }
@@ -259,7 +260,10 @@ fun SearchScreen(
                         label = { it.label },
                         onSelect = { scope = it },
                         focusRequesters = filterFocus,
-                        enabled = { it in search.searchScopes },
+                        // A category the service cannot answer stays in the row but takes no
+                        // click and no focus: it would only ever show an empty list.
+                        enabled = { it in supportedScopes && it in search.searchScopes },
+                        disabledLabel = { if (it in supportedScopes) "off" else "not available" },
                         modifier = Modifier.listFade(listState, 0)
                             .padding(bottom = SidekitTheme.spacing.pageGap)
                             .then(filterRowModifier)
@@ -377,6 +381,7 @@ private val SearchScope.icon: SidekitIcon
 fun SearchScopesScreen(
     search: SearchUiState,
     chrome: ChromeUiState,
+    supportedScopes: Set<SearchScope> = SearchScope.entries.toSet(),
     onBack: () -> Unit,
     onToggleScope: (SearchScope) -> Unit,
     onNowPlaying: () -> Unit,
@@ -397,16 +402,22 @@ fun SearchScopesScreen(
             }
             SearchScope.entries.forEachIndexed { index, scope ->
                 item(key = scope.name) {
-                    val included = scope in search.searchScopes
+                    // A category the service cannot answer is shown, not hidden: the list keeps
+                    // its shape on every service, and "Not available" says why it cannot be
+                    // turned on instead of leaving the user to guess.
+                    val available = scope in supportedScopes
+                    val included = available && scope in search.searchScopes
                     // Never let the last category be turned off: the search page has no list to
                     // show without one, and an empty scope set used to mean "everything". The row
                     // stays focusable so its checked, disabled state is still announced.
-                    val locked = included && search.searchScopes.size == 1
+                    val locked = included &&
+                        search.searchScopes.count { it in supportedScopes } == 1
                     SidetrackItem(
                         scope.label,
                         modifier = Modifier.listFade(listState, index + 1)
-                            .semantics { if (locked) disabled() },
+                            .semantics { if (locked || !available) disabled() },
                         secondary = when {
+                            !available -> "Not available"
                             locked -> "On, required"
                             included -> "On"
                             else -> "Off"
@@ -415,7 +426,7 @@ fun SearchScopesScreen(
                         icon = if (included) SidekitIcon.Check else null,
                         toggleable = included,
                         toggleRole = Role.Checkbox,
-                        onClick = { if (!locked) onToggleScope(scope) }
+                        onClick = { if (available && !locked) onToggleScope(scope) }
                     )
                 }
             }

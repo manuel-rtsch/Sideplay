@@ -272,6 +272,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 onRetry = vm::retryLibrary,
                 onCreatePlaylist = { nav.navigate(CREATE_PLAYLIST) },
                 canCreatePlaylist = vm.capabilities.supportsPlaylistCreate,
+                supportedFilters = vm.supportedFilters,
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
             )
@@ -476,6 +477,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 search,
                 saved,
                 chrome,
+                supportedScopes = vm.supportedScopes,
                 onBack = { nav.popBackStack() },
                 onQuery = vm::setQuery,
                 onClear = vm::clearQuery,
@@ -503,6 +505,7 @@ fun NavGraphBuilder.sidetrackGraph(
             SearchScopesScreen(
                 search,
                 chrome,
+                supportedScopes = vm.supportedScopes,
                 onBack = { nav.popBackStack() },
                 onToggleScope = vm::toggleScope,
                 onNowPlaying = { nav.openNowPlaying(vm) },

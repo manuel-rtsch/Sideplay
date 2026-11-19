@@ -225,6 +225,15 @@ enum class LibraryFilter(val label: String, val empty: String) {
     Shows("Shows", "No saved shows")
 }
 
+/** The provider-side section a library category reads from. */
+fun LibraryFilter.section(): LibrarySection = when (this) {
+    LibraryFilter.LikedSongs -> LibrarySection.Liked
+    LibraryFilter.Playlists -> LibrarySection.Playlists
+    LibraryFilter.Albums -> LibrarySection.Albums
+    LibraryFilter.Artists -> LibrarySection.Artists
+    LibraryFilter.Shows -> LibrarySection.Shows
+}
+
 enum class SearchScope(val label: String) {
     Tracks("Tracks"),
     Artists("Artists"),

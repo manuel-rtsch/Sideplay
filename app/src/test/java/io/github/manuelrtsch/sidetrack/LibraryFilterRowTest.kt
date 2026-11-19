@@ -18,6 +18,7 @@ import hrln.interactive.sidekit.design.canvas.SidekitCanvas
 import hrln.interactive.sidekit.design.theme.SidekitSpacing
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,7 +28,14 @@ import org.junit.runner.RunWith
 class LibraryFilterRowTest {
     @get:Rule val compose = createComposeRule()
 
-    private fun show(filter: LibraryFilter) {
+    /** What Navidrome can fill: no Shows, because the Subsonic podcast endpoints are stubs. */
+    private val navidromeFilters: Set<LibraryFilter> = ServiceCapabilities.Navidrome.availableLibraryFilters
+
+    private fun show(
+        filter: LibraryFilter,
+        supportedFilters: Set<LibraryFilter> = LibraryFilter.entries.toSet(),
+        onFilter: (LibraryFilter) -> Unit = {}
+    ) {
         val state = LibraryUiState(
             libraryItems = runBlocking { MockSpotifyDataSource.library(filter).items },
             filter = filter
@@ -41,7 +49,7 @@ class LibraryFilterRowTest {
                         ChromeUiState(),
                         onBack = {},
                         onSearch = {},
-                        onFilter = {},
+                        onFilter = onFilter,
                         onTrack = {},
                         onAddToQueue = {},
                         onPlaylist = {},
@@ -55,6 +63,7 @@ class LibraryFilterRowTest {
                         onRetry = {},
                         onCreatePlaylist = {},
                         canCreatePlaylist = false,
+                        supportedFilters = supportedFilters,
                         onDismissNotice = {},
                         onDismissNowPlaying = {}
                     )
@@ -72,6 +81,22 @@ class LibraryFilterRowTest {
         compose.onAllNodes(hasScrollAction())[0].performScrollToIndex(4)
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Albums").assertIsNotDisplayed()
+    }
+
+    @Test
+    fun aCategoryTheServiceCannotFillIsMutedAndSkipped() {
+        var picked: LibraryFilter? = null
+        show(LibraryFilter.Artists, navidromeFilters) { picked = it }
+        // Navidrome has no Shows section: the button keeps its slot but says why it is dead.
+        compose.onNodeWithContentDescription("Shows, not available").assertExists()
+        compose.onNodeWithContentDescription("Shows").assertDoesNotExist()
+        // Right from the last available category has nowhere to go: the muted button is skipped
+        // instead of taking focus, so no press can select a category that would load nothing.
+        compose.onNodeWithContentDescription("Followed artists").assertIsFocused()
+        compose.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Followed artists").assertIsFocused()
+        assertEquals(null, picked)
     }
 
     @Test

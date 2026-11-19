@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.isFocused
@@ -26,9 +27,13 @@ import org.junit.runner.RunWith
 class SearchFilterRowTest {
     @get:Rule val compose = createComposeRule()
 
+    /** What Navidrome can answer: no Shows, because the Subsonic podcast endpoints are stubs. */
+    private val navidromeScopes: Set<SearchScope> = ServiceCapabilities.Navidrome.availableSearchScopes
+
     private fun show(
         query: String = "night",
-        scopes: Set<SearchScope> = SearchScope.entries.toSet()
+        scopes: Set<SearchScope> = SearchScope.entries.toSet(),
+        supportedScopes: Set<SearchScope> = SearchScope.entries.toSet()
     ) {
         val results = runBlocking {
             MockSpotifyDataSource.search(query, scopes, 0, 100)
@@ -41,6 +46,7 @@ class SearchFilterRowTest {
                         state,
                         SavedUiState(),
                         ChromeUiState(),
+                        supportedScopes = supportedScopes,
                         onBack = {},
                         onQuery = {},
                         onClear = {},
@@ -123,6 +129,46 @@ class SearchFilterRowTest {
         compose.onNodeWithText("Albums").performClick()
         compose.waitForIdle()
         assertEquals(1, toggles)
+    }
+
+    @Test
+    fun aCategoryTheServiceCannotAnswerIsMutedInTheRow() {
+        show(scopes = navidromeScopes, supportedScopes = navidromeScopes)
+        compose.onNodeWithContentDescription("Shows, not available").assertExists()
+        // Left/Right walk only the answerable categories, so Shows is never selected.
+        compose.onNodeWithContentDescription("Playlists").requestFocus()
+        compose.waitForIdle()
+        compose.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Playlists").assertIsFocused()
+    }
+
+    @Test
+    fun aCategoryTheServiceCannotAnswerCannotBeTurnedOn() {
+        var toggles = 0
+        val state = SearchUiState(searchScopes = navidromeScopes)
+        compose.setContent {
+            SidekitTheme(spacing = SidekitSpacing.Compact) {
+                SidekitCanvas {
+                    SearchScopesScreen(
+                        state,
+                        ChromeUiState(),
+                        supportedScopes = navidromeScopes,
+                        onBack = {},
+                        onToggleScope = { toggles += 1 },
+                        onNowPlaying = {},
+                        onDismissNotice = {},
+                        onDismissNowPlaying = {}
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("Shows").assertIsNotEnabled()
+        compose.onNodeWithText("Not available").assertExists()
+        compose.onNodeWithText("Shows").performClick()
+        compose.waitForIdle()
+        assertEquals(0, toggles)
     }
 
     @Test

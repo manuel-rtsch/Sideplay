@@ -183,11 +183,11 @@ class SidetrackViewModel(
     /** What the active service can do. The UI asks this instead of asking which service it is. */
     val capabilities: ServiceCapabilities get() = session?.capabilities ?: ServiceCapabilities.All
 
-    private val supportedFilters: List<LibraryFilter>
-        get() = LibraryFilter.entries.filter { it.section() in capabilities.librarySections }
+    /** The library categories this service can fill. The category row mutes the rest. */
+    val supportedFilters: Set<LibraryFilter> get() = capabilities.availableLibraryFilters
 
-    private val supportedScopes: Set<SearchScope>
-        get() = SearchScope.entries.filter { it in capabilities.searchScopes }.toSet()
+    /** The search categories this service can answer. The scope list mutes the rest. */
+    val supportedScopes: Set<SearchScope> get() = capabilities.availableSearchScopes
     private val _state = MutableStateFlow(
         SidetrackUiState(
             signedIn = session?.signedIn?.value ?: false,
@@ -1331,9 +1331,11 @@ class SidetrackViewModel(
     }
 
     fun setFilter(filter: LibraryFilter) {
+        // A category the service cannot fill is not a choice: the row disables it, and this guard
+        // keeps a programmatic or restored selection from landing on an empty page.
         val supported = filter.takeIf { it in supportedFilters } ?: supportedFilters.firstOrNull() ?: LibraryFilter.LikedSongs
         _state.update {
-            if (it.filter == filter) {
+            if (it.filter == supported) {
                 it.copy(libraryLoading = true)
             } else {
                 it.copy(
@@ -1367,6 +1369,9 @@ class SidetrackViewModel(
     }
 
     fun toggleScope(scope: SearchScope) {
+        // A category the service cannot answer is not a choice either: the scope list disables
+        // it, and this guard stops a stored or programmatic call from turning it back on.
+        if (scope !in supportedScopes) return
         val current = _state.value.searchScopes
         val next = toggledSearchScopes(current, scope)
         if (next == current) return
@@ -2528,14 +2533,6 @@ class SidetrackViewModel(
     private fun artistKey(id: String) = MediaKey(service, MediaType.Artist, id)
 
     private fun trackKey(id: String) = MediaKey(service, MediaType.Track, id)
-
-    private fun LibraryFilter.section(): LibrarySection = when (this) {
-        LibraryFilter.LikedSongs -> LibrarySection.Liked
-        LibraryFilter.Playlists -> LibrarySection.Playlists
-        LibraryFilter.Albums -> LibrarySection.Albums
-        LibraryFilter.Artists -> LibrarySection.Artists
-        LibraryFilter.Shows -> LibrarySection.Shows
-    }
 
     private fun libraryItemKey(item: Any): String = when (item) {
         is Track -> "t${item.id}"

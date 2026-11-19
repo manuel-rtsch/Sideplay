@@ -112,3 +112,15 @@ data class ServiceCapabilities(
         )
     }
 }
+
+/**
+ * The library categories a service can fill. The row keeps the other buttons in place but mutes
+ * them: a category the service cannot fill has nothing to show and no setting that would change
+ * that, so it must not look selectable.
+ */
+val ServiceCapabilities.availableLibraryFilters: Set<LibraryFilter>
+    get() = LibraryFilter.entries.filterTo(LinkedHashSet()) { it.section() in librarySections }
+
+/** The search categories a service can answer. The scope list mutes the rest the same way. */
+val ServiceCapabilities.availableSearchScopes: Set<SearchScope>
+    get() = SearchScope.entries.filterTo(LinkedHashSet()) { it in searchScopes }

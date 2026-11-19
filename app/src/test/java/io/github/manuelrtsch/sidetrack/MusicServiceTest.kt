@@ -40,6 +40,30 @@ class MusicServiceTest {
         assertTrue(!caps.supportsGapless)
     }
 
+    @Test fun `Navidrome mutes the categories its API cannot answer`() {
+        val navidrome = ServiceCapabilities.Navidrome
+        // Shows are missing because Navidrome answers every Subsonic podcast endpoint with 501.
+        assertEquals(
+            listOf(
+                LibraryFilter.LikedSongs,
+                LibraryFilter.Playlists,
+                LibraryFilter.Albums,
+                LibraryFilter.Artists
+            ),
+            navidrome.availableLibraryFilters.toList()
+        )
+        assertEquals(
+            setOf(SearchScope.Tracks, SearchScope.Artists, SearchScope.Albums, SearchScope.Playlists),
+            navidrome.availableSearchScopes
+        )
+        assertEquals(LibrarySection.Shows, LibraryFilter.Shows.section())
+    }
+
+    @Test fun `a fully featured service keeps every category selectable`() {
+        assertEquals(LibraryFilter.entries.toSet(), ServiceCapabilities.All.availableLibraryFilters)
+        assertEquals(SearchScope.entries.toSet(), ServiceCapabilities.All.availableSearchScopes)
+    }
+
     @Test fun `Spotify does not yet advertise playlist creation until its transport lands`() {
         assertTrue(!ServiceCapabilities.All.supportsPlaylistCreate)
     }
