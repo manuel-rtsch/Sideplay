@@ -394,17 +394,17 @@ shadow request by type, because the field name is a Robolectric implementation d
 
 ### 10.2 Measured delta
 
-| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 | After slice 4 | After slice 5 |
-|---|---|---|---|---|---|---|
-| Product line (default suite) | 45.99% | 46.75% | 48.57% | 52.36% | 57.74% | **59.11%** |
-| Product branch (default suite) | 29.46% | 30.07% | 31.20% | 33.88% | 38.12% | **39.75%** |
-| Product line (full suite) | 58.4% | 58.4% | 58.4% | 64.66% | 69.98% | **71.47%** |
-| Product branch (full suite) | 35.8% | 35.8% | 35.8% | 40.16% | 44.35% | **45.90%** |
-| `:core` line (own tests) | 35.8% | 46.5% | 46.5% | 46.5% | 46.5% |
-| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% | 34.0% | 34.0% |
-| Floors: `:app` default, `:app` full | 45/28, 57/34 | 46/30, 57/34 | 48/31, 57/34 | 52/33, 64/40 | **57/38, 69/44** |
-| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, 48/33 | 46/34, 67/52 | 46/34, **74/57** |
-| Floors: `:provider-jellyfin`, `:provider-navidrome` | 46/38, 50/34 | 46/38, 50/34 | 46/38, 50/34 | 58/44, 68/41 | **91/59, 68/41** |
+| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 | After slice 4 | After slice 5 | After slice 6 |
+|---|---|---|---|---|---|---|---|
+| Product line (default suite) | 45.99% | 46.75% | 48.57% | 52.36% | 57.74% | 59.11% | **59.51%** |
+| Product branch (default suite) | 29.46% | 30.07% | 31.20% | 33.88% | 38.12% | 39.75% | **40.17%** |
+| Product line (full suite) | 58.4% | 58.4% | 58.4% | 64.66% | 69.98% | 71.47% | **71.87%** |
+| Product branch (full suite) | 35.8% | 35.8% | 35.8% | 40.16% | 44.35% | 45.90% | **46.31%** |
+| `:core` line (own tests) | 35.8% | 46.5% | 46.5% | 46.5% | 46.5% | 46.5% | **64.02%** |
+| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% | 34.0% | 34.0% | 34.0% | **50.69%** |
+| Floors: `:app` default, `:app` full | 45/28, 57/34 | 46/30, 57/34 | 48/31, 57/34 | 52/33, 64/40 | 57/38, 69/44 | 57/38, 69/44 | **58/39, 71/45** |
+| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, 48/33 | 46/34, 67/52 | 46/34, 74/57 | **63/49, 76/60** |
+| Floors: `:provider-jellyfin`, `:provider-navidrome` | 46/38, 50/34 | 46/38, 50/34 | 46/38, 50/34 | 58/44, 68/41 | 91/59, 68/41 | 91/59, 68/41 | **91/60, 68/41** |
 
 Per-file after slice 2: `PlaybackService.kt` 0% → **89.0%** line, `AppSession.kt` 5.5% → **36.1%**,
 `QueueReorder.kt` 24.8% → **49.1%**, `SidetrackGraph.kt` 8.9% → **9.0%**.
@@ -418,8 +418,8 @@ Per-file after slice 4: `SpotifyWebApi.kt` 7.7% → **98.9%**, `SpotifySession.k
 **55.5%**, `SdkJellyfinApi` → **100%** and the Jellyfin module 58.5% → **91.1%**. The full-suite
 line is now **69.98%**, effectively at the Phase 2 line target; branch is 0.65 points short.
 
-`:provider-spotify` moved from 32.5% at the start of Phase 2 to **67.2%** and is no longer the
-module holding the product-wide number back. Its remaining gaps are playback paths that need the
+`:provider-spotify` moved from 32.5% at the start of Phase 2 to **77.74%** by slice 6 and is no
+longer the module holding the product-wide number back. Its remaining gaps are playback paths that need the
 native library, not request mapping. `:provider-jellyfin` (91.1%) and `:provider-navidrome` (68.4%)
 are close to or past the module target, and `:core` (46.5%) is the last large module below it.
 
@@ -530,31 +530,66 @@ looper, and the tests poll observable native calls instead of pumping the looper
 The audio-settings test (deferred player rebuild) was dropped rather than forced: the deferral
 lives in `LibrespotPlaybackEngine`, not in the session, so it belongs to an engine-level test.
 
-### 10.8 Next slice
+### 10.8 What landed (slice 6)
 
-Phase 2's named targets are now effectively met. What remains is the long tail, in value order:
+| Area | Tests | What is pinned |
+|---|---|---|
+| `core/playback/PlaybackController.kt` | 32 | start denied by audio focus, a grant that claims the session and publishes, a failed start that releases focus and the registry, pause giving focus back and invalidating in-flight commands, resume denied/failed/successful, toggle, seek and the attached-UI seek callback, next/previous with and without a UI owner, reconfigure with a derived or explicit source, a rebuild that reports failure, stop with and without `keepQueue`, disconnect, stale-event filtering, a stall with and without a recovery path, a stall while paused, the noisy broadcast, sleep-timer expiry, ticks and end-of-track, zero-minute clearing, source/position promotion, the buffering mirror, `pollEvent`/`ended`, and notices |
+| `provider-spotify/playback/LibrespotPlaybackEngine.kt` | +6 | a settings rebuild during playback is deferred, it applies on the next pause at the UI position without autoplay, the next start rebuilds the player without reloading the old item, a failed deferred rebuild is swallowed on pause and on start, an invalidated start does not begin audio after its load returns, and disconnect stops before dropping the session |
 
-Slice 5 met the phase-2 line and branch targets on the full suite (71.47% / 45.90%). What is left
-is the long tail, and two of its items are now explicit decisions rather than work items:
+38 new tests and 34 moved. `PlaybackControllerTest` (17) and `LibrespotPlaybackEngineTest` (11,
+now 17) are now in `:provider-spotify`, next to the engine they drive, rather than in `:app`; the
+controller's own contract was extracted into a new `:core` suite with a recording `PlaybackEngine`
+instead of the librespot builder. The moved files construct `MediaKey(ServiceId.Spotify, …)`
+directly, because `MediaKeyFixtures` still lives in the app's test source set; sharing that fixture
+is the remaining testFixtures question from §9.3.
 
-1. `core`: the `PlaybackController` remainder (~75% merged). `ExoPlayerMedia3Player` (0%) is
-   **accepted as a gap**: it builds a real `ExoPlayer`, and Robolectric cannot buffer audio, so a
-   unit test would assert listener translation against a mock and prove nothing. Cover it with an
-   instrumented test alongside the playback service, or add a `Media3Player` factory seam in the
-   same slice that first needs it. `GuardedEncryptedStore` (0%) is also **accepted**: it builds an
-   `EncryptedFileStore` in its initializer, so its failure paths need a keystore that throws; the
-   app's `CredentialStoreGuardTest` and `StoreFailureTest` already pin the same contract through
-   the injectable `JsonStore`.
+Measured effect:
+
+* `PlaybackController.kt` went from **9.3% line** in `:core`'s own run to **93.1%** (76.3% branch);
+  merged across the product it is **94.5% / 81.4%**.
+* `LibrespotPlaybackEngine.kt` is **97.4% line / 69.5% branch**.
+* `:core` moved from **46.5% / 34.0%** to **64.02% / 50.69%**; `:provider-spotify` from
+  **75.01% / 58.33%** to **77.74% / 61.24%**.
+* The default suite is **599 tests**, the full suite **625**, all green.
+
+Two things worth recording about the suite shape:
+
+* **Moving the tests did not change product coverage; it changed who owns it.** The 17 controller
+  tests exercised the same lines from `:app`; the new `:core` suite is what raises `:core`'s own
+  gate, and the moved engine tests keep the deferred-rebuild contract next to the engine.
+* **`registry.active` can survive a failed resume.** `PlaybackController.resume()` activates the
+  owner before asking the engine, and only clears `playing` when the engine reports false. The new
+  test pins the audible state (`isActive == false`) and deliberately does not assert that the
+  registry is empty, because it is not. That is worth a separate decision, not a test that quietly
+  encodes either answer.
+
+### 10.9 Next slice
+
+Phase 2's named targets are met. Slice 6 closed the controller remainder and the deferred engine
+rebuild, so what is left is the accepted gaps plus Phase 3's rebalance:
+
+1. `core`: `ExoPlayerMedia3Player` (0%) is **accepted as a gap**: it builds a real `ExoPlayer`, and
+   Robolectric cannot buffer audio, so a unit test would assert listener translation against a mock
+   and prove nothing. Cover it with an instrumented test alongside the playback service, or add a
+   `Media3Player` factory seam in the same slice that first needs it. `GuardedEncryptedStore` (0%)
+   is also **accepted**: it builds an `EncryptedFileStore` in its initializer, so its failure paths
+   need a keystore that throws; the app's `CredentialStoreGuardTest` and `StoreFailureTest` already
+   pin the same contract through the injectable `JsonStore`.
 2. `app`: `AppSession`'s remaining ~45 lines are almost all the `GuardedEncryptedStore`-backed
    `ActiveServiceStore` and the `AppSessions.create`/`build` failure branches. Reading the store
    back is impossible under Robolectric (the guard swallows the write), so `AppSessionsTest` asserts
    provisioning through the session instead and the persistence boundary stays with the two store
-   tests. The remaining `build` fallbacks need a provider constructor that throws, which means a
-   factory seam; not worth it yet. `SidetrackGraph` still needs a composed nav host: Roborazzi or
-   instrumented work, not unit tests.
-3. `provider-spotify`: the native paths are covered except `recoverPlayback` (the stall path) and
-   the `applyAudioSettings` rebuild, which is engine behaviour (`LibrespotPlaybackEngine`'s deferred
-   `reconfigurePending`) and should be pinned there rather than through the session.
+   tests. `SidetrackGraph` still needs a composed nav host, and `QueueReorder`'s slot math needs a
+   laid-out list: Roborazzi or instrumented work, not unit tests.
+3. `provider-spotify`: `recoverPlayback` (the stall path) is the remaining native branch. The
+   `applyAudioSettings` rebuild is now pinned in the engine (slice 6), so it no longer belongs to
+   the session suite.
+4. **Phase 3 — rebalance.** Delete the `:app` Spotify tests that duplicate `:provider-spotify`
+   coverage (~62 tests / ~900 lines), cap the screenshot suite at one baseline per state semantics
+   cannot express, and decide whether `MediaKeyFixtures`/`FakeHttpStream`/`RecordingServiceRuntime`
+   become a shared test-fixtures module. Re-measure afterwards; the floors above are the baseline
+   for that delta.
 
 ## Appendix A — reproducing the numbers
 

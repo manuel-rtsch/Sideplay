@@ -91,7 +91,7 @@ kover {
                     minBound(91)
                 }
                 rule("branch coverage") {
-                    minBound(59, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                    minBound(60, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
                 }
             }
         }

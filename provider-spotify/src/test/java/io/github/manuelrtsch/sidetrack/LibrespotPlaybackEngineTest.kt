@@ -6,6 +6,9 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
 import io.github.manuelrtsch.sidetrack.playback.LibrespotPlaybackEngine
 import io.github.manuelrtsch.sidetrack.playback.PlaybackEvent
 import io.github.manuelrtsch.sidetrack.playback.PlaybackSource
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -103,6 +106,100 @@ class LibrespotPlaybackEngineTest {
         assertNull(gateway.loadedUri)
     }
 
+    @Test fun `a reconfigure during playback is deferred until the next start`() = runTest {
+        val gateway = FakeGateway()
+        val engine = engine(gateway)
+        val first = PlaybackSource("a", "spotify:track:a")
+        val second = PlaybackSource("b", "spotify:track:b")
+        engine.start(first, 0L)
+        val loadsAfterStart = gateway.loads
+
+        val rebuilt = engine.reconfigure(first, 0L, wasPlaying = true)
+
+        // A rebuild stops the sink and fetches the item again, which is audible mid-track.
+        assertFalse(rebuilt)
+        assertEquals(0, gateway.recreates)
+        assertEquals(loadsAfterStart, gateway.loads)
+        assertTrue(engine.state.value.isPlaying)
+
+        engine.start(second, 0L)
+
+        // The player is rebuilt without a reload of the old item; the new start's load feeds it.
+        assertEquals(1, gateway.recreates)
+        assertEquals(loadsAfterStart + 1, gateway.loads)
+        assertEquals("spotify:track:b", gateway.loadedUri)
+    }
+
+    @Test fun `a deferred reconfigure applies on pause`() = runTest {
+        val gateway = FakeGateway()
+        val engine = engine(gateway)
+        val source = PlaybackSource("a", "spotify:track:a")
+        engine.start(source, 12_000L)
+
+        engine.reconfigure(source, 12_000L, wasPlaying = true)
+        engine.pause()
+
+        assertEquals(1, gateway.recreates)
+        assertEquals(2, gateway.loads)
+        assertEquals(12_000L, gateway.loadedPosition)
+        // The pause is already silent, so the reload must not start audio behind the user's back.
+        assertFalse(gateway.autoplay)
+        assertFalse(engine.state.value.isPlaying)
+    }
+
+    @Test fun `a deferred rebuild that fails on pause is swallowed`() = runTest {
+        val gateway = FakeGateway(failRecreate = true)
+        val engine = engine(gateway)
+        val source = PlaybackSource("a", "spotify:track:a")
+        engine.start(source, 0L)
+        engine.reconfigure(source, 0L, wasPlaying = true)
+
+        engine.pause()
+
+        assertTrue(gateway.paused)
+        assertFalse(engine.state.value.isPlaying)
+        assertFalse(engine.state.value.isBuffering)
+    }
+
+    @Test fun `a deferred rebuild that fails on the next start does not block the new item`() = runTest {
+        val gateway = FakeGateway(failRecreate = true)
+        val engine = engine(gateway)
+        engine.start(PlaybackSource("a", "spotify:track:a"), 0L)
+        engine.reconfigure(PlaybackSource("a", "spotify:track:a"), 0L, wasPlaying = true)
+
+        engine.start(PlaybackSource("b", "spotify:track:b"), 0L)
+
+        assertEquals("spotify:track:b", gateway.loadedUri)
+        assertTrue(engine.state.value.isPlaying)
+    }
+
+    @Test fun `a start that was invalidated while loading does not begin playback`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val gateway = FakeGateway(loadGate = gate)
+        val engine = engine(gateway)
+        val job = launch { engine.start(PlaybackSource("a", "spotify:track:a"), 0L) }
+        runCurrent()
+
+        engine.invalidateCommands()
+        gate.complete(Unit)
+        job.join()
+
+        assertFalse(engine.state.value.isPlaying)
+        assertEquals("spotify:track:a", gateway.loadedUri)
+    }
+
+    @Test fun `disconnect stops the player before dropping the session`() = runTest {
+        val gateway = FakeGateway()
+        val engine = engine(gateway)
+        engine.start(PlaybackSource("a", "spotify:track:a"), 0L)
+
+        engine.disconnect()
+
+        assertTrue(gateway.stopped)
+        assertTrue(gateway.disconnected)
+        assertFalse(engine.state.value.isPlaying)
+    }
+
     @Test fun `pollEvent parses the native protocol into typed events`() = runTest {
         val engine = engine(FakeGateway(), event = """{"type":"position","positionMs":1234}""")
 
@@ -185,7 +282,9 @@ class LibrespotPlaybackEngineTest {
 
     private class FakeGateway(
         private val failLoad: Boolean = false,
-        private val recreate: Boolean = true
+        private val recreate: Boolean = true,
+        private val failRecreate: Boolean = false,
+        private val loadGate: CompletableDeferred<Unit>? = null
     ) : SpotifyGateway {
         var loadedUri: String? = null
         var loadedPosition: Long? = null
@@ -193,22 +292,31 @@ class LibrespotPlaybackEngineTest {
         var paused = false
         var stopped = false
         var recreated = false
+        var recreates = 0
+        var loads = 0
         var plays = 0
         var seekedTo: Long? = null
+        var disconnected = false
 
         override suspend fun connect(accessToken: String) = Unit
-        override suspend fun disconnect() = Unit
+        override suspend fun disconnect() {
+            disconnected = true
+        }
         override suspend fun recreatePlayer(): Boolean {
             recreated = true
+            recreates++
+            if (failRecreate) throw IllegalStateException("no player")
             return recreate
         }
         override suspend fun preload(uri: String) = Unit
 
         override suspend fun load(uri: String, positionMs: Long, autoplay: Boolean) {
+            loadGate?.await()
             if (failLoad) throw SpotifyGatewayException(SpotifyFailure.TrackUnavailable, "missing")
             loadedUri = uri
             loadedPosition = positionMs
             this.autoplay = autoplay
+            loads++
         }
 
         override suspend fun play() {

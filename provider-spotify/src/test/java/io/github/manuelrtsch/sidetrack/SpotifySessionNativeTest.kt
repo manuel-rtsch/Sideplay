@@ -9,6 +9,7 @@ import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
 import io.github.manuelrtsch.sidetrack.data.SpotifySession
 import java.util.Collections
+import java.util.concurrent.Executors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
@@ -20,7 +21,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import java.util.concurrent.Executors
 
 /**
  * The native playback paths of [SpotifySession]: connect, load, preload, resume, halt and stop.
@@ -314,7 +314,9 @@ class SpotifySessionNativeTest {
             return true
         }
 
-        override fun disconnect() { calls += "disconnect" }
+        override fun disconnect() {
+            calls += "disconnect"
+        }
         override fun hasPlayer(): Boolean = playerAttached
 
         override fun createPlayer(bitrateKbps: Int, normalization: Boolean, gapless: Boolean): Boolean {
@@ -373,8 +375,12 @@ class SpotifySessionNativeTest {
         var credentials: SpotifyCredentials? = null
     ) : SpotifyCredentialStore {
         override fun read(): SpotifyCredentials? = credentials
-        override fun save(credentials: SpotifyCredentials) { this.credentials = credentials }
-        override fun clear() { credentials = null }
+        override fun save(credentials: SpotifyCredentials) {
+            this.credentials = credentials
+        }
+        override fun clear() {
+            credentials = null
+        }
     }
 
     private class FakeTokens : SpotifyTokenClient {
@@ -385,8 +391,7 @@ class SpotifySessionNativeTest {
             redirectUri: String
         ): SpotifyCredentials = error("not used")
 
-        override suspend fun refresh(clientId: String, refreshToken: String): SpotifyCredentials =
-            error("not used")
+        override suspend fun refresh(clientId: String, refreshToken: String): SpotifyCredentials = error("not used")
     }
 
     private companion object {

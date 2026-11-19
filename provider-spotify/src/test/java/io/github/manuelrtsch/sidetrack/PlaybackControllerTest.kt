@@ -27,7 +27,7 @@ class PlaybackControllerTest {
         val registry = MediaSessionRegistry()
         val playback = librespotPlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
 
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
 
         assertSame(playback, registry.active)
         assertTrue(playback.isActive)
@@ -43,7 +43,7 @@ class PlaybackControllerTest {
         val playback = librespotPlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
         val other = FakeOwner()
         registry.register(other)
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
 
         registry.activate(other)
         runCurrent()
@@ -90,7 +90,7 @@ class PlaybackControllerTest {
         val registry = MediaSessionRegistry()
         val playback = librespotPlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
 
-        runCatching { playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L) }
+        runCatching { playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L) }
 
         assertFalse(playback.isActive)
         assertNull(registry.active)
@@ -102,7 +102,7 @@ class PlaybackControllerTest {
         val playback = librespotPlaybackController(gateway, CoroutineScope(StandardTestDispatcher(testScheduler)), registry)
         var stopped = false
         playback.onStopped = { stopped = true }
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
 
         playback.stop()
 
@@ -132,7 +132,7 @@ class PlaybackControllerTest {
             ),
             12_000L
         )
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 12_000L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 12_000L)
         playback.pause()
         advanceTimeBy(1_000L)
         runCurrent()
@@ -166,7 +166,7 @@ class PlaybackControllerTest {
             ),
             12_000L
         )
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 12_000L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 12_000L)
 
         playback.reconfigure()
 
@@ -175,7 +175,7 @@ class PlaybackControllerTest {
         assertEquals(1, gateway.loads)
         assertTrue(playback.isActive)
 
-        playback.start(MediaKey.spotify(MediaType.Track, "b"), "spotify:track:b", 0L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "b"), "spotify:track:b", 0L)
 
         assertTrue(gateway.recreated)
         assertEquals("spotify:track:b", gateway.loadedUri)
@@ -202,7 +202,7 @@ class PlaybackControllerTest {
             ),
             12_000L
         )
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 12_000L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 12_000L)
         playback.reconfigure()
 
         playback.pause()
@@ -274,7 +274,7 @@ class PlaybackControllerTest {
             MediaSessionRegistry(),
             elapsedTime = { testScheduler.currentTime }
         )
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
 
         playback.setSleepTimer(5)
         advanceTimeBy(5 * 60_000L + 1)
@@ -315,7 +315,7 @@ class PlaybackControllerTest {
             MediaSessionRegistry(),
             elapsedTime = { testScheduler.currentTime }
         )
-        playback.start(MediaKey.spotify(MediaType.Track, "a"), "spotify:track:a", 0L)
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
 
         playback.setSleepTimer(5)
         playback.clearSleepTimer()

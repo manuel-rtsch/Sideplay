@@ -26,9 +26,9 @@ is passed.
 
 | Module | Scope | Notable suites |
 |---|---|---|
-| `:core` | service-agnostic models, persistence, queue/history/progress repositories, playback controller, sleep timer, drain policy | `QueueRepositoryTest`, `HistoryRepositoryTest`, `StorePersistenceTest`, `DrainPolicyTest`, `SleepTimerTest` |
-| `:app` | Compose screens, view model, navigation, service glue | `SidetrackViewModel` suites, row/screen semantics, `PlaybackControllerTest`, `Media3PlaybackEngineTest`, `SidetrackScreenshotTest` |
-| `:provider-spotify` | Spotify auth, Web API mapping, native catalog/gateway, librespot engine | `NativeSpotifyCatalogTest`, `SpotifyAuthTest`, `LibrespotPlaybackEngineTest` |
+| `:core` | service-agnostic models, persistence, queue/history/progress repositories, playback controller, sleep timer, drain policy | `QueueRepositoryTest`, `HistoryRepositoryTest`, `StorePersistenceTest`, `DrainPolicyTest`, `SleepTimerTest`, `PlaybackControllerSessionTest` |
+| `:app` | Compose screens, view model, navigation, service glue | `SidetrackViewModel` suites, row/screen semantics, `Media3PlaybackEngineTest`, `SidetrackScreenshotTest` |
+| `:provider-spotify` | Spotify auth, Web API mapping, native catalog/gateway, librespot engine and the controller it builds | `NativeSpotifyCatalogTest`, `SpotifyAuthTest`, `LibrespotPlaybackEngineTest`, `PlaybackControllerTest` |
 | `:provider-jellyfin` | Jellyfin auth, API mapping, catalog, playback reporting | `JellyfinCatalogTest`, `JellyfinAuthTest` |
 | `:provider-navidrome` | Navidrome auth, API mapping | `NavidromeApiTest` |
 
@@ -55,15 +55,15 @@ the suite that ran, because the screenshot tests contribute roughly twelve point
 
 | Suite | Line floor | Branch floor |
 |---|---|---|
-| default (no screenshots) | 57 | 38 |
-| full (`-PsidetrackScreenshots`) | 69 | 44 |
+| default (no screenshots) | 58 | 39 |
+| full (`-PsidetrackScreenshots`) | 71 | 45 |
 
-Measured after the native-playback slice: 59.11% line / 39.75% branch on the default suite, 71.47% /
-45.90% on the full suite — the phase-2 targets (70/45) are met with the screenshots included.
+Measured after the controller/engine slice: 59.51% line / 40.17% branch on the default suite, 71.87% /
+46.31% on the full suite — the phase-2 targets (70/45) are met with the screenshots included.
 
-`:provider-spotify`'s own floor is 74/57, raised by the native-playback suite: the module measures
-75.01% line / 58.33% branch where it measured 67.2% before that suite and 65.06% after the rebase
-onto `release/v0.4.0`. The other provider floors and `:core` are unchanged.
+`:provider-spotify`'s own floor is 76/60: the module measures 77.74% line / 61.24% branch after the
+controller and engine suites moved next to the engine. `:core` measures 64.02% / 50.69% and its
+floor is 63/49. The other provider floors are unchanged.
 
 Phase 2 targets are **70% line / 45% branch** with the full suite.
 

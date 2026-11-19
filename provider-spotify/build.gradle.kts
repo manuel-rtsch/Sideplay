@@ -50,15 +50,16 @@ kover {
     reports {
         variant("debug") {
             verify {
-                // Re-based when the phase-2 branch was rebased onto release/v0.4.0 and then lifted
-                // by the native-playback suite (SpotifySessionNativeTest, 13 tests): the module
-                // measures 75.01% line / 58.33% branch, up from 65.06%/51.76% after the rebase and
-                // 67.2% before it. The floors sit one point under the measurement, as a ratchet.
+                // Re-based when the phase-2 branch was rebased onto release/v0.4.0 and lifted by
+                // the native-playback suite (SpotifySessionNativeTest, 13 tests). Slice 6 moved
+                // LibrespotPlaybackEngineTest and PlaybackControllerTest next to the engine, so
+                // the module measures 77.74% line / 61.24% branch. The floors sit under the
+                // measurement, as a ratchet.
                 rule("line coverage") {
-                    minBound(74)
+                    minBound(76)
                 }
                 rule("branch coverage") {
-                    minBound(57, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                    minBound(60, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
                 }
             }
         }
