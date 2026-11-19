@@ -29,6 +29,16 @@ class EncryptedStoreException(message: String, cause: Throwable? = null) : Excep
  * Losing the key is recoverable: the data is unreadable either way. So a failed read drops the
  * unreadable file and reads as empty, which puts the app back on its first-run path instead of
  * crashing. Writes still fail loudly, because silently pretending to save is worse than saying so.
+ *
+ * Two failures that look alike are kept apart, because the consequences differ:
+ * - *Authentication* — the key no longer opens the bytes. Dropping the file is correct; it will
+ *   never decrypt again.
+ * - *Keystore state* — a `KeyStoreException`, `ProviderException` or an I/O error. That is
+ *   transient (early boot, a restarting keystore daemon, a disk hiccup) and the same key may work
+ *   on the next launch. The read still comes back empty, but the file is left alone; deleting it
+ *   would turn a temporary outage into a permanent sign-out.
+ *
+ * The split lives in [StoreFailure].
  */
 class GuardedEncryptedStore(
     context: Context,
@@ -37,8 +47,13 @@ class GuardedEncryptedStore(
     private val file = EncryptedFileStore(context.applicationContext, name)
 
     override fun read(): JSONObject = runCatching { file.read() }.getOrElse { error ->
-        Log.w(TAG, "Dropping unreadable encrypted store '$name'", error)
-        runCatching { file.clear() }
+        if (StoreFailure.isAuthenticationFailure(error)) {
+            Log.w(TAG, "Dropping unreadable encrypted store '$name'", error)
+            runCatching { file.clear() }
+        } else {
+            // The key blob itself is not the problem, so it may open the file on the next launch.
+            Log.w(TAG, "Could not read encrypted store '$name', keeping it for the next launch", error)
+        }
         JSONObject()
     }
 
