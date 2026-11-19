@@ -89,10 +89,12 @@ Everything else that leaves the device is either a read, a playback progress rep
 1. **Duplicate track ids in a playlist remove the wrong occurrence (Navidrome).**
    `removeFromPlaylist` resolves the row with `indexOfFirst { it.id == songId }`
    (`NavidromeApi.kt:173`). With `[A, B, C, A]`, removing the last `A` deletes index 0. Size is
-   preserved, contents are not. The integration test hides this: it appends a duplicate and then
-   asserts *size* returns to the original (`NavidromeIntegrationTest.kt:118-129`), which passes
-   while the playlist has silently rotated. Not reachable from the 0.4.0 UI; fix before 0.4.1
-   ships add/remove.
+   preserved, contents are not. Not reachable from the 0.4.0 UI; fix before 0.4.1 ships
+   add/remove. **The suite now catches it:** `catalog reads and edits a playlist` asserts the
+   ordered track ids before, after the append and after the removal, and appends a track the
+   playlist does not already hold — so it stays green on the correct path. `removing a duplicated
+   track leaves the other entries in place` pins the defect itself and is `@Ignore`d until the
+   resolution becomes "the occurrence I appended"; un-ignore it with that fix.
 2. **Jellyfin entry-id fallback (Jellyfin).** If the entry is not found within the first 500
    playlist items, `removeFromPlaylist` falls back to passing the *media item id* as an entry id
    (`JellyfinApi.kt:447-455`), which removes nothing (or, improbably, the wrong entry). Again one
@@ -103,7 +105,7 @@ Everything else that leaves the device is either a read, a playback progress rep
 
 ### 1.5 Hazard in the test harness itself
 
-`NavidromeIntegrationTest` (4 tests) **stars a real track and edits a real playlist** named
+`NavidromeIntegrationTest` (5 tests, 1 `@Ignore`d) **stars a real track and edits a real playlist** named
 `Sidetrack Test…`. `JellyfinIntegrationTest` is read-only. These run only when
 `NAVIDROME_TEST_URL`/`JELLYFIN_TEST_URL` are exported — never point them at a tester's instance,
 only at a throwaway container. This is the one place where "the app can damage a library" is
@@ -128,14 +130,15 @@ Fast, offline tests unless marked **(integration)** — those need `NAVIDROME_TE
 | Progress reporting | — | start/progress/stopped reach the server once, mark-played only on finish |
 | Device confirmation | — | **ran**: FLAC decoded, `AudioTrack start`, no extractor error |
 
-Suite status (default, no env vars): `provider-navidrome 18 tests (4 skipped)`,
-`provider-jellyfin 38 (2 skipped)`, `app 231`, **0 failures**.
+Suite status (default, no env vars): `provider-navidrome 19 tests (5 skipped)`,
+`provider-jellyfin 43 (2 skipped)`, `app 235`, `provider-spotify 115`, `core 4`, **0 failures**.
 
 ### 2.1 With the containers running
 
-`NAVIDROME_TEST_URL=http://localhost:4533 …` — **4/4 ran, 0 failures** against Navidrome 0.64.2:
-artist/album/track reads, `albumList` paging, search, stream + artwork URLs fetched, star toggled
-and restored, playlist read/append/remove.
+`NAVIDROME_TEST_URL=http://localhost:4533 …` — **4 ran, 1 `@Ignore`d, 0 failures** against Navidrome
+0.64.2: artist/album/track reads, `albumList` paging, search, stream + artwork URLs fetched, star
+toggled and restored, and playlist read/append/remove asserted on the ordered track ids (the
+playlist was left with its original single entry).
 
 `JELLYFIN_TEST_URL=http://localhost:8096 …` — **2/2 ran, 0 failures** against Jellyfin 12.4:
 real sign-in, albums/tracks/search, and a stream URL opened with the `Authorization` header that
@@ -151,6 +154,37 @@ Also confirmed directly on 12.4, since they were D14's open questions:
 | `editable` from `openAccess`/`shares` | **Does not hold for a fresh playlist** — a playlist created by `demo` comes back `OpenAccess:false, Shares:[]`, so `editable` is `false` even for its creator, and `createPlaylist` returns `editable = false` (`JellyfinCatalog.kt:173` + default at `:252`). Harmless in 0.4.0 (no add/remove entry point) but must be fixed before 0.4.1 surfaces them. |
 | Entry id vs item id | A freshly added entry's `PlaylistItemId` equals the media item id, so the 500-item scan fallback (§1.4) is usually harmless in practice. Add (`POST /Playlists/{id}/Items`) and remove (`DELETE …?entryIds=`) both returned 204. |
 
+### 2.1.1 What a 10.9 server actually does — the floor, settled
+
+Run 2026-11-19 against a throwaway `jellyfin/jellyfin:10.9.11` on :8097
+(`docker run -d --name jellyfin109 -p 8097:8096 -v ~/jf109b-cfg:/config -v ~/jf109b-cache:/cache -v ~/Music/Auto:/media:ro jellyfin/jellyfin:10.9.11`;
+the container is stopped again, its config at `~/jf109b-cfg`), finished through the
+startup API (`GET /Startup/Configuration` first — that is what creates the initial administrator;
+`POST /Startup/User` alone answers 500 `Sequence contains no elements`) and loaded with the same
+`/media` music folder.
+
+| Step | 10.9.11 |
+| --- | --- |
+| `POST /Users/AuthenticateByName` | **Succeeds** — a token, a user id, no warning. |
+| `GET /Items?includeItemTypes=MusicAlbum` (curl) | **200** with albums. |
+| The same read through the 12.x SDK | **`InvalidContentException: Deserialization failed`** — `MissingFieldException: Field 'ItemId' is required for type 'UserItemDataDto'`. 10.9's user data carries no `ItemId`. |
+| What the user sees without the fix | Sign-in appears to work, then every screen says *“Could not talk to that Jellyfin server. Sidetrack needs Jellyfin 12.0 or newer.”* |
+| `POST /Items/{id}/PlaybackInfo` with the music profile | curl → 500 (10.9 rejects part of the 12.x profile / route shape; not investigated further, since the reads above already decide the floor). |
+
+So 10.9 “mostly works” in exactly the way this report warned about: the failure lands *after* a
+successful sign-in, on the first read, as a deserialization error the user cannot act on. The
+floor is therefore enforced, not just documented:
+
+- `jellyfinMajorVersion` / `requireJellyfinVersion` (`auth/JellyfinAuth.kt`). `SdkJellyfinAuthenticator`
+  asks `/System/Info/Public` — anonymous, one small request, **before** the password is sent — and
+  refuses a server older than 12 by name: *“That server runs Jellyfin 10.9.11. Sidetrack needs
+  Jellyfin 12.0 or newer.”* An unreadable version string (a fork, a proxy) is let through, and its
+  reads still fail honestly.
+- Verified both ways: the same suite against `jellyfin/jellyfin:12.4` is 2/2 green, and against
+  10.9.11 it now fails on the sign-in line with that message instead of inside `GET /Items`.
+- `JellyfinAuthTest` pins the parsing (`12.4.0`, `12`, `12.0.0-beta5`, `unstable`, null), the exact
+  refusal text, and that 12.x and unreadable versions pass.
+
 ### 2.2 The harness was broken, not just skipped
 
 The Jellyfin integration suite could not run even with the env vars set: `createJellyfin` threw
@@ -161,35 +195,42 @@ a device name and id, and `provider-jellyfin` declares `testRuntimeOnly("org.slf
 This is the reason the 0.4.0 playback regression reached the device despite an integration test
 that would have caught it.
 
-### The one structural gap
+### ~~The one structural gap~~ — closed
 
 `SdkJellyfinApi.playback()` — the function that posts `PlaybackInfo`, merges
-`requiredHttpHeaders`, and chooses `transcodingUrl` vs direct stream — has **no offline test**.
+`requiredHttpHeaders`, and chooses `transcodingUrl` vs direct stream — had **no offline test**.
 `FakeJellyfinApi` stubs `playback()` wholesale (`FakeJellyfinApi.kt:91`), so the branch the 0.4.0
-bug lived in is exercised only by the integration test, which is now runnable but still opt-in. Cheap fix: extract the choice into
-an `internal fun` over `(transcodingUrl, baseUrl, directUrl)` and assert all three cases; the
-device profile and URL builder are already pinned.
+bug lived in was exercised only by the integration test.
+
+The choice is now `internal fun playbackStreamUrl(transcodingUrl, baseUrl, directUrl)` in
+`JellyfinApi.kt`, and `JellyfinPlaybackChoiceTest` (5 tests, no SDK, no server) pins it: no url and
+blank url keep the static direct-play stream, an absolute `transcodingUrl` is used as is, a
+relative one is joined to the server root, and a `transcodingUrl` wins over a source that also
+claims `supportsDirectPlay`.
 
 ---
 
 ## 3. Remaining work before handing out
 
 1. ~~Run both integration suites against throwaway containers.~~ **Done** — see §2.1.
-2. **Decide the Jellyfin floor out loud.** Most self-hosters run 10.8/10.9; the SDK declares 12.0
-   minimum and the app's failure text says so (`JellyfinAuth.kt:284`). Either state "Jellyfin 12+"
-   in the tester brief, or verify what 10.9 actually does (it may mostly work and then fail on a
-   path we have not exercised — worse than a clean refusal).
-3. **Close the `playback()` branch gap** (§2) so the 0.4.0 regression cannot come back silently.
-4. Optional, before 0.4.1: fix the duplicate-index removal and the 500-entry fallback, make
-   `NavidromeIntegrationTest` assert playlist *contents* rather than size so it can catch them,
-   and stop reporting a creator's own fresh Jellyfin playlist as non-editable.
+2. ~~Decide the Jellyfin floor out loud.~~ **Decided: 12.0, and now enforced at sign-in.**
+   What 10.9.11 does was measured — it signs in and then fails every read in deserialization — so
+   the app asks `/System/Info/Public` first and refuses an older server by version. See §2.1.1.
+   The tester brief still says 12+, now with the app agreeing instead of contradicting itself.
+3. ~~Close the `playback()` branch gap (§2) so the 0.4.0 regression cannot come back silently.~~
+   **Done** — see §2, “The one structural gap”.
+4. Optional, before 0.4.1: ~~make `NavidromeIntegrationTest` assert playlist *contents* rather than
+   size so it can catch them~~ (**done**, plus the `@Ignore`d duplicate case — see §1.4), fix the
+   duplicate-index removal and the 500-entry fallback, and stop reporting a creator's own fresh
+   Jellyfin playlist as non-editable.
 
 ## 4. What to tell testers
 
 - Navidrome and Jellyfin connections are read-first: the app can favourite/unfavourite tracks,
   albums and artists, follow artists, create empty playlists and report playback progress. It
   cannot delete anything and cannot rewrite an existing playlist.
-- Jellyfin needs **12.0 or newer**.
+- Jellyfin needs **12.0 or newer**. An older server is refused on the sign-in form and named
+  ("That server runs Jellyfin 10.9.11…"), instead of signing in and then failing every screen.
 - Audio settings affect only how the app asks for a stream; nothing is written back to the
   library.
 - If a screen says "unavailable"/"network", the app has not written anything — retry is safe.

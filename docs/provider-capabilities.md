@@ -148,13 +148,22 @@ the service cannot answer, and the quality/normalization/gapless rows are gated 
 - `NavidromeIntegrationTest.kt` — opt-in smoke tests against a real Navidrome/Subsonic server
   (env: `NAVIDROME_TEST_URL` / `_USER` / `_PASSWORD`; skipped when absent): reads artists/albums/
   tracks, resolves stream and artwork URLs, pages the library and writes stars, reads and edits a
-  playlist.
+  playlist. The playlist edit appends a track the playlist does not already hold and asserts the
+  ordered track ids before, after the append and after the removal — a size check would hide a
+  rotation. `removing a duplicated track leaves the other entries in place` pins the duplicate-id
+  defect recorded in [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md)
+  §1.4 and stays `@Ignore`d until removal targets the occurrence that was appended.
 ---
 
 ## Jellyfin (official Kotlin SDK)
 
 Jellyfin is implemented through `org.jellyfin.sdk:jellyfin-core` 1.9.4 (LGPL-3.0), which speaks
-Jellyfin 12.x; 10.x servers are out of scope. The adapter covers the music library only.
+Jellyfin 12.x. 10.x is out of scope **and refused**: `SdkJellyfinAuthenticator` reads
+`/System/Info/Public` before it sends the password and rejects a server older than 12.0 by version,
+because 10.9 accepts the sign-in and then fails every read (`UserItemDataDto` has no `ItemId`,
+which the 12.x SDK requires). See
+[release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md) §2.1.1. The
+adapter covers the music library only.
 
 ### Implemented
 
@@ -208,8 +217,14 @@ Jellyfin 12.x; 10.x servers are out of scope. The adapter covers the music libra
   single pause report, end-of-track marking played, and a skip stopping without a play.
 - `MusicServiceTest.kt` — updated picker list (`Spotify`, `Navidrome`, `Jellyfin`) and the
   existing Jellyfin capability/category pins.
+- `JellyfinPlaybackUrlTest.kt` / `JellyfinPlaybackChoiceTest.kt` — offline, no server and (for
+  the choice test) no SDK: the direct play is `/Audio/{id}/stream?static=true` and never
+  `/universal`; no or blank `transcodingUrl` keeps that URL, an absolute one is used as is, a
+  relative one is joined to the server root, and a `transcodingUrl` wins over a source that also
+  claims `supportsDirectPlay`. This is the branch the 0.4.0 playback regression lived in.
 - `JellyfinIntegrationTest.kt` — opt-in smoke tests against a real server
   (`JELLYFIN_TEST_URL` / `_USER` / `_PASSWORD`; skipped when absent): album/track/search reads,
   a resolved stream URL that returns audio bytes with the auth header, and artwork URL minting.
-  The dev-container checks named in D14 (empty-id `createPlaylist`, `editable`, direct FLAC) are
-  still to be confirmed there before this section counts as verified against a server.
+  The dev-container checks named in D14 were run on `jellyfin/jellyfin:12.4`: empty-id
+  `createPlaylist` and direct FLAC hold; `editable` derived from `openAccess`/`shares` does not
+  (see [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md) §2.1).
