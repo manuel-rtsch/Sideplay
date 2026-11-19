@@ -7,12 +7,14 @@ provider, what is currently **implemented** and what is **covered by tests**.
 
 Sources of truth:
 
-- Capability flags: `app/src/main/java/io/github/manuelrtsch/sidetrack/MediaModels.kt`
-  (`ServiceCapabilities`), `SpotifySession.kt` / `SpotifyAdapters.kt` (`ServiceCapabilities.All`),
-  `NavidromeRuntime.kt` (`ServiceCapabilities.Navidrome`).
+- Capability flags: `core/src/main/java/io/github/manuelrtsch/sidetrack/MediaModels.kt`
+  (`ServiceCapabilities`, `ServiceId`), `provider-spotify/…/data/SpotifySession.kt` /
+  `SpotifyAdapters.kt` (`ServiceCapabilities.All`), `provider-navidrome/…/data/NavidromeRuntime.kt`
+  (`ServiceCapabilities.Navidrome`), and the Jellyfin set in `MediaModels.kt`.
 - Which categories the UI offers: `ServiceCapabilities.availableLibraryFilters` and
   `availableSearchScopes` in the same file, fed to the Library row and the search screens.
-- Tests: `app/src/test/java/io/github/manuelrtsch/sidetrack/`.
+- Tests: each module's own `src/test` (`app`, `core`, `provider-spotify`,
+  `provider-navidrome`, `provider-jellyfin`).
 - A third provider, Jellyfin, is **planned, not implemented**. Its identity and capability set
   exist (`ServiceId.Jellyfin`, `ServiceCapabilities.Jellyfin`, pinned by `MusicServiceTest`), but
   there is no auth, catalog, writer or runtime, and no picker entry — see

@@ -308,18 +308,21 @@ whatever the capability set leaves out (see `docs/provider-capabilities.md`).
 
 ## 5. Runtime shape
 
-Mirror the Navidrome adapter — one provider file set, isolated stores, shared Media3 playback:
+Mirror the Navidrome adapter — one provider module, isolated stores, shared Media3 playback. Since
+the provider decoupling (`docs/provider-decoupling.md`), paths below are relative to
+`provider-jellyfin/src/main/java/io/github/manuelrtsch/sidetrack/`; `MediaModels.kt` and
+`JellyfinProvider` registration stay in `:core` and `:app` respectively.
 
 | Piece | File | Responsibility |
 | --- | --- | --- |
-| Identity | `MediaModels.kt` | `ServiceId.Jellyfin = ServiceId("jellyfin")` (persisted, ship once) |
-| Capabilities | `MediaModels.kt` | `ServiceCapabilities.Jellyfin` |
+| Identity | `:core` — `MediaModels.kt` | `ServiceId.Jellyfin = ServiceId("jellyfin")` (persisted, ship once) |
+| Capabilities | `:core` — `MediaModels.kt` | `ServiceCapabilities.Jellyfin` |
 | API seam | `data/JellyfinApi.kt` | thin wrapper over the SDK groups so tests can fake it (the Navidrome `NavidromeTransport` pattern) |
 | Catalog | `data/JellyfinCatalog.kt` | `MediaCatalog` + `MediaLibraryWriter` over the seam |
-| Auth | `auth/JellyfinAuth.kt` | `ServiceAuth` over `authenticationApi`, token-only store |
+| Auth | `auth/JellyfinAuth.kt` | `ServiceAuth` over `authenticationApi`, token-only store (moved to `:provider-jellyfin`) |
 | Store | `auth/JellyfinCredentialStore.kt` | `GuardedEncryptedStore(context, "sidetracks_jellyfin")` holding server, token, user id, user name |
 | Runtime | `data/JellyfinRuntime.kt` | `ServiceRuntime` + `QualitySettingsRuntime` + `CacheRuntime`; `sidetracks_settings_jellyfin`, `sidetracks-jellyfin-queue.bin`, `-history.bin`, `-resume.bin` |
-| Registration | `data/AppSession.kt`, `data/JellyfinRuntime.kt` | `JellyfinService` constants, `JellyfinProvider`, `KnownServices`, `AppSessions.build` |
+| Registration | `:app` — `data/AppSession.kt`; provider — `data/JellyfinRuntime.kt` | `JellyfinService` constants, `JellyfinProvider`, `KnownServices`, `AppSessions.build` |
 | SDK lifecycle | `data/JellyfinRuntime.kt` | one `createJellyfin(context)` per runtime; one `createApi` per signed-in account; `api.update(token)` on restore |
 
 `AppSessions.build` gains a `ServiceId.Jellyfin ->` branch; the picker, the sign-in form and the

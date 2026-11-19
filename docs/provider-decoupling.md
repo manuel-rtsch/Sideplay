@@ -1,8 +1,8 @@
 # Provider decoupling — assessment and plan
 
-Status: **assessed 2026-11-19; decoupling not started.** This document records how far the three
-providers (Spotify, Navidrome, Jellyfin) are detached from the core today, the target module graph,
-and the staged plan that gets there without changing behaviour.
+Status: **done 2026-11-19.** The module split landed in stages A–F; the deviations from the plan are
+listed in §8. This document records how far the three providers are detached from the core, the
+target module graph, and the staged plan that got there without changing behaviour.
 
 Related: [provider-capabilities.md](provider-capabilities.md), [jellyfin-integration.md](jellyfin-integration.md).
 
@@ -187,3 +187,34 @@ Notes for each stage:
   `libsidetrack_spotify.so`.
 - **Demo build**: reflective `DemoContent` lookup is easy to break by moving the fixture package.
 - **Test placement**: a test that needs both a provider and `KnownServices` belongs in `:app`.
+
+
+---
+
+## 8. What actually landed
+
+Graph is now `:app → :core`, `:provider-spotify`, `:provider-navidrome`, `:provider-jellyfin`, with
+every provider depending only on `:core`.
+
+Commits: `6032e03` (sign-in capability), `f00f5bd` (`:core`), `f18665a` (Navidrome),
+`8fb8a44` (Jellyfin), `133a932` (Spotify), plus this documentation pass.
+
+Deviations from the plan, all forced by the module boundary and recorded here so the next reader
+does not "fix" them back:
+
+- **`DemoContent` split.** The interface moved to `:provider-spotify`; the reflective
+  `DemoContentSource` (which reads `BuildConfig.DEMO_CONTENT`/`DEMO_PACK`) stayed in `:app` and is
+  injected into `SpotifySession(demo = …)`. A library module cannot read the app's build-type
+  fields, and a provider should not reach for the app's classes.
+- **`SpotifyAuth` takes the redirect scheme.** `BuildConfig.AUTH_SCHEME` is a build-type value
+  (`sidetrack` vs `sidetrack-demo`), so it is a constructor argument the app supplies.
+- **Three Spotify tests stayed in `:app`:** `SpotifyViewModelEventTest` and
+  `SpotifyFallbackStateTest` drive the ViewModel/`AppSessions`, and `SpotifyPaginationTest` uses
+  `MockSpotifyDataSource`, which depends on app resources (`R`).
+- **`SpotifyIdNavigationTest` lost one assertion.** `NavType.StringType.parseValue` is AndroidX
+  behaviour; the JSON-null mapping it also covered stays tested in the provider module.
+- Native packaging (`buildSpotifyNative`, `jniLibs`, `src/demo` fixtures) never moved, as planned.
+
+Verification: `:app:testDebugUnitTest` (231), `:provider-spotify` (107), `:provider-navidrome` (18),
+`:provider-jellyfin` (12) — 368 total, 0 failures; `:app:assembleDebug`, `:app:assembleDemo` and
+`spotlessCheck` green.
