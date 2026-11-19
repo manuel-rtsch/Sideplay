@@ -356,6 +356,86 @@ The audit above was measured in the 0.4.0 working tree, which contained four unc
 
 ---
 
+## 10. Phase 2 status (two slices)
+
+Phase 2 is being worked in slices. The first took the `:core` glue the audit named plus the queue
+reorder state machine; the second took the two largest `app` risks, the playback service and the
+app session, and whatever of the navigation graph is reachable without a composed nav host.
+
+### 10.1 What landed (slice 1)
+
+| Area | Tests | What is pinned |
+|---|---|---|
+| `core/playback/AudioFocus.kt` | 12 | grant, denial, a held request is not repeated, abandon with and without focus, transient loss resumes on gain, permanent loss does not, a transient loss followed by a permanent one does not resume, abandon during a transient loss cancels the resume, duck is ignored, a permanent loss re-asks the system |
+| `core/data/ServiceRuntime.kt` | 10 | every optional-interface extension answers the neutral value when the interface is absent, and forwards to the runtime when it is present |
+| `app/ui/QueueReorder.kt` | 13 | lift state, keypad stepping and its bounds, step without a lift, touch lift ignoring steps, a sub-half-row drag, end/cancel clearing every field Back reads |
+
+### 10.1a What landed (slice 2)
+
+| Area | Tests | What is pinned |
+|---|---|---|
+| `app/playback/PlaybackService.kt` | 12 | channel creation, the nothing-playing path leaving the foreground, the playing path promoting to a media notification, title/artist text, the three notification actions and the paused player's Play button, each transport action reaching the player, the signed-out session dropping the notification, task removal halting audio |
+| `app/data/AppSession.kt` | 12 | unprovisioned state for every accessor, the runtime accessor failing loudly, transport commands silent before provisioning, install publishing the service and forwarding each transport call, `signedIn` and `playback` following the runtime, re-install replacing both |
+| `app/SidetrackGraph.kt` | 16 | the keypad-back route table (Home/Welcome/Sign in excluded, every screen route included, unknown/null routes and an empty back stack excluded), the notification intent recorded and other intents ignored |
+
+The service test installs a session into `AppSessions` by reflection and drives `onStartCommand`
+directly, so it exercises the real notification builder and the real `PlaybackController`, not a
+model of them. The session and provider fakes moved to `app/src/test/.../RecordingServiceRuntime.kt`,
+which now backs both files.
+
+35 new tests in slice 1, 40 in slice 2. They run in the default suite: `:core` in ~1 s (no Robolectric for the runtime
+seams), `QueueReorderTest` in well under a second.
+
+Audio focus is exercised through Robolectric's `ShadowAudioManager`; the listener is read off the
+shadow request by type, because the field name is a Robolectric implementation detail.
+
+### 10.2 Measured delta
+
+| Gate | Phase 1 | After slice 1 | After slice 2 |
+|---|---|---|---|
+| Product line (default suite) | 45.99% | 46.75% | **48.57%** |
+| Product branch (default suite) | 29.46% | 30.07% | **31.20%** |
+| `:core` line (own tests) | 35.8% | 46.5% | 46.5% |
+| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% |
+| Floors: `:app` default, `:core` | 45/28, 34/27 | 46/30, 46/34 | **48/31, 46/34** |
+
+Per-file after slice 2: `PlaybackService.kt` 0% → **89.0%** line, `AppSession.kt` 5.5% → **36.1%**,
+`QueueReorder.kt` 24.8% → **49.1%**, `SidetrackGraph.kt` 8.9% → **9.0%**.
+
+The floors in `app/build.gradle.kts` and `core/build.gradle.kts` are raised to the new values. The
+full-suite product floor (57 / 34) is unchanged until the screenshot-inclusive run is re-measured.
+
+`:core` is now the module furthest along toward the 70% target. The product-wide number moves
+slowly from here because `:app` and `:provider-spotify` hold most of the uncovered lines.
+
+### 10.3 What the slice changed about the plan
+
+* **Two audit items are blocked on a seam, not on test effort.** `GuardedEncryptedStore`
+  constructs `EncryptedFileStore` in its initializer, so its failure paths can only be reached
+  with a keystore that throws — the app's `CredentialStoreGuardTest` covers the same behaviour
+  through the injectable `JsonStore` instead. `ExoPlayerMedia3Player` builds a real `ExoPlayer`,
+  and Robolectric cannot buffer audio; its listener translation is only worth testing once a
+  `Media3Player` factory seam exists. Both should be decided (seam or accept the gap) before the
+  next slice spends time on them.
+* **`ServiceRuntime`'s optional interfaces are cheap coverage but shallow.** The extensions only
+  cast; the value is regression insurance for the neutral defaults. The real risk in that file is
+  the runtime implementations (`JellyfinRuntime`, `NavidromeRuntime`), which are still at ~1%.
+* **`QueueReorder`'s drag math still needs a laid-out list.** The keypad path and the no-op cases
+  are covered; the slot arithmetic (`firstOnScreen`/`lastOnScreen`, auto-scroll) needs a Compose
+  list with a real viewport, so it belongs with the instrumented or Roborazzi work, not here.
+
+### 10.4 Next slice
+
+Still the Phase 2 order from §7, minus what the two slices closed:
+
+1. Providers: `JellyfinRuntime` (0.6%), `NavidromeRuntime` (0.9%), `SpotifyTokenClient` (2%),
+   `SpotifyAudioSink` (3.5%), `NativeBridge` (6%). These are now the largest untouched blocks.
+2. `core`: `PlaybackController` (53%) remainder, `ExoPlayerMedia3Player` and
+   `GuardedEncryptedStore` if a seam is approved.
+3. `app`: the remainder of `AppSession` (36%) and `SidetrackGraph`. The graph's route table only
+   becomes reachable with a composed nav host, so that is a Roborazzi/instrumented job, not a
+   unit-test one; the 1 point it gained here is the keypad-back predicate.
+
 ## Appendix A — reproducing the numbers
 
 Robolectric ignores on-the-fly JaCoCo instrumentation, so the agent has to be applied
