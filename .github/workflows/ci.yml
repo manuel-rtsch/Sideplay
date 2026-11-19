@@ -58,8 +58,8 @@ jobs:
           path: ~/.m2/repository
           key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
           restore-keys: robolectric-${{ runner.os }}-
-      - name: Run JVM and Robolectric tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+      - name: Run JVM and Robolectric tests, then the coverage gates
+        run: ./gradlew coverage --stacktrace
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -68,6 +68,40 @@ jobs:
           path: |
             app/build/reports/tests/testDebugUnitTest
             app/build/test-results/testDebugUnitTest
+            app/build/reports/kover
+          retention-days: 7
+          if-no-files-found: ignore
+
+  screenshot-tests:
+    name: Screenshot tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/android-setup
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: robolectric-${{ runner.os }}-
+      - name: Verify Roborazzi baselines and the full-suite coverage floors
+        run: ./gradlew coverage -PsidetrackScreenshots --stacktrace
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/test-results/testDebugUnitTest
+            app/build/reports/kover
           retention-days: 7
           if-no-files-found: ignore
 
