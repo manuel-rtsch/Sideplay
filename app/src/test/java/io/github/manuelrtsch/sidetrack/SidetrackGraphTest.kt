@@ -23,8 +23,8 @@ class SidetrackGraphTest {
         assertFalse(keypadBackIsLeftAction(SIDE_PLAY_ONBOARDING, canPop = true))
     }
 
-    @Test fun `sign in leaves Back to the system`() {
-        assertFalse(keypadBackIsLeftAction(SIDE_PLAY_SIGN_IN, canPop = true))
+    @Test fun `sign in takes Back because the picker is a step behind it`() {
+        assertTrue(keypadBackIsLeftAction(SIDE_PLAY_SIGN_IN, canPop = true))
     }
 
     @Test fun `library screens take Back`() {

@@ -385,7 +385,7 @@ class JellyfinSdkApiTest {
         assertFalse(info.directPlay)
     }
 
-    @Test fun `direct play falls back to the universal audio endpoint`() = runBlocking {
+    @Test fun `direct play streams the static file instead of the universal endpoint`() = runBlocking {
         server.reply {
             FakeJellyfin.Res(
                 200,
@@ -395,9 +395,10 @@ class JellyfinSdkApiTest {
 
         val info = api().playback(ITEM_ID, 320_000)
 
-        assertTrue(info.url.contains("/Audio/$ITEM_ID/universal"))
+        assertTrue(info.url.contains("/Audio/$ITEM_ID/stream"))
+        assertTrue(info.url.contains("static=true"))
         assertTrue(info.directPlay)
-        assertTrue(info.url.contains("maxStreamingBitrate=320000"))
+        assertEquals("src", info.mediaSourceId)
     }
 
     @Test fun `no media source still yields a playable fallback`() = runBlocking {
@@ -405,7 +406,7 @@ class JellyfinSdkApiTest {
 
         val info = api().playback(ITEM_ID, null)
 
-        assertTrue(info.url.contains("/Audio/$ITEM_ID/universal"))
+        assertTrue(info.url.contains("/Audio/$ITEM_ID/stream"))
         assertNull(info.mediaSourceId)
         assertFalse(info.directPlay)
     }

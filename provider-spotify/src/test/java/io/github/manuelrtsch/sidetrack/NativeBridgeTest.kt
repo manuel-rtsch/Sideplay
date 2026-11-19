@@ -24,7 +24,7 @@ class NativeBridgeTest {
 
         assertFalse(NativeBridge.isAvailable)
         assertFalse(NativeBridge.initialize())
-        assertFalse(NativeBridge.connect("token"))
+        assertEquals("native library unavailable", NativeBridge.connect("token"))
         assertFalse(NativeBridge.setAccessToken("token"))
         assertFalse(NativeBridge.hasPlayer())
         assertFalse(NativeBridge.createPlayer(160, false, true))
@@ -60,7 +60,7 @@ class NativeBridgeTest {
         // The JVM throws UnsatisfiedLinkError for every symbol here; the bridge must translate that
         // to "false"/"null" instead of letting it escape into the service or the UI.
         assertFalse(NativeBridge.initialize())
-        assertFalse(NativeBridge.connect("token"))
+        assertTrue(NativeBridge.connect("token")!!.startsWith("bridge failure: "))
         assertFalse(NativeBridge.setAccessToken("token"))
         assertFalse(NativeBridge.hasPlayer())
         assertFalse(NativeBridge.createPlayer(160, false, true))

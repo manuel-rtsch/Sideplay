@@ -58,6 +58,10 @@ the suite that ran, because the screenshot tests contribute roughly twelve point
 | default (no screenshots) | 57 | 38 |
 | full (`-PsidetrackScreenshots`) | 69 | 44 |
 
+`:provider-spotify`'s own floor is 65/51: it was re-based when the branch was rebased onto
+`release/v0.4.0`, whose new catalog/diagnostics code no provider test reaches yet. The other
+provider floors and `:core` are unchanged.
+
 Phase 2 targets are **70% line / 45% branch** with the full suite.
 
 ## Adding a test
