@@ -17,17 +17,20 @@ class KeypadBackNavigationTest {
             "sidetrack/now-playing",
             "sidetrack/queue",
             "sidetrack/settings",
-            "sidetrack/about"
+            "sidetrack/about",
+            "sidetrack/sign-in"
         ).forEach { route ->
             assertTrue("$route should Back", keypadBackIsLeftAction(route, canPop = true))
         }
     }
 
     @Test
-    fun `Home Sign in and Welcome leave Back to the system`() {
+    fun `Home and Welcome leave Back to the system`() {
         assertFalse(keypadBackIsLeftAction("sidetrack/home", canPop = true))
-        assertFalse(keypadBackIsLeftAction("sidetrack/sign-in", canPop = true))
         assertFalse(keypadBackIsLeftAction("sidetrack/welcome", canPop = true))
+        // Sign in carries a Back action of its own now, so the keypad key follows it and only
+        // falls back to the system when nothing is behind (a signed-out launch starts here).
+        assertFalse(keypadBackIsLeftAction("sidetrack/sign-in", canPop = false))
     }
 
     @Test

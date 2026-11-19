@@ -40,7 +40,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.ActionMotion
-import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.action.withNotice
 import hrln.interactive.sidekit.design.components.SidekitCard
@@ -255,27 +254,39 @@ fun SettingsScreen(
 }
 
 /**
- * The one place a service is chosen: first run, and again after signing out or asking to change
- * service from Sign in.
+ * The one place a service is chosen: first run, and again after signing out or going back from
+ * Sign in.
  *
  * Selection is deliberately not reachable while signed in. The app runs one service at a time,
  * so a picker in Settings would promise a switch that would have to tear down a live session.
  *
- * The screen is always the same screen: no row is pre-selected and there is no action bar. It is
- * shown before any commitment, so marking the service in use as "Selected" would claim one that
- * has not been made; and the back action that used to sit in the bar was a leftover of the Sign
- * in screen's buttons, not a choice this screen offers. The keypad Back key and the system back
- * gesture still leave it.
+ * The screen is always the same screen: no row is pre-selected, and the bar holds the two things
+ * a first-run user needs before committing to a service — what this app is, and how to drive it.
+ * About sits on the left, Help on the right. No back action: this is the step behind Sign in, not
+ * a step in front of something else, and the keypad Back key still leaves.
  */
 @Composable
 fun ServicePickerScreen(
     services: List<ServiceChoice>,
-    onSelect: (ServiceId) -> Boolean
+    onSelect: (ServiceId) -> Boolean,
+    onAbout: () -> Unit = {},
+    onHelp: () -> Unit = {}
 ) {
     // A service that cannot be opened stays selected nowhere and says so on its own row, so the
     // tap is never silently lost.
     var unavailable by remember { mutableStateOf<ServiceId?>(null) }
-    SidekitScaffold(title = "Choose service") { padding ->
+    val actions = remember(onAbout, onHelp) {
+        listOf(
+            // Both wear the theme colour: on the first screen the app shows, the two ways to find
+            // out what it is are the main actions, not a grey afterthought.
+            SideAction("about", "About", motion = ActionMotion.Up, onClick = onAbout),
+            SideAction("help", "Help", motion = ActionMotion.Up, onClick = onHelp)
+        )
+    }
+    // "Welcome", not "Welcome to Sidetrack": the shared header is one line at title size, and the
+    // longer string truncates on the wheel ("Welcome to Sid…"). The box carries the greeting's
+    // second half by telling the user what to do.
+    SidekitScaffold(title = "Welcome", actions = actions) { padding ->
         val listState = rememberLazyListState()
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -283,11 +294,10 @@ fun ServicePickerScreen(
             item(key = "explain") {
                 SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
                     SidekitText(
-                        "Pick the service your library lives on. Sidetrack plays one at a time; " +
-                            "signing out brings you back here.",
+                        "Select an instance to get started",
                         style = SidekitTheme.typography.caption,
                         color = SidekitTheme.colors.surfaceA6,
-                        maxLines = Int.MAX_VALUE
+                        maxLines = DESCRIPTION_MAX_LINES
                     )
                 }
             }
@@ -353,9 +363,15 @@ fun AudioQualityScreen(
 }
 
 /**
+ * How many lines a screen's explanatory card may take. Three is the wheel's practical limit for a
+ * hint the user reads once and scrolls past; copy that needs more is copy that needs rewriting.
+ */
+internal const val DESCRIPTION_MAX_LINES = 3
+
+/**
  * The values a password form shows as placeholders, and submits when the user presses Sign in
- * without typing anything. Used by Navidrome to offer its public demo. Null leaves the form
- * literal: empty fields stay empty and fail validation as before.
+ * without typing anything. Used by Navidrome and Jellyfin to offer their public demos. Null
+ * leaves the form literal: empty fields stay empty and fail validation as before.
  */
 data class PasswordSignInDefaults(
     val serverUrl: String,
@@ -382,10 +398,9 @@ internal fun passwordSignInValues(
 @Composable
 fun SignInScreen(
     chrome: ChromeUiState,
-    onAbout: () -> Unit,
+    onBack: () -> Unit,
     onSignIn: () -> Unit,
     onDismissNotice: () -> Unit,
-    onChangeService: (() -> Unit)? = null,
     serviceName: String = "your music service",
     passwordAuth: Boolean = false,
     defaults: PasswordSignInDefaults? = null,
@@ -403,26 +418,18 @@ fun SignInScreen(
     } else {
         onSignIn
     }
-    val baseActions = remember(passwordAuth) {
+    val baseActions = remember(passwordAuth, onBack) {
         listOf(
-            SideAction("about", "About", tone = ActionTone.Muted, motion = ActionMotion.Up, onClick = onAbout),
+            // Back, not About: the picker is the step behind this screen, so the left action is the
+            // way to a different service and the bar needs no second, overlapping affordance.
+            SideAction.back("back", "Back", onBack),
             SideAction.forward("signIn", "Sign in", submit)
         )
     }
     val actions = withNotice(chrome.notice, onDismissNotice, baseActions, chrome.noticeKind)
-    // The picker is only ever behind this screen, so the escape hatch from a wrong choice lives
-    // here rather than in Settings.
-    val options = remember(onChangeService) {
-        listOfNotNull(
-            onChangeService?.let {
-                SideAction("changeService", "Change service", tone = ActionTone.Muted, onClick = it)
-            }
-        )
-    }
     SidekitScaffold(
         title = "Sign in",
-        actions = actions,
-        options = options
+        actions = actions
     ) { padding ->
         val listState = rememberLazyListState()
         SidekitList(padding, state = listState) {
@@ -436,26 +443,21 @@ fun SignInScreen(
                 SidekitCard(modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidekitText(
-                            "Connect Sidetrack with your $serviceName account",
+                            "Connect your $serviceName account",
                             style = SidekitTheme.typography.bodySmall,
-                            maxLines = Int.MAX_VALUE
+                            maxLines = DESCRIPTION_MAX_LINES
                         )
+                        // One sentence per case: what the app does with the secret, nothing else.
+                        // A demo needs no mention here — its values sit in the placeholders.
                         SidekitText(
-                            when {
-                                !passwordAuth ->
-                                    "Sidetrack never sees your password or sensitive information."
-
-                                defaults != null ->
-                                    "Your password is stored encrypted on this device and only used to sign " +
-                                        "requests to your server. Leave empty to try the shared demo."
-
-                                else ->
-                                    "Your password is stored encrypted on this device and only used to sign " +
-                                        "requests to your server."
+                            if (passwordAuth) {
+                                "The password is stored encrypted on this device."
+                            } else {
+                                "Sidetrack never sees your password."
                             },
                             style = SidekitTheme.typography.caption,
                             color = colors.surfaceA6,
-                            maxLines = Int.MAX_VALUE
+                            maxLines = DESCRIPTION_MAX_LINES
                         )
                     }
                 }

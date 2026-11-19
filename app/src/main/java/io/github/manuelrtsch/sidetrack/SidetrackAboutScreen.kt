@@ -1,5 +1,8 @@
 package io.github.manuelrtsch.sidetrack
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,12 +19,34 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import hrln.interactive.sidekit.design.action.ActionMotion
+import hrln.interactive.sidekit.design.action.ActionTone
+import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitCard
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+
+/** Where Sidetrack's source lives; the About page's "Source code" action opens it in a browser. */
+internal const val SOURCE_CODE_URL = "https://github.com/manuel-rtsch/Sidetrack"
+
+/**
+ * Hands [SOURCE_CODE_URL] to whatever browser the device has. A ROM without one leaves the press
+ * with nothing to do — there is no notice bar on the About page and nothing to undo — so the
+ * missing activity is swallowed rather than crashing the app the user is reading about it in.
+ */
+internal fun openSourceCode(context: Context) {
+    try {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, SOURCE_CODE_URL.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    } catch (_: ActivityNotFoundException) {
+        // No browser installed.
+    }
+}
 
 private data class Licence(val software: String, val licence: String)
 
@@ -66,7 +91,13 @@ fun SidetrackAboutScreen(onBack: () -> Unit, backLabel: String = "Settings") {
 
     SidekitScaffold(
         title = "About",
-        actions = sidetrackBack(backLabel, onBack)
+        actions = sidetrackBack(backLabel, onBack) + SideAction(
+            "sourceCode",
+            "Source code",
+            tone = ActionTone.Muted,
+            motion = ActionMotion.Up,
+            onClick = { openSourceCode(context) }
+        )
     ) { padding ->
         SidekitList(padding, state = listState) {
             item(key = "version") {

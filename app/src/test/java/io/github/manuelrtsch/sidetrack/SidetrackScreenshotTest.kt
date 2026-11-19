@@ -414,7 +414,7 @@ class SidetrackScreenshotTest {
     @Test fun signIn() = shoot("sidetrack_sign_in") {
         SignInScreen(
             SidetrackUiState(signedIn = false).chrome,
-            onAbout = {},
+            onBack = {},
             onSignIn = {},
             onDismissNotice = {}
         )
@@ -423,17 +423,17 @@ class SidetrackScreenshotTest {
     @Test fun servicePicker() = shoot("sidetrack_service_picker") {
         ServicePickerScreen(
             services = KnownServices,
-            onSelect = { true }
+            onSelect = { true },
+            onAbout = {}
         )
     }
 
     @Test fun navidromeSignIn() = shoot("sidetrack_sign_in_navidrome") {
         SignInScreen(
             SidetrackUiState(signedIn = false).chrome,
-            onAbout = {},
+            onBack = {},
             onSignIn = {},
             onDismissNotice = {},
-            onChangeService = {},
             serviceName = "Navidrome",
             passwordAuth = true,
             defaults = PasswordSignInDefaults(

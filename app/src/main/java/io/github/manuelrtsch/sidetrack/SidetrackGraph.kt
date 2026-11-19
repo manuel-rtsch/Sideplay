@@ -44,6 +44,7 @@ const val SIDE_PLAY_SERVICE_PICKER = "sidetrack/service"
 const val SIDE_PLAY_SEARCH = "sidetrack/search"
 private const val HOME = SIDE_PLAY_START
 private const val ONBOARDING = SIDE_PLAY_ONBOARDING
+private val HELP = "$ROOT/help"
 private val HISTORY = "$ROOT/history"
 private val LIBRARY = "$ROOT/library"
 private val COLLECTION = "$ROOT/collection/{key}"
@@ -76,8 +77,8 @@ private fun notesRoute(key: String) = "$ROOT/notes/${Uri.encode(key)}"
 /**
  * Routes with a way back: either a Back action (or a named "Home"/"Library" back), or, for the
  * service picker, no action bar at all but a step behind it. The keypad's Back key uses the same
- * set, so it must not pop a screen that offers no way out: Home, Sign in and Welcome leave the
- * press to the system.
+ * set, so it must not pop a screen that offers no way out: Home and Welcome leave the press to
+ * the system.
  */
 private val KEYPAD_BACK_ROUTES = setOf(
     HISTORY,
@@ -94,6 +95,10 @@ private val KEYPAD_BACK_ROUTES = setOf(
     SLEEP_TIMER,
     SETTINGS,
     SERVICE_PICKER,
+    SIGN_IN,
+    // Welcome itself has no left action on the first run; the picker's Help page (same body, Back
+    // in the bar) does.
+    HELP,
     AUDIO_QUALITY,
     APPEARANCE,
     KEYBOARD,
@@ -787,10 +792,12 @@ fun NavGraphBuilder.sidetrackGraph(
             val context = LocalContext.current
             val appSession = remember(context) { AppSessions.get(context) }
             // The picker is the first screen on a fresh install and a pushed screen when it comes
-            // from Sign in. Either way it is the same neutral screen: no pre-selection and no
-            // action bar, so the Sign in buttons are not morphed into a back button here.
+            // from Sign in. Either way it is the same neutral screen: no pre-selection, and the
+            // same two bar actions (About, Help) rather than a back button.
             ServicePickerScreen(
                 services = KnownServices,
+                onAbout = { nav.navigate(ABOUT) },
+                onHelp = { nav.navigate(HELP) },
                 onSelect = { id ->
                     if (!AppSessions.select(context, id)) {
                         false
@@ -823,7 +830,7 @@ fun NavGraphBuilder.sidetrackGraph(
             SidetrackAppearanceScreen(onBack = { nav.popBackStack() })
         }
         composable(KEYBOARD) {
-            val backLabel = if (nav.previousBackStackEntry?.destination?.route == ONBOARDING) {
+            val backLabel = if (nav.previousBackStackEntry?.destination?.route in setOf(ONBOARDING, HELP)) {
                 "Welcome"
             } else {
                 "Settings"
@@ -837,7 +844,7 @@ fun NavGraphBuilder.sidetrackGraph(
         composable(ABOUT) {
             val backLabel = when (nav.previousBackStackEntry?.destination?.route) {
                 SIGN_IN -> "Sign in"
-                ONBOARDING -> "Welcome"
+                ONBOARDING, HELP -> "Welcome"
                 else -> "Settings"
             }
             SidetrackAboutScreen(onBack = { nav.popBackStack() }, backLabel = backLabel)
@@ -856,6 +863,17 @@ fun NavGraphBuilder.sidetrackGraph(
                         launchSingleTop = true
                     }
                 }
+            )
+        }
+        composable(HELP) {
+            // The same Welcome body the first run shows, opened before a service is chosen: it
+            // teaches the keypad, so it is the most useful thing a first-run user can read here.
+            SidetrackOnboardingScreen(
+                hostBacked = hostBacked,
+                onAbout = { nav.navigate(ABOUT) },
+                onKeyboard = { nav.navigate(KEYBOARD) },
+                onDone = { nav.popBackStack() },
+                onBack = { nav.popBackStack() }
             )
         }
         composable(SIGN_IN) { entry ->
@@ -882,10 +900,16 @@ fun NavGraphBuilder.sidetrackGraph(
             }
             SignInScreen(
                 chrome,
-                onAbout = { nav.navigate(ABOUT) },
+                onBack = {
+                    // Usually the picker is the step behind. A signed-out launch of a provisioned
+                    // install starts here with nothing behind, so Back opens the picker instead of
+                    // being a dead end — the same answer, reached without a state to check.
+                    if (!nav.popBackStack()) {
+                        nav.navigate(SERVICE_PICKER) { launchSingleTop = true }
+                    }
+                },
                 onSignIn = vm::signIn,
                 onDismissNotice = vm::dismissNotice,
-                onChangeService = { nav.navigate(SERVICE_PICKER) { launchSingleTop = true } },
                 serviceName = appSession.serviceName.ifEmpty { "your music service" },
                 passwordAuth = passwordAuth,
                 defaults = defaults,

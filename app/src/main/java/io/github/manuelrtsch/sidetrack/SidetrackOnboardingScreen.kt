@@ -30,6 +30,10 @@ import hrln.interactive.sidekit.sdk.settings.KeypadGuide
  * needs before Home, keeps the module and Back-key status compact, and leaves the full key guide
  * on the Keyboard screen instead of asking the user to explore a diagram first.
  *
+ * The same body is the picker's Help page ([onBack] non-null): it then reads the same way but
+ * returns instead of starting the app, and the onboarding flag stays unwritten so the real welcome
+ * still happens once a service is chosen.
+ *
  * A Sidekit host owns the keypad choice, so with a host installed the keyboard row is
  * informational and the module and input mode keep coming from Sidekit.
  */
@@ -38,7 +42,8 @@ fun SidetrackOnboardingScreen(
     hostBacked: Boolean,
     onAbout: () -> Unit,
     onKeyboard: () -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current.applicationContext
     val local = remember(context) { SidetrackLocalSettings(context) }
@@ -71,6 +76,7 @@ fun SidetrackOnboardingScreen(
         canManageKeypadAccess = !hostBacked,
         keypadBackEnabled = keypadBackEnabled,
         onAbout = onAbout,
+        onBack = onBack,
         onDone = {
             local.markOnboardingSeen()
             onDone()
@@ -92,14 +98,20 @@ internal fun SidetrackOnboardingContent(
     canManageKeypadAccess: Boolean = false,
     keypadBackEnabled: Boolean = false,
     onAbout: () -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     val list = rememberLazyListState()
 
     SidekitScaffold(
         title = "Welcome",
         actions = listOf(
-            SideAction.forward("getStarted", "Get started", onDone)
+            // Help mode returns to the picker; the first run keeps its single way forward.
+            if (onBack != null) {
+                SideAction.back("back", "Back", onBack)
+            } else {
+                SideAction.forward("getStarted", "Get started", onDone)
+            }
         ),
         // A real extra action, so pressing Options here demonstrates what the card explains.
         options = listOf(
