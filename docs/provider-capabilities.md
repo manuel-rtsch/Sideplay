@@ -10,10 +10,20 @@ Sources of truth:
 - Capability flags: `app/src/main/java/io/github/manuelrtsch/sidetrack/MediaModels.kt`
   (`ServiceCapabilities`), `SpotifySession.kt` / `SpotifyAdapters.kt` (`ServiceCapabilities.All`),
   `NavidromeRuntime.kt` (`ServiceCapabilities.Navidrome`).
+- Which categories the UI offers: `ServiceCapabilities.availableLibraryFilters` and
+  `availableSearchScopes` in the same file, fed to the Library row and the search screens.
 - Tests: `app/src/test/java/io/github/manuelrtsch/sidetrack/`.
+- A third provider, Jellyfin, is **planned but not implemented** — see
+  [jellyfin-integration.md](jellyfin-integration.md) for its proposed capability set and the
+  assessment of the official Kotlin SDK.
 
 Legend: ✅ supported & surfaced · ⚠️ implemented in the catalog but not surfaced (capability flag
 off / returned as unsupported) · ❌ not supported.
+
+A capability that is off is also visible in the UI: the Library's category row and the search
+category row keep the button in place but mute it, drop its click and skip it under the keypad,
+and screen readers get "not available" instead of "off". Keeping the slot means the row never
+reflows between services; muting it means no button leads to an empty page.
 
 ---
 
@@ -34,6 +44,22 @@ off / returned as unsupported) · ❌ not supported.
 | Progress reporting (resume) | ✅ | ✅ |
 | Scrobbling | ✅ | ✅ |
 | Sign-in | OAuth (PKCE) via browser | Username/password against a `ping` |
+
+Planned, not built ([details](jellyfin-integration.md)):
+
+| Capability | Jellyfin (proposed) |
+| --- | :---: |
+| Library sections | Liked, Playlists, Albums, Artists |
+| Search scopes | Tracks, Artists, Albums, Playlists |
+| Podcasts / shows | ❌ (music libraries carry none) |
+| Song radio | ✅ (InstantMix) |
+| Follow artist | ✅ (favorite artist) |
+| Playlist editing / creation | ✅ |
+| Loudness normalization | ❌ (no ReplayGain parameter) |
+| Gapless playback | ❌ (engine-level) |
+| Quality selection | ✅ (`maxStreamingBitrate`) |
+| Progress reporting / scrobbling | ✅ (`reportPlaybackStart/Progress/Stopped`, `markPlayedItem`) |
+| Sign-in | Username/password or Quick Connect (deferred) |
 
 ---
 
@@ -99,11 +125,22 @@ narrower capability set below.
 ### Not supported (not yet)
 
 - **Podcasts / shows**: no `Shows` library section and no `Shows` search scope; `supportsPodcasts`
-  is false.
+  is false. This is upstream, not a Sidetrack omission: Navidrome registers every Subsonic
+  podcast endpoint (`getPodcasts`, `getNewestPodcasts`, `refreshPodcasts`, the channel and episode
+  calls) as an HTTP 501 stub, because mainline Navidrome has no podcast library at all. Podcast
+  support lives only in unmerged upstream work (navidrome/navidrome#3150, #5949) and in forks, so
+  there is nothing for a client to read. Adding it here would mean the two calls plus a *Show*
+  collection and episode mapping, gated on a runtime probe rather than on the provider name, since
+  a fork or a future release would answer them.
 - **Follow artist** ❌: `isFollowed` returns `null` and `setFollowed` is a no-op;
   `supportsFollowArtist` is false.
 - **Gapless** ❌: `supportsGapless` stays false until the Media3 engine applies per-track
   seamless handoff. The preference is already persisted (`setGapless`) so it is ready to flip on.
+
+The missing features surface as muted, unreachable categories and hidden settings rows, not as
+buttons that open an empty page: the Library category row and the *Search in* screen read
+`availableLibraryFilters` / `availableSearchScopes`, `setFilter`/`toggleScope` ignore a category
+the service cannot answer, and the quality/normalization/gapless rows are gated by their flags.
 
 ### Coverage
 
@@ -115,7 +152,13 @@ narrower capability set below.
   catalog applying quality/normalization from settings to the stream, and writer star/edit.
 - `MusicServiceTest.kt` — asserts `ServiceCapabilities.Navidrome` advertises the delivered parity
   capabilities (radio, quality selection, normalization, playlist edit, progress, scrobbling) and
-  keeps the not-yet-supported ones off (podcasts, follow-artist, gapless).
+  keeps the not-yet-supported ones off (podcasts, follow-artist, gapless). Also pins the derived
+  category sets: Navidrome offers four library filters and four search scopes, `Shows` included in
+  neither, while `ServiceCapabilities.All` keeps every category selectable.
+- `LibraryFilterRowTest.kt` / `SearchFilterRowTest.kt` — assert that a switched-off capability is
+  surfaced honestly on Navidrome: the `Shows` tile keeps its slot, is announced as "not available",
+  takes no click, is skipped by Left/Right, and cannot be turned back on from the *Search in*
+  screen. `setFilter`/`toggleScope` refuse it as well, so no selection can reach an empty page.
 - `NavidromeIntegrationTest.kt` — opt-in smoke tests against a real Navidrome/Subsonic server
   (env: `NAVIDROME_TEST_URL` / `_USER` / `_PASSWORD`; skipped when absent): reads artists/albums/
   tracks, resolves stream and artwork URLs, pages the library and writes stars, reads and edits a
