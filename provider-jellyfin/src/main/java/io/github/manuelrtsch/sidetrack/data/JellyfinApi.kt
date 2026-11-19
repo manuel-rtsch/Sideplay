@@ -476,12 +476,10 @@ class SdkJellyfinApi(
         ).content
         val source = response.mediaSources.firstOrNull()
         val directPlay = source?.transcodingUrl == null && source?.supportsDirectPlay == true
-        val baseUrl = api.baseUrl?.trimEnd('/').orEmpty()
-        val transcodingUrl = source?.transcodingUrl
-        val url = if (!transcodingUrl.isNullOrBlank()) {
-            if (transcodingUrl.startsWith("http")) transcodingUrl else baseUrl + transcodingUrl
-        } else {
-            directPlayStreamUrl(
+        val url = playbackStreamUrl(
+            transcodingUrl = source?.transcodingUrl,
+            baseUrl = api.baseUrl?.trimEnd('/').orEmpty(),
+            directUrl = directPlayStreamUrl(
                 audio = api.audioApi,
                 itemId = uuid(itemId),
                 container = source?.container,
@@ -489,7 +487,7 @@ class SdkJellyfinApi(
                 deviceId = api.deviceInfo.id,
                 playSessionId = response.playSessionId
             )
-        }
+        )
         val headers = buildMap {
             source?.requiredHttpHeaders?.forEach { (key, value) -> if (value != null) put(key, value) }
             putAll(credentials.headers())
@@ -597,6 +595,23 @@ class SdkJellyfinApi(
         const val CLIENT_NAME = "Sidetrack"
         const val PLAYLIST_ENTRY_SCAN = 500
     }
+}
+
+/**
+ * Which URL the player is handed for the source `PlaybackInfo` answered with.
+ *
+ * A `transcodingUrl` means the server refused the original file (a bitrate ceiling, an unsupported
+ * codec, or a stream copy) and is the only URL that can serve it; it arrives either absolute or as
+ * a path relative to the server root. When there is none the source is a direct play, and
+ * [directUrl] — the static stream endpoint — is the one that works.
+ *
+ * Kept out of [SdkJellyfinApi.playback] so the branch that the 0.4.0 regression lived in can be
+ * asserted offline: a `FakeJellyfinApi` stubs `playback()` wholesale, so nothing else covers it.
+ */
+internal fun playbackStreamUrl(transcodingUrl: String?, baseUrl: String, directUrl: String): String = when {
+    transcodingUrl.isNullOrBlank() -> directUrl
+    transcodingUrl.startsWith("http") -> transcodingUrl
+    else -> baseUrl + transcodingUrl
 }
 
 /**
