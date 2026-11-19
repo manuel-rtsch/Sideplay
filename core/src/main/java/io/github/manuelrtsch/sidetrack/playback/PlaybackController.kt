@@ -404,7 +404,13 @@ class PlaybackController(
         publish()
         val started = engine.resume(positionMs)
         if (!started) {
+            // Symmetric with [start]: an engine that cannot deliver audio has not earned the
+            // session or the focus request. Leaving the registry pointed at a silent owner would
+            // contradict what [MediaSessionRegistry.active] claims to mean, and holding focus
+            // would keep the app that just paused for us paused.
             playing = false
+            focus?.abandon()
+            registry.deactivate(this)
             publish()
             return false
         }

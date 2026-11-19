@@ -124,6 +124,21 @@ class PlaybackControllerSessionTest {
         assertFalse(controller.isActive)
     }
 
+    @Test fun `a failed resume releases focus and the registry`() = runTest {
+        focusResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        val engine = FakeEngine().apply { resumeResult = false }
+        controller = newController(engine, context = context)
+        controller.setNowPlaying(track(), 0L, PlaybackSource("a", "spotify:track:a"))
+
+        assertFalse(controller.resume())
+
+        // The resume path claims the session and the focus request before the engine decides, so
+        // a refusal has to give both back — otherwise the registry names a silent owner and the
+        // app that paused for us stays paused.
+        assertNull(registry.active)
+        assertNotNull(shadowOf(audio).lastAbandonedAudioFocusRequest)
+    }
+
     @Test fun `resume claims the session and hands the position to the engine`() = runTest {
         focusResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         val engine = FakeEngine()
