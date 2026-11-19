@@ -26,14 +26,14 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -444,9 +444,11 @@ fun SignInScreen(
                             when {
                                 !passwordAuth ->
                                     "Sidetrack never sees your password or sensitive information."
+
                                 defaults != null ->
                                     "Your password is stored encrypted on this device and only used to sign " +
                                         "requests to your server. Leave empty to try the shared demo."
+
                                 else ->
                                     "Your password is stored encrypted on this device and only used to sign " +
                                         "requests to your server."

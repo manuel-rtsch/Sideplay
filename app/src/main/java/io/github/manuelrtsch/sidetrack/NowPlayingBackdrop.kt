@@ -48,6 +48,7 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
+import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.StateFlow
@@ -193,7 +194,7 @@ private fun RemoteBackdrop(url: String, side: Dp) {
     // would cost three times the bytes for a picture nobody sees sharply.
     val px = with(LocalDensity.current) { (side * 0.6f).roundToPx() }.coerceIn(96, 768)
     val bitmap by produceState<ImageBitmap?>(null, url, px) {
-        value = RemoteArtwork.load(context, url, px, px)?.asImageBitmap()
+        value = RemoteArtwork.load(context, url, px, px, ArtworkAccess.current())?.asImageBitmap()
     }
     bitmap?.let { image ->
         key(image) {

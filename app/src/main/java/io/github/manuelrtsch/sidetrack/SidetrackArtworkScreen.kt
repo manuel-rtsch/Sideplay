@@ -21,6 +21,7 @@ import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtworkImage
+import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
 
 /**
  * A generic, full-width view of one piece of artwork. The pill keeps the item shape and takes its
@@ -66,7 +67,8 @@ fun SidetrackArtworkScreen(
                             artUrl,
                             Modifier.fillMaxSize(),
                             placeholder = SidekitIcon.Album,
-                            contentDescription = label
+                            contentDescription = label,
+                            headers = ArtworkAccess.current()
                         )
 
                         painter != null -> Image(

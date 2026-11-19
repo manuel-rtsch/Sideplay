@@ -1,11 +1,12 @@
 # Jellyfin integration — plan and SDK assessment
 
-Status: **planned; steps 1–2 of §9 landed.** The SDK dependency and its licence notice are in the
-build, and `ServiceId.Jellyfin` / `ServiceCapabilities.Jellyfin` exist with tests pinning the flag
-set and the muted categories. Nothing else exists yet: no auth, catalog, writer, runtime or picker
-entry, so no user can select Jellyfin. This document records what the official Kotlin SDK gives us,
-what it does not, how Jellyfin maps onto Sidetrack's provider-neutral model, the decisions taken
-(§8), and the order in which the adapter is built.
+Status: **planned; steps 1–4 of §9 landed.** In the build: the SDK dependency and its licence
+notice, `ServiceId.Jellyfin` / `ServiceCapabilities.Jellyfin` with tests pinning the flag set and
+the muted categories, password sign-in with an encrypted token store, and header-authenticated
+artwork. Nothing else exists yet: no catalog, writer, runtime or picker entry, so no user can
+select Jellyfin. This document records what the official Kotlin SDK gives us, what it does not, how
+Jellyfin maps onto Sidetrack's provider-neutral model, the decisions taken (§8), and the order in
+which the adapter is built.
 
 Sources: the [Kotlin SDK guide](https://kotlin-sdk.jellyfin.org/guide/getting-started.html), the
 SDK sources at [jellyfin/jellyfin-sdk-kotlin](https://github.com/jellyfin/jellyfin-sdk-kotlin)
@@ -169,11 +170,13 @@ The SDK exposes URL builders next to every byte-returning endpoint:
 (Sidekit) fetches with a plain GET and no custom headers, so image URLs would otherwise have to
 carry `ApiKey`.
 
-**Decided (D10):** artwork loading gains custom-header support instead. The Jellyfin adapter sends
-the same `Authorization` header for images as for audio, so the access token never appears in a
-URL, a log line or an image-cache key. The audio stream uses `PlaybackSource.headers`, which
-already exists for Media3. Because this touches shared code (Spotify and Navidrome images too), it
-is its own step before the catalog — see §9.
+**Decided (D10):** artwork loading carries custom headers instead. `RemoteArtwork.load` and
+`RemoteArtworkImage` take a `headers` map (Sidekit 1.9.0), the map is part of the memory and disk
+cache key, and its values are hashed — never written to a file name or a log line. Sidetrack keeps
+the signed-in service's headers in `ArtworkAccess`, installed at sign-in and cleared at sign-out,
+so rows, the now-playing backdrop and the media notification all send the same `Authorization` as
+the audio stream. Spotify and Navidrome pass an empty map and are unchanged; the audio stream uses
+`PlaybackSource.headers`, which already exists for Media3.
 
 The authorization header format the SDK itself uses is
 `MediaBrowser Client="Sidetrack", DeviceId="…", Device="…", Version="…", Token="…"`
@@ -385,7 +388,7 @@ decision and the consequence the implementation has to live with.
 | D7 | **Jellyfin 12.0+ only**, documented and enforced at sign-in. | SDK 1.9.x refuses 10.x, so most current self-hosted installs are turned away with an explicit upgrade message. This is the plan's most user-visible constraint. Revisit only by adding a second client, never by loosening the SDK floor. |
 | D8 | **In-app provider**, like Navidrome — not a second app id. | One APK, one release train, shared Media3 player and stores; Jellyfin code ships to every user even when unused, and the Spotify-first branding has to accommodate a self-hosted service. Supersedes the closing suggestion in `.provider-assessment.local.md`. |
 | D9 | **Plain server URL in v1**; SDK discovery (address candidates, scored recommendations) later. | No new screens; the existing provider-agnostic form works unchanged. A host typed without `:8096` surfaces as a generic network error until discovery lands. |
-| D10 | **Header support for artwork**, no `ApiKey` in image URLs. | `RemoteArtwork`/the image loader gains custom headers; the token stays out of URLs, logs and Coil cache keys; shared code used by Spotify and Navidrome changes, so it needs its own tests and lands before the catalog. |
+| D10 | **Header support for artwork**, no `ApiKey` in image URLs. | Sidekit 1.9.0 adds `headers` to `RemoteArtwork` and `RemoteArtworkImage` and folds them into the cache key; Sidetrack installs the account header in `ArtworkAccess` at sign-in. Until the Sidekit tag publishes 1.9.0 to GitHub Pages, Sidetrack resolves it from `~/.m2` (staged with `-PsidekitVersion=1.9.0`), so a clean machine needs that publication before it can build. |
 | D11 | **`getPostedPlaybackInfo` + a music `DeviceProfile`** is the playback path; universal URL is fallback only. | Owns `playSessionId` (needed for accurate progress) and `transcodingUrl` (prefix `api.baseUrl`) plus `requiredHttpHeaders`; the profile has to advertise direct play for Media3's containers or servers transcode FLAC away silently; more code and more failure modes than a bare URL builder. |
 | D12 | **`markPlayedItem` only when the item finishes.** | Skips do not count as plays, matching the server's model; `reportPlaybackStopped` still reports where playback ended, so the server keeps its positions. No invented percentage rule. |
 | D13 | **Seed `ResumePoint` from `getResumeItems` at sign-in**; local state is authoritative afterwards. | Resume survives a reinstall and follows the account across devices; costs one call at sign-in; no two-way reconciliation rules, so a position advanced elsewhere only lands at the next sign-in. |
@@ -400,11 +403,14 @@ decision and the consequence the implementation has to live with.
 2. **Identity and capabilities**: `ServiceId.Jellyfin`, `ServiceCapabilities.Jellyfin`, a
    `MusicServiceTest` case pinning the flag set and the muted categories. `KnownServices` is not
    touched yet, so the picker cannot offer a service that cannot sign in.
-3. **Auth**: `JellyfinCredentialStore` + `JellyfinAuth` (`signIn`, `restore`, `signOut`), token
-   validation via `getCurrentUser`, `ServiceFailure` mapping unit tests with a fake transport.
-4. **Artwork headers** (D10): teach the image loader to attach per-request headers, so Jellyfin
-   images carry `Authorization` instead of `?ApiKey=`; cover it with a test that Spotify/Navidrome
-   artwork is unchanged. Lands before the catalog, which produces the image URLs.
+3. **Auth**: `JellyfinCredentialStore` + `JellyfinAuth` (`signIn`, `restore`, `signOut`), with the
+   SDK behind a `JellyfinAuthenticator` seam so the tests need no server. `restore` reads the
+   stored token without a round trip; a revoked token surfaces as a 401 on the first request and
+   maps to `AuthenticationExpired`. Done, including the `ServiceFailure` mapping tests.
+4. **Artwork headers** (D10): Sidekit's `RemoteArtwork` takes per-request headers (published as
+   `1.9.0`), Sidetrack carries them in `ArtworkAccess`, and Jellyfin images send `Authorization`
+   instead of `?ApiKey=`. Done; the cache-key test in Sidekit pins that Spotify/Navidrome artwork
+   is unaffected.
 5. **API seam and catalog**: `JellyfinApi` + `JellyfinCatalog` for the four sections, album and
    playlist collections, artist/albums/top-tracks, search, artwork URLs; pagination via
    `totalRecordCount`, `hasMore` computed; unit tests with recorded JSON shaped like

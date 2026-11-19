@@ -94,6 +94,7 @@ import hrln.interactive.sidekit.design.components.container
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.media.RemoteArtworkImage
+import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 import io.github.manuelrtsch.sidetrack.playback.tileText
@@ -147,14 +148,18 @@ fun Cover(
                 height = requestSize,
                 modifier = Modifier.fillMaxSize(),
                 placeholder = SidekitIcon.Album,
-                contentDescription = contentDescription
+                contentDescription = contentDescription,
+                // The signed-in service's artwork auth, when it needs one. Empty for Spotify and
+                // Navidrome, whose URLs already carry their credentials.
+                headers = ArtworkAccess.current()
             )
 
             artUrl != null -> RemoteArtworkImage(
                 artUrl,
                 Modifier.fillMaxSize(),
                 placeholder = SidekitIcon.Album,
-                contentDescription = contentDescription
+                contentDescription = contentDescription,
+                headers = ArtworkAccess.current()
             )
 
             artRes != 0 -> Image(
