@@ -337,16 +337,23 @@ settings screens pick it up from `KnownServices` and the capability set with no 
 ## 6. Playback plan
 
 **Decided (D11): the posted-info path below is the implementation, not a preference.** The
-universal URL in step 2 stays documented as the fallback for a server that answers
-`getPostedPlaybackInfo` badly; it is not built in the first cut.
+universal URL in step 2 is **not** a usable fallback and must not be built: on Jellyfin 12.4 the
+endpoint answers `500` with an HTML error page for any request that does not name a container, so
+Media3 fails with *none of the available extractors could read the stream* (this is the v0.4.0
+Jellyfin playback bug: a 0.4.0 build sent `…/Audio/{id}/universal?userId&deviceId&mediaSourceId
+&maxStreamingBitrate` and the player was handed the error page's `text/html`). The direct-play
+fallback is `…/Audio/{id}/stream?static=true`, verified against the demo server on 12.4: it
+answers `206` with `audio/flac` and `Accept-Ranges: bytes`, which is what seeking needs.
 
 1. **Preferred**: `mediaInfoApi.getPostedPlaybackInfo(itemId, PlaybackInfoDto(
    userId = …, maxStreamingBitrate = quality.kbps * 1000, deviceProfile = musicProfile))`.
    Take `playSessionId` (needed for progress reporting) and the first `mediaSources` entry.
    Play `transcodingUrl` (absolute path, so prefix `api.baseUrl`), passing
    `requiredHttpHeaders` plus the `Authorization` header.
-2. **Simple fallback**: `audioApi.getUniversalAudioStreamUrl(itemId, maxStreamingBitrate = …,
-   userId = …, deviceId = …)` with the token as a header.
+2. **Direct-play fallback** (no `transcodingUrl`): `audioApi.getAudioStreamUrl(itemId, container =
+source.container, static = true, mediaSourceId = source.id, deviceId = …, playSessionId = …)`.
+   `static=true` serves the original file with byte ranges intact, so a FLAC stays a FLAC and a
+   seek is a `Range` request. Do **not** use `getUniversalAudioStreamUrl` here: see above.
 3. Feed it to the existing `PlaybackController`:
    `PlaybackSource(id = item.id, uri = url, headers = mapOf("Authorization" to header))`.
 4. `AudioQuality` → `maxStreamingBitrate`: `Normal` 96 kbit/s, `VeryHigh` (labelled *Max*)
@@ -396,7 +403,7 @@ decision and the consequence the implementation has to live with.
 | D8 | **In-app provider**, like Navidrome — not a second app id. | One APK, one release train, shared Media3 player and stores; Jellyfin code ships to every user even when unused, and the Spotify-first branding has to accommodate a self-hosted service. Supersedes the closing suggestion in `.provider-assessment.local.md`. |
 | D9 | **Plain server URL in v1**; SDK discovery (address candidates, scored recommendations) later. | No new screens; the existing provider-agnostic form works unchanged. A host typed without a port gets Jellyfin's default filled in (`http` → `8096`); `https` keeps its implicit 443, because 8920 only applies when the certificate lives in Jellyfin itself and a proxied server (the public demo included) answers on 443. Discovery would still improve `https`/self-signed cases. |
 | D10 | **Header support for artwork**, no `ApiKey` in image URLs. | Sidekit 1.9.0 adds `headers` to `RemoteArtwork` and `RemoteArtworkImage` and folds them into the cache key; Sidetrack installs the account header in `ArtworkAccess` at sign-in. Until the Sidekit tag publishes 1.9.0 to GitHub Pages, Sidetrack resolves it from `~/.m2` (staged with `-PsidekitVersion=1.9.0`), so a clean machine needs that publication before it can build. |
-| D11 | **`getPostedPlaybackInfo` + a music `DeviceProfile`** is the playback path; universal URL is fallback only. | Owns `playSessionId` (needed for accurate progress) and `transcodingUrl` (prefix `api.baseUrl`) plus `requiredHttpHeaders`; the profile has to advertise direct play for Media3's containers or servers transcode FLAC away silently; more code and more failure modes than a bare URL builder. |
+| D11 | **`getPostedPlaybackInfo` + a music `DeviceProfile`** is the playback path; a direct play falls back to `/Audio/{id}/stream?static=true`, never to the universal URL. | Owns `playSessionId` (needed for accurate progress) and `transcodingUrl` (prefix `api.baseUrl`) plus `requiredHttpHeaders`; the profile has to advertise direct play for Media3's containers or servers transcode FLAC away silently; more code and more failure modes than a bare URL builder. |
 | D12 | **`markPlayedItem` only when the item finishes.** | Skips do not count as plays, matching the server's model; `reportPlaybackStopped` still reports where playback ended, so the server keeps its positions. No invented percentage rule. |
 | D13 | **Seed `ResumePoint` from `getResumeItems` at sign-in**; local state is authoritative afterwards. | Resume survives a reinstall and follows the account across devices; costs one call at sign-in; no two-way reconciliation rules, so a position advanced elsewhere only lands at the next sign-in. |
 | D14 | **No production 12.x server to test against; a throwaway `jellyfin/jellyfin` 12.x container in dev is the reference.** | `JellyfinIntegrationTest` stays opt-in (`JELLYFIN_TEST_URL`/`_USER`/`_PASSWORD`, skipped when absent) so CI is green; the three unverified claims in §2.11 — `createPlaylist` with empty `ids`, `editable` from `openAccess`/`shares`, direct FLAC via the profile — are exercised there and must be confirmed against the container before the adapter is called server-verified. |

@@ -21,6 +21,7 @@ import org.jellyfin.sdk.api.client.extensions.playlistApi
 import org.jellyfin.sdk.api.client.extensions.searchApi
 import org.jellyfin.sdk.api.client.extensions.sessionApi
 import org.jellyfin.sdk.api.client.extensions.userDataApi
+import org.jellyfin.sdk.api.operations.AudioApi
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -480,14 +481,13 @@ class SdkJellyfinApi(
         val url = if (!transcodingUrl.isNullOrBlank()) {
             if (transcodingUrl.startsWith("http")) transcodingUrl else baseUrl + transcodingUrl
         } else {
-            // The server chose direct play, and a MediaSourceInfo carries no direct URL in 1.9.4,
-            // so the universal endpoint is the documented fallback (D11).
-            api.audioApi.getUniversalAudioStreamUrl(
+            directPlayStreamUrl(
+                audio = api.audioApi,
                 itemId = uuid(itemId),
-                userId = userId,
-                deviceId = api.deviceInfo.id,
+                container = source?.container,
                 mediaSourceId = source?.id,
-                maxStreamingBitrate = maxStreamingBitrate
+                deviceId = api.deviceInfo.id,
+                playSessionId = response.playSessionId
             )
         }
         val headers = buildMap {
@@ -598,6 +598,33 @@ class SdkJellyfinApi(
         const val PLAYLIST_ENTRY_SCAN = 500
     }
 }
+
+/**
+ * The URL for a source the server let us play directly.
+ *
+ * `/Audio/{id}/universal` is the endpoint a `MediaSourceInfo` points at only implicitly, and on
+ * Jellyfin 12 it answers **500** with an HTML error page unless it is also told the container to
+ * produce — so the player is handed a web page where it expects audio and fails with "none of the
+ * available extractors could read the stream". `/Audio/{id}/stream?static=true` is what Jellyfin's
+ * own clients use for a direct play: it serves the original file with byte ranges intact, which
+ * Media3 needs to seek. A bitrate cap never reaches this path; the server answers such a request
+ * with a `transcodingUrl` instead.
+ */
+internal fun directPlayStreamUrl(
+    audio: AudioApi,
+    itemId: UUID,
+    container: String?,
+    mediaSourceId: String?,
+    deviceId: String?,
+    playSessionId: String?
+): String = audio.getAudioStreamUrl(
+    itemId = itemId,
+    container = container,
+    static = true,
+    mediaSourceId = mediaSourceId,
+    deviceId = deviceId,
+    playSessionId = playSessionId
+)
 
 /** The direct-play containers Media3/ExoPlayer handles, plus one audio-only transcode fallback. */
 internal fun jellyfinMusicProfile(maxStreamingBitrate: Int?): DeviceProfile {
