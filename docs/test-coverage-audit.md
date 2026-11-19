@@ -54,8 +54,15 @@ The suite is broad enough; the next gain is removing work that does not buy risk
   more unit tests.
 * `QueueReorder`'s slot arithmetic (`firstOnScreen`/`lastOnScreen`, auto-scroll) needs a
   laid-out list. Same category: instrumented/Roborazzi.
-* `PlaybackService` is unit-tested at 0% → high coverage through `onStartCommand`; an
-  instrumented test is still worth adding for the real foreground-service lifecycle.
+* ~~`PlaybackService` lifecycle~~ — **closed.** `PlaybackServiceTest` pins every
+  `onStartCommand` branch under Robolectric (cold start, signed-out session, nothing playing,
+  paused vs playing notification, transport actions), and `SpotifyPlaybackServiceInstrumentedTest`
+  drives the real foreground promotion and notification on a device. The instrumented suite had
+  never run and was red when checked for this review — the placeholder notification shares the
+  real notification id, so the waiting test read the placeholder, and ExoPlayer opens a stream at
+  position 0 without a `Range` header, so the "did it stream" assertion was wrong. Both tests were
+  fixed and `:app:connectedDebugAndroidTest` now runs in CI on API 31 and 36, which is what keeps
+  it from rotting again.
 
 ### 1.3 `core` — accepted gaps and one decision
 
@@ -66,11 +73,14 @@ The suite is broad enough; the next gain is removing work that does not buy risk
 * `GuardedEncryptedStore` (0%) is **accepted** for the same reason as the app store: it
   constructs `EncryptedFileStore` in its initializer. The same contract is pinned through
   the injectable `JsonStore`.
-* **Decision needed:** `PlaybackController.resume()` activates the media-session owner
+* ~~**Decision needed:** `PlaybackController.resume()` activates the media-session owner
   before asking the engine whether audio started. If the engine reports failure, `playing`
-  is cleared but `registry.active` still points at the controller. Slice 6 pinned the
-  audible state and deliberately did not encode either answer for the registry. Decide
-  whether this is a bug; if yes, fix it and assert the registry is cleared.
+  is cleared but `registry.active` still points at the controller.~~ **Decided: it was a bug,
+  and it is fixed.** A failed resume now abandons audio focus and deactivates the registry,
+  exactly as `start()`'s failure path already did — the registry documents `active` as "the owner
+  currently allowed to play", and a silent owner is not that. Holding the focus request would
+  also have left whatever app paused for us still paused. `a failed resume releases focus and the
+  registry` pins both (it fails without the change).
 * `ServiceRuntime`'s optional-interface extensions are shallow coverage. They are fine as
   neutral-default regression insurance; the real runtimes are covered.
 
@@ -95,10 +105,10 @@ ratcheting the floors if a future change moves them.
 
 | Gate | Value |
 |---|---|
-| Default suite (`./gradlew testDebugUnitTest`) | **599 tests** |
-| Full suite (`-PsidetrackScreenshots`) | **625 tests** |
-| Product line / branch, default | **59.51% / 40.17%** |
-| Product line / branch, full | **71.87% / 46.31%** |
+| Default suite (`./gradlew testDebugUnitTest`) | **620 tests** |
+| Full suite (`-PsidetrackScreenshots`) | **649 tests** |
+| Product line / branch, default | **59.85% / 40.47%** |
+| Product line / branch, full | **72.20% / 46.62%** |
 | Phase-2 target (full suite) | **70% line / 45% branch — met** |
 
 Module coverage (own tests, unless noted):
@@ -109,8 +119,8 @@ Module coverage (own tests, unless noted):
 | `:provider-spotify` | 77.74% | 61.24% |
 | `:provider-jellyfin` | 91.18% | 60.55% |
 | `:provider-navidrome` | 68.36% | 41.61% |
-| `:app` / product merged, default | 59.51% | 40.17% |
-| `:app` / product merged, full | 71.87% | 46.31% |
+| `:app` / product merged, default | 59.85% | 40.47% |
+| `:app` / product merged, full | 72.20% | 46.62% |
 
 Floors are a ratchet and track the suite that ran:
 
