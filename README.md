@@ -4,7 +4,7 @@
 
 <h1 align="center">Sidetrack</h1>
 
-<p align="center"><strong>Spotify for your Sidephone, built for the keypad.</strong></p>
+<p align="center"><strong>A music player for the Sidephone, built around its keypad.</strong></p>
 
 <p align="center">
   <a href="https://github.com/manuel-rtsch/Sidetrack/releases/latest"><img src="https://img.shields.io/github/v/release/manuel-rtsch/Sidetrack?label=release&color=1db954" alt="Latest release"></a>
@@ -13,27 +13,68 @@
   <a href="https://www.sidephone.com/"><img src="https://img.shields.io/badge/made%20for-Sidephone%20SP--01-1db954" alt="Made for Sidephone SP-01"></a>
 </p>
 
-Sidetrack is a Spotify player for [Sidekit](https://github.com/HarlenPostill/Sidekit), the
-keypad-first launcher and app suite for the [Sidephone SP-01](https://www.sidephone.com/). It
-follows Sidekit's theme, accent, input mode and key mappings when Sidekit is installed, and also
-runs standalone on any Android 12+ phone with a touchscreen or a physical keypad.
+Sidetrack is a capable music player built on the [Sidekit
+SDK](https://github.com/HarlenPostill/Sidekit). It is designed for the [Sidephone
+SP-01](https://www.sidephone.com/): the whole app is optimized for its small display, and every
+action has a keypad path. When Sidekit is installed, Sidetrack follows the launcher's theme,
+accent, input mode and key mappings; it also runs on its own on any Android 12+ phone with a
+keypad or touchscreen.
 
-> Sidetrack is an independent project. It is not made by or affiliated with Spotify.
+> Sidetrack is an independent project. It is not made by or affiliated with any of the music
+> services it connects to.
+
+## Designed for the Sidephone
+
+Sidetrack is built around the SP-01 rather than adapted from a touch-first app. The layout is
+sized for its small display, and the whole app can be driven from the keypad, with touch as an
+equal option.
+
+- **Keypad first** — T9, mini QWERTY, Sundial and game controller input are supported, with
+  keypad navigation throughout.
+- **Sidekit integration** — when Sidekit is installed, theme, accent, input mode and key
+  mappings follow the launcher.
+- **Touch-friendly** — swipe actions and on-screen controls cover the same actions.
+
+## Supported services
+
+Sidetrack connects to one service at a time. The choice is remembered until you sign out.
+Capabilities vary by service: the interface shows only what the selected service supports, so
+podcasts, artist following, gapless playback or playlist creation appear only where they work.
+
+| | Spotify | Navidrome | Jellyfin |
+| --- | --- | --- | --- |
+| Sign-in | Browser | Username and password over Subsonic | Username and password |
+| Library | Liked songs, playlists, albums, artists, shows | Starred tracks, playlists, albums, artists | Favourite tracks, playlists, albums, artists |
+| Search | Tracks, artists, albums, playlists, shows | Tracks, artists, albums, playlists | Tracks, artists, albums, playlists |
+| Radio | Song radio from any seed | Similar songs, with a random-song fallback | Instant Mix from any item |
+
+| Capability | Spotify | Navidrome | Jellyfin |
+| --- | :---: | :---: | :---: |
+| Podcasts | ✅ | ❌ | ❌ |
+| Follow artists | ✅ | ❌ | ✅ |
+| Create playlists | ❌ | ✅ | ✅ |
+| Loudness normalization | ✅ | ✅ | ❌ |
+| Gapless playback | ✅ | ❌ | ❌ |
+| Quality selection | ✅ | ✅ | ✅ |
+
+Spotify needs a Premium account for playback. Jellyfin needs a 12.x server with a music library.
+On Spotify, podcasts include show notes, episode numbers, dates, per-episode resume and
+±30-second controls. Jellyfin follows artists through its favourite-artist flag.
 
 ## What you can do
 
-- **Listen to your library** — playlists, albums, artists, shows and saved tracks.
-- **Listen to podcasts properly** — show notes, episode numbers and dates, per-episode resume,
-  ±30-second controls, and no song-style shuffle or repeat.
-- **Search everything** — tracks, artists, albums, playlists and shows in one place.
+- **Listen to your library** — liked tracks, playlists, albums and artists. Spotify adds shows.
+- **Search everything** — tracks, artists, albums and playlists in one place, plus shows on
+  Spotify.
+- **Listen to podcasts properly** (Spotify) — show notes, episode numbers and dates, per-episode
+  resume, ±30-second controls, and no song-style shuffle or repeat.
 - **Control playback** — play, pause, skip, seek, shuffle, repeat, and volume with the phone's
-  own keys. Loudness is normalized and sequential tracks join without a gap.
+  own keys. Loudness is normalized where the service supports it, and sequential Spotify tracks
+  join without a gap.
 - **Keep a queue** — add tracks or whole collections, reorder, and see what played before.
 - **Start a song radio** — build a station from whatever is playing.
-- **Save what you like** — like tracks, save albums and shows, follow artists, add playlists.
-- **Use the keypad** — T9, mini QWERTY, Sundial and game controller are supported. On mini
-  QWERTY, **T / D / B / J** move, **Enter** selects, **Back** goes back, and the top-right key
-  opens Options.
+- **Save what you like** — like tracks, save albums, follow artists on Spotify and Jellyfin, and
+  create playlists on Navidrome and Jellyfin.
 - **See what is playing** — a full Now Playing screen, lock-screen controls, and a notification
   with artwork and transport buttons.
 
@@ -57,39 +98,36 @@ runs standalone on any Android 12+ phone with a touchscreen or a physical keypad
 
 ## Getting started
 
-1. Install [Sidekit](https://github.com/HarlenPostill/Sidekit/releases/latest) on your Sidephone
-   if you want the full launcher and app suite. Sidetrack works without it too.
+1. Optionally install [Sidekit](https://github.com/HarlenPostill/Sidekit/releases/latest) to use
+   Sidetrack alongside the launcher and pick up its theme, accent and key mappings. Sidetrack
+   runs without it.
 2. Install the Sidetrack APK.
-3. Open Sidetrack, choose **Spotify**, **Navidrome** or **Jellyfin**, and sign in. Jellyfin
-   needs a 12.x server (the Kotlin SDK's minimum) with a music library. To try the app without an
-   account or a server, choose **Navidrome** and leave the sign-in form empty: it signs into the
-   shared demo at [demo.navidrome.org](https://demo.navidrome.org) (`demo` / `demo`).
-4. On the one-time **Welcome** screen, learn the keypad habits: **Back** returns, **Options**
-   opens the page's extra actions, holding **Options** jumps to the action bar, and on touch you
-   drag a row left to reveal its menu. Open **Keyboard** to switch modules or enable the
-   **Keypad Back key**, then press **Get started**.
-5. Pick something from your library, or press **Search** and start typing.
-6. Press **OK** / **Enter** to play. The now-playing confirmation in the action bar opens Now
-   Playing; pressing **OK** / **Enter** on the current track does the same.
-
-Lists show a few items at a time. When there is more, a **See more** row loads the next page.
+3. Open Sidetrack and choose a service. Spotify opens a browser sign-in; Navidrome and Jellyfin
+   ask for a server address, username and password. Jellyfin needs a 12.x server with a music
+   library.
+4. To try the app without an account or a server, choose **Navidrome** and submit the blank
+   sign-in form: it signs into the shared demo at
+   [demo.navidrome.org](https://demo.navidrome.org) (`demo` / `demo`).
+5. Follow the short **Welcome** screen to set up the keyboard and keypad preferences.
+6. Pick something from your library or search, and start listening.
 
 ## Building from source
 
-You need JDK 21 and the Android SDK. For real playback through librespot, you also need the
-Android NDK and a Rust toolchain.
+You need JDK 21 and the Android SDK. Navidrome and Jellyfin need nothing else. Spotify playback
+through librespot also needs the Android NDK and a Rust toolchain.
 
 ```sh
 ./gradlew :app:assembleProfile -PsidetrackNative=true
 ```
 
-The native bridge is required for library and search; without it the app falls back to the
-public Spotify Web API, which currently rate-limits the desktop client ID.
+The native bridge is required for Spotify library and search; without it Spotify falls back to
+the public Spotify Web API, which currently rate-limits the desktop client ID. Builds without
+`-PsidetrackNative=true` still support Navidrome and Jellyfin.
 
 ## License
 
 MIT. Sidetrack also links librespot; its license and notice ship with the native build.
 
-Exception: `app/src/main/java/io/github/manuelrtsch/sidetrack/auth/` was written with the GPLv3
-Sidespot auth path as a reference and is therefore a derivative of it. That package is pending a
-clean-room rewrite or a GPLv3 notice.
+Exception: `provider-spotify/src/main/java/io/github/manuelrtsch/sidetrack/auth/` was written with
+the GPLv3 Sidespot auth path as a reference and is therefore a derivative of it. That package is
+pending a clean-room rewrite or a GPLv3 notice.

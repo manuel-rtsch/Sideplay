@@ -15,8 +15,8 @@ Sources of truth:
   `availableSearchScopes` in the same file, fed to the Library row and the search screens.
 - Tests: each module's own `src/test` (`app`, `core`, `provider-spotify`,
   `provider-navidrome`, `provider-jellyfin`).
-- A third provider, Jellyfin, is implemented through the official Kotlin SDK (music libraries
-  only, no 10.x servers). It has auth, catalog, writer, runtime and a picker entry — see
+- Jellyfin is implemented through the official Kotlin SDK (music libraries only, no pre-12.x
+  servers). It has auth, catalog, writer, runtime and a picker entry — see
   [jellyfin-integration.md](jellyfin-integration.md) for the decisions and the build order.
 
 Legend: ✅ supported & surfaced · ⚠️ implemented in the catalog but not surfaced (capability flag
