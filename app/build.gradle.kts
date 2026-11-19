@@ -263,6 +263,7 @@ tasks.matching {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":provider-navidrome"))
     implementation(libs.sidekit.design)
     implementation(libs.sidekit.sdk)
     implementation(libs.androidx.core.ktx)
