@@ -64,6 +64,29 @@ class QueueRepository(
 
     fun playItem(item: MediaItem): Snapshot = play(listOf(item), 0)
 
+    /**
+     * Starts [item] now without touching the tail. A track picked from a list row is a request
+     * to hear that track, not a request to discard the queue the user assembled: only the
+     * current item changes, the previous one moves into history, and the context becomes the
+     * picked item alone so repeat-context replays just it.
+     */
+    fun playNow(item: MediaItem): Snapshot {
+        if (!item.playable) return snapshot
+        if (item.key == snapshot.current?.key) return snapshot
+        val previous = snapshot.current
+        return commit(
+            snapshot.copy(
+                current = item,
+                history = if (previous == null) {
+                    snapshot.history
+                } else {
+                    (listOf(previous) + snapshot.history).take(HISTORY_LIMIT)
+                },
+                context = listOf(item)
+            )
+        )
+    }
+
     /** Stops and clears the queue. */
     fun stop(): Snapshot = commit(
         snapshot.copy(

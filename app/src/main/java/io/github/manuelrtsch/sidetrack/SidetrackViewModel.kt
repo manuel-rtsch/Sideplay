@@ -730,16 +730,46 @@ class SidetrackViewModel(
     fun play(items: List<MediaItem>, index: Int) {
         if (index !in items.indices) return
         val item = items[index]
-        if (!item.playable) {
-            notice("Not available on this account")
-            return
-        }
+        if (!readyToPlay(item)) return
         if (_state.value.current?.id == item.id) {
             if (!_state.value.isPlaying) togglePlayPause()
             _state.update { it.copy(notice = null) }
             return
         }
-        val snapshot = queue.play(items, index)
+        beginPlayback(queue.play(items, index), item)
+    }
+
+    fun playItem(item: MediaItem) = play(listOf(item), 0)
+
+    /**
+     * Plays one track picked from a list row (Library, Search) without discarding the queue.
+     *
+     * A row tap is a request to hear that track now, not a request to throw away the tail the
+     * user built with Add to queue, so unlike [play] this keeps Up next exactly as it was and
+     * only replaces the current item. Collection, album and artist pages still use [play] and
+     * [playCollection], where the list is the context worth queueing.
+     */
+    fun playNow(item: MediaItem) {
+        if (!readyToPlay(item)) return
+        if (_state.value.current?.id == item.id) {
+            if (!_state.value.isPlaying) togglePlayPause()
+            _state.update { it.copy(notice = null) }
+            return
+        }
+        beginPlayback(queue.playNow(item), item)
+    }
+
+    /** Guards every play entry point, so a tap that cannot start keeps the queue untouched. */
+    private fun readyToPlay(item: MediaItem): Boolean {
+        if (!item.playable) {
+            notice("Not available on this account")
+            return false
+        }
+        return true
+    }
+
+    /** Commits a queue snapshot to the screen and starts its current item on the service. */
+    private fun beginPlayback(snapshot: QueueRepository.Snapshot, item: MediaItem) {
         if (item is Track) ensureTrackSaved(item.id)
         recorded(item)
         val resume = itemStartPosition(item)
@@ -748,8 +778,6 @@ class SidetrackViewModel(
         showNowPlayingNotice(item)
         startRemote(item, resume, resuming = resume > 0L)
     }
-
-    fun playItem(item: MediaItem) = play(listOf(item), 0)
 
     /**
      * Plays one episode from a show page. A show is not a setlist: its list is newest-first, so

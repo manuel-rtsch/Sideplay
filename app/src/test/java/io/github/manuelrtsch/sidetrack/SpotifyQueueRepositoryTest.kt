@@ -34,6 +34,36 @@ class SpotifyQueueRepositoryTest {
         assertTrue(queue.snapshot.history.isEmpty())
     }
 
+    @Test fun `play now keeps the assembled tail and only replaces the current item`() {
+        val queue = QueueRepository(Random(1))
+        queue.play(tracks, 0)
+        queue.playNow(track("z"))
+
+        assertEquals("z", queue.snapshot.current?.id)
+        assertEquals(listOf("b", "c", "d"), queue.snapshot.upcoming.map { it.id })
+        assertEquals(listOf("a"), queue.snapshot.history.map { it.id })
+        assertEquals(listOf("z"), queue.snapshot.context.map { it.id })
+    }
+
+    @Test fun `play now on the current item changes nothing`() {
+        val queue = QueueRepository(Random(1))
+        queue.play(tracks, 1)
+        val before = queue.snapshot
+
+        queue.playNow(tracks[1])
+
+        assertEquals(before, queue.snapshot)
+    }
+
+    @Test fun `play now from an empty queue leaves the tail alone`() {
+        val queue = QueueRepository(Random(1))
+        queue.playNow(track("z"))
+
+        assertEquals("z", queue.snapshot.current?.id)
+        assertTrue(queue.snapshot.upcoming.isEmpty())
+        assertTrue(queue.snapshot.history.isEmpty())
+    }
+
     @Test fun `play next moves an existing upcoming item instead of duplicating it`() {
         val queue = QueueRepository(Random(1))
         queue.play(tracks, 0)
