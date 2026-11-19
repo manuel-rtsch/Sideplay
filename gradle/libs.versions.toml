@@ -16,6 +16,7 @@ coroutines = "1.11.0"
 media3 = "1.11.1"
 ktlint = "1.8.0"
 spotless = "8.11.0"
+kover = "0.9.11"
 # 1.9.0 adds the request headers artwork needs for Jellyfin. It is staged in ~/.m2 until the
 # Sidekit tag publishes it to GitHub Pages; release builds need that publication first.
 sidekit = "1.9.0"
@@ -56,3 +57,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

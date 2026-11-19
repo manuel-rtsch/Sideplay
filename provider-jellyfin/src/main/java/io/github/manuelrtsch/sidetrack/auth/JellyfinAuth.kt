@@ -148,8 +148,7 @@ class SdkJellyfinAuthenticator(private val context: Context) : JellyfinAuthentic
      * `viewModelScope`, and Android throws [android.os.NetworkOnMainThreadException] once the
      * response body is read.
      */
-    override suspend fun signIn(serverUrl: String, username: String, password: String): JellyfinCredentials =
-        withContext(Dispatchers.IO) { signInBlocking(serverUrl, username, password) }
+    override suspend fun signIn(serverUrl: String, username: String, password: String): JellyfinCredentials = withContext(Dispatchers.IO) { signInBlocking(serverUrl, username, password) }
 
     private suspend fun signInBlocking(serverUrl: String, username: String, password: String): JellyfinCredentials {
         val jellyfin = createJellyfin {

@@ -1,8 +1,11 @@
 import java.util.Properties
+import kotlinx.kover.gradle.plugin.dsl.AggregationType
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kover)
 }
 
 val fallbackVersionName = "0.1.0"
@@ -46,6 +49,15 @@ val standaloneDemo = providers.gradleProperty("sidetrackStandaloneDemo")
  * Optional ABI restriction for the published APK. `-PsidetrackAbis=arm64-v8a` leaves the
  * emulator's x86_64 bridge out; without it the universal APK is built exactly as before.
  */
+// Slow or environment-dependent suites are opt-in, so the default `testDebugUnitTest` stays a
+// fast, hermetic gate:
+//   ./gradlew testDebugUnitTest -PsidetrackScreenshots        (verify Roborazzi baselines)
+//   ./gradlew testDebugUnitTest -PsidetrackScreenshotsRecord   (rewrite the baselines)
+//   ./gradlew testDebugUnitTest -PsidetrackIntegration        (live Navidrome/Jellyfin servers)
+val recordScreenshots = providers.gradleProperty("sidetrackScreenshotsRecord").isPresent
+val runScreenshotTests = recordScreenshots || providers.gradleProperty("sidetrackScreenshots").isPresent
+val runIntegrationTests = providers.gradleProperty("sidetrackIntegration").isPresent
+
 val packagedAbis = providers.gradleProperty("sidetrackAbis")
     .orElse(providers.environmentVariable("SIDETRACK_ABIS"))
     .map { value -> value.split(',').map(String::trim).filter(String::isNotEmpty) }
@@ -187,7 +199,12 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
             all {
-                it.systemProperty("roborazzi.test.record", "true")
+                // Recording and verifying are mutually exclusive: a suite that records on every
+                // run can never fail, so verification is the default and recording is explicit.
+                it.systemProperty("roborazzi.test.record", recordScreenshots.toString())
+                it.systemProperty("roborazzi.test.verify", (!recordScreenshots).toString())
+                if (!runScreenshotTests) it.filter.excludeTestsMatching("*ScreenshotTest")
+                if (!runIntegrationTests) it.filter.excludeTestsMatching("*IntegrationTest")
             }
         }
     }
@@ -310,4 +327,49 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+}
+
+// Kover aggregation. :app is the merging module, so its debug-variant report contains the classes
+// of every module and its verification rule is the product-wide gate. Per-module floors live in
+// the other modules' build files.
+dependencies {
+    kover(project(":core"))
+    kover(project(":provider-spotify"))
+    kover(project(":provider-jellyfin"))
+    kover(project(":provider-navidrome"))
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                // Generated and synthetic code only. Compose functions stay counted: the semantics
+                // and screenshot tests exercise them, so excluding the annotation would flatter
+                // the number rather than describe the suite.
+                classes("*.BuildConfig", "*.R", "*.R\$*", "*ComposableSingletons*")
+            }
+        }
+        variant("debug") {
+            html {
+                onCheck = false
+                htmlDir = layout.buildDirectory.dir("reports/kover/html")
+            }
+            xml {
+                onCheck = false
+                xmlFile = layout.buildDirectory.file("reports/kover/report.xml")
+            }
+            verify {
+                // Product-wide ratchet, measured when Kover was introduced. The floor matches the
+                // suite that was actually run: the screenshot tests dominate UI coverage, so the
+                // fast default gate (45.99% line / 29.46% branch) sits below the full gate
+                // (58.4% / 35.8%). Phase 2 targets: 70% / 45% with the full suite. Raise, never lower.
+                rule("product line coverage") {
+                    minBound(if (runScreenshotTests) 57 else 45)
+                }
+                rule("product branch coverage") {
+                    minBound(if (runScreenshotTests) 34 else 28, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                }
+            }
+        }
+    }
 }

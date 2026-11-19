@@ -287,6 +287,75 @@ instrumented tests for the playback service than on unit-test line coverage.
 
 ---
 
+## 9. Phase 1 status (landed on this branch)
+
+Phase 1 was infrastructure only; no production behaviour changed.
+
+### 9.1 What landed
+
+1. **Kover replaces the ad-hoc JaCoCo measurement.** `kover` 0.9.11 on the `debug` variant, with
+   `:app` as the merging module so `:app:koverVerifyDebug` measures every module together. Generated
+   code (`BuildConfig`, `R`, `ComposableSingletons`) is filtered out; `@Composable` functions are
+   deliberately still counted, because the semantics and screenshot tests do exercise them.
+   Entry point: `./gradlew coverage`.
+2. **`:core` has a test source set.** Seven suites moved there, renamed where the old name leaked a
+   provider: `QueueRepositoryTest` (34), `HistoryRepositoryTest` (10), `EpisodeProgressTest` (7),
+   `StorePersistenceTest` (14), `DrainPolicyTest` (8), `SleepTimerTest` (4), `HaltStopGuardTest` (4).
+   That is **81 tests that now run in ~3 s** instead of under Robolectric/Compose.
+3. **Suites are split by cost and dependency.** `*ScreenshotTest` and `*IntegrationTest` are filtered
+   out of the default `testDebugUnitTest` and gated behind `-PsidetrackScreenshots` and
+   `-PsidetrackIntegration`. Default run: **359 tests, ~46 s**. Full run: **385 tests**.
+4. **Screenshot tests actually verify now.** They were running with `roborazzi.test.record=true` on
+   every invocation, so all 26 could never fail — they rewrote their own baselines. Recording is now
+   opt-in (`-PsidetrackScreenshotsRecord`) and verification is the default. All 26 baselines match, so
+   no rebaselining was needed.
+5. **Coverage floors are a ratchet** in the build files, with the bound tracking which suite ran:
+
+| Gate | Suite | Line floor | Branch floor | Measured |
+|---|---|---|---|---|
+| `:app` (product-wide, merged) | default | 45 | 28 | 46.0% / 29.5% |
+| `:app` (product-wide, merged) | full | 57 | 34 | 58.4% / 35.8% |
+| `:core` | own tests | 34 | 27 | 35.8% / 29.0% |
+| `:provider-spotify` | own tests | 31 | 20 | 32.5% / 20.8% |
+| `:provider-jellyfin` | own tests | 46 | 38 | 47.1% / 39.7% |
+| `:provider-navidrome` | own tests | 50 | 34 | 51.4% / 35.4% |
+
+Phase 2 targets remain **70% line / 45% branch** on the full suite.
+
+### 9.2 What the split revealed
+
+* **The screenshot suite carries ~12 points of line coverage** (58.4% full vs 46.0% default). That is
+  the single largest block of coverage in the repo, and it comes from rendering screens whose
+  behaviour is already asserted by semantics tests. It is why the two floors differ.
+* **Moving tests to `:core` did not change product coverage** — the same lines were already exercised,
+  just from a more expensive JVM. What changed is the feedback loop: 81 tests in 3 s instead of ~40 s.
+* **Per-module floors and per-module *coverage* are different numbers.** `:core` verifies against
+  35.8% because that is what its own tests reach; the whole suite still covers roughly 75% of it. The
+  per-module gates therefore guard against losing a module's own tests, while the `:app` merged gate
+  guards the product. Both are intentional.
+
+### 9.3 Findings that move to Phase 2
+
+* Fixture sharing is the blocker for moving the remaining playback tests: `Media3PlaybackEngineTest`
+  depends on `app/src/test/.../FakeHttpStream.kt`, which six other app tests also use. Android
+  `testFixtures` on `:core` (or a small `:test-support` module) would let that test and its fixture
+  travel to `:core`. The fakes are otherwise not duplicated: the Jellyfin and Navidrome fakes are
+  provider-local by design.
+* `:app` still carries ~62 Spotify tests duplicating `:provider-spotify` coverage, and
+  `PlaybackControllerTest` / `LibrespotPlaybackEngineTest` still sit in `:app` even though they only
+  touch `:core` and `:provider-spotify` types (`PlaybackControllerTest` needs `SpotifyGateway`, so it
+  belongs in `:provider-spotify`).
+* `SidetrackGraph` remains at 8.9% and `PlaybackService` at 0%: the two largest risks are untouched,
+  which is exactly where Phase 2 starts.
+
+### 9.4 Baseline reconciliation
+
+The audit above was measured in the 0.4.0 working tree, which contained four uncommitted
+`JellyfinAuthTest` cases that do not exist at `cbe96d0`. On this branch the committed baseline is
+391 tests (395 − 4); Phase 1 moved 81 of them and split the rest into 359 default / 385 full.
+
+---
+
 ## Appendix A — reproducing the numbers
 
 Robolectric ignores on-the-fly JaCoCo instrumentation, so the agent has to be applied

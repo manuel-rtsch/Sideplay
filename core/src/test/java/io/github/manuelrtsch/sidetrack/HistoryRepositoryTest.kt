@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class SpotifyHistoryRepositoryTest {
+class HistoryRepositoryTest {
     @Test fun `most recent item is first and duplicates move up`() {
         val saved = mutableListOf<List<HistoryEntry>>()
         val history = HistoryRepository(save = { saved += it })

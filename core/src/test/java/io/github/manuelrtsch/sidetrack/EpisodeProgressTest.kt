@@ -13,7 +13,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class SpotifyEpisodeProgressTest {
+class EpisodeProgressTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
     @Test fun `episode progress survives a process restart`() {

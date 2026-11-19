@@ -1,6 +1,10 @@
+import kotlinx.kover.gradle.plugin.dsl.AggregationType
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -35,6 +39,27 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    // ApplicationProvider and the JUnit4 runner used by the store and progress tests.
+    testImplementation(libs.androidx.junit)
 
     androidTestImplementation(libs.androidx.junit)
+}
+
+// Coverage ratchet for this module's own tests. The floor is the level measured when Kover was
+// introduced (docs/test-coverage-audit.md); it only ever moves up. Note this measures what this
+// module's tests cover, not what the whole suite covers -- the product-wide gate lives in :app,
+// which is the merging module.
+kover {
+    reports {
+        variant("debug") {
+            verify {
+                rule("line coverage") {
+                    minBound(34)
+                }
+                rule("branch coverage") {
+                    minBound(27, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                }
+            }
+        }
+    }
 }

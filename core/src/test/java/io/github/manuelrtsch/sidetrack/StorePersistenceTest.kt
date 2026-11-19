@@ -19,7 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class SpotifyPersistenceTest {
+class StorePersistenceTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val tracks = listOf(
         track("a"),
@@ -135,7 +135,7 @@ class SpotifyPersistenceTest {
         assertEquals("b", snapshot.current?.id)
         assertEquals(ServiceId.Spotify, snapshot.current?.service)
         assertEquals(listOf("a", "b"), snapshot.upcoming.map { it.id })
-        assertEquals(MediaKey.spotify(MediaType.Track, "b"), snapshot.current?.key)
+        assertEquals(MediaKey(ServiceId.Spotify, MediaType.Track, "b"), snapshot.current?.key)
 
         // The next save upgrades the file; reading it back must still produce the same queue.
         store.write(snapshot)

@@ -33,3 +33,18 @@ allprojects {
         }
     }
 }
+
+// One entry point for the coverage gate. `:app` is the merging module, so its rule is the
+// product-wide floor; the other four verify their own modules. Add `-PsidetrackScreenshots`
+// for the full suite, which has the higher floor.
+tasks.register("coverage") {
+    group = "verification"
+    description = "Runs the unit tests and verifies every coverage floor."
+    dependsOn(
+        ":app:koverVerifyDebug",
+        ":core:koverVerifyDebug",
+        ":provider-spotify:koverVerifyDebug",
+        ":provider-jellyfin:koverVerifyDebug",
+        ":provider-navidrome:koverVerifyDebug"
+    )
+}

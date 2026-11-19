@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class SpotifyQueueRepositoryTest {
+class QueueRepositoryTest {
     private val tracks = listOf(
         track("a"),
         track("b"),
