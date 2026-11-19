@@ -29,24 +29,7 @@ class SidetrackScreenshotTest {
         compose.onRoot().captureRoboImage("screenshots/$name.png")
     }
 
-    private val recent = MockSpotifyDataSource.recentlyPlayed
-    private val current = MockSpotifyDataSource.recentlyPlayed.first()
-    private val state = SidetrackUiState(
-        current = current,
-        upcoming = recent.drop(1),
-        history = recent.drop(3),
-        recent = recent,
-        libraryItems = runBlocking { MockSpotifyDataSource.library(LibraryFilter.Albums).items },
-        librarySections = runBlocking {
-            LibraryFilter.entries.associateWith { MockSpotifyDataSource.library(it, 0, LIBRARY_SECTION_SIZE).items }
-        },
-        librarySectionHasMore = LibraryFilter.entries.toSet(),
-        searchResults = runBlocking { MockSpotifyDataSource.search("night", SearchScope.entries.toSet()) },
-        searchHasMore = SearchScope.entries.toSet(),
-        isPlaying = true,
-        savedTrackIds = setOf(current.id),
-        filter = LibraryFilter.Albums
-    )
+    private val state = screenshotState()
 
     @Test fun home() = shoot("sidetrack_home") {
         SidetrackHomeScreen(
@@ -88,8 +71,8 @@ class SidetrackScreenshotTest {
 
     @Test fun nowPlayingNotice() = shoot("sidetrack_now_playing_notice") {
         SidetrackHomeScreen(
-            state.copy(nowPlayingNotice = current).playback,
-            state.copy(nowPlayingNotice = current).chrome,
+            state.copy(nowPlayingNotice = state.current).playback,
+            state.copy(nowPlayingNotice = state.current).chrome,
             sleepTimer = MutableStateFlow(SleepTimerState.Off),
             onNowPlaying = {},
             onLibrary = {},
