@@ -39,6 +39,7 @@ internal class FakeJellyfinApi : JellyfinApi {
     val favorites = mutableListOf<Pair<String, Boolean>>()
     val added = mutableListOf<Pair<String, String>>()
     val removed = mutableListOf<Pair<String, String>>()
+    var lastRemoveIndex: Int? = null
     val created = mutableListOf<String>()
     val starts = mutableListOf<JellyfinPlaybackReport>()
     val progress = mutableListOf<JellyfinPlaybackReport>()
@@ -84,8 +85,9 @@ internal class FakeJellyfinApi : JellyfinApi {
         return 7
     }
 
-    override suspend fun removeFromPlaylist(playlistId: String, itemId: String) {
+    override suspend fun removeFromPlaylist(playlistId: String, itemId: String, index: Int?) {
         removed += playlistId to itemId
+        lastRemoveIndex = index
     }
 
     override suspend fun playback(itemId: String, maxStreamingBitrate: Int?): JellyfinPlaybackInfo {

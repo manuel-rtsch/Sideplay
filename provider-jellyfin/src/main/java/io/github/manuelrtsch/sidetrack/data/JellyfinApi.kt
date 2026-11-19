@@ -179,7 +179,7 @@ interface JellyfinApi {
 
     suspend fun createPlaylist(name: String): String?
     suspend fun addToPlaylist(playlistId: String, itemId: String): Int
-    suspend fun removeFromPlaylist(playlistId: String, itemId: String)
+    suspend fun removeFromPlaylist(playlistId: String, itemId: String, index: Int? = null)
 
     suspend fun playback(itemId: String, maxStreamingBitrate: Int?): JellyfinPlaybackInfo
     fun imageUrl(id: String, tag: String?, maxHeight: Int = ARTWORK_MAX_HEIGHT): String
@@ -444,21 +444,25 @@ class SdkJellyfinApi(
         before
     }
 
-    override suspend fun removeFromPlaylist(playlistId: String, itemId: String) = call {
+    override suspend fun removeFromPlaylist(playlistId: String, itemId: String, index: Int?) = call {
         // Jellyfin removes by playlist entry id, which is not the media item id.
-        val entry = runCatching {
-            api.playlistApi.getPlaylistItems(
-                playlistId = uuid(playlistId),
-                userId = userId,
-                limit = PLAYLIST_ENTRY_SCAN,
-                fields = listOf(ItemFields.PARENT_ID)
-            ).content.items.firstOrNull { it.id.toString() == itemId }
-        }.getOrNull()
-        api.playlistApi.removeItemFromPlaylist(
-            playlistId = playlistId,
-            entryIds = listOf(entry?.playlistItemId ?: itemId)
-        )
+        val entryId = playlistEntryId(playlistId = playlistId, itemId = itemId, index = index) ?: return@call
+        api.playlistApi.removeItemFromPlaylist(playlistId = playlistId, entryIds = listOf(entryId))
         Unit
+    }
+
+    /** The id the server removes this entry by, or null when the item is no longer there. */
+    private suspend fun playlistEntryId(playlistId: String, itemId: String, index: Int?): String? {
+        val playlist = uuid(playlistId)
+        return resolvePlaylistEntry(itemId, index, PLAYLIST_ENTRY_PAGE) { start, limit ->
+            api.playlistApi.getPlaylistItems(
+                playlistId = playlist,
+                userId = userId,
+                startIndex = start,
+                limit = limit,
+                fields = listOf(ItemFields.PARENT_ID)
+            ).content.items.map { PlaylistEntry(entryId = it.playlistItemId, itemId = it.id?.toString()) }
+        }
     }
 
     override suspend fun playback(itemId: String, maxStreamingBitrate: Int?): JellyfinPlaybackInfo = call {
@@ -476,12 +480,10 @@ class SdkJellyfinApi(
         ).content
         val source = response.mediaSources.firstOrNull()
         val directPlay = source?.transcodingUrl == null && source?.supportsDirectPlay == true
-        val baseUrl = api.baseUrl?.trimEnd('/').orEmpty()
-        val transcodingUrl = source?.transcodingUrl
-        val url = if (!transcodingUrl.isNullOrBlank()) {
-            if (transcodingUrl.startsWith("http")) transcodingUrl else baseUrl + transcodingUrl
-        } else {
-            directPlayStreamUrl(
+        val url = playbackStreamUrl(
+            transcodingUrl = source?.transcodingUrl,
+            baseUrl = api.baseUrl?.trimEnd('/').orEmpty(),
+            directUrl = directPlayStreamUrl(
                 audio = api.audioApi,
                 itemId = uuid(itemId),
                 container = source?.container,
@@ -489,7 +491,7 @@ class SdkJellyfinApi(
                 deviceId = api.deviceInfo.id,
                 playSessionId = response.playSessionId
             )
-        }
+        )
         val headers = buildMap {
             source?.requiredHttpHeaders?.forEach { (key, value) -> if (value != null) put(key, value) }
             putAll(credentials.headers())
@@ -595,7 +597,60 @@ class SdkJellyfinApi(
 
     private companion object {
         const val CLIENT_NAME = "Sidetrack"
-        const val PLAYLIST_ENTRY_SCAN = 500
+        /** Entries per request when resolving a playlist entry id; the scan itself has no cap. */
+        const val PLAYLIST_ENTRY_PAGE = 200
+    }
+}
+
+/**
+ * Which URL the player is handed for the source `PlaybackInfo` answered with.
+ *
+ * A `transcodingUrl` means the server refused the original file (a bitrate ceiling, an unsupported
+ * codec, or a stream copy) and is the only URL that can serve it; it arrives either absolute or as
+ * a path relative to the server root. When there is none the source is a direct play, and
+ * [directUrl] — the static stream endpoint — is the one that works.
+ *
+ * Kept out of [SdkJellyfinApi.playback] so the branch that the 0.4.0 regression lived in can be
+ * asserted offline: a `FakeJellyfinApi` stubs `playback()` wholesale, so nothing else covers it.
+ */
+internal fun playbackStreamUrl(transcodingUrl: String?, baseUrl: String, directUrl: String): String = when {
+    transcodingUrl.isNullOrBlank() -> directUrl
+    transcodingUrl.startsWith("http") -> transcodingUrl
+    else -> baseUrl + transcodingUrl
+}
+
+/** One playlist entry as the removal scan needs it: the id to remove by, and the item it holds. */
+internal data class PlaylistEntry(val entryId: String?, val itemId: String?)
+
+/**
+ * Which playlist entry to remove, scanning every page.
+ *
+ * The old code read the first 500 entries and then fell back to passing the *media item id* as an
+ * entry id, which removes nothing — or, if the id happens to collide, the wrong entry. A playlist
+ * longer than a page therefore could not be edited from its tail at all.
+ *
+ * [index] is the row the caller pointed at; without it the last match wins, because an append
+ * leaves its copy at the end. An index that no longer holds the item is ignored rather than
+ * trusted: the playlist may have changed since the caller read it.
+ */
+internal suspend fun resolvePlaylistEntry(
+    itemId: String,
+    index: Int?,
+    pageSize: Int,
+    loadPage: suspend (startIndex: Int, limit: Int) -> List<PlaylistEntry>
+): String? {
+    var start = 0
+    var lastMatch: String? = null
+    while (true) {
+        val page = loadPage(start, pageSize)
+        for ((offset, entry) in page.withIndex()) {
+            if (entry.itemId != itemId) continue
+            val entryId = entry.entryId ?: continue
+            if (index == start + offset) return entryId
+            lastMatch = entryId
+        }
+        if (page.size < pageSize) return lastMatch
+        start += page.size
     }
 }
 

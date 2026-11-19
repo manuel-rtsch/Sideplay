@@ -252,6 +252,55 @@ class NavidromeApiTest {
         assertEquals("navidrome:track:s2", source.id)
     }
 
+    /**
+     * Subsonic removes by index, and the old code always picked `indexOfFirst`, so with
+     * `[A, B, C, A]` removing the second `A` deleted the first one: the size stayed right and the
+     * playlist rotated. The row the caller names wins; without one, the last match (the copy an
+     * append left at the end) is removed.
+     */
+    @Test fun `removing a duplicated track removes the occurrence asked for`() = runTest {
+        val transport = FakeTransport { url ->
+            if (url.contains("getPlaylist")) {
+                ok(
+                    """{"status":"ok","playlist":{"id":"p1","name":"Mix","owner":"joe","songCount":4,"entry":[
+                        {"id":"s1","title":"One"},{"id":"s2","title":"Two"},
+                        {"id":"s3","title":"Three"},{"id":"s1","title":"One"}
+                    ]}}"""
+                )
+            } else {
+                ok("""{"status":"ok"}""")
+            }
+        }
+        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val playlist = MediaKey(ServiceId.Navidrome, MediaType.Playlist, "p1")
+        val song = Track(id = "s1", title = "One", artist = "A", artistId = "ar", albumId = "al", artRes = 0, durationMs = 0)
+
+        api.removeFromPlaylist(playlist.id, song.id, index = 0)
+        assertEquals("0", transport.lastQuery()["songIndexToRemove"])
+
+        api.removeFromPlaylist(playlist.id, song.id)
+        assertEquals("3", transport.lastQuery()["songIndexToRemove"])
+
+        // A row that no longer holds this song is not trusted.
+        api.removeFromPlaylist(playlist.id, song.id, index = 1)
+        assertEquals("3", transport.lastQuery()["songIndexToRemove"])
+    }
+
+    @Test fun `a track that is not in the playlist sends nothing`() = runTest {
+        val transport = FakeTransport { url ->
+            if (url.contains("getPlaylist")) {
+                ok("""{"status":"ok","playlist":{"id":"p1","name":"Mix","owner":"joe","songCount":1,"entry":[{"id":"s1","title":"One"}]}}""")
+            } else {
+                ok("""{"status":"ok"}""")
+            }
+        }
+        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+
+        api.removeFromPlaylist("p1", "s9")
+
+        assertFalse(transport.urls.any { it.contains("updatePlaylist") })
+    }
+
     @Test fun `writer stars and edits a playlist`() = runTest {
         val transport = FakeTransport { url ->
             when {

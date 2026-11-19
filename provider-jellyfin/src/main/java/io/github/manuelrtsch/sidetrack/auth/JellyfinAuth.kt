@@ -22,6 +22,7 @@ import org.jellyfin.sdk.api.client.exception.SecureConnectionException
 import org.jellyfin.sdk.api.client.exception.TimeoutException
 import org.jellyfin.sdk.api.client.extensions.authenticateUserByName
 import org.jellyfin.sdk.api.client.extensions.authenticationApi
+import org.jellyfin.sdk.api.client.extensions.systemApi
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
@@ -160,6 +161,14 @@ class SdkJellyfinAuthenticator(private val context: Context) : JellyfinAuthentic
         } catch (error: Throwable) {
             throw jellyfinFailure(error)
         }
+        // Before the password travels: a server older than 12.0 accepts the sign-in and then fails
+        // every read (see [requireJellyfinVersion]), which is worse than this refusal.
+        val version = try {
+            api.systemApi.getPublicSystemInfo().content.version
+        } catch (error: Throwable) {
+            throw jellyfinFailure(error)
+        }
+        requireJellyfinVersion(version)
         val result = try {
             api.authenticationApi.authenticateUserByName(username, password).content
         } catch (error: Throwable) {
@@ -248,6 +257,39 @@ class JellyfinAuth(
         displayName = credentials.userName,
         serverUrl = credentials.serverUrl
     )
+}
+
+/** The oldest server Sidetrack speaks: 12.0. See [requireJellyfinVersion]. */
+private const val MINIMUM_JELLYFIN_MAJOR = 12
+
+/**
+ * The major version of a Jellyfin version string, or null when it cannot be read.
+ *
+ * `"12.4.0"`, `"12"` and `"12.0.0-beta5"` all give 12; `"unstable"` and null give null.
+ */
+internal fun jellyfinMajorVersion(version: String?): Int? =
+    version?.trim()?.takeWhile { it.isDigit() }?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+
+/**
+ * Refuses a server the 12.x SDK cannot read, naming it.
+ *
+ * Verified against `jellyfin/jellyfin:10.9.11` on 2026-11-19: the password sign-in **succeeds**, and
+ * the first `GET /Items` then dies in deserialization — 10.9's `UserItemDataDto` carries no
+ * `ItemId`, which the SDK requires — surfacing as "Sidetrack needs Jellyfin 12.0 or newer" on every
+ * screen of a session that looked fine. Asking `/System/Info/Public` first (anonymous, one small
+ * request) turns that into a refusal on the sign-in form, before any password is sent.
+ *
+ * An unreadable version string is let through: a fork or a proxy can answer something we did not
+ * anticipate, and its reads still fail honestly through [jellyfinFailure].
+ */
+internal fun requireJellyfinVersion(version: String?) {
+    val major = jellyfinMajorVersion(version) ?: return
+    if (major < MINIMUM_JELLYFIN_MAJOR) {
+        throw ServiceException(
+            ServiceFailure.NotConnected,
+            "That server runs Jellyfin ${version!!.trim()}. Sidetrack needs Jellyfin 12.0 or newer."
+        )
+    }
 }
 
 /**

@@ -169,10 +169,20 @@ class NavidromeApi(
         return before
     }
 
-    suspend fun removeFromPlaylist(playlistId: String, songId: String) {
-        val index = playlist(playlistId)?.tracks?.indexOfFirst { it.id == songId } ?: -1
-        if (index < 0) return
-        call("updatePlaylist", "playlistId" to playlistId, "songIndexToRemove" to index.toString())
+    /**
+     * Removes one occurrence of [songId], by position.
+     *
+     * Subsonic removes by index, so which occurrence is removed is decided here. The row the caller
+     * named wins when it still holds that song; otherwise the **last** match, because an append —
+     * the Undo case — leaves its copy at the end. This used to be `indexOfFirst`, so with
+     * `[A, B, C, A]` removing the second `A` deleted the first one: size preserved, order rotated.
+     */
+    suspend fun removeFromPlaylist(playlistId: String, songId: String, index: Int? = null) {
+        val tracks = playlist(playlistId)?.tracks.orEmpty()
+        val target = index?.takeIf { tracks.getOrNull(it)?.id == songId }
+            ?: tracks.indexOfLast { it.id == songId }
+        if (target < 0) return
+        call("updatePlaylist", "playlistId" to playlistId, "songIndexToRemove" to target.toString())
     }
 
     suspend fun streamUrl(
@@ -498,8 +508,8 @@ class NavidromeCatalog(
 
     override suspend fun addToPlaylist(playlist: MediaKey, item: MediaItem): Int? = client().addToPlaylist(playlist.id, item.id)
 
-    override suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem) {
-        client().removeFromPlaylist(playlist.id, item.id)
+    override suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem, index: Int?) {
+        client().removeFromPlaylist(playlist.id, item.id, index)
     }
 
     override suspend fun createPlaylist(name: String): Playlist? = runCatching {

@@ -1,10 +1,13 @@
 package io.github.manuelrtsch.sidetrack
 
 import io.github.manuelrtsch.sidetrack.data.JellyfinKind
+import io.github.manuelrtsch.sidetrack.data.PlaylistEntry
 import io.github.manuelrtsch.sidetrack.data.jellyfinBitrateKbps
 import io.github.manuelrtsch.sidetrack.data.jellyfinMusicProfile
+import io.github.manuelrtsch.sidetrack.data.resolvePlaylistEntry
 import io.github.manuelrtsch.sidetrack.data.toHint
 import io.github.manuelrtsch.sidetrack.data.toItem
+import kotlinx.coroutines.test.runTest
 import java.util.UUID
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -95,6 +98,59 @@ class JellyfinApiTest {
         assertEquals(96, AudioQuality.Normal.jellyfinBitrateKbps())
         assertNull(AudioQuality.High.jellyfinBitrateKbps())
         assertEquals(320, AudioQuality.VeryHigh.jellyfinBitrateKbps())
+    }
+
+    /**
+     * The removal scan used to stop after 500 entries and then remove by the *media item id*, which
+     * removes nothing — or, on a collision, the wrong entry. A playlist longer than one page could
+     * not be edited from its tail at all. This walks 1,200 entries with two pages of 200 in front.
+     */
+    @Test fun `a playlist entry past the first pages is still found`() = runTest {
+        val entries = List(1_200) { PlaylistEntry(entryId = "entry-$it", itemId = "item-$it") }
+        val requested = mutableListOf<Int>()
+
+        val resolved = resolvePlaylistEntry(itemId = "item-1150", index = null, pageSize = 200) { start, limit ->
+            requested += start
+            entries.drop(start).take(limit)
+        }
+
+        assertEquals("entry-1150", resolved)
+        // Six pages to reach it, then one empty page: a page that is exactly full cannot be told
+        // from the last one, so the scan has to ask once more. Only an unnamed removal gets there —
+        // a named row returns from the page that holds it.
+        assertEquals(listOf(0, 200, 400, 600, 800, 1000, 1200), requested)
+    }
+
+    @Test fun `the row the caller named decides which duplicate is removed`() = runTest {
+        val entries = listOf(
+            PlaylistEntry("entry-a1", "item-a"),
+            PlaylistEntry("entry-b", "item-b"),
+            PlaylistEntry("entry-a2", "item-a")
+        )
+
+        assertEquals("entry-a1", resolvePlaylistEntry("item-a", index = 0, pageSize = 200) { _, _ -> entries })
+        assertEquals("entry-a2", resolvePlaylistEntry("item-a", index = 2, pageSize = 200) { _, _ -> entries })
+    }
+
+    @Test fun `without an index the last match wins, because an append leaves its copy at the end`() = runTest {
+        val entries = listOf(
+            PlaylistEntry("entry-a1", "item-a"),
+            PlaylistEntry("entry-b", "item-b"),
+            PlaylistEntry("entry-a2", "item-a")
+        )
+
+        assertEquals("entry-a2", resolvePlaylistEntry("item-a", index = null, pageSize = 200) { _, _ -> entries })
+    }
+
+    @Test fun `a stale index is not trusted, and a missing item resolves to nothing`() = runTest {
+        val entries = listOf(
+            PlaylistEntry("entry-a1", "item-a"),
+            PlaylistEntry("entry-b", "item-b")
+        )
+
+        // index 1 now holds item-b, so the named row no longer describes item-a.
+        assertEquals("entry-a1", resolvePlaylistEntry("item-a", index = 1, pageSize = 200) { _, _ -> entries })
+        assertNull(resolvePlaylistEntry("item-gone", index = null, pageSize = 200) { _, _ -> entries })
     }
 
     @Test fun `an unknown item kind is not mistaken for a music type`() {

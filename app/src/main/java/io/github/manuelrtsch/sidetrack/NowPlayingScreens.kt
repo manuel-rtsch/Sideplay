@@ -99,8 +99,9 @@ internal fun NowPlayingSeek(
     modifier: Modifier = Modifier,
     buffering: Boolean = false
 ) {
-    val positionMs by playbackPositionMs.collectAsStateWithLifecycle()
-    Seek(positionMs, durationMs, onSeek, modifier, buffering)
+    // The state object, not its value: the value ticks five times a second and [Seek] reads it in
+    // its draw lambda, so collecting it here as a value would recompose this row on every tick.
+    Seek(playbackPositionMs.collectAsStateWithLifecycle(), durationMs, onSeek, modifier, buffering)
 }
 
 @Composable

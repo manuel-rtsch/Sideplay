@@ -4,7 +4,6 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode as AnimationRepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -40,6 +39,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -954,7 +955,7 @@ private const val KEY_SEEK_DEBOUNCE_MS = 300L
  */
 @Composable
 fun Seek(
-    positionMs: Long,
+    position: State<Long>,
     durationMs: Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -975,21 +976,23 @@ fun Seek(
     // of moving focus. Losing focus leaves the mode.
     var sliding by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    // The clock ticks five times a second while something plays, and this row is the only part of
+    // the now-playing screen that follows it. Reading the tick in composition — and smoothing it
+    // with a 120 ms animation whose target moved before it could ever settle — recomposed the whole
+    // row, its two labels and its semantics node on every frame: a recomposition and a full tree
+    // semantics diff five to sixty times a second for a bar that had moved a quarter of a pixel.
+    // So the tick is read in two places instead of one:
+    //  - the draw lambda reads it, so a new sample invalidates a draw and nothing else;
+    //  - everything read in composition (the counting label, the accessibility description and
+    //    its range) only wants seconds, so it goes through a derived value that changes once a
+    //    second.
+    val secondMs by remember(position) { derivedStateOf { position.value / 1_000L * 1_000L } }
     val shownPositionMs = when {
         dragFraction != null -> (dragFraction!! * durationMs).toLong()
         keyTargetMs != null -> keyTargetMs!!
-        else -> positionMs
+        else -> secondMs
     }
     val shownFraction = if (seekable) (shownPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    // The position flow ticks at 10 Hz. Animating between those samples keeps the fill and knob
-    // moving continuously instead of stepping a couple of pixels at a time. Dragging bypasses
-    // the animation so the bar still follows the finger exactly.
-    val animatedFraction by animateFloatAsState(
-        targetValue = shownFraction,
-        animationSpec = tween(durationMillis = 120, easing = LinearEasing),
-        label = "seekFraction"
-    )
-    val barFraction = if (dragFraction != null) shownFraction else animatedFraction
     val trackColor = SidekitTheme.colors.surfaceA4
     val progressColor = SidekitTheme.colors.light
     // The knob turns accent-coloured while the bar owns the keypad, so slide mode is visible.
@@ -1016,7 +1019,9 @@ fun Seek(
     fun nudge(direction: Float) {
         sliding = true
         if (!seekable) return
-        val target = ((keyTargetMs ?: positionMs) + direction.toLong() * 10_000L)
+        // The clock itself, not the second the labels were rendered with: a step builds on where
+        // the track actually is, so holding the key does not drift behind it.
+        val target = ((keyTargetMs ?: position.value) + direction.toLong() * 10_000L)
             .coerceIn(0L, durationMs)
         keyTargetMs = target
         keySeekPending = true
@@ -1138,6 +1143,15 @@ fun Seek(
                     }
                 }
                 .drawBehind {
+                    // The live fraction, read here rather than in composition: dragging and
+                    // stepping use their own local targets, everything else follows the clock.
+                    fun fractionOf(ms: Long) = (ms.toFloat() / durationMs).coerceIn(0f, 1f)
+                    val barFraction = when {
+                        dragFraction != null -> dragFraction!!
+                        keyTargetMs != null && seekable -> fractionOf(keyTargetMs!!)
+                        seekable -> fractionOf(position.value)
+                        else -> 0f
+                    }
                     val h = 6.dp.toPx()
                     val knob = 9.dp.toPx()
                     // The focus ring stays full width; only the track and knob pull in while

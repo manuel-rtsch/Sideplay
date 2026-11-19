@@ -118,6 +118,9 @@ class JellyfinCatalogTest {
         assertEquals(listOf("ar1"), results.artists.map { it.id })
         assertEquals(listOf("a1"), results.albums.map { it.id })
         assertEquals(listOf("p1"), results.playlists.map { it.id })
+        // A playlist from search is offered as editable like one from the library list: the server
+        // does not say who may edit it (see PLAYLIST_EDITABLE).
+        assertTrue(results.playlists.single().editable)
     }
 
     @Test fun `radio asks for offset plus limit and drops the front`() = runTest {
@@ -196,6 +199,19 @@ class JellyfinCatalogTest {
         assertEquals("new-playlist", playlist.id)
         assertEquals("Fresh", playlist.name)
         assertEquals(ServiceId.Jellyfin, playlist.service)
+        // 12.4 answers a playlist the account just created with OpenAccess:false and Shares:[], so
+        // deriving editability from those fields made a creator's own playlist read as read-only.
+        assertTrue(playlist.editable)
+    }
+
+    @Test fun `a removal passes the row the caller acted on`() = runTest {
+        catalog.removeFromPlaylist(
+            MediaKey(ServiceId.Jellyfin, MediaType.Playlist, "p1"),
+            mediaTrack("t1"),
+            index = 3
+        )
+
+        assertEquals(3, api.lastRemoveIndex)
     }
 
     @Test fun `saved state comes from user data and is absent when the server does not say`() = runTest {
