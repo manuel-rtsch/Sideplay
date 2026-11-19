@@ -44,6 +44,7 @@ private val licences = listOf(
     Licence("Sidetrack", "MIT"),
     Licence("Sidekit", "MIT"),
     Licence("librespot", "MIT"),
+    Licence("Jellyfin SDK for Kotlin", "LGPL-3.0"),
     Licence("AndroidX / Jetpack Compose", "Apache 2.0"),
     Licence("Kotlin", "Apache 2.0")
 )

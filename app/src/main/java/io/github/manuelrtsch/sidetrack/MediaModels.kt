@@ -8,6 +8,7 @@ value class ServiceId(val value: String) {
     companion object {
         val Spotify = ServiceId("spotify")
         val Navidrome = ServiceId("navidrome")
+        val Jellyfin = ServiceId("jellyfin")
 
         /** A context-free fixture, used by previews and unit tests that have no signed-in service. */
         val Local = ServiceId("local")
@@ -106,6 +107,34 @@ data class ServiceCapabilities(
             supportsPlaylistEdit = true,
             supportsPlaylistCreate = true,
             supportsNormalization = true,
+            supportsQualitySelection = true,
+            supportsProgressReporting = true,
+            supportsScrobbling = true
+        )
+
+        /**
+         * Jellyfin has albums, playlists, artists and instant mixes. Music libraries carry no
+         * podcast type, the API has no loudness parameter, and gapless is engine-level — the same
+         * reason Navidrome leaves it off. Follow maps onto the favorite-artist flag, because that
+         * is the only artist-level "keep this" state the server has (decision D2).
+         */
+        val Jellyfin = ServiceCapabilities(
+            librarySections = setOf(
+                LibrarySection.Liked,
+                LibrarySection.Playlists,
+                LibrarySection.Albums,
+                LibrarySection.Artists
+            ),
+            searchScopes = setOf(
+                SearchScope.Tracks,
+                SearchScope.Artists,
+                SearchScope.Albums,
+                SearchScope.Playlists
+            ),
+            supportsRadio = true,
+            supportsFollowArtist = true,
+            supportsPlaylistEdit = true,
+            supportsPlaylistCreate = true,
             supportsQualitySelection = true,
             supportsProgressReporting = true,
             supportsScrobbling = true

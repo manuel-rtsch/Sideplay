@@ -277,6 +277,11 @@ dependencies {
     // HTTP playback engine for Jellyfin/Navidrome. Spotify keeps librespot; Media3 is not used
     // by the Spotify path. Added in migration phase 0 so the dependency is accepted up front.
     implementation(libs.androidx.media3.exoplayer)
+    // Jellyfin's generated Kotlin client. LGPL-3.0, so it is linked, never bundled as source:
+    // its licence is listed on the About screen and its types stay inside data/ and auth/, which
+    // keeps a swap back to a hand-rolled client possible. Added before the adapter so the build
+    // accepts the dependency up front (see docs/jellyfin-integration.md, step 1).
+    implementation(libs.jellyfin.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 

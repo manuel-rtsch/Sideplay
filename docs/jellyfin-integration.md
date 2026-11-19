@@ -1,9 +1,11 @@
 # Jellyfin integration — plan and SDK assessment
 
-Status: **researched, not implemented.** Nothing here is in the build yet: no dependency, no
-`ServiceId`, no capability set, no code. This document records what the official Kotlin SDK gives
-us, what it does not, how Jellyfin maps onto Sidetrack's provider-neutral model, and the order in
-which the adapter should be built.
+Status: **planned; steps 1–2 of §9 landed.** The SDK dependency and its licence notice are in the
+build, and `ServiceId.Jellyfin` / `ServiceCapabilities.Jellyfin` exist with tests pinning the flag
+set and the muted categories. Nothing else exists yet: no auth, catalog, writer, runtime or picker
+entry, so no user can select Jellyfin. This document records what the official Kotlin SDK gives us,
+what it does not, how Jellyfin maps onto Sidetrack's provider-neutral model, the decisions taken
+(§8), and the order in which the adapter is built.
 
 Sources: the [Kotlin SDK guide](https://kotlin-sdk.jellyfin.org/guide/getting-started.html), the
 SDK sources at [jellyfin/jellyfin-sdk-kotlin](https://github.com/jellyfin/jellyfin-sdk-kotlin)
@@ -164,9 +166,14 @@ The SDK exposes URL builders next to every byte-returning endpoint:
 **`createUrl` does not append the token.** Either add `?ApiKey=<token>` yourself or send the
 `Authorization` header. This differs from Navidrome, which bakes its Subsonic token into every URL
 (`u`/`t`/`s` query params), so Sidetrack has never needed headers for artwork. `RemoteArtwork`
-(Sidekit) fetches with a plain GET and no custom headers, so **image URLs must carry `ApiKey`**;
-the audio stream can use either the query parameter or `PlaybackSource.headers`, which already
-exists for Media3.
+(Sidekit) fetches with a plain GET and no custom headers, so image URLs would otherwise have to
+carry `ApiKey`.
+
+**Decided (D10):** artwork loading gains custom-header support instead. The Jellyfin adapter sends
+the same `Authorization` header for images as for audio, so the access token never appears in a
+URL, a log line or an image-cache key. The audio stream uses `PlaybackSource.headers`, which
+already exists for Media3. Because this touches shared code (Spotify and Navidrome images too), it
+is its own step before the catalog — see §9.
 
 The authorization header format the SDK itself uses is
 `MediaBrowser Client="Sidetrack", DeviceId="…", Device="…", Version="…", Token="…"`
@@ -319,6 +326,10 @@ settings screens pick it up from `KnownServices` and the capability set with no 
 
 ## 6. Playback plan
 
+**Decided (D11): the posted-info path below is the implementation, not a preference.** The
+universal URL in step 2 stays documented as the fallback for a server that answers
+`getPostedPlaybackInfo` badly; it is not built in the first cut.
+
 1. **Preferred**: `mediaInfoApi.getPostedPlaybackInfo(itemId, PlaybackInfoDto(
    userId = …, maxStreamingBitrate = quality.kbps * 1000, deviceProfile = musicProfile))`.
    Take `playSessionId` (needed for progress reporting) and the first `mediaSources` entry.
@@ -353,23 +364,32 @@ settings screens pick it up from `KnownServices` and the capability set with no 
    the current `positionTicks`.
 4. On stop/finish: `reportPlaybackStopped(PlaybackStopInfo(...))`, then `markPlayedItem(itemId)`
    when the item actually finished (Jellyfin has no scrobble rule of its own).
-5. Optionally seed `ResumePoint` from `libraryApi.getResumeItems` on sign-in, so resume survives a
+5. Seed `ResumePoint` from `libraryApi.getResumeItems` on sign-in (D13), so resume survives a
    reinstall; local state stays authoritative otherwise.
 
 ---
 
-## 8. Open decisions
+## 8. Decisions
 
-| # | Question | Recommendation |
+Settled 2026-11-19. The "recommendation" column this section used to carry is gone: each row is a
+decision and the consequence the implementation has to live with.
+
+| # | Decision | Consequence |
 | --- | --- | --- |
-| D1 | **SDK or hand-rolled HTTP like Navidrome?** | SDK. Jellyfin's API surface (45 groups, many enums) is far larger than Subsonic's ~20 endpoints; hand-rolling would mean reimplementing the mapping the SDK already ships. Accept LGPL-3.0, +OkHttp, +kotlinx-serialization. |
-| D2 | **Follow artist = favorite artist?** | Yes, `supportsFollowArtist = true`. It is the only artist-level "keep this" state Jellyfin has, and Sidetrack's follow is exactly "pin this artist". Copy stays "Follow"/"Following"; internal naming can note the mapping. |
-| D3 | **Shows?** | Off. Music libraries have no podcasts; mapping video `Series` would need podcast-only UI semantics rethought. Revisit only if Jellyfin ships podcast libraries. |
-| D4 | **Quality selection?** | On, as a bitrate ceiling via `maxStreamingBitrate` + `DeviceProfile`. Without a profile, servers default to low-bitrate transcodes. |
-| D5 | **Quick Connect?** | Defer. Password auth reuses the existing form and store; Quick Connect needs a code screen and polling, and adds a second auth path to test. |
-| D6 | **WebSockets now?** | Defer. Useful for saved-state invalidation and remote control, not required for a correct first version. |
-| D7 | **Server version floor** | Document "Jellyfin 12.0 or newer". SDK 1.9.x will not talk to 10.10.x servers. |
-| D8 | **Second app id vs. in-app provider?** | In-app, like Navidrome. It is already a multi-provider app; one more picker entry is the smaller change and keeps one code base. |
+| D1 | **Official Kotlin SDK** (`org.jellyfin.sdk:jellyfin-core` 1.9.4), behind an API seam. | Adds LGPL-3.0 (must appear in About), OkHttp 5.5.1, kotlinx-serialization 1.11 and kotlin-logging; needs an Android `Context`; `implementation`-only, SDK types stay in `data/`/`auth/` so a swap back to hand-rolled HTTP stays possible; APK grows — measure `assembleRelease` before/after. |
+| D2 | **Follow artist = favorite artist**, `supportsFollowArtist = true`. | Following is a server-visible favourite, so other Jellyfin clients show the artist as favourited; the Artists section can be sourced from `getArtists(isFavorite = true)`; the copy stays "Follow"/"Following". |
+| D3 | **No shows**, `supportsPodcasts = false`. | Shows category and search scope mute; no `Series`/`Episode` mapping or its tests; revisit only if the Jellyfin podcast plugin becomes a target. |
+| D4 | **Quality selection on**, mapped like Navidrome: 96 / 320 / uncapped. | The `DeviceProfile` must state `maxStreamingBitrate`/`maxStaticMusicBitrate` explicitly, including for "High" — Jellyfin's default ceiling is low. Every cap is a transcode: server CPU and possible FLAC→AAC. |
+| D5 | **Quick Connect deferred**; password auth only in v1. | Password-less/LDAP Jellyfin users cannot sign in until the follow-up, which needs an `AuthInput` variant, a code screen and ~5 s polling. |
+| D6 | **WebSockets deferred**. | A like or playlist change made in another client is not reflected until the next refetch; the saved-state cache can go stale within a session. Not required for a correct v1. |
+| D7 | **Jellyfin 12.0+ only**, documented and enforced at sign-in. | SDK 1.9.x refuses 10.x, so most current self-hosted installs are turned away with an explicit upgrade message. This is the plan's most user-visible constraint. Revisit only by adding a second client, never by loosening the SDK floor. |
+| D8 | **In-app provider**, like Navidrome — not a second app id. | One APK, one release train, shared Media3 player and stores; Jellyfin code ships to every user even when unused, and the Spotify-first branding has to accommodate a self-hosted service. Supersedes the closing suggestion in `.provider-assessment.local.md`. |
+| D9 | **Plain server URL in v1**; SDK discovery (address candidates, scored recommendations) later. | No new screens; the existing provider-agnostic form works unchanged. A host typed without `:8096` surfaces as a generic network error until discovery lands. |
+| D10 | **Header support for artwork**, no `ApiKey` in image URLs. | `RemoteArtwork`/the image loader gains custom headers; the token stays out of URLs, logs and Coil cache keys; shared code used by Spotify and Navidrome changes, so it needs its own tests and lands before the catalog. |
+| D11 | **`getPostedPlaybackInfo` + a music `DeviceProfile`** is the playback path; universal URL is fallback only. | Owns `playSessionId` (needed for accurate progress) and `transcodingUrl` (prefix `api.baseUrl`) plus `requiredHttpHeaders`; the profile has to advertise direct play for Media3's containers or servers transcode FLAC away silently; more code and more failure modes than a bare URL builder. |
+| D12 | **`markPlayedItem` only when the item finishes.** | Skips do not count as plays, matching the server's model; `reportPlaybackStopped` still reports where playback ended, so the server keeps its positions. No invented percentage rule. |
+| D13 | **Seed `ResumePoint` from `getResumeItems` at sign-in**; local state is authoritative afterwards. | Resume survives a reinstall and follows the account across devices; costs one call at sign-in; no two-way reconciliation rules, so a position advanced elsewhere only lands at the next sign-in. |
+| D14 | **No production 12.x server to test against; a throwaway `jellyfin/jellyfin` 12.x container in dev is the reference.** | `JellyfinIntegrationTest` stays opt-in (`JELLYFIN_TEST_URL`/`_USER`/`_PASSWORD`, skipped when absent) so CI is green; the three unverified claims in §2.11 — `createPlaylist` with empty `ids`, `editable` from `openAccess`/`shares`, direct FLAC via the profile — must be confirmed there before the writer and playback steps count as done. |
 
 ---
 
@@ -378,24 +398,32 @@ settings screens pick it up from `KnownServices` and the capability set with no 
 1. **Dependency and licence**: `jellyfin = "1.9.4"` in `gradle/libs.versions.toml`, `jellyfin-core`
    in `app/build.gradle.kts`, LGPL-3.0 notice in the About licences list.
 2. **Identity and capabilities**: `ServiceId.Jellyfin`, `ServiceCapabilities.Jellyfin`, a
-   `MusicServiceTest` case pinning the flag set and the muted categories.
+   `MusicServiceTest` case pinning the flag set and the muted categories. `KnownServices` is not
+   touched yet, so the picker cannot offer a service that cannot sign in.
 3. **Auth**: `JellyfinCredentialStore` + `JellyfinAuth` (`signIn`, `restore`, `signOut`), token
    validation via `getCurrentUser`, `ServiceFailure` mapping unit tests with a fake transport.
-4. **API seam and catalog**: `JellyfinApi` + `JellyfinCatalog` for the four sections, album and
+4. **Artwork headers** (D10): teach the image loader to attach per-request headers, so Jellyfin
+   images carry `Authorization` instead of `?ApiKey=`; cover it with a test that Spotify/Navidrome
+   artwork is unchanged. Lands before the catalog, which produces the image URLs.
+5. **API seam and catalog**: `JellyfinApi` + `JellyfinCatalog` for the four sections, album and
    playlist collections, artist/albums/top-tracks, search, artwork URLs; pagination via
    `totalRecordCount`, `hasMore` computed; unit tests with recorded JSON shaped like
    `BaseItemDtoQueryResult`.
-5. **Writer**: favorites (track/album/artist), playlist add/remove/create.
-6. **Runtime and playback**: `JellyfinRuntime`, `PlaybackSource` resolution (universal URL first,
-   `getPostedPlaybackInfo` next), quality ceiling, isolated stores.
-7. **Registration**: `KnownServices`, `JellyfinProvider`, `AppSessions.build`; the picker and the
+6. **Writer**: favorites (track/album/artist), playlist add/remove/create; confirm the empty-id
+   `createPlaylist` and `editable` assumptions against the dev container (D14).
+7. **Runtime and playback**: `JellyfinRuntime`, `getPostedPlaybackInfo` + `DeviceProfile` (D11),
+   quality ceiling (D4), isolated stores.
+8. **Registration**: `KnownServices`, `JellyfinProvider`, `AppSessions.build`; the picker and the
    password sign-in form then work unchanged.
-8. **Progress reporting**: `postCapabilities`, start/progress/stopped, `markPlayedItem`.
-9. **Optional**: `getResumeItems` seeding, WebSocket invalidation, discovery UI, Quick Connect.
-10. **Integration test**: `JellyfinIntegrationTest` gated on `JELLYFIN_TEST_URL` / `_USER` /
-    `_PASSWORD`, matching Navidrome's opt-in pattern (skipped when absent).
+9. **Progress reporting**: `postCapabilities`, start/progress/stopped, `markPlayedItem` on finish
+   (D12), `getResumeItems` seeding at sign-in (D13).
+10. **Deferred follow-ups**: WebSocket invalidation (D6), discovery UI (D9), Quick Connect (D5),
+     and 10.x support only if it ever gets its own client (D7).
+11. **Integration test**: `JellyfinIntegrationTest` gated on `JELLYFIN_TEST_URL` / `_USER` /
+    `_PASSWORD`, matching Navidrome's opt-in pattern (skipped when absent); run against the dev
+    container (D14).
 
-Steps 2–4 keep the build green on their own; nothing needs a feature flag because the picker only
+Steps 2–5 keep the build green on their own; nothing needs a feature flag because the picker only
 offers what `KnownServices` lists.
 
 ---
@@ -409,7 +437,8 @@ offers what `KnownServices` lists.
 - **Binary size**: one artifact plus OkHttp and kotlinx-serialization already partly present via
   other deps; measure with `assembleRelease` before and after.
 - **Token leakage**: never log `Authorization` headers or `ApiKey` query parameters; keep tokens in
-  the encrypted store only.
+  the encrypted store only. D10 removes `ApiKey` from artwork URLs entirely, so the remaining
+  exposure is the playback URL and the request headers.
 - **Request volume**: search is one call (hints), but library sections page through `getItems`;
   the artist screen costs three calls. Match Navidrome's `LIBRARY_SECTION_SIZE`/`CATALOG_PAGE_SIZE`
   budget.

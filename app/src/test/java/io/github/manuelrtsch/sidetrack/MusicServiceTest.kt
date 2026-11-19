@@ -59,6 +59,45 @@ class MusicServiceTest {
         assertEquals(LibrarySection.Shows, LibraryFilter.Shows.section())
     }
 
+    @Test fun `Jellyfin advertises only what its API can deliver`() {
+        val caps = ServiceCapabilities.Jellyfin
+        assertTrue(caps.supportsRadio)
+        assertTrue(caps.supportsFollowArtist)
+        assertTrue(caps.supportsQualitySelection)
+        assertTrue(caps.supportsPlaylistEdit)
+        assertTrue(caps.supportsPlaylistCreate)
+        assertTrue(caps.supportsProgressReporting)
+        assertTrue(caps.supportsScrobbling)
+        // Music libraries hold no podcast type (D3), there is no loudness endpoint, and gapless
+        // is engine-level, so all three stay off.
+        assertTrue(!caps.supportsPodcasts)
+        assertTrue(!caps.supportsNormalization)
+        assertTrue(!caps.supportsGapless)
+    }
+
+    @Test fun `Jellyfin mutes the categories it cannot answer`() {
+        val jellyfin = ServiceCapabilities.Jellyfin
+        assertEquals(
+            listOf(
+                LibraryFilter.LikedSongs,
+                LibraryFilter.Playlists,
+                LibraryFilter.Albums,
+                LibraryFilter.Artists
+            ),
+            jellyfin.availableLibraryFilters.toList()
+        )
+        assertEquals(
+            setOf(SearchScope.Tracks, SearchScope.Artists, SearchScope.Albums, SearchScope.Playlists),
+            jellyfin.availableSearchScopes
+        )
+    }
+
+    @Test fun `the picker does not offer Jellyfin until the adapter can sign in`() {
+        // The identity and capability set ship first (docs/jellyfin-integration.md, steps 1-2);
+        // registration follows with the runtime, so no picker entry leads to an empty screen.
+        assertNull(serviceChoice(ServiceId.Jellyfin))
+    }
+
     @Test fun `a fully featured service keeps every category selectable`() {
         assertEquals(LibraryFilter.entries.toSet(), ServiceCapabilities.All.availableLibraryFilters)
         assertEquals(SearchScope.entries.toSet(), ServiceCapabilities.All.availableSearchScopes)

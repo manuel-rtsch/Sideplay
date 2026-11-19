@@ -13,9 +13,10 @@ Sources of truth:
 - Which categories the UI offers: `ServiceCapabilities.availableLibraryFilters` and
   `availableSearchScopes` in the same file, fed to the Library row and the search screens.
 - Tests: `app/src/test/java/io/github/manuelrtsch/sidetrack/`.
-- A third provider, Jellyfin, is **planned but not implemented** — see
-  [jellyfin-integration.md](jellyfin-integration.md) for its proposed capability set and the
-  assessment of the official Kotlin SDK.
+- A third provider, Jellyfin, is **planned, not implemented**. Its identity and capability set
+  exist (`ServiceId.Jellyfin`, `ServiceCapabilities.Jellyfin`, pinned by `MusicServiceTest`), but
+  there is no auth, catalog, writer or runtime, and no picker entry — see
+  [jellyfin-integration.md](jellyfin-integration.md) for the decisions and the build order.
 
 Legend: ✅ supported & surfaced · ⚠️ implemented in the catalog but not surfaced (capability flag
 off / returned as unsupported) · ❌ not supported.
