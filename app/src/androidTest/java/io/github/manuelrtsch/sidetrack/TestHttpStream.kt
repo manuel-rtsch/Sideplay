@@ -13,14 +13,19 @@ import kotlin.math.sin
  * A minimal HTTP/1.1 music server for instrumented playback tests.
  *
  * `com.sun.net.httpserver` is not part of Android, so this speaks just enough HTTP for ExoPlayer:
- * a request line, headers, `Range`, and a PCM WAV body. It records the ranges it was asked for so
- * a test can prove the player streamed rather than buffered the whole file.
+ * a request line, headers, `Range`, and a PCM WAV body. It records every request line and every
+ * `Range` it answered so a test can state what the player actually asked for — note that ExoPlayer
+ * opens a fresh item at position 0 without a `Range` and only sends one when it resumes or seeks
+ * inside the file, so a non-empty [requests] is the portable claim.
  */
 class TestHttpStream : AutoCloseable {
     private val server = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
     private val running = java.util.concurrent.atomic.AtomicBoolean(true)
 
     val ranges = CopyOnWriteArrayList<String>()
+
+    /** Request lines the server has answered, e.g. `GET /stream.wav HTTP/1.1`. */
+    val requests = CopyOnWriteArrayList<String>()
 
     val url: String get() = "http://127.0.0.1:${server.localPort}/stream.wav"
 
@@ -48,6 +53,7 @@ class TestHttpStream : AutoCloseable {
                 writeResponse(it.getOutputStream(), 404, emptyMap(), ByteArray(0))
                 return
             }
+            requests += requestLine
             val range = headers["range"]
             if (range != null) ranges += range
             val (start, end) = parseRange(range, WAV.size)

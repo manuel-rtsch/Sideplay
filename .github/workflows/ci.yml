@@ -105,6 +105,53 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # The foreground playback service, the media session and the shared controller are only real
+  # against a device: Robolectric shadows the notification and audio focus. This suite went
+  # unnoticed and red until the 0.4.0 release review, so it runs here rather than on request.
+  instrumented-tests:
+    name: Instrumented tests (API ${{ matrix.api-level }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 31 is minSdk (what the 0.3.6 installs run on); 36 is what the app targets today.
+        api-level: [31, 36]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/android-setup
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run instrumented tests on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none
+          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-reports-api${{ matrix.api-level }}
+          path: |
+            app/build/reports/androidTests
+            app/build/outputs/androidTest-results
+          retention-days: 7
+          if-no-files-found: ignore
+
   android-lint:
     name: Android Lint
     runs-on: ubuntu-latest

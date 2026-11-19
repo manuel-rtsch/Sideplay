@@ -51,7 +51,11 @@ class Media3PlaybackInstrumentedTest {
 
             assertTrue("player never started (playing=$playing position=$position)", playing)
             assertTrue("player never advanced (position=$position)", position > 0L)
-            assertTrue("no range request was made: ${stream.ranges}", stream.ranges.isNotEmpty())
+            // ExoPlayer opens a fresh item at position 0 without a `Range` header; it only asks
+            // for a range when it resumes or seeks inside the file. The claim this test makes is
+            // that the shared controller streamed over HTTP at all, so pin the request, not the
+            // header shape a particular ExoPlayer build happens to choose.
+            assertTrue("the stream was never requested: ${stream.requests}", stream.requests.isNotEmpty())
 
             withContext(Dispatchers.Main) {
                 controller.stop()
