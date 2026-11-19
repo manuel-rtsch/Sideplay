@@ -113,8 +113,7 @@ class NavidromeIntegrationTest {
     }
 
     /** The playlist's tracks, in order — the assertion unit. A size alone hides a rotation. */
-    private suspend fun tracksOf(catalog: NavidromeCatalog, playlist: Playlist): List<Track> =
-        catalog.collection(playlist.key, 0, 200)!!.items.filterIsInstance<Track>()
+    private suspend fun tracksOf(catalog: NavidromeCatalog, playlist: Playlist): List<Track> = catalog.collection(playlist.key, 0, 200)!!.items.filterIsInstance<Track>()
 
     /** Tracks the playlist does not already hold, so an edit appends a distinct id. */
     private suspend fun tracksNotIn(api: NavidromeApi, playlist: List<Track>, count: Int): List<Track> {
@@ -129,8 +128,7 @@ class NavidromeIntegrationTest {
         return found.values.toList()
     }
 
-    private suspend fun trackNotIn(api: NavidromeApi, playlist: List<Track>): Track? =
-        tracksNotIn(api, playlist, count = 1).firstOrNull()
+    private suspend fun trackNotIn(api: NavidromeApi, playlist: List<Track>): Track? = tracksNotIn(api, playlist, count = 1).firstOrNull()
 
     @Test fun `catalog reads and edits a playlist`() = runTest {
         requireServer()

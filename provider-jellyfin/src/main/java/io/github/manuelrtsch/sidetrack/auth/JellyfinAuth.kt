@@ -267,8 +267,7 @@ private const val MINIMUM_JELLYFIN_MAJOR = 12
  *
  * `"12.4.0"`, `"12"` and `"12.0.0-beta5"` all give 12; `"unstable"` and null give null.
  */
-internal fun jellyfinMajorVersion(version: String?): Int? =
-    version?.trim()?.takeWhile { it.isDigit() }?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+internal fun jellyfinMajorVersion(version: String?): Int? = version?.trim()?.takeWhile { it.isDigit() }?.takeIf { it.isNotEmpty() }?.toIntOrNull()
 
 /**
  * Refuses a server the 12.x SDK cannot read, naming it.

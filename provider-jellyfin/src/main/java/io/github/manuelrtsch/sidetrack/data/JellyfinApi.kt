@@ -597,6 +597,7 @@ class SdkJellyfinApi(
 
     private companion object {
         const val CLIENT_NAME = "Sidetrack"
+
         /** Entries per request when resolving a playlist entry id; the scan itself has no cap. */
         const val PLAYLIST_ENTRY_PAGE = 200
     }

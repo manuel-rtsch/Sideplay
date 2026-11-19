@@ -7,8 +7,8 @@ import io.github.manuelrtsch.sidetrack.data.jellyfinMusicProfile
 import io.github.manuelrtsch.sidetrack.data.resolvePlaylistEntry
 import io.github.manuelrtsch.sidetrack.data.toHint
 import io.github.manuelrtsch.sidetrack.data.toItem
-import kotlinx.coroutines.test.runTest
 import java.util.UUID
+import kotlinx.coroutines.test.runTest
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ImageType
