@@ -53,11 +53,13 @@ kover {
     reports {
         variant("debug") {
             verify {
+                // Phase 2 slice 1 (audio focus and the runtime contract seams) raised the
+                // module from 35.8% / 29.0% to 46.5% / 34.0%.
                 rule("line coverage") {
-                    minBound(34)
+                    minBound(46)
                 }
                 rule("branch coverage") {
-                    minBound(27, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                    minBound(34, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
                 }
             }
         }
