@@ -265,6 +265,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":provider-navidrome"))
     implementation(project(":provider-jellyfin"))
+    implementation(project(":provider-spotify"))
     implementation(libs.sidekit.design)
     implementation(libs.sidekit.sdk)
     implementation(libs.androidx.core.ktx)

@@ -2,6 +2,8 @@ package io.github.manuelrtsch.sidetrack.data
 
 import android.content.Context
 import android.util.Log
+import io.github.manuelrtsch.sidetrack.BuildConfig
+import io.github.manuelrtsch.sidetrack.DemoContentSource
 import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.auth.EncryptedSpotifyCredentialStore
 import io.github.manuelrtsch.sidetrack.auth.SpotifyAuth
@@ -172,9 +174,14 @@ object AppSessions {
         ServiceId.Spotify -> {
             val session = try {
                 SpotifySession(
-                    SpotifyAuth(EncryptedSpotifyCredentialStore(context)),
+                    SpotifyAuth(
+                        EncryptedSpotifyCredentialStore(context),
+                        authScheme = BuildConfig.AUTH_SCHEME
+                    ),
                     context.cacheDir.absolutePath,
-                    context
+                    context,
+                    // Only the app knows whether this build carries a demo pack (see DemoContent).
+                    demo = DemoContentSource.current
                 )
             } catch (e: Exception) {
                 Log.w("SidetrackSession", "Falling back to a signed-out Spotify session", e)

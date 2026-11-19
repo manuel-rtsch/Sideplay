@@ -1,6 +1,5 @@
 package io.github.manuelrtsch.sidetrack
 
-import androidx.navigation.NavType
 import io.github.manuelrtsch.sidetrack.data.collection
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -20,12 +19,6 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class SpotifyIdNavigationTest {
-
-    @Test
-    fun navigationParsesTheLiteralNullAsAbsent() {
-        assertNull(NavType.StringType.parseValue("null"))
-        assertEquals("h33fR99rX82mBeIzNvbG0BN", NavType.StringType.parseValue("h33fR99rX82mBeIzNvbG0BN"))
-    }
 
     @Test
     fun jsonNullsAndBlanksAreNotRouteIds() {

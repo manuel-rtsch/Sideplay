@@ -5,7 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.AudioQuality
-import io.github.manuelrtsch.sidetrack.DemoContentSource
+import io.github.manuelrtsch.sidetrack.DemoContent
 import io.github.manuelrtsch.sidetrack.Episode
 import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.MediaKey
@@ -37,7 +37,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 class SpotifySession(
     private val auth: SpotifyAuth = SpotifyAuth(NoopCredentialStore),
     private val tmpDir: String? = null,
-    context: Context? = null
+    context: Context? = null,
+    /**
+     * Fixed catalog for demo builds, injected by :app because only it knows whether this build
+     * carries a demo pack. Null in every normal build.
+     */
+    private val demo: DemoContent? = null
 ) : ServiceRuntime,
     NativePlaybackRuntime,
     QualitySettingsRuntime,
@@ -105,7 +110,7 @@ class SpotifySession(
     val spotifyCatalog: SpotifyCatalog by lazy {
         // The demo build type serves a fixed catalog; playback still goes through the real
         // account and librespot, so only the read/write side is replaced.
-        DemoContentSource.current?.catalog()
+        demo?.catalog()
             ?: if (nativeAvailable) {
                 NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
             } else {
@@ -239,7 +244,7 @@ class SpotifySession(
     }
 
     init {
-        DemoContentSource.current?.seed(history, queue)
+        demo?.seed(history, queue)
         if (nativeAvailable) {
             tmpDir?.let(NativeBridge::setTmpDir)
             audioCacheDir?.let { NativeBridge.setCacheDir(it.absolutePath, AUDIO_CACHE_LIMIT_BYTES) }

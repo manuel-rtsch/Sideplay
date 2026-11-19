@@ -41,6 +41,7 @@ include(":app")
 include(":core")
 include(":provider-navidrome")
 include(":provider-jellyfin")
+include(":provider-spotify")
 // The Spotify provider module is added in its own stage.
 
 // Release builds use the published SDK from GitHub Pages. A sibling Sidekit checkout is only a

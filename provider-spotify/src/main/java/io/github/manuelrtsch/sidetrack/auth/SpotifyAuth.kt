@@ -1,6 +1,5 @@
 package io.github.manuelrtsch.sidetrack.auth
 
-import io.github.manuelrtsch.sidetrack.BuildConfig
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -26,7 +25,13 @@ import kotlinx.coroutines.withContext
 class SpotifyAuth(
     private val store: SpotifyCredentialStore,
     private val tokens: SpotifyTokenClient = HttpSpotifyTokenClient(),
-    private val nowMs: () -> Long = System::currentTimeMillis
+    private val nowMs: () -> Long = System::currentTimeMillis,
+    /**
+     * Scheme of the link the browser callback page offers back into the app. It is a build-type
+     * value (`sidetrack`, `sidetrack-demo`), so the app passes its own rather than this module
+     * guessing one.
+     */
+    private val authScheme: String = "sidetrack"
 ) {
     private val refreshLock = Mutex()
 
@@ -252,7 +257,7 @@ class SpotifyAuth(
               </svg>
               <h1>$title</h1>
               <p>$hint</p>
-              <a class="open" href="${BuildConfig.AUTH_SCHEME}://auth">
+              <a class="open" href="$authScheme://auth">
                 Open Sidetrack
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                   <path d="M3 9h11M10 4l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
