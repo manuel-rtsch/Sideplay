@@ -42,6 +42,8 @@ tasks.register("coverage") {
     description = "Runs the unit tests and verifies every coverage floor."
     dependsOn(
         ":app:koverVerifyDebug",
+        ":app:koverHtmlReportDebug",
+        ":app:koverXmlReportDebug",
         ":core:koverVerifyDebug",
         ":provider-spotify:koverVerifyDebug",
         ":provider-jellyfin:koverVerifyDebug",
