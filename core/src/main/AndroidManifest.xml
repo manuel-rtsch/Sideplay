@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      NetworkMonitor registers a default network callback and reads the active network's
+      capabilities. The app already declares this permission, but the module that calls the API
+      declares what it needs so :core lints and could be reused on its own; the merger de-duplicates
+      it against the app's copy.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+</manifest>
