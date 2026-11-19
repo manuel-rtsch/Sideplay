@@ -30,7 +30,7 @@ import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.data.AppSessions
 import io.github.manuelrtsch.sidetrack.data.KnownServices
-import io.github.manuelrtsch.sidetrack.data.NavidromeDemo
+import io.github.manuelrtsch.sidetrack.data.SignInKind
 import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -873,7 +873,13 @@ fun NavGraphBuilder.sidetrackGraph(
                 }
             }
             val appSession = AppSessions.get(context)
-            val passwordAuth = appSession.provider?.id == ServiceId.Navidrome
+            // The provider describes its own sign-in: a password form with optional public demo
+            // defaults, or a browser/custom-tab flow with no fields. No shared code names a service.
+            val signInKind = appSession.provider?.signInKind
+            val passwordAuth = signInKind is SignInKind.Password
+            val defaults = (signInKind as? SignInKind.Password)?.defaults?.let {
+                PasswordSignInDefaults(it.serverUrl, it.username, it.password)
+            }
             SignInScreen(
                 chrome,
                 onAbout = { nav.navigate(ABOUT) },
@@ -882,17 +888,7 @@ fun NavGraphBuilder.sidetrackGraph(
                 onChangeService = { nav.navigate(SERVICE_PICKER) { launchSingleTop = true } },
                 serviceName = appSession.serviceName.ifEmpty { "your music service" },
                 passwordAuth = passwordAuth,
-                // Navidrome's form offers the public demo, so the app can be tried without a
-                // server of one's own. Other providers keep their own sign-in route.
-                defaults = if (passwordAuth) {
-                    PasswordSignInDefaults(
-                        NavidromeDemo.SERVER_URL,
-                        NavidromeDemo.USERNAME,
-                        NavidromeDemo.PASSWORD
-                    )
-                } else {
-                    null
-                },
+                defaults = defaults,
                 onPasswordSignIn = vm::signIn
             )
         }

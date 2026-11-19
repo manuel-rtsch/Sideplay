@@ -44,6 +44,23 @@ enum class ServiceFailure {
     Unknown
 }
 
+/**
+ * What the sign-in screen must offer for this service.
+ *
+ * A provider describes its own sign-in instead of the UI comparing service ids, so a new
+ * service can reuse an existing form without editing shared code.
+ */
+sealed interface SignInKind {
+    /** OAuth/custom tab, no fields. */
+    data object Browser : SignInKind
+
+    /** Server address, username and password. [defaults] pre-fills a public demo, if any. */
+    data class Password(val defaults: PasswordDefaults? = null) : SignInKind
+}
+
+/** The values a public demo prefills on a password sign-in form. */
+data class PasswordDefaults(val serverUrl: String, val username: String, val password: String)
+
 /** A catalog or playback failure carrying a [ServiceFailure] the UI can map to copy. */
 class ServiceException(
     val failure: ServiceFailure,
@@ -133,6 +150,9 @@ interface MusicServiceProvider {
     val id: ServiceId
     val displayName: String
     val capabilities: ServiceCapabilities
+
+    /** What the sign-in screen must offer for this service. */
+    val signInKind: SignInKind
 
     fun createAuth(): ServiceAuth
 }

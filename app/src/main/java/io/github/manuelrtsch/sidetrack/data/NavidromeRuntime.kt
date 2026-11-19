@@ -204,6 +204,9 @@ class NavidromeProvider(
     override val id: ServiceId = NavidromeService.id
     override val displayName: String = NavidromeService.DISPLAY_NAME
     override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
+    override val signInKind: SignInKind = SignInKind.Password(
+        PasswordDefaults(NavidromeDemo.SERVER_URL, NavidromeDemo.USERNAME, NavidromeDemo.PASSWORD)
+    )
 
     override fun createAuth(): ServiceAuth = session.auth
 }

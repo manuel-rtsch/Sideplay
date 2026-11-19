@@ -165,6 +165,7 @@ class SpotifyProvider(
     override val id: ServiceId = SpotifyService.id
     override val displayName: String = SpotifyService.DISPLAY_NAME
     override val capabilities: ServiceCapabilities = ServiceCapabilities.All
+    override val signInKind: SignInKind = SignInKind.Browser
 
     override fun createAuth(): ServiceAuth = SpotifyServiceAuth(session)
 }
