@@ -46,9 +46,14 @@ data class JellyfinCredentials(
 /**
  * Trims a typed server address into the base URL the SDK expects.
  *
- * Deliberately plain (decision D9): the scheme is added when missing and a trailing slash is
- * dropped, but the port is never guessed — a self-hosted Jellyfin usually answers on 8096, and
- * quietly trying it would make a typo look like a working server.
+ * Deliberately plain (decision D9): the scheme is added when missing, a trailing slash is dropped,
+ * and a missing port becomes Jellyfin's default. This is what makes a bare `192.168.1.20` or
+ * `music.example.org` reach a default install, which listens on 8096 and nothing else.
+ *
+ * Only `http` gets the default filled in. A `https://` address keeps its implicit 443: 8920 is
+ * Jellyfin's HTTPS port only when the certificate is configured inside Jellyfin itself, while a
+ * proxied server — the public demo included — answers on 443, so appending 8920 would turn a
+ * working address into a dead one.
  */
 fun normalizeJellyfinServerUrl(value: String): String {
     val trimmed = value.trim().trimEnd('/')
@@ -57,8 +62,16 @@ fun normalizeJellyfinServerUrl(value: String): String {
     if (parsed == null || parsed.host.isNullOrEmpty() || (parsed.protocol != "http" && parsed.protocol != "https")) {
         throw ServiceException(ServiceFailure.NotConnected, "Enter the Jellyfin server address")
     }
-    return withScheme
+    if (parsed.protocol != "http" || parsed.port != -1) return withScheme
+    // Insert the port at the end of the authority so a typed base path survives: a proxied server
+    // can sit under one (the demo's `/stable`), and that path belongs after the port.
+    val authorityStart = withScheme.indexOf("://") + 3
+    val authorityEnd = withScheme.indexOf('/', authorityStart).let { if (it == -1) withScheme.length else it }
+    return withScheme.substring(0, authorityEnd) + ":" + DEFAULT_HTTP_PORT + withScheme.substring(authorityEnd)
 }
+
+/** The port a default Jellyfin install listens on; see [normalizeJellyfinServerUrl]. */
+private const val DEFAULT_HTTP_PORT = 8096
 
 /**
  * Jellyfin signs in with a password once and keeps the resulting token, unlike Navidrome, which
@@ -204,8 +217,10 @@ class JellyfinAuth(
         val password = input as? AuthInput.Password
             ?: throw ServiceException(ServiceFailure.NotConnected, "Jellyfin needs a server, username and password")
         val serverUrl = normalizeJellyfinServerUrl(password.serverUrl)
-        if (password.username.isBlank() || password.password.isEmpty()) {
-            throw ServiceException(ServiceFailure.NotConnected, "Enter your Jellyfin username and password")
+        // The password is optional on purpose: a public demo server can have accounts without one,
+        // and Jellyfin answers an empty password the same way it answers any other.
+        if (password.username.isBlank()) {
+            throw ServiceException(ServiceFailure.NotConnected, "Enter your Jellyfin username")
         }
         val credentials = authenticator.signIn(serverUrl, password.username.trim(), password.password)
         current = credentials

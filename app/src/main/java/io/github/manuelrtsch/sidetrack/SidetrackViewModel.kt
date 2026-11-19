@@ -1565,12 +1565,15 @@ class SidetrackViewModel(
         startSignIn(AuthInput.Browser(openBrowser))
     }
 
-    /** Navidrome's self-hosted flow: server URL, username and password instead of a browser. */
+    /** A self-hosted flow: server URL, username and password instead of a browser. */
     fun signIn(serverUrl: String, username: String, password: String) {
-        if (serverUrl.isBlank() || username.isBlank() || password.isBlank()) {
-            _state.update { it.say("Enter the server, username and password") }
+        if (serverUrl.isBlank() || username.isBlank()) {
+            _state.update { it.say("Enter the server and username") }
             return
         }
+        // The password stays out of this check: a service can have accounts without one (the
+        // Jellyfin demo does). The provider knows which fields it needs and names the missing one,
+        // so the form does not refuse a valid sign-in the provider would accept.
         startSignIn(AuthInput.Password(serverUrl.trim(), username.trim(), password))
     }
 

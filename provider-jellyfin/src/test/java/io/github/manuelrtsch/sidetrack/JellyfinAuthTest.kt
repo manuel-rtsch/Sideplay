@@ -76,6 +76,41 @@ class JellyfinAuthTest {
     }
 
     @Test
+    fun `a host without a port gets Jellyfin's default http port`() {
+        assertEquals("http://music.example.org:8096", normalizeJellyfinServerUrl("music.example.org"))
+        assertEquals("http://192.168.1.20:8096", normalizeJellyfinServerUrl("192.168.1.20"))
+    }
+
+    @Test
+    fun `an https address keeps its implicit port`() {
+        // 8920 only exists when the certificate lives in Jellyfin itself; a proxied server (the
+        // public demo) answers on 443, so guessing 8920 would break a working address.
+        assertEquals("https://music.example.org", normalizeJellyfinServerUrl("https://music.example.org"))
+        assertEquals(
+            "https://demo.jellyfin.org/stable",
+            normalizeJellyfinServerUrl("https://demo.jellyfin.org/stable/")
+        )
+    }
+
+    @Test
+    fun `a typed port wins over the default`() {
+        assertEquals("http://music.example.org:4533", normalizeJellyfinServerUrl("music.example.org:4533"))
+        assertEquals("https://music.example.org:8920", normalizeJellyfinServerUrl("https://music.example.org:8920"))
+    }
+
+    @Test
+    fun `an empty password signs in, as the demo account has none`() = runTest {
+        val authenticator = FakeAuthenticator()
+        val auth = JellyfinAuth(store, authenticator)
+
+        val account = auth.signIn(AuthInput.Password("https://demo.jellyfin.org/stable", "demo", ""))
+
+        assertEquals(1, authenticator.calls)
+        assertEquals("listener", account.displayName)
+        assertEquals("https://demo.jellyfin.org/stable", store.read()!!.serverUrl)
+    }
+
+    @Test
     fun `an unusable address is rejected before a request is made`() {
         val failure = runCatching { normalizeJellyfinServerUrl("ftp://music.example.org") }
             .exceptionOrNull() as ServiceException

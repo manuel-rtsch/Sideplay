@@ -276,9 +276,12 @@ class JellyfinProvider(
 
     /**
      * Password sign-in only in v1 (D5). Quick Connect needs an `AuthInput` variant and a code
-     * screen, so it stays a follow-up. There is no public demo server, hence no defaults.
+     * screen, so it stays a follow-up. The public demo prefills the form, and its account has no
+     * password, which the provider accepts.
      */
-    override val signInKind: SignInKind = SignInKind.Password()
+    override val signInKind: SignInKind = SignInKind.Password(
+        PasswordDefaults(JellyfinDemo.SERVER_URL, JellyfinDemo.USERNAME, JellyfinDemo.PASSWORD)
+    )
 
     override fun createAuth(): ServiceAuth = session.auth
 }

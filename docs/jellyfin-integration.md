@@ -3,6 +3,9 @@
 Status: **implemented; steps 1–9 and 11 of §9 landed.** Jellyfin is a selectable provider with
 password sign-in, catalog, writer, runtime and progress reporting over the shared Media3 player.
 Steps 10 (WebSocket invalidation, discovery UI, Quick Connect, 10.x) remain deferred. The
+playlist add/remove write paths are implemented but have no in-app entry point yet (create has
+one); the UI work is scheduled for 0.4.1 and tracked in
+[provider-capabilities.md](provider-capabilities.md#playlist-editing--deferred-to-041). The
 dev-container checks named in D14 — empty-id `createPlaylist`, `editable` from `openAccess`/
 `shares`, direct FLAC via the profile — are covered by the opt-in
 `JellyfinIntegrationTest` and still need a run against a real 12.x server. This document records
@@ -121,8 +124,8 @@ The SDK exposes 45 generated groups as extension properties on `ApiClient`
 | `isSaved` | `userDataApi.getItemUserData(itemId).isFavorite` |
 | `setSaved` | `userDataApi.markFavoriteItem` / `unmarkFavoriteItem` |
 | `isFollowed` / `setFollowed` | same two calls on a `MusicArtist` id |
-| `addToPlaylist` | `playlistApi.addItemToPlaylist` |
-| `removeFromPlaylist` | `playlistApi.removeItemFromPlaylist` |
+| `addToPlaylist` | `playlistApi.addItemToPlaylist` (writer only; UI in 0.4.1) |
+| `removeFromPlaylist` | `playlistApi.removeItemFromPlaylist` (writer only; UI in 0.4.1) |
 | `createPlaylist` | `playlistApi.createPlaylist(CreatePlaylistDto(name = …, ids = …, mediaType = AUDIO))` |
 | Progress | `sessionApi.postFullCapabilities` once, then `reportPlaybackStart/Progress/Stopped` |
 | Resume list | `libraryApi.getResumeItems` |
@@ -387,11 +390,11 @@ decision and the consequence the implementation has to live with.
 | D2 | **Follow artist = favorite artist**, `supportsFollowArtist = true`. | Following is a server-visible favourite, so other Jellyfin clients show the artist as favourited; the Artists section can be sourced from `getArtists(isFavorite = true)`; the copy stays "Follow"/"Following". |
 | D3 | **No shows**, `supportsPodcasts = false`. | Shows category and search scope mute; no `Series`/`Episode` mapping or its tests; revisit only if the Jellyfin podcast plugin becomes a target. |
 | D4 | **Quality selection on**, mapped like Navidrome: 96 / 320 / uncapped. | The `DeviceProfile` must state `maxStreamingBitrate`/`maxStaticMusicBitrate` explicitly, including for "High" — Jellyfin's default ceiling is low. Every cap is a transcode: server CPU and possible FLAC→AAC. |
-| D5 | **Quick Connect deferred**; password auth only in v1. | Password-less/LDAP Jellyfin users cannot sign in until the follow-up, which needs an `AuthInput` variant, a code screen and ~5 s polling. |
+| D5 | **Quick Connect deferred**; password auth only in v1. | Password-less/LDAP Jellyfin users cannot sign in until the follow-up, which needs an `AuthInput` variant, a code screen and ~5 s polling. The password field itself is optional, so accounts without one (the public demo's `demo` user) sign in; only Quick Connect's code exchange is missing. |
 | D6 | **WebSockets deferred**. | A like or playlist change made in another client is not reflected until the next refetch; the saved-state cache can go stale within a session. Not required for a correct v1. |
 | D7 | **Jellyfin 12.0+ only**, documented and enforced at sign-in. | SDK 1.9.x refuses 10.x, so most current self-hosted installs are turned away with an explicit upgrade message. This is the plan's most user-visible constraint. Revisit only by adding a second client, never by loosening the SDK floor. |
 | D8 | **In-app provider**, like Navidrome — not a second app id. | One APK, one release train, shared Media3 player and stores; Jellyfin code ships to every user even when unused, and the Spotify-first branding has to accommodate a self-hosted service. Supersedes the closing suggestion in `.provider-assessment.local.md`. |
-| D9 | **Plain server URL in v1**; SDK discovery (address candidates, scored recommendations) later. | No new screens; the existing provider-agnostic form works unchanged. A host typed without `:8096` surfaces as a generic network error until discovery lands. |
+| D9 | **Plain server URL in v1**; SDK discovery (address candidates, scored recommendations) later. | No new screens; the existing provider-agnostic form works unchanged. A host typed without a port gets Jellyfin's default filled in (`http` → `8096`); `https` keeps its implicit 443, because 8920 only applies when the certificate lives in Jellyfin itself and a proxied server (the public demo included) answers on 443. Discovery would still improve `https`/self-signed cases. |
 | D10 | **Header support for artwork**, no `ApiKey` in image URLs. | Sidekit 1.9.0 adds `headers` to `RemoteArtwork` and `RemoteArtworkImage` and folds them into the cache key; Sidetrack installs the account header in `ArtworkAccess` at sign-in. Until the Sidekit tag publishes 1.9.0 to GitHub Pages, Sidetrack resolves it from `~/.m2` (staged with `-PsidekitVersion=1.9.0`), so a clean machine needs that publication before it can build. |
 | D11 | **`getPostedPlaybackInfo` + a music `DeviceProfile`** is the playback path; universal URL is fallback only. | Owns `playSessionId` (needed for accurate progress) and `transcodingUrl` (prefix `api.baseUrl`) plus `requiredHttpHeaders`; the profile has to advertise direct play for Media3's containers or servers transcode FLAC away silently; more code and more failure modes than a bare URL builder. |
 | D12 | **`markPlayedItem` only when the item finishes.** | Skips do not count as plays, matching the server's model; `reportPlaybackStopped` still reports where playback ended, so the server keeps its positions. No invented percentage rule. |
