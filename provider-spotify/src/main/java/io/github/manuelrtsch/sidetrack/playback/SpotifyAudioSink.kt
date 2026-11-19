@@ -87,6 +87,9 @@ class SpotifyAudioSink(
     /** PCM read from the native channel after the AudioTrack was paused. */
     private val pendingPcm = ArrayDeque<ByteArray>()
 
+    /** Bytes of PCM the current track consumes per second, for the prefill targets. */
+    private var trackBytesPerSecond = 0
+
     /** Position of the first frame written to the current AudioTrack. */
     private var startPositionMs = 0L
     private var startHeadFrames = 0L
@@ -229,8 +232,10 @@ class SpotifyAudioSink(
         stopDrain()
         // A fresh item and a seek both wait for their first new PCM before they are audible.
         if (startWhenPrefilled) onBuffering(true)
+        val prefill = prefillBytes()
         val policy = DrainPolicy(
-            prefillBytes = prefillBytes(),
+            prefillBytes = prefill,
+            minStartBytes = minStartBytes(prefill),
             prefillTimeoutMs = PREPLAY_TIMEOUT_MS,
             starveTimeoutMs = STARVE_TIMEOUT_MS
         ).apply { begin(SystemClock.elapsedRealtime(), playing = !startWhenPrefilled) }
@@ -374,6 +379,15 @@ class SpotifyAudioSink(
 
     private fun prefillBytes(): Int = (trackBufferBytes / PREFILL_FRACTION).coerceAtLeast(MIN_PREFILL_BYTES)
 
+    /**
+     * The least a track may be started with when the prefill deadline expires first. Enough to
+     * keep AudioFlinger fed for a moment, so the timeout relaxes the target instead of making the
+     * track underrun the instant it plays. Never above the prefill target itself.
+     */
+    private fun minStartBytes(prefill: Int): Int = (trackBytesPerSecond * MIN_START_MS / 1_000L).toInt()
+        .coerceAtLeast(MIN_PREFILL_BYTES)
+        .coerceAtMost(prefill)
+
     private fun underrunCount(output: AudioTrack): Int = runCatching { output.underrunCount }.getOrDefault(0)
 
     private fun readFormat(): Format {
@@ -402,6 +416,14 @@ class SpotifyAudioSink(
             onFailure(IllegalStateException("AudioTrack rejected the PCM format"))
             return null
         }
+        // The platform minimum is a latency figure, not a jitter budget: it holds a few tens of
+        // milliseconds, so any pause in decoding (a track's first fetch, a route change, a GC on
+        // the UI process) drains it and AudioFlinger marks the track as underrun. A few hundred
+        // milliseconds comfortably covers those stalls; seeking flushes it, so nothing waits
+        // behind it.
+        val frameBytes = BYTES_PER_SAMPLE * format.channels
+        val targetBuffer = format.sampleRate * frameBytes * TARGET_BUFFER_MS / 1_000
+        val bufferBytes = maxOf(minBuffer * 2, targetBuffer)
         return runCatching {
             AudioTrack.Builder()
                 .setAudioAttributes(
@@ -417,10 +439,16 @@ class SpotifyAudioSink(
                         .setChannelMask(channelMask)
                         .build()
                 )
-                .setBufferSizeInBytes(minBuffer * 2)
+                .setBufferSizeInBytes(bufferBytes)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
-        }.onFailure(onFailure).getOrNull()?.also { trackBufferBytes = minBuffer * 2 }
+        }.onFailure(onFailure).getOrNull()?.also {
+            trackBufferBytes = bufferBytes
+            trackBytesPerSecond = format.sampleRate * BYTES_PER_SAMPLE * format.channels
+            SidetrackDebug.log(
+                "audio.track bufferMs=${bufferBytes * 1_000L / trackBytesPerSecond} minBuffer=$minBuffer"
+            )
+        }
     }
 
     private data class Format(val sampleRate: Int = 44_100, val channels: Int = 2)
@@ -430,10 +458,22 @@ class SpotifyAudioSink(
         const val READ_TIMEOUT_MS = 100L
 
         /** Retry interval for a full AudioTrack buffer. Short enough that cancel stays responsive. */
-        const val WRITE_RETRY_MS = 5L
+        const val WRITE_RETRY_MS = 10L
 
         /** S16LE stereo: 4 bytes per frame. */
         const val BYTES_PER_FRAME = 4
+
+        /** S16LE: two bytes per sample per channel. */
+        const val BYTES_PER_SAMPLE = 2
+
+        /**
+         * How much PCM the AudioTrack holds. Bigger than the platform minimum on purpose: it is
+         * the cushion that turns a stall in decoding into a late buffer instead of an underrun.
+         */
+        const val TARGET_BUFFER_MS = 400
+
+        /** The floor a track may start with once the prefill deadline expired. */
+        const val MIN_START_MS = 100L
 
         /** Start playing once half the track buffer holds audio. */
         const val PREFILL_FRACTION = 2

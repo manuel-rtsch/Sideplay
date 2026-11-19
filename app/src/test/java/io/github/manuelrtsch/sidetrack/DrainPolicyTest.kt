@@ -12,10 +12,11 @@ import org.junit.Test
  */
 class DrainPolicyTest {
     private val prefill = 40_000
+    private val minStart = 4_096
     private val prefillTimeout = 1_500L
     private val starveTimeout = 15_000L
 
-    private fun policy() = DrainPolicy(prefill, prefillTimeout, starveTimeout)
+    private fun policy() = DrainPolicy(prefill, minStart, prefillTimeout, starveTimeout)
 
     @Test fun `does not play before the track is primed`() {
         val policy = policy()
@@ -36,13 +37,27 @@ class DrainPolicyTest {
         assertFalse(policy.mayPlay(nowMs = 5_000L))
     }
 
-    @Test fun `plays anyway when the first PCM is late`() {
+    @Test fun `plays a partial cushion once the prefill deadline expires`() {
         val policy = policy()
         policy.begin(nowMs = 0L, playing = false)
-        policy.onData(4_096, nowMs = 50L)
+        policy.onData(minStart, nowMs = 50L)
 
         assertFalse(policy.mayPlay(nowMs = prefillTimeout - 1))
         assertTrue(policy.mayPlay(nowMs = prefillTimeout))
+    }
+
+    @Test fun `never starts a track that holds less than the minimum cushion`() {
+        val policy = policy()
+        policy.begin(nowMs = 0L, playing = false)
+        policy.onData(minStart - 1, nowMs = 50L)
+
+        assertFalse(policy.mayPlay(nowMs = prefillTimeout))
+        assertFalse(policy.mayPlay(nowMs = starveTimeout - 1))
+
+        // The next buffer arrives: it is still short of the prefill target but playable.
+        policy.onData(1, nowMs = starveTimeout - 1)
+
+        assertTrue(policy.mayPlay(nowMs = starveTimeout - 1))
     }
 
     @Test fun `a caller that already started the track is not told to start it again`() {
@@ -82,13 +97,13 @@ class DrainPolicyTest {
         assertTrue(policy.starved(nowMs = starveTimeout * 2 - 1_000L))
     }
 
-    @Test fun `a track that has not started yet cannot starve`() {
+    @Test fun `a track that never gets PCM stalls instead of starting empty`() {
         val policy = policy()
         policy.begin(nowMs = 0L, playing = false)
 
-        // Waiting for the prefill is the preplay timeout's business, not the stall budget's.
-        assertFalse(policy.starved(nowMs = starveTimeout * 2))
-        assertTrue(policy.mayPlay(nowMs = starveTimeout * 2))
-        assertTrue(policy.starved(nowMs = starveTimeout * 2 + starveTimeout))
+        // Waiting for the prefill is the preplay timeout's business; waiting forever is not.
+        assertFalse(policy.mayPlay(nowMs = prefillTimeout))
+        assertFalse(policy.starved(nowMs = starveTimeout - 1))
+        assertTrue(policy.starved(nowMs = starveTimeout))
     }
 }
