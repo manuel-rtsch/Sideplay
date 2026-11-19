@@ -6,7 +6,9 @@ import io.github.manuelrtsch.sidetrack.auth.JellyfinAuthenticator
 import io.github.manuelrtsch.sidetrack.auth.JellyfinCredentialStore
 import io.github.manuelrtsch.sidetrack.auth.JellyfinCredentials
 import io.github.manuelrtsch.sidetrack.auth.jellyfinFailure
+import io.github.manuelrtsch.sidetrack.auth.jellyfinMajorVersion
 import io.github.manuelrtsch.sidetrack.auth.normalizeJellyfinServerUrl
+import io.github.manuelrtsch.sidetrack.auth.requireJellyfinVersion
 import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
 import io.github.manuelrtsch.sidetrack.data.AuthInput
 import io.github.manuelrtsch.sidetrack.data.ServiceException
@@ -188,6 +190,43 @@ class JellyfinAuthTest {
     fun `timeouts and certificates map to the network bucket`() {
         assertEquals(ServiceFailure.Network, jellyfinFailure(TimeoutException()).failure)
         assertEquals(ServiceFailure.Network, jellyfinFailure(SecureConnectionException()).failure)
+    }
+
+    @Test
+    fun `a version string yields its major number`() {
+        assertEquals(12, jellyfinMajorVersion("12.4.0"))
+        assertEquals(12, jellyfinMajorVersion("12"))
+        assertEquals(12, jellyfinMajorVersion(" 12.0.0-beta5 "))
+        assertEquals(10, jellyfinMajorVersion("10.9.11"))
+        assertNull(jellyfinMajorVersion(null))
+        assertNull(jellyfinMajorVersion(""))
+        assertNull(jellyfinMajorVersion("unstable"))
+    }
+
+    /**
+     * Pinned against `jellyfin/jellyfin:10.9.11`: that server signs in and then fails every read,
+     * because its `UserItemDataDto` has no `ItemId` and the 12.x SDK requires it. Sign-in refuses it
+     * instead, and says which version it found.
+     */
+    @Test
+    fun `a server older than 12 is refused by name`() {
+        val failure = runCatching { requireJellyfinVersion("10.9.11") }.exceptionOrNull()
+
+        assertTrue(failure is ServiceException)
+        assertEquals(ServiceFailure.NotConnected, (failure as ServiceException).failure)
+        assertEquals(
+            "That server runs Jellyfin 10.9.11. Sidetrack needs Jellyfin 12.0 or newer.",
+            failure.message
+        )
+    }
+
+    @Test
+    fun `a 12 server and an unreadable version are let through`() {
+        requireJellyfinVersion("12.4.0")
+        requireJellyfinVersion("12.0.0-beta5")
+        // A fork or a proxy can answer something we did not anticipate; its reads fail honestly.
+        requireJellyfinVersion(null)
+        requireJellyfinVersion("unstable")
     }
 
     private class FakeAuthenticator : JellyfinAuthenticator {
