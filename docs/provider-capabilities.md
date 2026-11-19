@@ -15,9 +15,8 @@ Sources of truth:
   `availableSearchScopes` in the same file, fed to the Library row and the search screens.
 - Tests: each module's own `src/test` (`app`, `core`, `provider-spotify`,
   `provider-navidrome`, `provider-jellyfin`).
-- A third provider, Jellyfin, is **planned, not implemented**. Its identity and capability set
-  exist (`ServiceId.Jellyfin`, `ServiceCapabilities.Jellyfin`, pinned by `MusicServiceTest`), but
-  there is no auth, catalog, writer or runtime, and no picker entry — see
+- A third provider, Jellyfin, is implemented through the official Kotlin SDK (music libraries
+  only, no 10.x servers). It has auth, catalog, writer, runtime and a picker entry — see
   [jellyfin-integration.md](jellyfin-integration.md) for the decisions and the build order.
 
 Legend: ✅ supported & surfaced · ⚠️ implemented in the catalog but not surfaced (capability flag
@@ -32,37 +31,21 @@ reflows between services; muting it means no button leads to an empty page.
 
 ## Overview
 
-| Capability | Spotify | Navidrome |
-| --- | :---: | :---: |
-| Library sections | Liked, Playlists, Albums, Artists, Shows | Liked, Playlists, Albums, Artists |
-| Search scopes | Tracks, Artists, Albums, Playlists, Shows | Tracks, Artists, Albums, Playlists |
-| Podcasts / shows | ✅ | ❌ |
-| Song radio | ✅ | ✅ |
-| Follow artist | ✅ | ❌ |
-| Playlist editing (add/remove items) | ✅ | ✅ |
-| Playlist creation | ❌ (pending transport) | ✅ |
-| Loudness normalization | ✅ | ✅ |
-| Gapless playback | ✅ | ❌ |
-| Quality selection | ✅ | ✅ |
-| Progress reporting (resume) | ✅ | ✅ |
-| Scrobbling | ✅ | ✅ |
-| Sign-in | OAuth (PKCE) via browser | Username/password against a `ping` |
-
-Planned, not built ([details](jellyfin-integration.md)):
-
-| Capability | Jellyfin (proposed) |
-| --- | :---: |
-| Library sections | Liked, Playlists, Albums, Artists |
-| Search scopes | Tracks, Artists, Albums, Playlists |
-| Podcasts / shows | ❌ (music libraries carry none) |
-| Song radio | ✅ (InstantMix) |
-| Follow artist | ✅ (favorite artist) |
-| Playlist editing / creation | ✅ |
-| Loudness normalization | ❌ (no ReplayGain parameter) |
-| Gapless playback | ❌ (engine-level) |
-| Quality selection | ✅ (`maxStreamingBitrate`) |
-| Progress reporting / scrobbling | ✅ (`reportPlaybackStart/Progress/Stopped`, `markPlayedItem`) |
-| Sign-in | Username/password or Quick Connect (deferred) |
+| Capability | Spotify | Navidrome | Jellyfin |
+| --- | :---: | :---: | :---: |
+| Library sections | Liked, Playlists, Albums, Artists, Shows | Liked, Playlists, Albums, Artists | Liked, Playlists, Albums, Artists |
+| Search scopes | Tracks, Artists, Albums, Playlists, Shows | Tracks, Artists, Albums, Playlists | Tracks, Artists, Albums, Playlists |
+| Podcasts / shows | ✅ | ❌ | ❌ (music libraries carry none) |
+| Song radio | ✅ | ✅ | ✅ (InstantMix) |
+| Follow artist | ✅ | ❌ | ✅ (favorite artist) |
+| Playlist editing (add/remove items) | ✅ | ✅ | ✅ |
+| Playlist creation | ❌ (pending transport) | ✅ | ✅ |
+| Loudness normalization | ✅ | ✅ | ❌ (no ReplayGain parameter) |
+| Gapless playback | ✅ | ❌ | ❌ (engine-level) |
+| Quality selection | ✅ | ✅ | ✅ (`maxStreamingBitrate`) |
+| Progress reporting (resume) | ✅ | ✅ | ✅ (`reportPlaybackStart/Progress/Stopped`) |
+| Scrobbling | ✅ | ✅ | ✅ (`markPlayedItem` on a real end, D12) |
+| Sign-in | OAuth (PKCE) via browser | Username/password against a `ping` | Username/password against the SDK; Quick Connect deferred |
 
 ---
 
@@ -166,3 +149,67 @@ the service cannot answer, and the quality/normalization/gapless rows are gated 
   (env: `NAVIDROME_TEST_URL` / `_USER` / `_PASSWORD`; skipped when absent): reads artists/albums/
   tracks, resolves stream and artwork URLs, pages the library and writes stars, reads and edits a
   playlist.
+---
+
+## Jellyfin (official Kotlin SDK)
+
+Jellyfin is implemented through `org.jellyfin.sdk:jellyfin-core` 1.9.4 (LGPL-3.0), which speaks
+Jellyfin 12.x; 10.x servers are out of scope. The adapter covers the music library only.
+
+### Implemented
+
+- **Auth** (`JellyfinAuth`): username/password against `/Users/AuthenticateByName`, a session
+  token in `JellyfinCredentialStore`, and the SDK's own `AuthorizationHeaderBuilder` so the
+  device id matches the one the API client sends. `restore` reads the token without a round trip;
+  a revoked token becomes `AuthenticationExpired` on the first request.
+- **API seam**: `JellyfinApi` reduces the generated DTOs to provider records; `SdkJellyfinApi`
+  is the only class that touches the SDK. A hand-written client could replace it without moving
+  the catalog.
+- **Library** (`JellyfinCatalog`): liked (favourite) tracks, playlists, albums and favourite
+  artists; album and playlist collections with pagination; artist detail, artist albums and top
+  tracks; artwork URLs minted per call.
+- **Search**: `getSearchHints` split into tracks, artists, albums and playlists; artwork for a
+  hint uses the image item id it points at, not the id of the hit.
+- **Playback**: `getPostedPlaybackInfo` with a music `DeviceProfile` decides direct play vs
+  transcode (D11); the resolved URL and its headers go through the shared `PlaybackController`
+  over Media3/ExoPlayer. Quality maps to `maxStreamingBitrate` (D4), `High` leaving the ceiling to
+  the server. Artwork and audio carry `Authorization` via `ArtworkAccess` / `PlaybackSource`.
+- **Library editing** (`MediaLibraryWriter`): favourite/unfavourite tracks, albums and artists;
+  add to / remove from playlist; create playlist. Jellyfin has no separate "saved" flag, so
+  favourite is used for both like and save.
+- **Radio**: `getInstantMixFromItem` from any seed.
+- **Progress reporting** (`JellyfinPlaybackReporter`): `reportPlaybackStart` / `Progress` /
+  `Stopped`, throttled to 10 seconds, and `markPlayedItem` only when the engine emits its
+  end-of-track signal (D12). It subscribes to a separate engine flow, so the ViewModel's event
+  queue is untouched. Skipping reports a stop but never a play.
+- **Resume**: the account's own `getResumeItems` seeds the resume point at sign-in (D13);
+  `postCapabilities` registers the session.
+- **Isolation**: separate queue, history, resume and settings stores per service.
+
+### Not supported
+
+- **Podcasts / shows** ❌: a music library has no podcast type, so `Shows` is neither a library
+  filter nor a search scope and `supportsPodcasts` is false (D3).
+- **Loudness normalization** ❌: Jellyfin exposes no ReplayGain/loudness parameter on the stream
+  URL. The preference is persisted but `supportsNormalization` is false, so the row is hidden.
+- **Gapless** ❌: engine-level, like Navidrome.
+- **Quick Connect** ❌ (deferred): v1 is password sign-in only (D5).
+- **Jellyfin 10.x** ❌: SDK 1.9.x requires 12.0.0 or newer (D7).
+
+### Coverage
+
+- `JellyfinApiTest.kt` — SDK DTO → provider mapping (artist/album ids, artwork tag, ticks to
+  milliseconds, favourite/played state, search-hint artwork item), the music `DeviceProfile`, and
+  the quality → bitrate mapping.
+- `JellyfinCatalogTest.kt` — four library sections and `hasMore`, album/playlist collections,
+  artist albums/top tracks, search partitioning, InstantMix offset, playback URL/headers and the
+  quality ceiling, writer favourites/add/remove/create, saved state for playlists being absent.
+- `JellyfinPlaybackReporterTest.kt` — start/progress/stopped ordering, 10-second throttling, a
+  single pause report, end-of-track marking played, and a skip stopping without a play.
+- `MusicServiceTest.kt` — updated picker list (`Spotify`, `Navidrome`, `Jellyfin`) and the
+  existing Jellyfin capability/category pins.
+- `JellyfinIntegrationTest.kt` — opt-in smoke tests against a real server
+  (`JELLYFIN_TEST_URL` / `_USER` / `_PASSWORD`; skipped when absent): album/track/search reads,
+  a resolved stream URL that returns audio bytes with the auth header, and artwork URL minting.
+  The dev-container checks named in D14 (empty-id `createPlaylist`, `editable`, direct FLAC) are
+  still to be confirmed there before this section counts as verified against a server.

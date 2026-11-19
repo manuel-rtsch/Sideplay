@@ -89,7 +89,7 @@ Rules to enforce:
 | `:core` | `MediaModels.kt`, `MediaItems.kt`, `DesignCompat.kt` (if UI-free), `data/{MusicService, ServiceRuntime, QueueRepository, HistoryRepository, PlaybackSettings, StateStores, ConflatedSaver, HaltStopGuard, NetworkMonitor, ArtworkAccess, EpisodeMeta, EpisodeProgress}.kt`, `storage/`, `playback/{PlaybackController, PlaybackEngine, Media3PlaybackEngine, ExoPlayerMedia3Player, MediaFormat, DrainPolicy, SleepTimer}.kt`, `auth/CredentialPersistenceException.kt`, `ui/` helpers that core types need |
 | `:provider-spotify` | `data/{SpotifySession, SpotifyCatalog, SpotifyWebApi, SpotifyWebCatalog, NativeSpotifyCatalog, NativeSpotifyGateway, SpotifyGateway, SpotifyAdapters, DemoContent}.kt`, `auth/{SpotifyAuth, SpotifyCredentials, SpotifyPkce, SpotifyTokenClient, EncryptedSpotifyCredentialStore}.kt`, `playback/{LibrespotPlaybackEngine, SpotifyAudioSink}.kt`, `bridge/` |
 | `:provider-navidrome` | `data/{NavidromeApi, NavidromeRuntime, NavidromeDemo}.kt`, `auth/NavidromeAuth.kt` |
-| `:provider-jellyfin` | `auth/JellyfinAuth.kt` (the catalog and runtime follow in the Jellyfin plan) |
+| `:provider-jellyfin` | `auth/JellyfinAuth.kt`, then `data/{JellyfinApi, JellyfinCatalog, JellyfinPlaybackReporter, JellyfinRuntime}.kt` (the adapter landed after the split) |
 | `:app` (stays) | every `Sidetrack*.kt` screen/activity/viewmodel, `data/AppSession.kt`, `Components.kt`, `TrackRow.kt`, `LibraryScreens.kt`, `NowPlaying*.kt`, `SearchScreen.kt`, `SettingsScreens.kt`, `Podcast*.kt`, `SidetrackViewModel.kt`, `MediaSessions.kt`/`PlaybackService.kt`/`AudioFocus.kt` if they need app-level Android components |
 
 Tests move with their subject: `NavidromeApiTest`, `NavidromeIntegrationTest` →
@@ -215,6 +215,11 @@ does not "fix" them back:
   behaviour; the JSON-null mapping it also covered stays tested in the provider module.
 - Native packaging (`buildSpotifyNative`, `jniLibs`, `src/demo` fixtures) never moved, as planned.
 
-Verification: `:app:testDebugUnitTest` (231), `:provider-spotify` (107), `:provider-navidrome` (18),
-`:provider-jellyfin` (12) — 368 total, 0 failures; `:app:assembleDebug`, `:app:assembleDemo` and
-`spotlessCheck` green.
+Verification at the time of the split: `:app:testDebugUnitTest` (231), `:provider-spotify` (107),
+`:provider-navidrome` (18), `:provider-jellyfin` (12) — 368 total, 0 failures;
+`:app:assembleDebug`, `:app:assembleDemo` and `spotlessCheck` green.
+
+The Jellyfin adapter was completed after this split: catalog, writer, runtime, playback reporting
+and picker registration now live in `:provider-jellyfin`, and `KnownServices` lists all three
+providers. See [provider-capabilities.md](provider-capabilities.md) and
+[jellyfin-integration.md](jellyfin-integration.md).

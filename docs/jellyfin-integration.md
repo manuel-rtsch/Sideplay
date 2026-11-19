@@ -1,12 +1,13 @@
 # Jellyfin integration — plan and SDK assessment
 
-Status: **planned; steps 1–4 of §9 landed.** In the build: the SDK dependency and its licence
-notice, `ServiceId.Jellyfin` / `ServiceCapabilities.Jellyfin` with tests pinning the flag set and
-the muted categories, password sign-in with an encrypted token store, and header-authenticated
-artwork. Nothing else exists yet: no catalog, writer, runtime or picker entry, so no user can
-select Jellyfin. This document records what the official Kotlin SDK gives us, what it does not, how
-Jellyfin maps onto Sidetrack's provider-neutral model, the decisions taken (§8), and the order in
-which the adapter is built.
+Status: **implemented; steps 1–9 and 11 of §9 landed.** Jellyfin is a selectable provider with
+password sign-in, catalog, writer, runtime and progress reporting over the shared Media3 player.
+Steps 10 (WebSocket invalidation, discovery UI, Quick Connect, 10.x) remain deferred. The
+dev-container checks named in D14 — empty-id `createPlaylist`, `editable` from `openAccess`/
+`shares`, direct FLAC via the profile — are covered by the opt-in
+`JellyfinIntegrationTest` and still need a run against a real 12.x server. This document records
+what the official Kotlin SDK gives us, what it does not, how Jellyfin maps onto Sidetrack's
+provider-neutral model, the decisions taken (§8), and the order in which the adapter was built.
 
 Sources: the [Kotlin SDK guide](https://kotlin-sdk.jellyfin.org/guide/getting-started.html), the
 SDK sources at [jellyfin/jellyfin-sdk-kotlin](https://github.com/jellyfin/jellyfin-sdk-kotlin)
@@ -395,7 +396,7 @@ decision and the consequence the implementation has to live with.
 | D11 | **`getPostedPlaybackInfo` + a music `DeviceProfile`** is the playback path; universal URL is fallback only. | Owns `playSessionId` (needed for accurate progress) and `transcodingUrl` (prefix `api.baseUrl`) plus `requiredHttpHeaders`; the profile has to advertise direct play for Media3's containers or servers transcode FLAC away silently; more code and more failure modes than a bare URL builder. |
 | D12 | **`markPlayedItem` only when the item finishes.** | Skips do not count as plays, matching the server's model; `reportPlaybackStopped` still reports where playback ended, so the server keeps its positions. No invented percentage rule. |
 | D13 | **Seed `ResumePoint` from `getResumeItems` at sign-in**; local state is authoritative afterwards. | Resume survives a reinstall and follows the account across devices; costs one call at sign-in; no two-way reconciliation rules, so a position advanced elsewhere only lands at the next sign-in. |
-| D14 | **No production 12.x server to test against; a throwaway `jellyfin/jellyfin` 12.x container in dev is the reference.** | `JellyfinIntegrationTest` stays opt-in (`JELLYFIN_TEST_URL`/`_USER`/`_PASSWORD`, skipped when absent) so CI is green; the three unverified claims in §2.11 — `createPlaylist` with empty `ids`, `editable` from `openAccess`/`shares`, direct FLAC via the profile — must be confirmed there before the writer and playback steps count as done. |
+| D14 | **No production 12.x server to test against; a throwaway `jellyfin/jellyfin` 12.x container in dev is the reference.** | `JellyfinIntegrationTest` stays opt-in (`JELLYFIN_TEST_URL`/`_USER`/`_PASSWORD`, skipped when absent) so CI is green; the three unverified claims in §2.11 — `createPlaylist` with empty `ids`, `editable` from `openAccess`/`shares`, direct FLAC via the profile — are exercised there and must be confirmed against the container before the adapter is called server-verified. |
 
 ---
 
@@ -416,24 +417,26 @@ decision and the consequence the implementation has to live with.
    is unaffected.
 5. **API seam and catalog**: `JellyfinApi` + `JellyfinCatalog` for the four sections, album and
    playlist collections, artist/albums/top-tracks, search, artwork URLs; pagination via
-   `totalRecordCount`, `hasMore` computed; unit tests with recorded JSON shaped like
-   `BaseItemDtoQueryResult`.
+   `totalRecordCount`, `hasMore` computed; unit tests against a fake `JellyfinApi` and direct
+   DTO-mapper tests. Done.
 6. **Writer**: favorites (track/album/artist), playlist add/remove/create; confirm the empty-id
-   `createPlaylist` and `editable` assumptions against the dev container (D14).
+   `createPlaylist` and `editable` assumptions against the dev container (D14). Implemented and
+   unit-tested; server confirmation pending.
 7. **Runtime and playback**: `JellyfinRuntime`, `getPostedPlaybackInfo` + `DeviceProfile` (D11),
-   quality ceiling (D4), isolated stores.
+   quality ceiling (D4), isolated stores. Done.
 8. **Registration**: `KnownServices`, `JellyfinProvider`, `AppSessions.build`; the picker and the
-   password sign-in form then work unchanged.
+   password sign-in form then work unchanged. Done.
 9. **Progress reporting**: `postCapabilities`, start/progress/stopped, `markPlayedItem` on finish
-   (D12), `getResumeItems` seeding at sign-in (D13).
+   (D12), `getResumeItems` seeding at sign-in (D13). Done through the new `PlaybackEngine.ended`
+   flow so the ViewModel keeps sole ownership of the event queue.
 10. **Deferred follow-ups**: WebSocket invalidation (D6), discovery UI (D9), Quick Connect (D5),
      and 10.x support only if it ever gets its own client (D7).
 11. **Integration test**: `JellyfinIntegrationTest` gated on `JELLYFIN_TEST_URL` / `_USER` /
     `_PASSWORD`, matching Navidrome's opt-in pattern (skipped when absent); run against the dev
-    container (D14).
+    container (D14). Written; server run pending.
 
-Steps 2–5 keep the build green on their own; nothing needs a feature flag because the picker only
-offers what `KnownServices` lists.
+Every step keeps the build green on its own; nothing needed a feature flag because the picker
+only offers what `KnownServices` lists, and registration was the last step.
 
 ---
 

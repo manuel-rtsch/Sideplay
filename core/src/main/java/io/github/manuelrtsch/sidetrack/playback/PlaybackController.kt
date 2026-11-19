@@ -19,6 +19,7 @@ import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -505,6 +506,12 @@ class PlaybackController(
 
     /** One engine event, or null when nothing has happened since the last poll. */
     suspend fun pollEvent(): PlaybackEvent? = engine.pollEvent()
+
+    /**
+     * End-of-track notifications that do not consume [pollEvent]. A provider uses this to report a
+     * finished item to its service without competing with the ViewModel for the event queue.
+     */
+    val ended: Flow<String?> get() = engine.ended
 
     private fun publish() {
         SidetrackDebug.log { "publish playing=$playing positionMs=$positionMs current=${current?.uri}" }

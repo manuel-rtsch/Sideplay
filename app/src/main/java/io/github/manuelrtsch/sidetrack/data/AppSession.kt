@@ -16,7 +16,8 @@ import kotlinx.coroutines.flow.asStateFlow
 /** Every service this build can provision, in the order the picker offers them. */
 val KnownServices: List<ServiceChoice> = listOf(
     ServiceChoice(SpotifyService.id, SpotifyService.DISPLAY_NAME),
-    ServiceChoice(NavidromeService.id, NavidromeService.DISPLAY_NAME)
+    ServiceChoice(NavidromeService.id, NavidromeService.DISPLAY_NAME),
+    ServiceChoice(JellyfinService.id, JellyfinService.DISPLAY_NAME)
 )
 
 /** The picker's view of [id], or null when this build does not know the service. */
@@ -194,6 +195,11 @@ object AppSessions {
             .onFailure { Log.w("SidetrackSession", "Could not build the Navidrome session", it) }
             .getOrNull()
             ?.let { Selection(NavidromeProvider(it), it) }
+
+        ServiceId.Jellyfin -> runCatching { JellyfinRuntime(context) }
+            .onFailure { Log.w("SidetrackSession", "Could not build the Jellyfin session", it) }
+            .getOrNull()
+            ?.let { Selection(JellyfinProvider(it), it) }
 
         else -> null
     }

@@ -60,7 +60,8 @@ runs standalone on any Android 12+ phone with a touchscreen or a physical keypad
 1. Install [Sidekit](https://github.com/HarlenPostill/Sidekit/releases/latest) on your Sidephone
    if you want the full launcher and app suite. Sidetrack works without it too.
 2. Install the Sidetrack APK.
-3. Open Sidetrack, choose **Spotify** or **Navidrome**, and sign in. To try the app without an
+3. Open Sidetrack, choose **Spotify**, **Navidrome** or **Jellyfin**, and sign in. Jellyfin
+   needs a 12.x server (the Kotlin SDK's minimum) with a music library. To try the app without an
    account or a server, choose **Navidrome** and leave the sign-in form empty: it signs into the
    shared demo at [demo.navidrome.org](https://demo.navidrome.org) (`demo` / `demo`).
 4. On the one-time **Welcome** screen, learn the keypad habits: **Back** returns, **Options**

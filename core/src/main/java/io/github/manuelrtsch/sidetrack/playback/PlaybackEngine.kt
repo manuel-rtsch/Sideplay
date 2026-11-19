@@ -1,6 +1,8 @@
 package io.github.manuelrtsch.sidetrack.playback
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import org.json.JSONObject
 
 /**
@@ -34,6 +36,16 @@ data class PlaybackEngineState(
  */
 interface PlaybackEngine {
     val state: StateFlow<PlaybackEngineState>
+
+    /**
+     * End-of-track notifications for observers that do not own the [pollEvent] queue.
+     *
+     * The queue is single-consumer: the ViewModel drains it to advance playback. A provider that
+     * has to tell the server an item finished (Jellyfin's "played" flag, decision D12) needs the
+     * same signal without taking events away from the queue owner. Engines that have no such
+     * observer leave the default, empty flow in place.
+     */
+    val ended: Flow<String?> get() = emptyFlow()
 
     /** Installed by the controller; the engine reports a dead audio pipeline here. */
     var onFailure: (Throwable) -> Unit

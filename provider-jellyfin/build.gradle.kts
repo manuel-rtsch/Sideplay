@@ -59,4 +59,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    // The opt-in integration test needs ApplicationProvider under Robolectric.
+    testImplementation(libs.androidx.junit)
 }

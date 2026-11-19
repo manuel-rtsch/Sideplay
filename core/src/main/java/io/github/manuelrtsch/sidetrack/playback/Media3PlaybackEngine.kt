@@ -2,8 +2,11 @@ package io.github.manuelrtsch.sidetrack.playback
 
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
@@ -60,6 +63,10 @@ class Media3PlaybackEngine(
     private val _state = MutableStateFlow(PlaybackEngineState())
     override val state: StateFlow<PlaybackEngineState> = _state.asStateFlow()
 
+    /** End-of-track observers; the event queue still belongs to the ViewModel (see [PlaybackEngine]). */
+    private val _ended = MutableSharedFlow<String?>(extraBufferCapacity = 1)
+    override val ended: Flow<String?> = _ended.asSharedFlow()
+
     override var onFailure: (Throwable) -> Unit = {}
 
     /** Serializes rebuilds so two settings toggles cannot install an old player last. */
@@ -86,6 +93,7 @@ class Media3PlaybackEngine(
                 Media3PlayerStatus.Ended -> {
                     _state.update { it.copy(isPlaying = false, isBuffering = false) }
                     events.add(PlaybackEvent.Ended(activeSource?.uri))
+                    _ended.tryEmit(activeSource?.uri)
                 }
 
                 Media3PlayerStatus.Idle -> _state.update { it.copy(isBuffering = false) }

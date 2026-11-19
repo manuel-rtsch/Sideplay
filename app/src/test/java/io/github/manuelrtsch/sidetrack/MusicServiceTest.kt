@@ -16,12 +16,13 @@ import org.junit.Test
 class MusicServiceTest {
     @Test fun `the picker offers every service this build can provision`() {
         assertEquals(
-            listOf(ServiceId.Spotify, ServiceId.Navidrome),
+            listOf(ServiceId.Spotify, ServiceId.Navidrome, ServiceId.Jellyfin),
             KnownServices.map { it.id }
         )
         // The label comes from the provider's own constant, so the picker cannot drift from it.
         assertEquals("Spotify", KnownServices.first { it.id == ServiceId.Spotify }.displayName)
         assertEquals("Navidrome", KnownServices.first { it.id == ServiceId.Navidrome }.displayName)
+        assertEquals("Jellyfin", KnownServices.first { it.id == ServiceId.Jellyfin }.displayName)
         assertNull(serviceChoice(ServiceId("unknown")))
     }
 
@@ -92,10 +93,10 @@ class MusicServiceTest {
         )
     }
 
-    @Test fun `the picker does not offer Jellyfin until the adapter can sign in`() {
-        // The identity and capability set ship first (docs/jellyfin-integration.md, steps 1-2);
-        // registration follows with the runtime, so no picker entry leads to an empty screen.
-        assertNull(serviceChoice(ServiceId.Jellyfin))
+    @Test fun `the picker offers Jellyfin once its runtime can sign in`() {
+        val choice = serviceChoice(ServiceId.Jellyfin)
+        assertEquals("Jellyfin", choice?.displayName)
+        assertEquals(ServiceId.Jellyfin, choice?.id)
     }
 
     @Test fun `a fully featured service keeps every category selectable`() {
