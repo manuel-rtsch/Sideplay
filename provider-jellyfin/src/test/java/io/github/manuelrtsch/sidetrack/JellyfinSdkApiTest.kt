@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.sun.net.httpserver.HttpServer
 import io.github.manuelrtsch.sidetrack.auth.JellyfinCredentials
+import io.github.manuelrtsch.sidetrack.auth.SdkJellyfinAuthenticator
 import io.github.manuelrtsch.sidetrack.data.JellyfinKind
 import io.github.manuelrtsch.sidetrack.data.JellyfinPlaybackReport
 import io.github.manuelrtsch.sidetrack.data.SdkJellyfinApi
@@ -171,7 +172,7 @@ class JellyfinSdkApiTest {
         assertEquals("entry-1", entries.items.single().playlistItemId)
     }
 
-    @Test fun `an open playlist is editable without a share and missing entries fall back`() = runBlocking {
+    @Test fun `an open playlist is editable and an entry that is gone removes nothing`() = runBlocking {
         server.reply { req ->
             when {
                 req.path.startsWith("/Playlists/") && req.path.endsWith("/Items") ->
@@ -188,10 +189,13 @@ class JellyfinSdkApiTest {
         assertTrue(playlist.editable)
         assertTrue(playlist.itemIds.isEmpty())
 
-        // The entry id in the scan is for a different media item, so the raw id is used.
+        // The only entry the scan sees is a different media item, so there is nothing to remove.
+        // This used to fall back to passing the media item id as an entry id, which removes
+        // nothing on the server — or, on an id collision, the wrong entry. Now no request is sent,
+        // and a playlist longer than one page is scanned to the end instead of being guessed at.
+        val deletesBefore = server.requests.count { it.method == "DELETE" }
         api.removeFromPlaylist(PLAYLIST_ID, ITEM_ID)
-        assertTrue(server.requests.last().method == "DELETE")
-        assertTrue(server.requests.last().query.orEmpty().contains("entryIds=$ITEM_ID"))
+        assertEquals(deletesBefore, server.requests.count { it.method == "DELETE" })
     }
 
     @Test fun `a deleted playlist is null and creating one returns the server id`() = runBlocking {
@@ -213,6 +217,38 @@ class JellyfinSdkApiTest {
         assertTrue(post.body.contains("Audio"))
     }
 
+    @Test fun `removal deletes by the entry id the scan found`() = runBlocking {
+        server.reply { req ->
+            when {
+                req.method == "GET" && req.path.endsWith("/Items") ->
+                    FakeJellyfin.Res(200, page("""{"Id":"$ITEM_ID","Name":"Entry","Type":"Audio","PlaylistItemId":"entry-1"}"""))
+
+                else -> FakeJellyfin.Res(204, "{}")
+            }
+        }
+
+        api().removeFromPlaylist(PLAYLIST_ID, ITEM_ID)
+
+        val delete = server.requests.last()
+        assertEquals("DELETE", delete.method)
+        assertTrue(delete.query.orEmpty().contains("entryIds=entry-1"))
+    }
+
+    @Test fun `the entry scan asks for one page at a time so a long playlist is not cut off`() = runBlocking {
+        server.reply { req ->
+            when {
+                req.method == "GET" && req.path.endsWith("/Items") -> FakeJellyfin.Res(200, page(ITEM))
+                else -> FakeJellyfin.Res(204, "{}")
+            }
+        }
+
+        api().removeFromPlaylist(PLAYLIST_ID, ITEM_ID)
+
+        val scan = server.requests.first { it.method == "GET" && it.path.endsWith("/Items") }
+        assertEquals("0", scan.query.orEmpty().substringAfter("startIndex=").substringBefore('&'))
+        assertEquals("200", scan.query.orEmpty().substringAfter("limit=").substringBefore('&'))
+    }
+
     @Test fun `adding to a playlist reports the size before the append`() = runBlocking {
         server.reply { req ->
             when {
@@ -228,6 +264,43 @@ class JellyfinSdkApiTest {
         assertEquals("POST", add.method)
         assertTrue(add.query.orEmpty().contains("ids=$ITEM_ID"))
         assertTrue(add.query.orEmpty().contains("userId=$USER_ID"))
+    }
+
+    // --- sign-in ---------------------------------------------------------------------------------
+
+    @Test fun `sign-in refuses a server older than 12 and names it, before sending the password`() = runBlocking {
+        server.reply { FakeJellyfin.Res(200, """{"Version":"10.9.11","ProductName":"Jellyfin Server"}""") }
+
+        val failure = runCatching {
+            SdkJellyfinAuthenticator(context).signIn(server.base, "demo", "secret")
+        }.exceptionOrNull()
+
+        assertTrue(failure is ServiceException)
+        assertEquals(ServiceFailure.NotConnected, (failure as ServiceException).failure)
+        assertTrue(failure.message.orEmpty().contains("10.9.11"))
+        assertTrue(server.requests.none { it.path.contains("AuthenticateByName") })
+    }
+
+    @Test fun `sign-in proceeds on a 12 server and keeps the token`() = runBlocking {
+        server.reply { req ->
+            when {
+                req.path.endsWith("/System/Info/Public") -> FakeJellyfin.Res(200, """{"Version":"12.4.0"}""")
+
+                req.path.contains("AuthenticateByName") -> FakeJellyfin.Res(
+                    200,
+                    """{"AccessToken":"tok-1","User":{"Id":"$USER_ID","Name":"demo"}}"""
+                )
+
+                else -> FakeJellyfin.Res(200, "{}")
+            }
+        }
+
+        val credentials = SdkJellyfinAuthenticator(context).signIn(server.base, "demo", "secret")
+
+        assertEquals("tok-1", credentials.accessToken)
+        assertEquals("demo", credentials.userName)
+        assertTrue(credentials.authorizationHeader.contains("tok-1"))
+        assertTrue(server.requests.any { it.path.contains("AuthenticateByName") })
     }
 
     // --- search, mixes and user data -----------------------------------------------------------
