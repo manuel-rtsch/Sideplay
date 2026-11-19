@@ -1,663 +1,187 @@
 # Test Suite and Coverage Audit
 
-Status: audit only, no code changes yet.
-Branch: `test/coverage-audit`, based on `release/v0.4.0` @ `cbe96d0`.
-Measured: debug variant, all four unit-test modules, merged.
+Status: Phase 2 complete. **Phase 3 (rebalance) is what remains.**
+Branch: `test/coverage-audit`. Measured on the debug variant, all modules merged.
 
-This document records the current shape of Sidetrack's unit-test suite: how much code
-there is, how many tests exist, where coverage actually lands, and where the suite is
-spending effort without buying risk reduction. It is the baseline for the test
-optimisation work on this branch.
+The original audit's 391-test / 57% baseline is obsolete; see git history if you need it.
+This document is now a work list, not a history.
 
 ---
 
-## 1. Method
+## 1. What remains
 
-Figures below are measured, not estimated:
+### 1.1 Phase 3 — rebalance (highest value)
 
-* **Size** — `cloc` over `src/main` only (Kotlin code lines: non-blank, non-comment),
-  dependencies, vendored librespot and generated sources excluded.
-* **Test count** — executed JUnit test methods from the Gradle test reports
-  (`*/build/test-results/testDebugUnitTest/TEST-*.xml`), cross-checked against `@Test`
-  annotations.
-* **Coverage** — JaCoCo 0.8.12 line/branch coverage of debug-compiled classes, all
-  modules merged.
+The suite is broad enough; the next gain is removing work that does not buy risk reduction.
 
-One caveat that matters if you reproduce this: **Robolectric ignores an on-the-fly JaCoCo
-agent**, so a plain `-javaagent` run reports ~0% for every Robolectric-backed test and
-makes the app look almost untested. The numbers here come from *offline* instrumentation
-of the compiled class jars. The exact recipe is in [Appendix A](#appendix-a--reproducing-the-numbers).
+1. **Delete the `:app` Spotify tests that duplicate `:provider-spotify`.**
+   About 62 tests / 900 lines still exercise session, queue, fallback and persistence
+   behaviour the provider module owns:
 
-Scope notes:
+   | `:app` test | Tests | Also covered by |
+   |---|---:|---|
+   | `SpotifyViewModelEventTest` | 32 | `NativeSpotifyGatewayTest`, `SpotifyQueueRepositoryTest` |
+   | `SpotifyFallbackStateTest` | 12 | `SpotifySessionCacheTest`, `NativeSpotifyCatalogTest` |
+   | `SpotifyPersistenceTest` | 14 | `SpotifyHistoryRepositoryTest`, `SpotifyEpisodeProgressTest` |
+   | `SpotifyPaginationTest` | 4 | `NativeSpotifyCatalogTest` |
 
-* Android instrumentation tests (`app/src/androidTest`, 3 classes) are out of scope;
-  they are device tests, not unit tests.
-* Compose compiler-generated code and `BuildConfig` are included in the denominators
-  where JaCoCo sees them; they are not actionable.
+   Keep the view-model-only assertions; move or delete the rest. Re-measure afterwards:
+   product coverage should barely move, and the default suite should get materially faster.
 
----
+2. **Cap the screenshot suite.** `SidetrackScreenshotTest` is 26 tests and 27 PNGs, and it
+   carries ~12 points of line coverage. Keep one baseline per screen state that semantics
+   tests cannot express; drop variants that only re-render a covered state. It stays
+   opt-in (`-PsidetrackScreenshots`), never part of the default loop.
 
-## 2. Size of the codebase
+3. **Create a shared test-fixtures source set/module.**
+   `MediaKeyFixtures`, `FakeHttpStream`, `RecordingServiceRuntime`, `Previews` and the
+   Spotify fakes are still app-local or copied. Android `testFixtures` on `:core` is the
+   smallest option. This unblocks moving the remaining `:app` playback tests to `:core`
+   and removes the direct `MediaKey(ServiceId.Spotify, …)` workaround in the moved tests.
 
-Own product code, `src/main` only:
+4. **Re-measure and ratchet.** After the deletions, measured coverage may dip a little
+   because the screenshot suite shrinks. Re-baseline the floors once, then raise them
+   again; do not lower a floor to absorb duplicate tests.
 
-| Module | Kotlin files | Code lines | Share |
-|---|---|---|---|
-| `app` | 37 | 10,545 | 59% |
-| `core` | 26 | 2,596 | 15% |
-| `provider-spotify` | 18 | 2,672 | 15% |
-| `provider-jellyfin` | 6 | 1,414 | 8% |
-| `provider-navidrome` | 4 | 679 | 4% |
-| **Kotlin total** | **91** | **17,906** | |
-| Rust (`native/sidetrack-spotify/src`) | 4 | 3,219 | |
-| **Product code total** | **95** | **~21,100** | |
+### 1.2 `app` gaps
 
-Excluded: `native/vendor` (vendored librespot and friends, ~7.4k lines plus its own
-dependencies), XML resources, Gradle scripts, `design/`, `maestro/`, `docs/`.
+* `AppSession`'s remaining ~45 lines are mostly the `GuardedEncryptedStore`-backed
+  `ActiveServiceStore` and `AppSessions.create`/`build` failure branches. The store cannot
+  be read back under Robolectric (the guard swallows the write). Either add a factory seam
+  for the store/runtime constructors or accept the gap; the persistence boundary is already
+  pinned by `CredentialStoreGuardTest` and `StoreFailureTest`.
+* `SidetrackGraph` needs a composed nav host. That is Roborazzi or instrumented work, not
+  more unit tests.
+* `QueueReorder`'s slot arithmetic (`firstOnScreen`/`lastOnScreen`, auto-scroll) needs a
+  laid-out list. Same category: instrumented/Roborazzi.
+* `PlaybackService` is unit-tested at 0% → high coverage through `onStartCommand`; an
+  instrumented test is still worth adding for the real foreground-service lifecycle.
 
-Test code: **7,041 lines** across **47 test classes** plus 6 fakes/fixtures
-(`MockSpotifyDataSource`, `FakeHttpStream`, `FakeJellyfinApi`, `TestHttpStream`,
-`NowPlayingFixture`, `MediaKeyFixtures`/`RecordingHapticShadow`/`Previews`).
+### 1.3 `core` — accepted gaps and one decision
 
-Test-to-product-code ratio is therefore about **1:3**, and 395 tests is about
-**1 test per 53 product lines** (1 per 45 Kotlin lines).
+* `ExoPlayerMedia3Player` (0%) is **accepted**. It builds a real `ExoPlayer`; Robolectric
+  cannot buffer audio, so a unit test would only assert listener translation against a
+  mock. Cover it with an instrumented test, or add a `Media3Player` factory seam only when
+  a slice actually needs it.
+* `GuardedEncryptedStore` (0%) is **accepted** for the same reason as the app store: it
+  constructs `EncryptedFileStore` in its initializer. The same contract is pinned through
+  the injectable `JsonStore`.
+* **Decision needed:** `PlaybackController.resume()` activates the media-session owner
+  before asking the engine whether audio started. If the engine reports failure, `playing`
+  is cleared but `registry.active` still points at the controller. Slice 6 pinned the
+  audible state and deliberately did not encode either answer for the registry. Decide
+  whether this is a bug; if yes, fix it and assert the registry is cleared.
+* `ServiceRuntime`'s optional-interface extensions are shallow coverage. They are fine as
+  neutral-default regression insurance; the real runtimes are covered.
 
----
+### 1.4 `provider-spotify` gaps
 
-## 3. Current test inventory
+* `recoverPlayback` (the stall/reconnect path) is the remaining native branch in
+  `SpotifySession`. It needs a fake native that can report a dead drain and a session that
+  can reconnect.
+* `applyAudioSettings`' deferred rebuild is now pinned in
+  `LibrespotPlaybackEngine.reconfigurePending`; no session-level test is needed.
+* `SpotifySession` is still below the provider average. Add only native-lifecycle cases
+  that the engine tests cannot express.
 
-`./gradlew testDebugUnitTest` → 395 test methods, all green, 6 skipped.
+### 1.5 `provider-jellyfin` / `provider-navidrome`
 
-| Module | Test classes | Tests | Test code lines | Test:main ratio |
-|---|---|---|---|---|
-| `app` | 30 | 231 | 4,526 | 0.43 |
-| `provider-spotify` | 10 | 110 | 1,363 | 0.51 |
-| `provider-jellyfin` | 5 | 36 | 784 | 0.55 |
-| `provider-navidrome` | 2 | 18 | 368 | 0.54 |
-| `core` | **0** | **0** | 0 | **0.00** |
-| **Total** | **47** | **395** | **7,041** | 0.39 |
-
-The 6 skipped tests are the live-server integration tests, which silently do nothing in
-CI because no server is provisioned:
-
-* `NavidromeIntegrationTest` — 4 tests
-* `JellyfinIntegrationTest` — 2 tests
-
-That is 1.5% of the suite reporting "green" without asserting anything.
-
-Largest test files by size: `SidetrackScreenshotTest` (415 lines), `PlaybackControllerTest`
-(331), `SpotifyViewModelEventTest` (329), `NativeSpotifyCatalogTest` (325),
-`SpotifyFallbackStateTest` (319), `SpotifyQueueRepositoryTest` (303).
-
----
-
-## 4. Coverage, measured
-
-Merged across all modules (a line covered by any module's tests counts once):
-
-| Area | Line coverage | Branch coverage |
-|---|---|---|
-| **Overall** | **57.0%** (7,142 / 12,520) | **37.3%** |
-| `app` | 58.0% (4,394 / 7,570) | 38.1% |
-| `core` | 75.1% (1,274 / 1,696) | 50.3% |
-| `provider-spotify` | 42.4% (728 / 1,718) | 23.9% |
-| `provider-jellyfin` | 47.6% (507 / 1,066) | 38.8% |
-| `provider-navidrome` | 50.9% (239 / 470) | 35.1% |
-
-`core`'s 75% is entirely indirect: `:core` has **no test source set**, so its coverage
-comes from `:app` and provider tests importing `QueueRepository`, `PlaybackController`,
-`StateStores` and friends. That has two costs — those tests pay full
-Robolectric/Compose startup cost for pure Kotlin logic, and there is no per-module gate
-that would catch a regression in `core` early.
-
-### 4.1 Where coverage is good (≥90%)
-
-| Code | Lines | Coverage |
-|---|---|---|
-| `core/data/HistoryRepository.kt` | 44 | 100% |
-| `core/data/PlaybackSettings.kt` | 28 | 100% |
-| `core/data/QueueRepository.kt` | 148 | 98% |
-| `core/data/EpisodeProgress.kt` | 124 | 92% |
-| `core/data/StateStores.kt` | 190 | 92% |
-| `core/playback/DrainPolicy.kt` | 18 | 100% |
-| `core/playback/SleepTimer.kt` | 31 | 97% |
-| `core/playback/PlaybackEngine.kt` | 76 | 96% |
-| `app/SidetrackAboutScreen.kt` | 112 | 100% |
-| `app/SidetrackItem.kt` | 70 | 100% |
-| `app/UiSlices.kt` | 127 | 98% |
-| `app/PodcastText.kt` | 56 | 96% |
-| `app/SidetrackOnboardingScreen.kt` | 111 | 92% |
-| `provider-spotify/auth/SpotifyPkce.kt` | 39 | 97% |
-| `provider-jellyfin/data/JellyfinPlaybackReporter.kt` | 94 | 98% |
-| `provider-jellyfin/data/JellyfinCatalog.kt` | 203 | 97% |
-
-### 4.2 Where the code is effectively untested
-
-Zero or near-zero coverage, ranked by how much runtime risk the file carries:
-
-| File | Lines | Coverage | Why it matters |
-|---|---|---|---|
-| `app/playback/PlaybackService.kt` | 139 | **0%** | The Android service that runs during playback |
-| `app/data/AppSession.kt` | 91 | **5.5%** | Session/bootstrap wiring |
-| `app/SidetrackGraph.kt` | 787 | **8.9%** | Navigation graph — every screen transition goes through it |
-| `app/SidetrackActivity.kt` | 66 | **0%** | Host activity |
-| `app/SidetrackAppearanceScreen.kt` | 21 | **0%** | |
-| `app/SidetrackNotes.kt` | 10 | **0%** | |
-| `app/ui/QueueIndication.kt` | 26 | **0%** | |
-| `app/ui/QueueReorder.kt` | 121 | **24.8%** | User-facing drag/reorder state |
-| `app/ui/Haptics.kt` | 7 | **28.6%** | |
-| `core/playback/AudioFocus.kt` | 27 | **0%** | Focus loss/ducking — common device bug source |
-| `core/playback/ExoPlayerMedia3Player.kt` | 60 | **0%** | |
-| `core/playback/PlaybackController.kt` | 317 | **53.3%** | Largest playback surface |
-| `core/data/ServiceRuntime.kt` | 15 | **26.7%** | |
-| `core/storage/GuardedEncryptedStore.kt` | 17 | **35.3%** | Credential boundary |
-| `provider-spotify/auth/SpotifyTokenClient.kt` | 49 | **2.0%** | Token refresh — silent auth failures |
-| `provider-spotify/data/SpotifyWebApi.kt` | 310 | **7.7%** | |
-| `provider-spotify/data/SpotifySession.kt` | 279 | **35.5%** | |
-| `provider-spotify/playback/SpotifyAudioSink.kt` | 228 | **3.5%** | |
-| `provider-spotify/bridge/NativeBridge.kt` | 48 | **6.2%** | JNI boundary |
-| `provider-spotify/data/SpotifyWebCatalog.kt` | 9 | **0%** | |
-| `provider-jellyfin/data/JellyfinRuntime.kt` | 155 | **0.6%** | |
-| `provider-jellyfin/data/JellyfinApi.kt` | 485 | **27.8%** | |
-| `provider-navidrome/data/NavidromeRuntime.kt` | 112 | **0.9%** | |
-
-Roughly 1,800 lines of glue sit at under 10%, and that is precisely the layer that
-cannot be exercised from a JVM-only test without some deliberate seams (fake runtime,
-fake service, injected clock/dispatcher).
+Both are at or near the module target (91.18% and 68.36% line). No planned work beyond
+ratcheting the floors if a future change moves them.
 
 ---
 
-## 5. Where the suite is spending effort inefficiently
+## 2. Current state
 
-Coverage alone does not show over-testing; density and duplication do.
-
-### 5.1 Screenshot tests duplicate semantic tests
-
-`SidetrackScreenshotTest` is 26 tests, 415 test lines and 27 PNG baselines, and it runs on
-every `testDebugUnitTest`, paying Robolectric + Roborazzi + Compose render cost. Nearly
-every screen it renders also has behavioural assertions elsewhere
-(`AccessibilitySemanticsTest`, `RowActionBarTest`, `HistoryRowActionsTest`,
-`NowPlayingScreens`/`SettingsScreens`/`LibraryScreens` semantics, `TrackRowGutterTest`).
-
-Verdict: keep the baselines, but run them as a tagged, separate task (PR/nightly), not as
-part of the default loop.
-
-### 5.2 Spotify is covered twice, at two layers
-
-`:app` carries Spotify behaviour that `:provider-spotify` also covers:
-
-| `:app` test | Tests | Lines | Also covered in provider module by |
-|---|---|---|---|
-| `SpotifyViewModelEventTest` | 32 | 329 | `NativeSpotifyGatewayTest`, `SpotifyQueueRepositoryTest` |
-| `SpotifyFallbackStateTest` | 12 | 319 | `SpotifySessionCacheTest`, `NativeSpotifyCatalogTest` |
-| `SpotifyPersistenceTest` | 14 | 205 | `SpotifyHistoryRepositoryTest`, `SpotifyEpisodeProgressTest` |
-| `SpotifyPaginationTest` | 4 | 43 | `NativeSpotifyCatalogTest` |
-
-That is ~62 tests / ~900 lines in `:app` exercising session, queue, fallback and
-persistence semantics that the provider module owns. Some of it is legitimately
-view-model behaviour, but the split is accidental rather than designed — and it keeps a
-large share of the "provider" logic testable only through Compose.
-
-The two engine suites (`Media3PlaybackEngineTest` 12 tests, `LibrespotPlaybackEngineTest`
-11 tests) are justified as parity contracts, but their fakes/fixtures are triplicated
-(`MockSpotifyDataSource`, `FakeHttpStream`, `MediaKeyFixtures`, `NowPlayingFixture`).
-
-### 5.3 Highest density sits on the lowest-risk code
-
-| Code | Code lines | Tests | Tests per 100 lines |
-|---|---|---|---|
-| `core/data/QueueRepository.kt` | 148 | 34 (`SpotifyQueueRepositoryTest`) | **23** |
-| `app/ui/RowGutter.kt` | 157 | 15 (`TrackRowGutterTest`) | 9.6 |
-| `provider-spotify/data/NativeSpotifyCatalog.kt` | 240 | 22 | 9.2 |
-| `provider-jellyfin/data/JellyfinCatalog.kt` | 203 | 10 | 4.9 |
-| `app/SidetrackViewModel.kt` | 1,634 | ~46 | 2.8 |
-
-`QueueRepository` at 98% with 34 tests is the single densest area in the repo, while
-`PlaybackService` — the component that actually runs while music plays — has zero tests.
-Trivia is also pinned at 100%: `AboutVersionTest`, `SidetrackLinksTest`,
-`PodcastTextTest` (8 tests for a 56-line file), `SidetrackAboutScreen`.
-
----
-
-## 6. Targets
-
-Two independent heuristics agree on the size of the next step:
-
-* **Density:** 1 test per ~40 product lines → ~525 tests.
-* **Coverage:** lifting 57% → 70% requires ~2,000–2,600 newly covered lines; concentrated
-  in 0%-coverage glue that is ~20 lines per test, that is 120–160 new tests.
-
-**Target: 530–560 tests, with a 70% overall line-coverage floor and a 60% per-module
-floor.** The count is an output, not the goal — the floors and the risk list are the goal.
-
-| Module | Tests now | Target | Priority work |
-|---|---|---|---|
-| `core` | 0 (in-module) | 40 | Create a `:core` test source set; move pure-logic tests out of `:app`; cover `AudioFocus`, `ExoPlayerMedia3Player`, `ServiceRuntime`, `GuardedEncryptedStore`, rest of `PlaybackController` |
-| `app` | 231 | 290 | `PlaybackService` (0%), `AppSession` (5%), `SidetrackGraph` (9%), `SidetrackActivity`, `QueueReorder`/`QueueIndication`/`Haptics` |
-| `provider-spotify` | 110 | 145 | `SpotifyTokenClient` (2%), `SpotifyWebApi` (8%), `SpotifySession` (36%), `SpotifyAudioSink` (3.5%), `NativeBridge` (6%) |
-| `provider-jellyfin` | 36 | 55 | `JellyfinRuntime` (0.6%), `JellyfinApi` (28%) |
-| `provider-navidrome` | 18 | 30 | `NavidromeRuntime` (0.9%) |
-
-Stop at ~70%. Beyond that, the remaining uncovered lines are Compose scaffolding and
-platform glue where tests are expensive and weak; additional budget is better spent on
-instrumented tests for the playback service than on unit-test line coverage.
-
----
-
-## 7. Proposed plan for this branch
-
-**Phase 1 — infrastructure (no behaviour tests yet)**
-
-1. Add Kover with per-module floors: 70% overall, 60% per module, excluding
-   Compose-generated code and `BuildConfig`.
-2. Create `core/src/test` and move the pure-logic tests there (`QueueRepository`,
-   `EpisodeProgress`, `HistoryRepository`, `PlaybackController`, `DrainPolicy`,
-   `SleepTimer`, `StateStores`). These get ~10× faster without Robolectric.
-3. Split suites by tag: `unit` (default, fast), `screenshot` (Roborazzi, PR/nightly),
-   `integration` (needs a live Navidrome/Jellyfin). Integration tests become an explicit
-   opt-in task instead of silently skipping.
-4. Consolidate fakes into a small shared test-fixtures module or source set to remove the
-   triplicated Spotify mocks.
-
-**Phase 2 — close the 0% glue** (the ~130 new tests)
-
-5. `app`: `PlaybackService`, `AppSession`, `SidetrackGraph` (route table + deep links),
-   `QueueReorder`, `Haptics`/`QueueIndication` via injected shadows.
-6. `core`: `AudioFocus` (loss, duck, transient, permanent), `ExoPlayerMedia3Player`,
-   `ServiceRuntime`, `GuardedEncryptedStore` failure paths.
-7. Providers: token client refresh/expiry/failure, session lifecycle, runtime
-   start/stop/halt, native bridge error mapping, `SpotifyWebApi`/`JellyfinApi` request
-   construction and error paths.
-
-**Phase 3 — rebalance**
-
-8. Decide ownership per behaviour: provider-level vs view-model-level, and delete the
-   duplicated half rather than keeping both.
-9. Cap the screenshot suite: one baseline per screen state that semantics tests cannot
-   express, not one per screen variant.
-10. Re-measure and record the delta at the end of the branch.
-
----
-
-## 8. Explicitly out of scope
-
-* Vendored Rust (`native/vendor`) and third-party Compose/Media3 code.
-* `BuildConfig` and compiler-generated Compose code.
-* Full end-to-end device flows — those belong to Maestro (`maestro/`), not unit tests.
-
----
-
-## 9. Phase 1 status (landed on this branch)
-
-Phase 1 was infrastructure only; no production behaviour changed.
-
-### 9.1 What landed
-
-1. **Kover replaces the ad-hoc JaCoCo measurement.** `kover` 0.9.11 on the `debug` variant, with
-   `:app` as the merging module so `:app:koverVerifyDebug` measures every module together. Generated
-   code (`BuildConfig`, `R`, `ComposableSingletons`) is filtered out; `@Composable` functions are
-   deliberately still counted, because the semantics and screenshot tests do exercise them.
-   Entry point: `./gradlew coverage`.
-2. **`:core` has a test source set.** Seven suites moved there, renamed where the old name leaked a
-   provider: `QueueRepositoryTest` (34), `HistoryRepositoryTest` (10), `EpisodeProgressTest` (7),
-   `StorePersistenceTest` (14), `DrainPolicyTest` (8), `SleepTimerTest` (4), `HaltStopGuardTest` (4).
-   That is **81 tests that now run in ~3 s** instead of under Robolectric/Compose.
-3. **Suites are split by cost and dependency.** `*ScreenshotTest` and `*IntegrationTest` are filtered
-   out of the default `testDebugUnitTest` and gated behind `-PsidetrackScreenshots` and
-   `-PsidetrackIntegration`. Default run: **359 tests, ~46 s**. Full run: **385 tests**.
-4. **Screenshot tests actually verify now.** They were running with `roborazzi.test.record=true` on
-   every invocation, so all 26 could never fail — they rewrote their own baselines. Recording is now
-   opt-in (`-PsidetrackScreenshotsRecord`) and verification is the default. All 26 baselines match, so
-   no rebaselining was needed.
-5. **Coverage floors are a ratchet** in the build files, with the bound tracking which suite ran:
-
-| Gate | Suite | Line floor | Branch floor | Measured |
-|---|---|---|---|---|
-| `:app` (product-wide, merged) | default | 45 | 28 | 46.0% / 29.5% |
-| `:app` (product-wide, merged) | full | 57 | 34 | 58.4% / 35.8% |
-| `:core` | own tests | 34 | 27 | 35.8% / 29.0% |
-| `:provider-spotify` | own tests | 31 | 20 | 32.5% / 20.8% |
-| `:provider-jellyfin` | own tests | 46 | 38 | 47.1% / 39.7% |
-| `:provider-navidrome` | own tests | 50 | 34 | 51.4% / 35.4% |
-
-Phase 2 targets remain **70% line / 45% branch** on the full suite.
-
-### 9.2 What the split revealed
-
-* **The screenshot suite carries ~12 points of line coverage** (58.4% full vs 46.0% default). That is
-  the single largest block of coverage in the repo, and it comes from rendering screens whose
-  behaviour is already asserted by semantics tests. It is why the two floors differ.
-* **Moving tests to `:core` did not change product coverage** — the same lines were already exercised,
-  just from a more expensive JVM. What changed is the feedback loop: 81 tests in 3 s instead of ~40 s.
-* **Per-module floors and per-module *coverage* are different numbers.** `:core` verifies against
-  35.8% because that is what its own tests reach; the whole suite still covers roughly 75% of it. The
-  per-module gates therefore guard against losing a module's own tests, while the `:app` merged gate
-  guards the product. Both are intentional.
-
-### 9.3 Findings that move to Phase 2
-
-* Fixture sharing is the blocker for moving the remaining playback tests: `Media3PlaybackEngineTest`
-  depends on `app/src/test/.../FakeHttpStream.kt`, which six other app tests also use. Android
-  `testFixtures` on `:core` (or a small `:test-support` module) would let that test and its fixture
-  travel to `:core`. The fakes are otherwise not duplicated: the Jellyfin and Navidrome fakes are
-  provider-local by design.
-* `:app` still carries ~62 Spotify tests duplicating `:provider-spotify` coverage, and
-  `PlaybackControllerTest` / `LibrespotPlaybackEngineTest` still sit in `:app` even though they only
-  touch `:core` and `:provider-spotify` types (`PlaybackControllerTest` needs `SpotifyGateway`, so it
-  belongs in `:provider-spotify`).
-* `SidetrackGraph` remains at 8.9% and `PlaybackService` at 0%: the two largest risks are untouched,
-  which is exactly where Phase 2 starts.
-
-### 9.4 Baseline reconciliation
-
-The audit above was measured in the 0.4.0 working tree, which contained four uncommitted
-`JellyfinAuthTest` cases that do not exist at `cbe96d0`. On this branch the committed baseline is
-391 tests (395 − 4); Phase 1 moved 81 of them and split the rest into 359 default / 385 full.
-
----
-
-## 10. Phase 2 status (four slices)
-
-Phase 2 is being worked in slices. The first took the `:core` glue the audit named plus the queue
-reorder state machine; the second took the two largest `app` risks, the playback service and the
-app session, and whatever of the navigation graph is reachable without a composed nav host; the
-third took the provider runtimes and the three Spotify boundaries the audit named (token client,
-audio sink, native bridge); the fourth took the two remaining Spotify data seams and the
-SDK-backed Jellyfin API.
-
-### 10.1 What landed (slice 1)
-
-| Area | Tests | What is pinned |
-|---|---|---|
-| `core/playback/AudioFocus.kt` | 12 | grant, denial, a held request is not repeated, abandon with and without focus, transient loss resumes on gain, permanent loss does not, a transient loss followed by a permanent one does not resume, abandon during a transient loss cancels the resume, duck is ignored, a permanent loss re-asks the system |
-| `core/data/ServiceRuntime.kt` | 10 | every optional-interface extension answers the neutral value when the interface is absent, and forwards to the runtime when it is present |
-| `app/ui/QueueReorder.kt` | 13 | lift state, keypad stepping and its bounds, step without a lift, touch lift ignoring steps, a sub-half-row drag, end/cancel clearing every field Back reads |
-
-### 10.1a What landed (slice 2)
-
-| Area | Tests | What is pinned |
-|---|---|---|
-| `app/playback/PlaybackService.kt` | 12 | channel creation, the nothing-playing path leaving the foreground, the playing path promoting to a media notification, title/artist text, the three notification actions and the paused player's Play button, each transport action reaching the player, the signed-out session dropping the notification, task removal halting audio |
-| `app/data/AppSession.kt` | 12 | unprovisioned state for every accessor, the runtime accessor failing loudly, transport commands silent before provisioning, install publishing the service and forwarding each transport call, `signedIn` and `playback` following the runtime, re-install replacing both |
-| `app/SidetrackGraph.kt` | 16 | the keypad-back route table (Home/Welcome/Sign in excluded, every screen route included, unknown/null routes and an empty back stack excluded), the notification intent recorded and other intents ignored |
-
-The service test installs a session into `AppSessions` by reflection and drives `onStartCommand`
-directly, so it exercises the real notification builder and the real `PlaybackController`, not a
-model of them. The session and provider fakes moved to `app/src/test/.../RecordingServiceRuntime.kt`,
-which now backs both files.
-
-35 new tests in slice 1, 40 in slice 2. They run in the default suite: `:core` in ~1 s (no Robolectric for the runtime
-seams), `QueueReorderTest` in well under a second.
-
-Audio focus is exercised through Robolectric's `ShadowAudioManager`; the listener is read off the
-shadow request by type, because the field name is a Robolectric implementation detail.
-
-### 10.2 Measured delta
-
-| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 | After slice 4 | After slice 5 | After slice 6 |
-|---|---|---|---|---|---|---|---|
-| Product line (default suite) | 45.99% | 46.75% | 48.57% | 52.36% | 57.74% | 59.11% | **59.51%** |
-| Product branch (default suite) | 29.46% | 30.07% | 31.20% | 33.88% | 38.12% | 39.75% | **40.17%** |
-| Product line (full suite) | 58.4% | 58.4% | 58.4% | 64.66% | 69.98% | 71.47% | **71.87%** |
-| Product branch (full suite) | 35.8% | 35.8% | 35.8% | 40.16% | 44.35% | 45.90% | **46.31%** |
-| `:core` line (own tests) | 35.8% | 46.5% | 46.5% | 46.5% | 46.5% | 46.5% | **64.02%** |
-| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% | 34.0% | 34.0% | 34.0% | **50.69%** |
-| Floors: `:app` default, `:app` full | 45/28, 57/34 | 46/30, 57/34 | 48/31, 57/34 | 52/33, 64/40 | 57/38, 69/44 | 57/38, 69/44 | **58/39, 71/45** |
-| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, 48/33 | 46/34, 67/52 | 46/34, 74/57 | **63/49, 76/60** |
-| Floors: `:provider-jellyfin`, `:provider-navidrome` | 46/38, 50/34 | 46/38, 50/34 | 46/38, 50/34 | 58/44, 68/41 | 91/59, 68/41 | 91/59, 68/41 | **91/60, 68/41** |
-
-Per-file after slice 2: `PlaybackService.kt` 0% → **89.0%** line, `AppSession.kt` 5.5% → **36.1%**,
-`QueueReorder.kt` 24.8% → **49.1%**, `SidetrackGraph.kt` 8.9% → **9.0%**.
-
-Per-file after slice 3: `JellyfinRuntime.kt` 0.6% → **71.8%**, `NavidromeRuntime.kt` 0.9% →
-**69.5%**, `HttpSpotifyTokenClient.kt` 2.0% → **100%**, `SpotifyAudioSink.kt` 3.5% → **83.8%**,
-`NativeBridge.kt` 6.2% → **90.9%**. The full-suite gates were re-measured for the first time since
-Phase 1, so the full-suite floor moved with them.
-
-Per-file after slice 4: `SpotifyWebApi.kt` 7.7% → **98.9%**, `SpotifySession.kt` 35.5% →
-**55.5%**, `SdkJellyfinApi` → **100%** and the Jellyfin module 58.5% → **91.1%**. The full-suite
-line is now **69.98%**, effectively at the Phase 2 line target; branch is 0.65 points short.
-
-`:provider-spotify` moved from 32.5% at the start of Phase 2 to **77.74%** by slice 6 and is no
-longer the module holding the product-wide number back. Its remaining gaps are playback paths that need the
-native library, not request mapping. `:provider-jellyfin` (91.1%) and `:provider-navidrome` (68.4%)
-are close to or past the module target, and `:core` (46.5%) is the last large module below it.
-
-### 10.3 What the slice changed about the plan
-
-* **Two audit items are blocked on a seam, not on test effort.** `GuardedEncryptedStore`
-  constructs `EncryptedFileStore` in its initializer, so its failure paths can only be reached
-  with a keystore that throws — the app's `CredentialStoreGuardTest` covers the same behaviour
-  through the injectable `JsonStore` instead. `ExoPlayerMedia3Player` builds a real `ExoPlayer`,
-  and Robolectric cannot buffer audio; its listener translation is only worth testing once a
-  `Media3Player` factory seam exists. Both should be decided (seam or accept the gap) before the
-  next slice spends time on them.
-* **`ServiceRuntime`'s optional interfaces are cheap coverage but shallow.** The extensions only
-  cast; the value is regression insurance for the neutral defaults. The real risk in that file is
-  the runtime implementations (`JellyfinRuntime`, `NavidromeRuntime`), which are still at ~1%.
-* **`QueueReorder`'s drag math still needs a laid-out list.** The keypad path and the no-op cases
-  are covered; the slot arithmetic (`firstOnScreen`/`lastOnScreen`, auto-scroll) needs a Compose
-  list with a real viewport, so it belongs with the instrumented or Roborazzi work, not here.
-
-### 10.4 What landed (slice 3)
-
-| Area | Tests | What is pinned |
-|---|---|---|
-| `provider-spotify/auth/SpotifyTokenClient.kt` | 8 | the authorization-code form (PKCE verifier, redirect, client id, form encoding), refresh grants, refresh-token rotation and the keep-previous rule, missing token type/scope/expiry defaults, Spotify's `error_description`, a blank error body falling back to the HTTP status, an unreadable body, and a 200 without an access token |
-| `provider-spotify/playback/SpotifyAudioSink.kt` | 7 | every no-track path (position, seek, pause, repeated stop), a start that drains PCM and reports audio flowing, valid/invalid/missing native format JSON, a dead drain reported through `onFailure`, resume without a paused track restarting at the requested position, pause/resume reusing the track, and reset keeping the track while dropping the item's audio |
-| `provider-spotify/bridge/NativeBridge.kt` | 3 | every call answers the neutral value when the library is absent, every call degrades to false/null when the library reports loaded but the symbols are missing (a partial ABI split), and the library name the Rust build produces |
-| `provider-jellyfin/data/JellyfinRuntime.kt` | 12 | empty vs stored session, sign-in persisting the token, a keystore write failure still signing in for this process, settings applied immediately, queue/history/resume isolation per account, sign-out clearing session and state, audio-cache accounting, the resume-item kind mapping, and the provider identity |
-| `provider-navidrome/data/NavidromeRuntime.kt` | 9 | the same account-state contract for Navidrome: signed-out defaults, stored credentials, settings, queue/history/resume isolation, sign-out, cache accounting and the provider identity |
-
-38 new tests, all in the default suite: the default gate is now 473 tests and the full run 499,
-all green. The token client gained a `tokenUrl` constructor argument (defaulted to Spotify's
-endpoint) so the real HTTP handling can run against a loopback server; no production behaviour
-changed. The runtime tests inject a `JsonStore` and a `JellyfinAuthenticator`, so they never touch
-the keystore or a real server.
-
-Two boundaries are pinned through their real failure mode rather than a mock: the audio sink is
-driven through Robolectric's `ShadowAudioTrack` (writes, pause, flush and the playback head are
-real shadow behaviour), and `NativeBridge` flips the SDK's own loaded/failed set by reflection so
-the "library present but symbols missing" branch executes. The reflection is the only seam short of
-shipping a test-only ABI, and it fails visibly if the SDK renames its state.
-
-### 10.5 What landed (slice 4)
-
-| Area | Tests | What is pinned |
-|---|---|---|
-| `provider-spotify/data/SpotifyWebApi.kt` | 24 | every library filter and its nested envelope, saved-track/saved-album/followed-artist/saved-show paging, all three collection flows (detail then page), search scope ordering, query encoding, the 1..50/1..100 limit clamps, artist/albums/top-tracks/radio mapping, the "smallest usable artwork" and blank-url fallbacks, sparse-track and episode defaults, and 401/429/4xx/unreadable-body/unreachable-server translation |
-| `provider-spotify/data/SpotifySession.kt` | 15 | stored-vs-empty sign-in state including an unreadable store, valid/expiring/refresh-less tokens, refresh rotation and scope inheritance, a refresh the store rejects, password sign-in rejection, sign-out clearing identity/queue/history/resume/cache, queue+history+resume persistence across a new session, every playback setting, and the expired-session error from `ensurePlaybackConnected`/`play`/`resume` |
-| `provider-jellyfin/data/JellyfinApi.kt` | 16 | the SDK-backed seam against a loopback server: every list query's kinds and paging, item mapping, playlist detail/entries and editability, create/add/remove, search scope bits including `includeArtists`, instant mix, user data, favorite/played/capabilities/report payloads, 401/404/500 translation, transcoding (relative and absolute) vs direct-play fallback, header merging and artwork URLs |
-
-55 new tests, all in the default suite: the default gate is now 528 tests and the full run 554,
-all green. `SpotifyWebApi` gained an `apiBase` constructor argument (defaulted to Spotify's API)
-so the real HTTP path can run against a loopback server; the Jellyfin test adds `slf4j-simple` as
-a test-only dependency because the SDK's kotlin-logging JVM binding needs a provider.
-
-The Jellyfin test deliberately goes through the generated serializers instead of a hand-written
-DTO fake: the loopback server returns the JSON the real server would, so a field the SDK marks
-required shows up as a red test rather than a fake that silently accepts anything. That caught the
-required `MediaSources`, `Shares`/`ItemIds`, and `PlayCount`/`Key` fields before the fixtures were
-finished.
-
-### 10.6 Rebase onto release/v0.4.0
-
-The phase-2 work was written against `cbe96d0`. `release/v0.4.0` then moved six commits ahead (the
-Jellyfin direct-play fix, the Spotify access-point fix, the bare-host Jellyfin sign-in, the service
-screens' About/Help pages and the keystore-unavailable store fix). The branch has been rebased onto
-`release/v0.4.0` and the tests were moved with the production code:
-
-| Test | What changed |
+| Gate | Value |
 |---|---|
-| `NativeBridgeTest` | `connect` now returns the transport's failure reason (`String?`) instead of a boolean, because an access-point failure happens before any request. The absent-library case asserts the reason itself; the missing-symbols case asserts the `bridge failure: …` translation. |
-| `SpotifyAudioSinkTest` | the fake native's `connect` returns `String?`. |
-| `JellyfinSdkApiTest` | direct play streams `/Audio/{id}/stream?static=true` (the universal endpoint answers 500 on Jellyfin 12); a missing media source still yields that stream URL but not as a direct play. |
-| `SidetrackGraphTest` | sign-in has a way back now, so it is in the keypad-back route table. |
+| Default suite (`./gradlew testDebugUnitTest`) | **599 tests** |
+| Full suite (`-PsidetrackScreenshots`) | **625 tests** |
+| Product line / branch, default | **59.51% / 40.17%** |
+| Product line / branch, full | **71.87% / 46.31%** |
+| Phase-2 target (full suite) | **70% line / 45% branch — met** |
 
-Two measurements worth recording:
+Module coverage (own tests, unless noted):
 
-* **The screenshot suite still verifies against the release baselines** — no rebaselining was needed
-  after the service-screen UI change, so the 26 baselines were already updated on the release branch.
-* **`:provider-spotify`'s own gate dropped from 67.2% to 65.06%/51.76%** (line/branch), because the
-  release commits added `ResilientSpotifyCatalog`, `ConnectDiagnostics` and the gateway/session
-  rework — roughly 350 lines that no provider test reaches. Its floor is re-based to 65/51 in this
-  commit with a note; the native-playback slice has to climb back past 67/52 rather than the floor
-  drifting again. `:app`, `:core`, `:provider-jellyfin` and `:provider-navidrome` floors are
-  unchanged and still pass.
+| Module | Line | Branch |
+|---|---:|---:|
+| `:core` | 64.02% | 50.69% |
+| `:provider-spotify` | 77.74% | 61.24% |
+| `:provider-jellyfin` | 91.18% | 60.55% |
+| `:provider-navidrome` | 68.36% | 41.61% |
+| `:app` / product merged, default | 59.51% | 40.17% |
+| `:app` / product merged, full | 71.87% | 46.31% |
 
-### 10.7 What landed (slice 5)
+Floors are a ratchet and track the suite that ran:
 
-| Area | Tests | What is pinned |
-|---|---|---|
-| `provider-spotify` `SpotifySession` playback | 13 | connect → createPlayer → load on a cold start, the live-session reuse that only re-checks the token, a forced reconnect, a rejected load surfacing as `TrackUnavailable`, a preload failure not disturbing the playing item, resume on a live session vs. after the player was dropped (reload at the UI position, not zero), the two transport skips and their threshold split, halt arming the stop guard for the event it caused, `stopPlayback` clearing queue and resume point, sign-out stopping the decoder before the credentials go |
-| `app` `AppSessions` provisioning | 5 | the service list and lookup, an unknown service provisioning nothing, selecting a service building its runtime, re-selecting it keeping that runtime, selecting another replacing the one that held the media session |
+| Gate | Line | Branch |
+|---|---:|---:|
+| `:app` product, default | 58 | 39 |
+| `:app` product, full | 71 | 45 |
+| `:core` | 63 | 49 |
+| `:provider-spotify` | 76 | 60 |
+| `:provider-jellyfin` | 91 | 60 |
+| `:provider-navidrome` | 68 | 41 |
 
-Two seams were needed, and both are production-neutral:
+The full suite's extra coverage comes almost entirely from the screenshot tests; that is
+why the default and full product floors differ. The floor is the gate, not the target.
 
-* `SpotifySession(native: SpotifyNative = NativeBridge)`. The gateway, catalog, audio sink and the
-  init/sign-out calls now go through it instead of the static bridge.
-* `SpotifySession(playbackContext: CoroutineContext = Dispatchers.Main.immediate)`. It builds the
-  playback scope and is the context `play`/`resume` hop onto, so the default is byte-for-byte the
-  old behaviour. The tests pass a single-threaded dispatcher.
+---
 
-That second one is the point the previous attempt missed. Under Robolectric the test body runs on
-the sandbox's main looper; a `runBlocking` test that plays through a session whose scope is
-`Dispatchers.Main.immediate` blocks the looper its own continuations are queued on, so the test
-hangs instead of failing. With an injected dispatcher the same production code runs off the
-looper, and the tests poll observable native calls instead of pumping the looper. The fixture's
-`readAudio` sleeps 2 ms per read: without it the drain spins the CPU while the fake never stalls.
+## 3. What is already done (compressed)
 
-The audio-settings test (deferred player rebuild) was dropped rather than forced: the deferral
-lives in `LibrespotPlaybackEngine`, not in the session, so it belongs to an engine-level test.
+Phase 1 (infrastructure):
 
-### 10.8 What landed (slice 6)
+* Kover on the debug variant, `:app` as the merging module, `./gradlew coverage` as the
+  entry point; generated code filtered.
+* `:core` has a test source set; pure logic moved out of Robolectric.
+* Default vs screenshot vs live-integration suites split by opt-in flags.
+* Screenshot tests verify by default; recording is explicit.
+* Per-module and product-wide floors added.
 
-| Area | Tests | What is pinned |
-|---|---|---|
-| `core/playback/PlaybackController.kt` | 32 | start denied by audio focus, a grant that claims the session and publishes, a failed start that releases focus and the registry, pause giving focus back and invalidating in-flight commands, resume denied/failed/successful, toggle, seek and the attached-UI seek callback, next/previous with and without a UI owner, reconfigure with a derived or explicit source, a rebuild that reports failure, stop with and without `keepQueue`, disconnect, stale-event filtering, a stall with and without a recovery path, a stall while paused, the noisy broadcast, sleep-timer expiry, ticks and end-of-track, zero-minute clearing, source/position promotion, the buffering mirror, `pollEvent`/`ended`, and notices |
-| `provider-spotify/playback/LibrespotPlaybackEngine.kt` | +6 | a settings rebuild during playback is deferred, it applies on the next pause at the UI position without autoplay, the next start rebuilds the player without reloading the old item, a failed deferred rebuild is swallowed on pause and on start, an invalidated start does not begin audio after its load returns, and disconnect stops before dropping the session |
+Phase 2 (coverage, slices 1–6):
 
-38 new tests and 34 moved. `PlaybackControllerTest` (17) and `LibrespotPlaybackEngineTest` (11,
-now 17) are now in `:provider-spotify`, next to the engine they drive, rather than in `:app`; the
-controller's own contract was extracted into a new `:core` suite with a recording `PlaybackEngine`
-instead of the librespot builder. The moved files construct `MediaKey(ServiceId.Spotify, …)`
-directly, because `MediaKeyFixtures` still lives in the app's test source set; sharing that fixture
-is the remaining testFixtures question from §9.3.
+* `:core`: audio focus, the runtime seams, queue reorder, and the `PlaybackController`
+  session contract (new `PlaybackControllerSessionTest`, 32 tests, fake engine).
+* `:app`: `PlaybackService`, `AppSession`, the reachable `SidetrackGraph` route table and
+  notification intent, `QueueReorder`.
+* Providers: `JellyfinRuntime`, `NavidromeRuntime`, token client, audio sink, `NativeBridge`,
+  `SpotifyWebApi`, `SpotifySession`, the Jellyfin SDK seam, and the native playback paths.
+* Slice 6 added six `LibrespotPlaybackEngine` tests for deferred player rebuilds, moved
+  `PlaybackControllerTest` and `LibrespotPlaybackEngineTest` to `:provider-spotify`, and
+  added the core controller session suite.
+* Production-neutral seams added along the way: `SpotifySession(native, playbackContext)`,
+  `SpotifyTokenClient(tokenUrl)`, `SpotifyWebApi(apiBase)`, `PlaybackController` clock and
+  notification hooks.
 
-Measured effect:
+Known test-shape issues already recorded here and still open in Phase 3: the duplicated
+`:app` Spotify suites, the screenshot suite size, and the unconsolidated fixtures.
 
-* `PlaybackController.kt` went from **9.3% line** in `:core`'s own run to **93.1%** (76.3% branch);
-  merged across the product it is **94.5% / 81.4%**.
-* `LibrespotPlaybackEngine.kt` is **97.4% line / 69.5% branch**.
-* `:core` moved from **46.5% / 34.0%** to **64.02% / 50.69%**; `:provider-spotify` from
-  **75.01% / 58.33%** to **77.74% / 61.24%**.
-* The default suite is **599 tests**, the full suite **625**, all green.
+---
 
-Two things worth recording about the suite shape:
+## 4. Definition of done for Phase 3
 
-* **Moving the tests did not change product coverage; it changed who owns it.** The 17 controller
-  tests exercised the same lines from `:app`; the new `:core` suite is what raises `:core`'s own
-  gate, and the moved engine tests keep the deferred-rebuild contract next to the engine.
-* **`registry.active` can survive a failed resume.** `PlaybackController.resume()` activates the
-  owner before asking the engine, and only clears `playing` when the engine reports false. The new
-  test pins the audible state (`isActive == false`) and deliberately does not assert that the
-  registry is empty, because it is not. That is worth a separate decision, not a test that quietly
-  encodes either answer.
+* No provider-owned behaviour is tested only through `:app`.
+* Screenshot baselines cover states, not screen variants.
+* Shared fixtures live in one place; no copied `FakeHttpStream`/`MediaKey` helpers.
+* Default suite is faster and smaller without losing product coverage.
+* Floors are re-measured and raised; `coverage` and `coverage -PsidetrackScreenshots` pass.
+* Accepted gaps (`ExoPlayerMedia3Player`, the encrypted stores) are either covered by
+  instrumented tests or explicitly left out of scope.
 
-### 10.9 Next slice
+After that, stop adding unit tests unless a real defect creates a new risk area. The
+remaining value is in instrumented coverage of the playback service and the store/keystore
+boundary, not in more line coverage.
 
-Phase 2's named targets are met. Slice 6 closed the controller remainder and the deferred engine
-rebuild, so what is left is the accepted gaps plus Phase 3's rebalance:
+---
 
-1. `core`: `ExoPlayerMedia3Player` (0%) is **accepted as a gap**: it builds a real `ExoPlayer`, and
-   Robolectric cannot buffer audio, so a unit test would assert listener translation against a mock
-   and prove nothing. Cover it with an instrumented test alongside the playback service, or add a
-   `Media3Player` factory seam in the same slice that first needs it. `GuardedEncryptedStore` (0%)
-   is also **accepted**: it builds an `EncryptedFileStore` in its initializer, so its failure paths
-   need a keystore that throws; the app's `CredentialStoreGuardTest` and `StoreFailureTest` already
-   pin the same contract through the injectable `JsonStore`.
-2. `app`: `AppSession`'s remaining ~45 lines are almost all the `GuardedEncryptedStore`-backed
-   `ActiveServiceStore` and the `AppSessions.create`/`build` failure branches. Reading the store
-   back is impossible under Robolectric (the guard swallows the write), so `AppSessionsTest` asserts
-   provisioning through the session instead and the persistence boundary stays with the two store
-   tests. `SidetrackGraph` still needs a composed nav host, and `QueueReorder`'s slot math needs a
-   laid-out list: Roborazzi or instrumented work, not unit tests.
-3. `provider-spotify`: `recoverPlayback` (the stall path) is the remaining native branch. The
-   `applyAudioSettings` rebuild is now pinned in the engine (slice 6), so it no longer belongs to
-   the session suite.
-4. **Phase 3 — rebalance.** Delete the `:app` Spotify tests that duplicate `:provider-spotify`
-   coverage (~62 tests / ~900 lines), cap the screenshot suite at one baseline per state semantics
-   cannot express, and decide whether `MediaKeyFixtures`/`FakeHttpStream`/`RecordingServiceRuntime`
-   become a shared test-fixtures module. Re-measure afterwards; the floors above are the baseline
-   for that delta.
+## 5. Measurement notes
 
-## Appendix A — reproducing the numbers
-
-Robolectric ignores on-the-fly JaCoCo instrumentation, so the agent has to be applied
-offline. Reproduce with temporary artefacts outside the repo:
-
-```bash
-# 1. Fetch JaCoCo (agent runtime + CLI)
-mkdir -p /tmp/jac && cd /tmp/jac
-curl -sSfLO https://repo1.maven.org/maven2/org/jacoco/org.jacoco.agent/0.8.12/org.jacoco.agent-0.8.12-runtime.jar
-curl -sSfLO https://repo1.maven.org/maven2/org/jacoco/org.jacoco.cli/0.8.12/org.jacoco.cli-0.8.12-nodeps.jar
-
-# 2. Instrument the debug class jars (originals stay untouched)
-for m in app core provider-spotify provider-jellyfin provider-navidrome; do
-  case $m in
-    app) src=app/build/intermediates/runtime_app_classes_jar/debug/bundleDebugClassesToRuntimeJar/classes.jar ;;
-    *)   src=$m/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar ;;
-  esac
-  java -jar org.jacoco.cli-0.8.12-nodeps.jar instrument "$src" --dest instr/$m.jar --quiet
-done
-
-# 3. Run tests with instrumented jars and jacoco-agent.destfile set
-#    (see /tmp/jac/offline.gradle in Appendix B)
-./gradlew --offline -I /tmp/jac/offline.gradle testDebugUnitTest --rerun-tasks
-
-# 4. Merge runs and report against the ORIGINAL (non-instrumented) jars
-java -jar org.jacoco.cli-0.8.12-nodeps.jar merge /tmp/jac/offline/*.exec --destfile /tmp/jac/merged.exec
-java -jar org.jacoco.cli-0.8.12-nodeps.jar report /tmp/jac/merged.exec \
-  --classfiles <each module's original classes.jar> \
-  --sourcefiles <each module's src/main/java> \
-  --html /tmp/jac/html --xml /tmp/jac/merged.xml
-```
-
-Note: `report` must be pointed at the original jars — JaCoCo refuses to analyse
-instrumented class files.
-
-## Appendix B — Gradle init script used for measurement
-
-```groovy
-def instrRoot = new File('/tmp/jac/instr')
-def runtimeJar = new File('/tmp/jac/org.jacoco.agent-0.8.12-runtime.jar')
-
-gradle.projectsEvaluated {
-    gradle.rootProject.allprojects { p ->
-        p.tasks.withType(Test).configureEach { t ->
-            def exec = new File("/tmp/jac/offline/${p.name}.exec")
-            t.systemProperty('jacoco-agent.destfile', exec.absolutePath)
-            t.systemProperty('jacoco-agent.append', 'true')
-            t.systemProperty('jacoco-agent.output', 'file')
-            def entries = t.classpath.files.collect { f ->
-                def s = f.absolutePath
-                if (s.contains('/build/intermediates/runtime_app_classes_jar/') ||
-                    s.contains('/build/intermediates/runtime_library_classes_jar/')) {
-                    def mod = (s =~ /\/([^\/]+)\/build\/intermediates\//)[0][1]
-                    def cand = new File(instrRoot, "${mod}.jar/classes.jar")
-                    if (cand.exists()) return cand
-                }
-                return f
-            }
-            entries.add(runtimeJar)
-            t.classpath = p.files(entries)
-        }
-    }
-}
-```
-
-## Appendix C — raw measurement artefacts
-
-Generated during the audit (not committed): per-module XML/HTML reports and exec files
-under `/tmp/jac/`, including `merged.xml` (overall), `mod/*.xml` (per module) and
-`mod/html-*` (browsable). Re-run Appendix A to regenerate.
+* Coverage is measured with Kover (see `docs/testing.md`); `./gradlew coverage` runs the
+  default gate, `./gradlew coverage -PsidetrackScreenshots` the full gate.
+* Reports land in `app/build/reports/kover/` and per module under
+  `<module>/build/reports/kover/`.
+* Only `src/main` product code is counted. Generated code, `BuildConfig`, vendored Rust,
+  Maestro flows and instrumentation tests are out of scope.
+* The old JaCoCo offline-instrumentation recipe was removed with this rewrite; Kover is the
+  source of truth now.
