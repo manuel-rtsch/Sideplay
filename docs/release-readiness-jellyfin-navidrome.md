@@ -84,28 +84,37 @@ Everything else that leaves the device is either a read, a playback progress rep
 - `JellyfinCatalog.addToPlaylist` reads the playlist size *before* appending only to report an
   Undo index — the read cannot become a write.
 
-### 1.4 Bounded defects found (wrong-entry risk, never bulk)
+### 1.4 Bounded defects found (wrong-entry risk, never bulk) — all fixed
 
-1. **Duplicate track ids in a playlist remove the wrong occurrence (Navidrome).**
-   `removeFromPlaylist` resolves the row with `indexOfFirst { it.id == songId }`
-   (`NavidromeApi.kt:173`). With `[A, B, C, A]`, removing the last `A` deletes index 0. Size is
-   preserved, contents are not. Not reachable from the 0.4.0 UI; fix before 0.4.1 ships
-   add/remove. **The suite now catches it:** `catalog reads and edits a playlist` asserts the
-   ordered track ids before, after the append and after the removal, and appends a track the
-   playlist does not already hold — so it stays green on the correct path. `removing a duplicated
-   track leaves the other entries in place` pins the defect itself and is `@Ignore`d until the
-   resolution becomes "the occurrence I appended"; un-ignore it with that fix.
-2. **Jellyfin entry-id fallback (Jellyfin).** If the entry is not found within the first 500
-   playlist items, `removeFromPlaylist` falls back to passing the *media item id* as an entry id
-   (`JellyfinApi.kt:447-455`), which removes nothing (or, improbably, the wrong entry). Again one
-   entry, and unreachable from the UI today.
-3. **`createPlaylist(ids = emptyList())` on Jellyfin is unverified.** Documented as an open
-   question in D14. The reachable failure mode is a visible error on *New playlist*, not a write.
-   Worth 10 minutes against a scratch 12.x instance.
+None of these was reachable from the 0.4.0 UI; all three are closed before 0.4.1 can surface
+playlist add/remove, and each has an offline test plus (1) real-server coverage.
+
+1. ~~**Duplicate track ids in a playlist remove the wrong occurrence (Navidrome).**~~
+   `removeFromPlaylist` resolved the row with `indexOfFirst { it.id == songId }`, so with
+   `[A, B, C, A]` removing the second `A` deleted index 0 — size preserved, order rotated.
+   `MediaLibraryWriter.removeFromPlaylist` now takes the row the caller acted on
+   (`index: Int? = null`), and Subsonic sends exactly that index; without one the **last** match
+   is removed, which is the copy an append (Undo) leaves at the end. A named row that no longer
+   holds the item is not trusted. `NavidromeApiTest` pins index-0, the unnamed last match and the
+   stale index; `removing a duplicated track leaves the other entries in place` builds the case
+   against a real server (it appends two spare tracks, duplicates one, removes it, and restores
+   the fixture). `catalog reads and edits a playlist` still asserts the ordered ids throughout.
+2. ~~**Jellyfin entry-id fallback (Jellyfin).**~~ The removal looked at the first 500 playlist
+   entries and then passed the *media item id* as an entry id, which removes nothing — or, on a
+   collision, the wrong entry — so a long playlist could not be edited from its tail at all.
+   `resolvePlaylistEntry` now scans every page (200 entries at a time, no cap) and removes by the
+   entry id it found, choosing the named row or the last match; an item that is no longer there
+   resolves to `null` and no request is sent. `JellyfinApiTest` walks 1,200 entries.
+3. ~~**`createPlaylist(ids = emptyList())` on Jellyfin is unverified.**~~ Confirmed on 12.4 (§2.1).
+4. ~~**A creator's own fresh Jellyfin playlist reads as non-editable.**~~ 12.4 answers a playlist
+   the account just created with `OpenAccess:false` and `Shares:[]`, and no field names the owner,
+   so deriving editability from those two fields could only ever say "no". Every playlist is now
+   offered as editable — as the library list already did — and the server still rejects a write
+   the account may not make, which the UI reports.
 
 ### 1.5 Hazard in the test harness itself
 
-`NavidromeIntegrationTest` (5 tests, 1 `@Ignore`d) **stars a real track and edits a real playlist** named
+`NavidromeIntegrationTest` (5 tests) **stars a real track and edits a real playlist** named
 `Sidetrack Test…`. `JellyfinIntegrationTest` is read-only. These run only when
 `NAVIDROME_TEST_URL`/`JELLYFIN_TEST_URL` are exported — never point them at a tester's instance,
 only at a throwaway container. This is the one place where "the app can damage a library" is
@@ -151,7 +160,7 @@ Also confirmed directly on 12.4, since they were D14's open questions:
 | --- | --- |
 | `createPlaylist(ids = emptyList())` | **Works** — `POST /Playlists` → 200 with a new id, playlist empty. *New playlist* is safe. |
 | Direct FLAC via the music profile | **Works** — `…/Audio/{id}/stream?static=true` → 206, `audio/flac`, `Accept-Ranges: bytes`, `content-range: bytes 0-1023/17494001`. |
-| `editable` from `openAccess`/`shares` | **Does not hold for a fresh playlist** — a playlist created by `demo` comes back `OpenAccess:false, Shares:[]`, so `editable` is `false` even for its creator, and `createPlaylist` returns `editable = false` (`JellyfinCatalog.kt:173` + default at `:252`). Harmless in 0.4.0 (no add/remove entry point) but must be fixed before 0.4.1 surfaces them. |
+| `editable` from `openAccess`/`shares` | **Does not hold for a fresh playlist** — a playlist created by `demo` comes back `OpenAccess:false, Shares:[]`, so deriving `editable` from those fields said `false` even for its creator. Fixed (§1.4.4): the adapter offers every playlist as editable and lets the server reject a write the account may not make. |
 | Entry id vs item id | A freshly added entry's `PlaylistItemId` equals the media item id, so the 500-item scan fallback (§1.4) is usually harmless in practice. Add (`POST /Playlists/{id}/Items`) and remove (`DELETE …?entryIds=`) both returned 204. |
 
 ### 2.1.1 What a 10.9 server actually does — the floor, settled
@@ -219,10 +228,12 @@ claims `supportsDirectPlay`.
    The tester brief still says 12+, now with the app agreeing instead of contradicting itself.
 3. ~~Close the `playback()` branch gap (§2) so the 0.4.0 regression cannot come back silently.~~
    **Done** — see §2, “The one structural gap”.
-4. Optional, before 0.4.1: ~~make `NavidromeIntegrationTest` assert playlist *contents* rather than
-   size so it can catch them~~ (**done**, plus the `@Ignore`d duplicate case — see §1.4), fix the
-   duplicate-index removal and the 500-entry fallback, and stop reporting a creator's own fresh
-   Jellyfin playlist as non-editable.
+4. ~~Optional, before 0.4.1: make `NavidromeIntegrationTest` assert playlist *contents* rather
+   than size, fix the duplicate-index removal and the 500-entry fallback, and stop reporting a
+   creator's own fresh Jellyfin playlist as non-editable.~~ **All done** — see §1.4. The harness
+   items (contents assertions, and the duplicate case no longer `@Ignore`d) landed first; the two
+   removals and the `editable` derivation followed. 0.4.1 therefore starts from a write path whose
+   position handling is already pinned, offline and against a real server.
 
 ## 4. What to tell testers
 

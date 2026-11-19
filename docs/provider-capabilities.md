@@ -90,7 +90,10 @@ narrower capability set below.
   `PlaybackController` over Media3/ExoPlayer, so the media session, notification and audio focus
   behave exactly as for Spotify.
 - **Library editing** (`MediaLibraryWriter`): star/unstar (like/save), add to / remove from
-  playlist.
+  playlist. Removal takes the row the caller acted on (`index: Int? = null`): Subsonic removes by
+  position, so with the same track twice the named row decides. Without one the last match goes,
+  which is the copy an append leaves at the end. A row that no longer holds the item is ignored,
+  not trusted.
 - **Radio**: `similarSongs` with a `randomSongs` fallback for servers without Last.fm, surfaced
   because `supportsRadio` is now true.
 - **Create playlist**: a *New playlist* action in the Library → Playlists options menu opens a
@@ -150,9 +153,12 @@ the service cannot answer, and the quality/normalization/gapless rows are gated 
   tracks, resolves stream and artwork URLs, pages the library and writes stars, reads and edits a
   playlist. The playlist edit appends a track the playlist does not already hold and asserts the
   ordered track ids before, after the append and after the removal — a size check would hide a
-  rotation. `removing a duplicated track leaves the other entries in place` pins the duplicate-id
-  defect recorded in [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md)
-  §1.4 and stays `@Ignore`d until removal targets the occurrence that was appended.
+  rotation. `removing a duplicated track leaves the other entries in place` builds the duplicate
+  case against the server (append two spare tracks, duplicate one, remove it) and restores the
+  playlist exactly, so the defect recorded in
+  [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md) §1.4 stays
+  covered. It and `removing a duplicated track removes the occurrence asked for` in
+  `NavidromeApiTest` are the two halves of that fix: one against a server, one offline.
 ---
 
 ## Jellyfin (official Kotlin SDK)
@@ -212,7 +218,13 @@ adapter covers the music library only.
   the quality → bitrate mapping.
 - `JellyfinCatalogTest.kt` — four library sections and `hasMore`, album/playlist collections,
   artist albums/top tracks, search partitioning, InstantMix offset, playback URL/headers and the
-  quality ceiling, writer favourites/add/remove/create, saved state for playlists being absent.
+  quality ceiling, writer favourites/add/remove/create (the removal passes the row it was given),
+  saved state for playlists being absent, and every playlist — from the library, from search, or
+  newly created — being offered as editable, because the server never says who may edit one.
+- `JellyfinApiTest.kt` — the SDK-to-neutral mapping, the music profile and quality ceiling, and
+  `resolvePlaylistEntry`: an entry past the first pages is still found (1,200 entries scanned
+  page by page), a named row decides which duplicate is removed, an unnamed removal takes the
+  last match, and a stale row or a missing item sends nothing.
 - `JellyfinPlaybackReporterTest.kt` — start/progress/stopped ordering, 10-second throttling, a
   single pause report, end-of-track marking played, and a skip stopping without a play.
 - `MusicServiceTest.kt` — updated picker list (`Spotify`, `Navidrome`, `Jellyfin`) and the
