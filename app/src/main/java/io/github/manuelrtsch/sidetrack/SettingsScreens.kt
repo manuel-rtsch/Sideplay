@@ -1,6 +1,8 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.text.format.Formatter
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +21,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -40,6 +51,7 @@ import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import hrln.interactive.sidekit.design.theme.drawFocusRing
 import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
 import io.github.manuelrtsch.sidetrack.data.ServiceChoice
@@ -453,7 +465,8 @@ fun SignInScreen(
                         { serverUrl = it },
                         label = "Server",
                         placeholder = defaults?.serverUrl ?: "host:port",
-                        modifier = modifier
+                        modifier = modifier,
+                        focusOnKeypad = true
                     )
                 }
                 row("username") { modifier ->
@@ -480,6 +493,41 @@ fun SignInScreen(
 }
 
 /**
+ * The list rows' focus feedback for a field card: a white ring and a slight lift while the field
+ * inside has focus, and D-pad Up/Down moving between fields instead of staying inside the text.
+ * Left/Right are left alone: inside a field they move the caret.
+ */
+@Composable
+private fun Modifier.fieldFocus(): Modifier {
+    val focusManager = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    val ring by animateFloatAsState(
+        targetValue = if (focused) 1f else 0f,
+        animationSpec = tween(FOCUS_RING_MS),
+        label = "fieldFocusRing"
+    )
+    return this
+        .onFocusChanged { focused = it.hasFocus }
+        .onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) {
+                false
+            } else {
+                when (event.key) {
+                    Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                    Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                    else -> false
+                }
+            }
+        }
+        .drawWithContent {
+            drawContent()
+            if (ring > 0f) drawFocusRing(ring)
+        }
+}
+
+private const val FOCUS_RING_MS = 120
+
+/**
  * A labelled one-line Sidekit field in an item card, the boxed form used across Sidekit's apps.
  * The label sits inside the card so the placeholder can carry an example (the demo credentials)
  * without having to say what the field is for.
@@ -490,9 +538,14 @@ private fun FormField(
     onValueChange: (String) -> Unit,
     label: String,
     placeholder: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    focusOnKeypad: Boolean = false
 ) {
-    SidekitCard(modifier.fillMaxWidth().heightIn(min = SidekitTheme.spacing.itemHeight)) {
+    SidekitCard(
+        modifier.fillMaxWidth()
+            .heightIn(min = SidekitTheme.spacing.itemHeight)
+            .fieldFocus()
+    ) {
         Column(Modifier.fillMaxWidth().align(Alignment.CenterStart)) {
             SidekitText(
                 label,
@@ -505,6 +558,7 @@ private fun FormField(
                 onValueChange,
                 Modifier.fillMaxWidth(),
                 placeholder = placeholder,
+                focusOnKeypad = focusOnKeypad,
                 singleLine = true
             )
         }
@@ -524,7 +578,11 @@ private fun PasswordField(
     modifier: Modifier = Modifier
 ) {
     val colors = SidekitTheme.colors
-    SidekitCard(modifier.fillMaxWidth().heightIn(min = SidekitTheme.spacing.itemHeight)) {
+    SidekitCard(
+        modifier.fillMaxWidth()
+            .heightIn(min = SidekitTheme.spacing.itemHeight)
+            .fieldFocus()
+    ) {
         Column(Modifier.fillMaxWidth().align(Alignment.CenterStart)) {
             SidekitText(
                 label,
