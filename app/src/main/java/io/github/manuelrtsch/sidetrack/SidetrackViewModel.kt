@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import hrln.interactive.sidekit.design.action.NoticeKind
@@ -1597,6 +1598,7 @@ class SidetrackViewModel(
             } catch (e: Throwable) {
                 // Sign-in runs on the main thread and touches the keystore, the browser and the
                 // network. Anything that escapes here used to kill the process; report it instead.
+                Log.e("SidetrackSignIn", "sign-in threw ${e::class.java.name}", e)
                 _state.update {
                     it.copy(authPending = false).say(e.message ?: "Sign-in failed")
                 }

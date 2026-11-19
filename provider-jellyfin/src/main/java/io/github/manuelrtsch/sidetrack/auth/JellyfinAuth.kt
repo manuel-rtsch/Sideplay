@@ -14,6 +14,8 @@ import io.github.manuelrtsch.sidetrack.storage.GuardedEncryptedStore
 import io.github.manuelrtsch.sidetrack.storage.JsonStore
 import java.io.IOException
 import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.api.client.exception.ApiClientException
 import org.jellyfin.sdk.api.client.exception.InvalidStatusException
 import org.jellyfin.sdk.api.client.exception.SecureConnectionException
@@ -127,7 +129,16 @@ fun interface JellyfinAuthenticator {
  * session on it, so a hand-rolled header would create a second session per request.
  */
 class SdkJellyfinAuthenticator(private val context: Context) : JellyfinAuthenticator {
-    override suspend fun signIn(serverUrl: String, username: String, password: String): JellyfinCredentials {
+    /**
+     * The SDK's suspend API is generated for multiplatform use and runs OkHttp synchronously on the
+     * calling thread, so it has to be moved off the main one: the sign-in screen calls this from
+     * `viewModelScope`, and Android throws [android.os.NetworkOnMainThreadException] once the
+     * response body is read.
+     */
+    override suspend fun signIn(serverUrl: String, username: String, password: String): JellyfinCredentials =
+        withContext(Dispatchers.IO) { signInBlocking(serverUrl, username, password) }
+
+    private suspend fun signInBlocking(serverUrl: String, username: String, password: String): JellyfinCredentials {
         val jellyfin = createJellyfin {
             context = this@SdkJellyfinAuthenticator.context.applicationContext
             clientInfo = ClientInfo(name = CLIENT_NAME, version = BuildConfig.VERSION_NAME)

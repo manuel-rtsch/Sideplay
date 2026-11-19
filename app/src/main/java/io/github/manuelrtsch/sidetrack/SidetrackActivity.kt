@@ -61,6 +61,11 @@ class SidetrackActivity : SidekitActivity() {
     }
 
     override fun onSidekitCreate(savedInstanceState: Bundle?) {
+        // kotlin-logging, pulled in by the Jellyfin SDK, defaults to its SLF4J backend on Android
+        // but ships no org.slf4j classes, so the SDK's first log call during sign-in dies with
+        // NoClassDefFoundError: org/slf4j/LoggerFactory. This property selects the native
+        // android.util.Log backend instead; it must be set before the SDK logs for the first time.
+        System.setProperty("kotlin-logging-to-android-native", "true")
         if (savedInstanceState == null) SidetrackLinks.handle(intent)
         // The media notification is app-owned and driven from core through injected hooks. They
         // must be installed here, before any player can demand a notification, so core never has
