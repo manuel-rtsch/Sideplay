@@ -24,7 +24,10 @@ interface SpotifyTokenClient {
  * only place the PKCE verifier leaves the device; refresh tokens are rotated when Spotify returns
  * a new one.
  */
-class HttpSpotifyTokenClient : SpotifyTokenClient {
+class HttpSpotifyTokenClient(
+    // Swappable so the request/response handling can run against a local server in tests.
+    private val tokenUrl: String = TOKEN_URL
+) : SpotifyTokenClient {
     override suspend fun exchange(
         clientId: String,
         code: String,
@@ -52,7 +55,7 @@ class HttpSpotifyTokenClient : SpotifyTokenClient {
 
     private suspend fun request(form: Map<String, String>, previousRefresh: String?): SpotifyCredentials = withContext(Dispatchers.IO) {
         val body = form.entries.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }
-        val connection = (URL(TOKEN_URL).openConnection() as HttpURLConnection).apply {
+        val connection = (URL(tokenUrl).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = TIMEOUT_MS
             readTimeout = TIMEOUT_MS

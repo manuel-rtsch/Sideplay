@@ -356,11 +356,13 @@ The audit above was measured in the 0.4.0 working tree, which contained four unc
 
 ---
 
-## 10. Phase 2 status (two slices)
+## 10. Phase 2 status (three slices)
 
 Phase 2 is being worked in slices. The first took the `:core` glue the audit named plus the queue
 reorder state machine; the second took the two largest `app` risks, the playback service and the
-app session, and whatever of the navigation graph is reachable without a composed nav host.
+app session, and whatever of the navigation graph is reachable without a composed nav host; the
+third took the provider runtimes and the three Spotify boundaries the audit named (token client,
+audio sink, native bridge).
 
 ### 10.1 What landed (slice 1)
 
@@ -391,22 +393,29 @@ shadow request by type, because the field name is a Robolectric implementation d
 
 ### 10.2 Measured delta
 
-| Gate | Phase 1 | After slice 1 | After slice 2 |
-|---|---|---|---|
-| Product line (default suite) | 45.99% | 46.75% | **48.57%** |
-| Product branch (default suite) | 29.46% | 30.07% | **31.20%** |
-| `:core` line (own tests) | 35.8% | 46.5% | 46.5% |
-| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% |
-| Floors: `:app` default, `:core` | 45/28, 34/27 | 46/30, 46/34 | **48/31, 46/34** |
+| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 |
+|---|---|---|---|---|
+| Product line (default suite) | 45.99% | 46.75% | 48.57% | **52.36%** |
+| Product branch (default suite) | 29.46% | 30.07% | 31.20% | **33.88%** |
+| Product line (full suite) | 58.4% | 58.4% | 58.4% | **64.66%** |
+| Product branch (full suite) | 35.8% | 35.8% | 35.8% | **40.16%** |
+| `:core` line (own tests) | 35.8% | 46.5% | 46.5% | 46.5% |
+| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% | 34.0% |
+| Floors: `:app` default, `:app` full | 45/28, 57/34 | 46/30, 57/34 | 48/31, 57/34 | **52/33, 64/40** |
+| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, **48/33** |
+| Floors: `:provider-jellyfin`, `:provider-navidrome` | 46/38, 50/34 | 46/38, 50/34 | 46/38, 50/34 | **58/44, 68/41** |
 
 Per-file after slice 2: `PlaybackService.kt` 0% → **89.0%** line, `AppSession.kt` 5.5% → **36.1%**,
 `QueueReorder.kt` 24.8% → **49.1%**, `SidetrackGraph.kt` 8.9% → **9.0%**.
 
-The floors in `app/build.gradle.kts` and `core/build.gradle.kts` are raised to the new values. The
-full-suite product floor (57 / 34) is unchanged until the screenshot-inclusive run is re-measured.
+Per-file after slice 3: `JellyfinRuntime.kt` 0.6% → **71.8%**, `NavidromeRuntime.kt` 0.9% →
+**69.5%**, `HttpSpotifyTokenClient.kt` 2.0% → **100%**, `SpotifyAudioSink.kt` 3.5% → **83.8%**,
+`NativeBridge.kt` 6.2% → **90.9%**. The full-suite gates were re-measured for the first time since
+Phase 1, so the full-suite floor moved with them.
 
-`:core` is now the module furthest along toward the 70% target. The product-wide number moves
-slowly from here because `:app` and `:provider-spotify` hold most of the uncovered lines.
+`:core` is still the module furthest along toward the 70% target, but `:provider-navidrome` (68.4%)
+and `:provider-jellyfin` (58.5%) closed most of their gap in one slice. `:provider-spotify` moved
+from 32.5% to 48.1% and is now the module holding the product-wide number back.
 
 ### 10.3 What the slice changed about the plan
 
@@ -424,12 +433,35 @@ slowly from here because `:app` and `:provider-spotify` hold most of the uncover
   are covered; the slot arithmetic (`firstOnScreen`/`lastOnScreen`, auto-scroll) needs a Compose
   list with a real viewport, so it belongs with the instrumented or Roborazzi work, not here.
 
-### 10.4 Next slice
+### 10.4 What landed (slice 3)
 
-Still the Phase 2 order from §7, minus what the two slices closed:
+| Area | Tests | What is pinned |
+|---|---|---|
+| `provider-spotify/auth/SpotifyTokenClient.kt` | 8 | the authorization-code form (PKCE verifier, redirect, client id, form encoding), refresh grants, refresh-token rotation and the keep-previous rule, missing token type/scope/expiry defaults, Spotify's `error_description`, a blank error body falling back to the HTTP status, an unreadable body, and a 200 without an access token |
+| `provider-spotify/playback/SpotifyAudioSink.kt` | 7 | every no-track path (position, seek, pause, repeated stop), a start that drains PCM and reports audio flowing, valid/invalid/missing native format JSON, a dead drain reported through `onFailure`, resume without a paused track restarting at the requested position, pause/resume reusing the track, and reset keeping the track while dropping the item's audio |
+| `provider-spotify/bridge/NativeBridge.kt` | 3 | every call answers the neutral value when the library is absent, every call degrades to false/null when the library reports loaded but the symbols are missing (a partial ABI split), and the library name the Rust build produces |
+| `provider-jellyfin/data/JellyfinRuntime.kt` | 12 | empty vs stored session, sign-in persisting the token, a keystore write failure still signing in for this process, settings applied immediately, queue/history/resume isolation per account, sign-out clearing session and state, audio-cache accounting, the resume-item kind mapping, and the provider identity |
+| `provider-navidrome/data/NavidromeRuntime.kt` | 9 | the same account-state contract for Navidrome: signed-out defaults, stored credentials, settings, queue/history/resume isolation, sign-out, cache accounting and the provider identity |
 
-1. Providers: `JellyfinRuntime` (0.6%), `NavidromeRuntime` (0.9%), `SpotifyTokenClient` (2%),
-   `SpotifyAudioSink` (3.5%), `NativeBridge` (6%). These are now the largest untouched blocks.
+38 new tests, all in the default suite: the default gate is now 473 tests and the full run 499,
+all green. The token client gained a `tokenUrl` constructor argument (defaulted to Spotify's
+endpoint) so the real HTTP handling can run against a loopback server; no production behaviour
+changed. The runtime tests inject a `JsonStore` and a `JellyfinAuthenticator`, so they never touch
+the keystore or a real server.
+
+Two boundaries are pinned through their real failure mode rather than a mock: the audio sink is
+driven through Robolectric's `ShadowAudioTrack` (writes, pause, flush and the playback head are
+real shadow behaviour), and `NativeBridge` flips the SDK's own loaded/failed set by reflection so
+the "library present but symbols missing" branch executes. The reflection is the only seam short of
+shipping a test-only ABI, and it fails visibly if the SDK renames its state.
+
+### 10.5 Next slice
+
+Still the Phase 2 order from §7, minus what the three slices closed:
+
+1. Providers: `SpotifyWebApi` (7.7%), `SpotifySession` (35.5%), `JellyfinApi` (27.8%). These are
+   now the largest untouched blocks and all three are request/response mapping over an injectable
+transport or SDK client.
 2. `core`: `PlaybackController` (53%) remainder, `ExoPlayerMedia3Player` and
    `GuardedEncryptedStore` if a seam is approved.
 3. `app`: the remainder of `AppSession` (36%) and `SidetrackGraph`. The graph's route table only
