@@ -124,7 +124,14 @@ interface MediaLibraryWriter {
     /** Appends [item] to [playlist] and returns the index it landed at, for Undo. */
     suspend fun addToPlaylist(playlist: MediaKey, item: MediaItem): Int? = null
 
-    suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem) = Unit
+    /**
+     * Removes one occurrence of [item] from [playlist].
+     *
+     * [index] is the row the caller acted on. A playlist can hold the same track twice and every
+     * backend removes by position, so a call without an index has to pick an occurrence: the
+     * providers remove the **last** match, which is the copy an Undo of [addToPlaylist] means.
+     */
+    suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem, index: Int? = null) = Unit
 
     /**
      * Creates a new empty playlist named [name] and returns it, or null when the service cannot

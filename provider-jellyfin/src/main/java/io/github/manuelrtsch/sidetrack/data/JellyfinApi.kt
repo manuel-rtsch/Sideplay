@@ -179,7 +179,7 @@ interface JellyfinApi {
 
     suspend fun createPlaylist(name: String): String?
     suspend fun addToPlaylist(playlistId: String, itemId: String): Int
-    suspend fun removeFromPlaylist(playlistId: String, itemId: String)
+    suspend fun removeFromPlaylist(playlistId: String, itemId: String, index: Int? = null)
 
     suspend fun playback(itemId: String, maxStreamingBitrate: Int?): JellyfinPlaybackInfo
     fun imageUrl(id: String, tag: String?, maxHeight: Int = ARTWORK_MAX_HEIGHT): String
@@ -444,21 +444,25 @@ class SdkJellyfinApi(
         before
     }
 
-    override suspend fun removeFromPlaylist(playlistId: String, itemId: String) = call {
+    override suspend fun removeFromPlaylist(playlistId: String, itemId: String, index: Int?) = call {
         // Jellyfin removes by playlist entry id, which is not the media item id.
-        val entry = runCatching {
-            api.playlistApi.getPlaylistItems(
-                playlistId = uuid(playlistId),
-                userId = userId,
-                limit = PLAYLIST_ENTRY_SCAN,
-                fields = listOf(ItemFields.PARENT_ID)
-            ).content.items.firstOrNull { it.id.toString() == itemId }
-        }.getOrNull()
-        api.playlistApi.removeItemFromPlaylist(
-            playlistId = playlistId,
-            entryIds = listOf(entry?.playlistItemId ?: itemId)
-        )
+        val entryId = playlistEntryId(playlistId = playlistId, itemId = itemId, index = index) ?: return@call
+        api.playlistApi.removeItemFromPlaylist(playlistId = playlistId, entryIds = listOf(entryId))
         Unit
+    }
+
+    /** The id the server removes this entry by, or null when the item is no longer there. */
+    private suspend fun playlistEntryId(playlistId: String, itemId: String, index: Int?): String? {
+        val playlist = uuid(playlistId)
+        return resolvePlaylistEntry(itemId, index, PLAYLIST_ENTRY_PAGE) { start, limit ->
+            api.playlistApi.getPlaylistItems(
+                playlistId = playlist,
+                userId = userId,
+                startIndex = start,
+                limit = limit,
+                fields = listOf(ItemFields.PARENT_ID)
+            ).content.items.map { PlaylistEntry(entryId = it.playlistItemId, itemId = it.id?.toString()) }
+        }
     }
 
     override suspend fun playback(itemId: String, maxStreamingBitrate: Int?): JellyfinPlaybackInfo = call {
@@ -593,7 +597,8 @@ class SdkJellyfinApi(
 
     private companion object {
         const val CLIENT_NAME = "Sidetrack"
-        const val PLAYLIST_ENTRY_SCAN = 500
+        /** Entries per request when resolving a playlist entry id; the scan itself has no cap. */
+        const val PLAYLIST_ENTRY_PAGE = 200
     }
 }
 
@@ -612,6 +617,41 @@ internal fun playbackStreamUrl(transcodingUrl: String?, baseUrl: String, directU
     transcodingUrl.isNullOrBlank() -> directUrl
     transcodingUrl.startsWith("http") -> transcodingUrl
     else -> baseUrl + transcodingUrl
+}
+
+/** One playlist entry as the removal scan needs it: the id to remove by, and the item it holds. */
+internal data class PlaylistEntry(val entryId: String?, val itemId: String?)
+
+/**
+ * Which playlist entry to remove, scanning every page.
+ *
+ * The old code read the first 500 entries and then fell back to passing the *media item id* as an
+ * entry id, which removes nothing — or, if the id happens to collide, the wrong entry. A playlist
+ * longer than a page therefore could not be edited from its tail at all.
+ *
+ * [index] is the row the caller pointed at; without it the last match wins, because an append
+ * leaves its copy at the end. An index that no longer holds the item is ignored rather than
+ * trusted: the playlist may have changed since the caller read it.
+ */
+internal suspend fun resolvePlaylistEntry(
+    itemId: String,
+    index: Int?,
+    pageSize: Int,
+    loadPage: suspend (startIndex: Int, limit: Int) -> List<PlaylistEntry>
+): String? {
+    var start = 0
+    var lastMatch: String? = null
+    while (true) {
+        val page = loadPage(start, pageSize)
+        for ((offset, entry) in page.withIndex()) {
+            if (entry.itemId != itemId) continue
+            val entryId = entry.entryId ?: continue
+            if (index == start + offset) return entryId
+            lastMatch = entryId
+        }
+        if (page.size < pageSize) return lastMatch
+        start += page.size
+    }
 }
 
 /**

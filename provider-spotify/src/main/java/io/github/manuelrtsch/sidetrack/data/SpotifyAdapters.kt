@@ -119,7 +119,9 @@ class SpotifyMediaLibraryWriter(
         return writer.addToPlaylist(playlist.id, uri)
     }
 
-    override suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem) {
+    // Spotify's own writer removes by uri and takes every occurrence of it, so the row index the
+    // caller knows has nothing to select here.
+    override suspend fun removeFromPlaylist(playlist: MediaKey, item: MediaItem, index: Int?) {
         val uri = item.uri ?: return
         writer.removeFromPlaylist(playlist.id, uri)
     }
