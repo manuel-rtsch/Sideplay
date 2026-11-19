@@ -106,6 +106,14 @@ android {
     }
 
     buildTypes {
+        // The debug build carries the same `.dev` identity as `dev`, so it installs next to the
+        // release app (the two are signed with different keys and cannot replace each other) and
+        // shows up as "Sidetrack Dev" in the launcher and the OAuth chooser.
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            manifestPlaceholders["appLabel"] = "Sidetrack Dev"
+        }
         release {
             if (releaseKeystorePropertiesFile.isFile) signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
