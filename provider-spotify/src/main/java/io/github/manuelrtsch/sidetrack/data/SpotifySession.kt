@@ -101,23 +101,48 @@ class SpotifySession(
 
     override val nativeAvailable: Boolean get() = NativeBridge.isAvailable
 
+    /** One line per failed access-point connection, in a file the user can share. */
+    private val connectDiagnostics by lazy { appContext?.let(::ConnectDiagnostics) }
+
     private val nativeGateway by lazy {
-        NativeSpotifyGateway(NativeBridge, { _settings.value }, { isOnline }, { accessToken() })
+        NativeSpotifyGateway(
+            native = NativeBridge,
+            settings = { _settings.value },
+            networkAvailable = { isOnline },
+            accessToken = { accessToken() },
+            onConnectFailure = { reason -> connectDiagnostics?.record(reason) }
+        )
     }
     val gateway: SpotifyGateway get() = nativeGateway
 
     private val webApi by lazy { SpotifyWebApi { accessToken() } }
+    private val webCatalog by lazy { SpotifyWebCatalog(webApi) }
+    private val nativeCatalog by lazy {
+        NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
+    }
+
     val spotifyCatalog: SpotifyCatalog by lazy {
         // The demo build type serves a fixed catalog; playback still goes through the real
         // account and librespot, so only the read/write side is replaced.
         demo?.catalog()
             ?: if (nativeAvailable) {
-                NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
+                // Reads keep working over HTTPS when the network refuses librespot's access point;
+                // see [ResilientSpotifyCatalog].
+                ResilientSpotifyCatalog(nativeCatalog, webCatalog)
             } else {
-                SpotifyWebCatalog(webApi)
+                webCatalog
             }
     }
-    val spotifyWriter: SpotifyLibraryWriter? get() = spotifyCatalog as? SpotifyLibraryWriter
+
+    /**
+     * Null while reads are served by the Web API: that transport is read-only here, so the UI has
+     * to hide the library actions instead of failing them one by one.
+     */
+    val spotifyWriter: SpotifyLibraryWriter? get() {
+        val catalog = spotifyCatalog
+        if (catalog is ResilientSpotifyCatalog) return catalog.takeUnless { it.degraded }
+        return catalog as? SpotifyLibraryWriter
+    }
 
     override val catalog: MediaCatalog by lazy { SpotifyMediaCatalog(spotifyCatalog) }
     override val writer: MediaLibraryWriter? get() = spotifyWriter?.let(::SpotifyMediaLibraryWriter)

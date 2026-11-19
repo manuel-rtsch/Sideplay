@@ -5,6 +5,9 @@ import io.github.manuelrtsch.sidetrack.data.NativeSpotifyGateway
 import io.github.manuelrtsch.sidetrack.data.PlaybackSettings
 import io.github.manuelrtsch.sidetrack.data.SpotifyFailure
 import io.github.manuelrtsch.sidetrack.data.SpotifyGatewayException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -50,6 +53,32 @@ class NativeSpotifyGatewayTest {
         val failure = runCatching { gateway.connect("token") }.exceptionOrNull()
 
         assertEquals(SpotifyFailure.Network, (failure as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `an unreachable access point is a network failure, not an expired session`() = runTest {
+        // Regression: this used to be reported as AuthenticationExpired, which sent the user to the
+        // sign-in screen even though the stored token was valid and only the access point refused.
+        val native = FakeNative().apply { connectOk = false }
+        val reasons = mutableListOf<String>()
+        val gateway = NativeSpotifyGateway(native, onConnectFailure = { reasons += it }) { "token" }
+
+        val failure = runCatching { gateway.connect("token") }.exceptionOrNull()
+
+        assertEquals(SpotifyFailure.Network, (failure as SpotifyGatewayException).failure)
+        assertEquals(listOf("SESSION_CONNECT_FAILED: test"), reasons)
+    }
+
+    @Test fun `concurrent catalog reads share one session`() = runTest {
+        val native = FakeNative()
+        val gateway = NativeSpotifyGateway(native) { "token" }
+
+        coroutineScope {
+            repeat(4) { launch(Dispatchers.IO) { gateway.ensureSession() } }
+        }
+
+        // One connect, not four: the racing calls used to rebuild the session under each other.
+        assertEquals(1, native.connects)
+        assertEquals("token", native.token)
     }
 
     @Test fun `offline load maps to Network`() = runTest {
@@ -255,12 +284,12 @@ class NativeSpotifyGatewayTest {
         override fun initialize() = isAvailable
         override fun setTmpDir(path: String) = Unit
         override fun setCacheDir(path: String, sizeLimitBytes: Long) = Unit
-        override fun connect(accessToken: String): Boolean {
+        override fun connect(accessToken: String): String? {
             connects++
             token = accessToken
             // Model the engine: a new session cannot keep the player created for the old one.
             playerCreated = false
-            return connectOk && isAvailable
+            return if (connectOk && isAvailable) null else "SESSION_CONNECT_FAILED: test"
         }
         override fun setAccessToken(accessToken: String): Boolean {
             if (setTokenOk) token = accessToken
