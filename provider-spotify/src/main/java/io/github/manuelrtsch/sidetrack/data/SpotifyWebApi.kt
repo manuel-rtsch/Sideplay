@@ -29,7 +29,11 @@ import org.json.JSONObject
  * The Spotify Web API reads the app needs. It deliberately returns UI models, not raw JSON: the
  * screens never learn an endpoint or a field name.
  */
-class SpotifyWebApi(private val accessToken: suspend () -> String?) {
+class SpotifyWebApi(
+    /** Overridable so tests can exercise the real HTTP handling against a loopback server. */
+    private val apiBase: String = API,
+    private val accessToken: suspend () -> String?
+) {
     suspend fun library(
         filter: LibraryFilter,
         offset: Int = 0,
@@ -38,12 +42,12 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         val page = { items: List<LibraryEntry>, total: Int? -> Page.of(items, offset, limit, total) }
         return when (filter) {
             LibraryFilter.LikedSongs -> {
-                val json = get("$ME_TRACKS?limit=$limit&offset=$offset", token())
+                val json = get("${apiBase}$ME_TRACKS?limit=$limit&offset=$offset", token())
                 page(tracks(json), json.optInt("total").takeIf { it > 0 })
             }
 
             LibraryFilter.Playlists -> {
-                val json = get("$ME_PLAYLISTS?limit=$limit&offset=$offset", token())
+                val json = get("${apiBase}$ME_PLAYLISTS?limit=$limit&offset=$offset", token())
                 page(json.optJSONArray("items").playlists(), json.optInt("total").takeIf { it > 0 })
             }
 
@@ -82,7 +86,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
         }
         if (types.isEmpty()) return SearchResults()
         val json = get(
-            "$SEARCH?q=${enc(query.trim())}&type=${types.joinToString(",")}&limit=${limit.coerceIn(1, 50)}&offset=$offset&market=from_token",
+            "${apiBase}$SEARCH?q=${enc(query.trim())}&type=${types.joinToString(",")}&limit=${limit.coerceIn(1, 50)}&offset=$offset&market=from_token",
             token()
         )
         return SearchResults(
@@ -95,7 +99,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     suspend fun artist(id: String): Artist? = runCatching {
-        artist(get("$ARTISTS/${enc(id)}", token()))
+        artist(get("${apiBase}$ARTISTS/${enc(id)}", token()))
     }.getOrNull()
 
     suspend fun albumsBy(
@@ -105,7 +109,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     ): Page<Album> {
         val json = runCatching {
             get(
-                "$ARTISTS/${enc(artist.id)}/albums?include_groups=album,single&limit=$limit&offset=$offset&market=from_token",
+                "${apiBase}$ARTISTS/${enc(artist.id)}/albums?include_groups=album,single&limit=$limit&offset=$offset&market=from_token",
                 token()
             )
         }.getOrNull()
@@ -115,7 +119,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
 
     suspend fun topTracks(artist: Artist, offset: Int = 0, limit: Int = CATALOG_PAGE_SIZE): Page<Track> {
         val json = runCatching {
-            get("$ARTISTS/${enc(artist.id)}/top-tracks?market=from_token", token())
+            get("${apiBase}$ARTISTS/${enc(artist.id)}/top-tracks?market=from_token", token())
         }.getOrNull()
         val tracks = json?.optJSONArray("tracks").tracks().orEmpty().drop(offset).take(limit)
         return Page.of(tracks, offset, limit)
@@ -123,7 +127,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
 
     suspend fun songRadio(trackId: String, limit: Int = CATALOG_PAGE_SIZE): List<Track> {
         val json = get(
-            "$RECOMMENDATIONS?seed_tracks=${enc(trackId)}&limit=${limit.coerceIn(1, 100)}&market=from_token",
+            "${apiBase}$RECOMMENDATIONS?seed_tracks=${enc(trackId)}&limit=${limit.coerceIn(1, 100)}&market=from_token",
             token()
         )
         return json.optJSONArray("tracks").tracks()
@@ -131,7 +135,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
 
     suspend fun artistRadio(artistId: String, limit: Int = CATALOG_PAGE_SIZE): List<Track> {
         val json = get(
-            "$RECOMMENDATIONS?seed_artists=${enc(artistId)}&limit=${limit.coerceIn(1, 100)}&market=from_token",
+            "${apiBase}$RECOMMENDATIONS?seed_artists=${enc(artistId)}&limit=${limit.coerceIn(1, 100)}&market=from_token",
             token()
         )
         return json.optJSONArray("tracks").tracks()
@@ -150,7 +154,7 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private suspend fun savedAlbums(offset: Int, limit: Int): Page<LibraryEntry> {
-        val json = get("$ME_ALBUMS?limit=$limit&offset=$offset", token())
+        val json = get("${apiBase}$ME_ALBUMS?limit=$limit&offset=$offset", token())
         val items = json.optJSONArray("items") ?: JSONArray()
         val albums = buildList(items.length()) {
             for (i in 0 until items.length()) {
@@ -161,14 +165,14 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private suspend fun followedArtists(offset: Int, limit: Int): Page<LibraryEntry> {
-        val json = get("$ME_FOLLOWING?type=artist&limit=$limit&offset=$offset", token())
+        val json = get("${apiBase}$ME_FOLLOWING?type=artist&limit=$limit&offset=$offset", token())
         val page = json.optJSONObject("artists")
         val artists = page?.optJSONArray("items").artists().orEmpty()
         return Page.of(artists, offset, limit, page?.optInt("total")?.takeIf { it > 0 })
     }
 
     private suspend fun savedShows(offset: Int, limit: Int): Page<LibraryEntry> {
-        val json = get("$ME_SHOWS?limit=$limit&offset=$offset", token())
+        val json = get("${apiBase}$ME_SHOWS?limit=$limit&offset=$offset", token())
         val items = json.optJSONArray("items") ?: JSONArray()
         val shows = buildList(items.length()) {
             for (i in 0 until items.length()) {
@@ -179,9 +183,9 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private suspend fun albumCollection(id: String, offset: Int, limit: Int): Collection? {
-        val json = get("$ALBUMS/${enc(id)}", token())
+        val json = get("${apiBase}$ALBUMS/${enc(id)}", token())
         val album = album(json) ?: return null
-        val page = get("$ALBUMS/${enc(id)}/tracks?limit=$limit&offset=$offset", token())
+        val page = get("${apiBase}$ALBUMS/${enc(id)}/tracks?limit=$limit&offset=$offset", token())
         val tracks = page.optJSONArray("items").tracks()
         return Collection(
             type = CollectionType.Album,
@@ -199,9 +203,9 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private suspend fun playlistCollection(id: String, offset: Int, limit: Int): Collection? {
-        val json = get("$PLAYLISTS/${enc(id)}", token())
+        val json = get("${apiBase}$PLAYLISTS/${enc(id)}", token())
         val playlist = playlist(json) ?: return null
-        val page = get("$PLAYLISTS/${enc(id)}/tracks?limit=$limit&offset=$offset&market=from_token", token())
+        val page = get("${apiBase}$PLAYLISTS/${enc(id)}/tracks?limit=$limit&offset=$offset&market=from_token", token())
         val tracks = tracks(page)
         return Collection(
             type = CollectionType.Playlist,
@@ -219,9 +223,9 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     }
 
     private suspend fun showCollection(id: String, offset: Int, limit: Int): Collection? {
-        val json = get("$SHOWS/${enc(id)}", token())
+        val json = get("${apiBase}$SHOWS/${enc(id)}", token())
         val show = show(json) ?: return null
-        val page = get("$SHOWS/${enc(id)}/episodes?limit=$limit&offset=$offset&market=from_token", token())
+        val page = get("${apiBase}$SHOWS/${enc(id)}/episodes?limit=$limit&offset=$offset&market=from_token", token())
         val items = page.optJSONArray("items") ?: JSONArray()
         val episodes = buildList(items.length()) {
             for (i in 0 until items.length()) {
@@ -452,17 +456,17 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
 
     private companion object {
         const val API = "https://api.spotify.com/v1"
-        const val SEARCH = "$API/search"
-        const val ME_TRACKS = "$API/me/tracks"
-        const val ME_PLAYLISTS = "$API/me/playlists"
-        const val ME_ALBUMS = "$API/me/albums"
-        const val ME_FOLLOWING = "$API/me/following"
-        const val ME_SHOWS = "$API/me/shows"
-        const val ALBUMS = "$API/albums"
-        const val ARTISTS = "$API/artists"
-        const val PLAYLISTS = "$API/playlists"
-        const val SHOWS = "$API/shows"
-        const val RECOMMENDATIONS = "$API/recommendations"
+        const val SEARCH = "/search"
+        const val ME_TRACKS = "/me/tracks"
+        const val ME_PLAYLISTS = "/me/playlists"
+        const val ME_ALBUMS = "/me/albums"
+        const val ME_FOLLOWING = "/me/following"
+        const val ME_SHOWS = "/me/shows"
+        const val ALBUMS = "/albums"
+        const val ARTISTS = "/artists"
+        const val PLAYLISTS = "/playlists"
+        const val SHOWS = "/shows"
+        const val RECOMMENDATIONS = "/recommendations"
         const val TIMEOUT_MS = 15_000
     }
 }

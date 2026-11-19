@@ -55,8 +55,8 @@ the suite that ran, because the screenshot tests contribute roughly twelve point
 
 | Suite | Line floor | Branch floor |
 |---|---|---|
-| default (no screenshots) | 52 | 33 |
-| full (`-PsidetrackScreenshots`) | 64 | 40 |
+| default (no screenshots) | 57 | 38 |
+| full (`-PsidetrackScreenshots`) | 69 | 44 |
 
 Phase 2 targets are **70% line / 45% branch** with the full suite.
 

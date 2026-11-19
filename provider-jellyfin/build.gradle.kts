@@ -70,6 +70,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    // The Jellyfin SDK logs through kotlin-logging, whose JVM binding needs an slf4j provider.
+    testImplementation(libs.slf4j.simple)
     // The opt-in integration test needs ApplicationProvider under Robolectric.
     testImplementation(libs.androidx.junit)
     // On the JVM the SDK's kotlin-logging resolves the slf4j backend, which the android runtime
@@ -86,10 +88,10 @@ kover {
         variant("debug") {
             verify {
                 rule("line coverage") {
-                    minBound(58)
+                    minBound(91)
                 }
                 rule("branch coverage") {
-                    minBound(44, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                    minBound(59, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
                 }
             }
         }

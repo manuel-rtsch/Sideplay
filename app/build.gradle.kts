@@ -361,17 +361,19 @@ kover {
             verify {
                 // Product-wide ratchet, measured when Kover was introduced. The floor matches the
                 // suite that was actually run: the screenshot tests dominate UI coverage, so the
-                // fast default gate (now 52.36% line / 33.88% branch) sits below the full gate
-                // (64.66% / 40.16%).
+                // fast default gate (now 57.74% line / 38.12% branch) sits below the full gate
+                // (69.98% / 44.35%).
                 // Slice 1 moved the default gate from 45.99% / 29.46%; slice 2 (playback service,
                 // app session, keypad-back routes) to 48.57% / 31.20%; slice 3 (provider runtimes,
-                // token client, audio sink, native bridge) moved it to 52.36% / 33.88%. Phase 2
-                // targets: 70% / 45% with the full suite. Raise, never lower.
+                // token client, audio sink, native bridge) to 52.36% / 33.88%; slice 4 (web API,
+                // Spotify session, Jellyfin SDK seam) moved it to 57.74% / 38.12%. Phase 2 targets:
+                // 70% / 45% with the full suite; the full-suite line is at 69.98%. Raise, never
+                // lower.
                 rule("product line coverage") {
-                    minBound(if (runScreenshotTests) 64 else 52)
+                    minBound(if (runScreenshotTests) 69 else 57)
                 }
                 rule("product branch coverage") {
-                    minBound(if (runScreenshotTests) 40 else 33, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                    minBound(if (runScreenshotTests) 44 else 38, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
                 }
             }
         }

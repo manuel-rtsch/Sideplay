@@ -356,13 +356,14 @@ The audit above was measured in the 0.4.0 working tree, which contained four unc
 
 ---
 
-## 10. Phase 2 status (three slices)
+## 10. Phase 2 status (four slices)
 
 Phase 2 is being worked in slices. The first took the `:core` glue the audit named plus the queue
 reorder state machine; the second took the two largest `app` risks, the playback service and the
 app session, and whatever of the navigation graph is reachable without a composed nav host; the
 third took the provider runtimes and the three Spotify boundaries the audit named (token client,
-audio sink, native bridge).
+audio sink, native bridge); the fourth took the two remaining Spotify data seams and the
+SDK-backed Jellyfin API.
 
 ### 10.1 What landed (slice 1)
 
@@ -393,17 +394,17 @@ shadow request by type, because the field name is a Robolectric implementation d
 
 ### 10.2 Measured delta
 
-| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 |
-|---|---|---|---|---|
-| Product line (default suite) | 45.99% | 46.75% | 48.57% | **52.36%** |
-| Product branch (default suite) | 29.46% | 30.07% | 31.20% | **33.88%** |
-| Product line (full suite) | 58.4% | 58.4% | 58.4% | **64.66%** |
-| Product branch (full suite) | 35.8% | 35.8% | 35.8% | **40.16%** |
-| `:core` line (own tests) | 35.8% | 46.5% | 46.5% | 46.5% |
-| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% | 34.0% |
-| Floors: `:app` default, `:app` full | 45/28, 57/34 | 46/30, 57/34 | 48/31, 57/34 | **52/33, 64/40** |
-| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, **48/33** |
-| Floors: `:provider-jellyfin`, `:provider-navidrome` | 46/38, 50/34 | 46/38, 50/34 | 46/38, 50/34 | **58/44, 68/41** |
+| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 | After slice 4 |
+|---|---|---|---|---|---|
+| Product line (default suite) | 45.99% | 46.75% | 48.57% | 52.36% | **57.74%** |
+| Product branch (default suite) | 29.46% | 30.07% | 31.20% | 33.88% | **38.12%** |
+| Product line (full suite) | 58.4% | 58.4% | 58.4% | 64.66% | **69.98%** |
+| Product branch (full suite) | 35.8% | 35.8% | 35.8% | 40.16% | **44.35%** |
+| `:core` line (own tests) | 35.8% | 46.5% | 46.5% | 46.5% | 46.5% |
+| `:core` branch (own tests) | 29.0% | 34.0% | 34.0% | 34.0% | 34.0% |
+| Floors: `:app` default, `:app` full | 45/28, 57/34 | 46/30, 57/34 | 48/31, 57/34 | 52/33, 64/40 | **57/38, 69/44** |
+| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, 48/33 | 46/34, **67/52** |
+| Floors: `:provider-jellyfin`, `:provider-navidrome` | 46/38, 50/34 | 46/38, 50/34 | 46/38, 50/34 | 58/44, 68/41 | **91/59, 68/41** |
 
 Per-file after slice 2: `PlaybackService.kt` 0% → **89.0%** line, `AppSession.kt` 5.5% → **36.1%**,
 `QueueReorder.kt` 24.8% → **49.1%**, `SidetrackGraph.kt` 8.9% → **9.0%**.
@@ -413,9 +414,14 @@ Per-file after slice 3: `JellyfinRuntime.kt` 0.6% → **71.8%**, `NavidromeRunti
 `NativeBridge.kt` 6.2% → **90.9%**. The full-suite gates were re-measured for the first time since
 Phase 1, so the full-suite floor moved with them.
 
-`:core` is still the module furthest along toward the 70% target, but `:provider-navidrome` (68.4%)
-and `:provider-jellyfin` (58.5%) closed most of their gap in one slice. `:provider-spotify` moved
-from 32.5% to 48.1% and is now the module holding the product-wide number back.
+Per-file after slice 4: `SpotifyWebApi.kt` 7.7% → **98.9%**, `SpotifySession.kt` 35.5% →
+**55.5%**, `SdkJellyfinApi` → **100%** and the Jellyfin module 58.5% → **91.1%**. The full-suite
+line is now **69.98%**, effectively at the Phase 2 line target; branch is 0.65 points short.
+
+`:provider-spotify` moved from 32.5% at the start of Phase 2 to **67.2%** and is no longer the
+module holding the product-wide number back. Its remaining gaps are playback paths that need the
+native library, not request mapping. `:provider-jellyfin` (91.1%) and `:provider-navidrome` (68.4%)
+are close to or past the module target, and `:core` (46.5%) is the last large module below it.
 
 ### 10.3 What the slice changed about the plan
 
@@ -455,18 +461,37 @@ real shadow behaviour), and `NativeBridge` flips the SDK's own loaded/failed set
 the "library present but symbols missing" branch executes. The reflection is the only seam short of
 shipping a test-only ABI, and it fails visibly if the SDK renames its state.
 
-### 10.5 Next slice
+### 10.5 What landed (slice 4)
 
-Still the Phase 2 order from §7, minus what the three slices closed:
+| Area | Tests | What is pinned |
+|---|---|---|
+| `provider-spotify/data/SpotifyWebApi.kt` | 24 | every library filter and its nested envelope, saved-track/saved-album/followed-artist/saved-show paging, all three collection flows (detail then page), search scope ordering, query encoding, the 1..50/1..100 limit clamps, artist/albums/top-tracks/radio mapping, the "smallest usable artwork" and blank-url fallbacks, sparse-track and episode defaults, and 401/429/4xx/unreadable-body/unreachable-server translation |
+| `provider-spotify/data/SpotifySession.kt` | 15 | stored-vs-empty sign-in state including an unreadable store, valid/expiring/refresh-less tokens, refresh rotation and scope inheritance, a refresh the store rejects, password sign-in rejection, sign-out clearing identity/queue/history/resume/cache, queue+history+resume persistence across a new session, every playback setting, and the expired-session error from `ensurePlaybackConnected`/`play`/`resume` |
+| `provider-jellyfin/data/JellyfinApi.kt` | 16 | the SDK-backed seam against a loopback server: every list query's kinds and paging, item mapping, playlist detail/entries and editability, create/add/remove, search scope bits including `includeArtists`, instant mix, user data, favorite/played/capabilities/report payloads, 401/404/500 translation, transcoding (relative and absolute) vs direct-play fallback, header merging and artwork URLs |
 
-1. Providers: `SpotifyWebApi` (7.7%), `SpotifySession` (35.5%), `JellyfinApi` (27.8%). These are
-   now the largest untouched blocks and all three are request/response mapping over an injectable
-transport or SDK client.
-2. `core`: `PlaybackController` (53%) remainder, `ExoPlayerMedia3Player` and
-   `GuardedEncryptedStore` if a seam is approved.
-3. `app`: the remainder of `AppSession` (36%) and `SidetrackGraph`. The graph's route table only
+55 new tests, all in the default suite: the default gate is now 528 tests and the full run 554,
+all green. `SpotifyWebApi` gained an `apiBase` constructor argument (defaulted to Spotify's API)
+so the real HTTP path can run against a loopback server; the Jellyfin test adds `slf4j-simple` as
+a test-only dependency because the SDK's kotlin-logging JVM binding needs a provider.
+
+The Jellyfin test deliberately goes through the generated serializers instead of a hand-written
+DTO fake: the loopback server returns the JSON the real server would, so a field the SDK marks
+required shows up as a red test rather than a fake that silently accepts anything. That caught the
+required `MediaSources`, `Shares`/`ItemIds`, and `PlayCount`/`Key` fields before the fixtures were
+finished.
+
+### 10.6 Next slice
+
+Phase 2's named targets are now effectively met. What remains is the long tail, in value order:
+
+1. `core`: `PlaybackController` (53%) remainder, `ExoPlayerMedia3Player` and
+   `GuardedEncryptedStore` if a seam is approved. `:core` is the last large module below 70%.
+2. `app`: the remainder of `AppSession` (36%) and `SidetrackGraph`. The graph's route table only
    becomes reachable with a composed nav host, so that is a Roborazzi/instrumented job, not a
    unit-test one; the 1 point it gained here is the keypad-back predicate.
+3. `provider-spotify`: the native playback paths (`recoverPlayback`, `preloadNext`, transport
+   skips, the start-of-play/stop coroutines). These need a fake `SpotifyNative` injected into
+   `SpotifySession`, or they stay a deliberate gap.
 
 ## Appendix A — reproducing the numbers
 

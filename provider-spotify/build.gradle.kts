@@ -51,10 +51,10 @@ kover {
         variant("debug") {
             verify {
                 rule("line coverage") {
-                    minBound(48)
+                    minBound(67)
                 }
                 rule("branch coverage") {
-                    minBound(33, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                    minBound(52, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
                 }
             }
         }
