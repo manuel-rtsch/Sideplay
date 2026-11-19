@@ -58,9 +58,12 @@ the suite that ran, because the screenshot tests contribute roughly twelve point
 | default (no screenshots) | 57 | 38 |
 | full (`-PsidetrackScreenshots`) | 69 | 44 |
 
-`:provider-spotify`'s own floor is 65/51: it was re-based when the branch was rebased onto
-`release/v0.4.0`, whose new catalog/diagnostics code no provider test reaches yet. The other
-provider floors and `:core` are unchanged.
+Measured after the native-playback slice: 59.11% line / 39.75% branch on the default suite, 71.47% /
+45.90% on the full suite — the phase-2 targets (70/45) are met with the screenshots included.
+
+`:provider-spotify`'s own floor is 74/57, raised by the native-playback suite: the module measures
+75.01% line / 58.33% branch where it measured 67.2% before that suite and 65.06% after the rebase
+onto `release/v0.4.0`. The other provider floors and `:core` are unchanged.
 
 Phase 2 targets are **70% line / 45% branch** with the full suite.
 

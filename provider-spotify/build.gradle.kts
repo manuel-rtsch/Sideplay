@@ -50,17 +50,15 @@ kover {
     reports {
         variant("debug") {
             verify {
-                // Re-based at 65/51 when the phase-2 branch was rebased onto release/v0.4.0. The
-                // release commits (ResilientSpotifyCatalog, ConnectDiagnostics, the gateway and
-                // session rework) added ~350 lines that only the app-level and screenshot suites
-                // touch, so this module's own gate measures 65.06% / 51.76% where it had been
-                // 67.2%. The native-playback slice has to climb back past 67/52 before this
-                // floor can move up again; it must not move further down.
+                // Re-based when the phase-2 branch was rebased onto release/v0.4.0 and then lifted
+                // by the native-playback suite (SpotifySessionNativeTest, 13 tests): the module
+                // measures 75.01% line / 58.33% branch, up from 65.06%/51.76% after the rebase and
+                // 67.2% before it. The floors sit one point under the measurement, as a ratchet.
                 rule("line coverage") {
-                    minBound(65)
+                    minBound(74)
                 }
                 rule("branch coverage") {
-                    minBound(51, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
+                    minBound(57, CoverageUnit.BRANCH, AggregationType.COVERED_PERCENTAGE)
                 }
             }
         }

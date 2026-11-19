@@ -394,16 +394,16 @@ shadow request by type, because the field name is a Robolectric implementation d
 
 ### 10.2 Measured delta
 
-| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 | After slice 4 |
-|---|---|---|---|---|---|
-| Product line (default suite) | 45.99% | 46.75% | 48.57% | 52.36% | **57.74%** |
-| Product branch (default suite) | 29.46% | 30.07% | 31.20% | 33.88% | **38.12%** |
-| Product line (full suite) | 58.4% | 58.4% | 58.4% | 64.66% | **69.98%** |
-| Product branch (full suite) | 35.8% | 35.8% | 35.8% | 40.16% | **44.35%** |
+| Gate | Phase 1 | After slice 1 | After slice 2 | After slice 3 | After slice 4 | After slice 5 |
+|---|---|---|---|---|---|---|
+| Product line (default suite) | 45.99% | 46.75% | 48.57% | 52.36% | 57.74% | **59.11%** |
+| Product branch (default suite) | 29.46% | 30.07% | 31.20% | 33.88% | 38.12% | **39.75%** |
+| Product line (full suite) | 58.4% | 58.4% | 58.4% | 64.66% | 69.98% | **71.47%** |
+| Product branch (full suite) | 35.8% | 35.8% | 35.8% | 40.16% | 44.35% | **45.90%** |
 | `:core` line (own tests) | 35.8% | 46.5% | 46.5% | 46.5% | 46.5% |
 | `:core` branch (own tests) | 29.0% | 34.0% | 34.0% | 34.0% | 34.0% |
 | Floors: `:app` default, `:app` full | 45/28, 57/34 | 46/30, 57/34 | 48/31, 57/34 | 52/33, 64/40 | **57/38, 69/44** |
-| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, 48/33 | 46/34, **67/52** |
+| Floors: `:core`, `:provider-spotify` | 34/27, 31/20 | 46/34, 31/20 | 46/34, 31/20 | 46/34, 48/33 | 46/34, 67/52 | 46/34, **74/57** |
 | Floors: `:provider-jellyfin`, `:provider-navidrome` | 46/38, 50/34 | 46/38, 50/34 | 46/38, 50/34 | 58/44, 68/41 | **91/59, 68/41** |
 
 Per-file after slice 2: `PlaybackService.kt` 0% → **89.0%** line, `AppSession.kt` 5.5% → **36.1%**,
@@ -505,25 +505,56 @@ Two measurements worth recording:
   drifting again. `:app`, `:core`, `:provider-jellyfin` and `:provider-navidrome` floors are
   unchanged and still pass.
 
-### 10.7 Next slice
+### 10.7 What landed (slice 5)
+
+| Area | Tests | What is pinned |
+|---|---|---|
+| `provider-spotify` `SpotifySession` playback | 13 | connect → createPlayer → load on a cold start, the live-session reuse that only re-checks the token, a forced reconnect, a rejected load surfacing as `TrackUnavailable`, a preload failure not disturbing the playing item, resume on a live session vs. after the player was dropped (reload at the UI position, not zero), the two transport skips and their threshold split, halt arming the stop guard for the event it caused, `stopPlayback` clearing queue and resume point, sign-out stopping the decoder before the credentials go |
+| `app` `AppSessions` provisioning | 5 | the service list and lookup, an unknown service provisioning nothing, selecting a service building its runtime, re-selecting it keeping that runtime, selecting another replacing the one that held the media session |
+
+Two seams were needed, and both are production-neutral:
+
+* `SpotifySession(native: SpotifyNative = NativeBridge)`. The gateway, catalog, audio sink and the
+  init/sign-out calls now go through it instead of the static bridge.
+* `SpotifySession(playbackContext: CoroutineContext = Dispatchers.Main.immediate)`. It builds the
+  playback scope and is the context `play`/`resume` hop onto, so the default is byte-for-byte the
+  old behaviour. The tests pass a single-threaded dispatcher.
+
+That second one is the point the previous attempt missed. Under Robolectric the test body runs on
+the sandbox's main looper; a `runBlocking` test that plays through a session whose scope is
+`Dispatchers.Main.immediate` blocks the looper its own continuations are queued on, so the test
+hangs instead of failing. With an injected dispatcher the same production code runs off the
+looper, and the tests poll observable native calls instead of pumping the looper. The fixture's
+`readAudio` sleeps 2 ms per read: without it the drain spins the CPU while the fake never stalls.
+
+The audio-settings test (deferred player rebuild) was dropped rather than forced: the deferral
+lives in `LibrespotPlaybackEngine`, not in the session, so it belongs to an engine-level test.
+
+### 10.8 Next slice
 
 Phase 2's named targets are now effectively met. What remains is the long tail, in value order:
 
-1. `core`: `PlaybackController` (75% merged) remainder, `ExoPlayerMedia3Player` and
-   `GuardedEncryptedStore` if a seam is approved. `:core` is the last large module below 70%.
-2. `app`: the remainder of `AppSession` (36%) and `SidetrackGraph`. The graph's route table only
-   becomes reachable with a composed nav host, so that is a Roborazzi/instrumented job, not a
-   unit-test one; the 1 point it gained here is the keypad-back predicate.
-3. `provider-spotify`: the native playback paths (`recoverPlayback`, `preloadNext`, transport
-   skips, the start-of-play/stop coroutines). These need a fake `SpotifyNative` injected into
-   `SpotifySession`, or they stay a deliberate gap. A first attempt at this was abandoned: the
-   session owns a `Dispatchers.Main.immediate` scope, and under Robolectric the test body runs on
-   the sandbox's main looper, so `runBlocking` in the test blocks the very looper the session's
-   continuations are queued on — `playback.stop()` never resumes and the suite hangs instead of
-   failing. The seam alone is not enough; the session also needs an injectable playback
-   dispatcher/scope (the way `PlaybackControllerTest` already drives the controller with a
-   `StandardTestDispatcher`). Do both in the same slice, and keep the fixture's `readAudio`
-   non-blocking with a small sleep so the drain does not spin.
+Slice 5 met the phase-2 line and branch targets on the full suite (71.47% / 45.90%). What is left
+is the long tail, and two of its items are now explicit decisions rather than work items:
+
+1. `core`: the `PlaybackController` remainder (~75% merged). `ExoPlayerMedia3Player` (0%) is
+   **accepted as a gap**: it builds a real `ExoPlayer`, and Robolectric cannot buffer audio, so a
+   unit test would assert listener translation against a mock and prove nothing. Cover it with an
+   instrumented test alongside the playback service, or add a `Media3Player` factory seam in the
+   same slice that first needs it. `GuardedEncryptedStore` (0%) is also **accepted**: it builds an
+   `EncryptedFileStore` in its initializer, so its failure paths need a keystore that throws; the
+   app's `CredentialStoreGuardTest` and `StoreFailureTest` already pin the same contract through
+   the injectable `JsonStore`.
+2. `app`: `AppSession`'s remaining ~45 lines are almost all the `GuardedEncryptedStore`-backed
+   `ActiveServiceStore` and the `AppSessions.create`/`build` failure branches. Reading the store
+   back is impossible under Robolectric (the guard swallows the write), so `AppSessionsTest` asserts
+   provisioning through the session instead and the persistence boundary stays with the two store
+   tests. The remaining `build` fallbacks need a provider constructor that throws, which means a
+   factory seam; not worth it yet. `SidetrackGraph` still needs a composed nav host: Roborazzi or
+   instrumented work, not unit tests.
+3. `provider-spotify`: the native paths are covered except `recoverPlayback` (the stall path) and
+   the `applyAudioSettings` rebuild, which is engine behaviour (`LibrespotPlaybackEngine`'s deferred
+   `reconfigurePending`) and should be pinned there rather than through the session.
 
 ## Appendix A — reproducing the numbers
 

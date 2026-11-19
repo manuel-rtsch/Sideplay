@@ -15,10 +15,12 @@ import io.github.manuelrtsch.sidetrack.SidetrackDebug
 import io.github.manuelrtsch.sidetrack.Track
 import io.github.manuelrtsch.sidetrack.auth.SpotifyAuth
 import io.github.manuelrtsch.sidetrack.bridge.NativeBridge
+import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
 import io.github.manuelrtsch.sidetrack.playback.LibrespotPlaybackEngine
 import io.github.manuelrtsch.sidetrack.playback.PlaybackController
 import io.github.manuelrtsch.sidetrack.playback.SpotifyAudioSink
 import java.io.File
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,7 +44,18 @@ class SpotifySession(
      * Fixed catalog for demo builds, injected by :app because only it knows whether this build
      * carries a demo pack. Null in every normal build.
      */
-    private val demo: DemoContent? = null
+    private val demo: DemoContent? = null,
+    /**
+     * The JNI bridge. Injected so the native playback paths (connect, load, preload, halt) can be
+     * driven without librespot; every normal build uses the real [NativeBridge].
+     */
+    private val native: SpotifyNative = NativeBridge,
+    /**
+     * Where [playback] and its transport fallbacks run. Main by default, because the controller
+     * owns a platform `MediaSession`; a test injects a single-threaded dispatcher so it can drive
+     * those paths without blocking the sandbox's main looper.
+     */
+    private val playbackContext: CoroutineContext = Dispatchers.Main.immediate
 ) : ServiceRuntime,
     NativePlaybackRuntime,
     QualitySettingsRuntime,
@@ -99,14 +112,14 @@ class SpotifySession(
     )
     override val settings: StateFlow<PlaybackSettings> = _settings.asStateFlow()
 
-    override val nativeAvailable: Boolean get() = NativeBridge.isAvailable
+    override val nativeAvailable: Boolean get() = native.isAvailable
 
     /** One line per failed access-point connection, in a file the user can share. */
     private val connectDiagnostics by lazy { appContext?.let(::ConnectDiagnostics) }
 
     private val nativeGateway by lazy {
         NativeSpotifyGateway(
-            native = NativeBridge,
+            native = native,
             settings = { _settings.value },
             networkAvailable = { isOnline },
             accessToken = { accessToken() },
@@ -118,7 +131,7 @@ class SpotifySession(
     private val webApi by lazy { SpotifyWebApi { accessToken() } }
     private val webCatalog by lazy { SpotifyWebCatalog(webApi) }
     private val nativeCatalog by lazy {
-        NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
+        NativeSpotifyCatalog(native) { nativeGateway.ensureSession() }
     }
 
     val spotifyCatalog: SpotifyCatalog by lazy {
@@ -180,13 +193,13 @@ class SpotifySession(
         save = { historyStore?.write(it) }
     )
 
-    private val playbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val playbackScope = CoroutineScope(SupervisorJob() + playbackContext)
     override val playback: PlaybackController by lazy {
-        val sink = SpotifyAudioSink(NativeBridge, playbackScope)
+        val sink = SpotifyAudioSink(native, playbackScope)
         val engine = LibrespotPlaybackEngine(
             gateway = nativeGateway,
             audio = sink,
-            eventSource = { if (nativeAvailable) NativeBridge.pollEvent() else null }
+            eventSource = { if (nativeAvailable) native.pollEvent() else null }
         )
         PlaybackController(
             engine = engine,
@@ -271,9 +284,9 @@ class SpotifySession(
     init {
         demo?.seed(history, queue)
         if (nativeAvailable) {
-            tmpDir?.let(NativeBridge::setTmpDir)
-            audioCacheDir?.let { NativeBridge.setCacheDir(it.absolutePath, AUDIO_CACHE_LIMIT_BYTES) }
-            NativeBridge.initialize()
+            tmpDir?.let(native::setTmpDir)
+            audioCacheDir?.let { native.setCacheDir(it.absolutePath, AUDIO_CACHE_LIMIT_BYTES) }
+            native.initialize()
         }
     }
 
@@ -296,11 +309,11 @@ class SpotifySession(
             playback.pause()
             // Stop the decoder immediately; waiting for the coroutine below leaves a window in
             // which the current track keeps playing after the credentials have been cleared.
-            NativeBridge.stop()
+            native.stop()
             playbackScope.launch { runCatching { playback.disconnect() } }
         } else {
             nativeGateway.reset()
-            NativeBridge.disconnect()
+            native.disconnect()
         }
         auth.clear()
         clearCaches()
@@ -340,7 +353,7 @@ class SpotifySession(
         connectForPlayback(forceReconnect)
         SidetrackDebug.log("session.play connected; starting playback")
         val keepAudioSink = gapless && _settings.value.gapless && positionMs == 0L
-        withContext(Dispatchers.Main.immediate) { playback.start(key, uri, positionMs, keepAudioSink, headers) }
+        withContext(playbackContext) { playback.start(key, uri, positionMs, keepAudioSink, headers) }
         preloadNext()
         SidetrackDebug.log("session.play returned")
     }
@@ -368,10 +381,10 @@ class SpotifySession(
         val current = playback.current
         val uri = current?.uri
         return if (rebuilt && current != null && uri != null) {
-            withContext(Dispatchers.Main.immediate) { playback.start(current.key, uri, playback.position) }
+            withContext(playbackContext) { playback.start(current.key, uri, playback.position) }
             true
         } else {
-            withContext(Dispatchers.Main.immediate) { playback.resume() }
+            withContext(playbackContext) { playback.resume() }
         }
     }
 
