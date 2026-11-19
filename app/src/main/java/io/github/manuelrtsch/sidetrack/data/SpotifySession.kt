@@ -94,26 +94,55 @@ class SpotifySession(
     val nativeAvailable: Boolean get() = NativeBridge.isAvailable
 
     private val nativeGateway by lazy {
-        NativeSpotifyGateway(NativeBridge, { _settings.value }, { isOnline }, { accessToken() })
+        NativeSpotifyGateway(
+            native = NativeBridge,
+            settings = { _settings.value },
+            networkAvailable = { isOnline },
+            accessToken = { accessToken() },
+            onConnectFailure = { reason -> TriageLog.e("native", "the access point refused: $reason") }
+        )
     }
     val gateway: SpotifyGateway get() = nativeGateway
 
     private val webApi by lazy { SpotifyWebApi { accessToken() } }
+    private val webCatalog by lazy { SpotifyWebCatalog(webApi) }
+    private val nativeCatalog by lazy {
+        NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
+    }
+
+    private val resilientCatalog by lazy {
+        ResilientSpotifyCatalog(
+            native = nativeCatalog,
+            web = webCatalog,
+            onDegrade = { error ->
+                TriageLog.w("catalog", "degraded to the Web API: ${error.message}")
+            }
+        )
+    }
+
     val catalog: SpotifyCatalog by lazy {
         // The demo build type serves a fixed catalog; playback still goes through the real
         // account and librespot, so only the read/write side is replaced.
         DemoContentSource.current?.catalog()
             ?: if (nativeAvailable) {
                 TriageLog.i("catalog", "implementation=native (librespot first-party endpoints)")
-                NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
+                // Reads fall back to the Web API when the network refuses the access point; the
+                // degradation is logged with the reason so the shareable file explains it.
+                resilientCatalog
             } else {
                 // The packaged bridge could not be loaded on this device. The Web API fallback is
                 // quota-limited, so this line is the difference between "no data" and "rate-limited".
                 TriageLog.w("catalog", "implementation=web API — the native librespot bridge did not load")
-                SpotifyWebCatalog(webApi)
+                webCatalog
             }
     }
-    val writer: SpotifyLibraryWriter? get() = catalog as? SpotifyLibraryWriter
+
+    /** Null once reads are served by the read-only Web API, so the UI hides the library actions. */
+    val writer: SpotifyLibraryWriter? get() {
+        val current = catalog
+        if (current is ResilientSpotifyCatalog) return current.takeUnless { it.degraded }
+        return current as? SpotifyLibraryWriter
+    }
 
     /** Process-wide queue and history so leaving Sidetrack does not forget what is playing. */
     val queue = SpotifyQueueRepository(

@@ -5,12 +5,18 @@ mod catalog;
 mod engine;
 
 use jni::objects::{JObject, JString};
-use jni::sys::{jboolean, jbyteArray, jlong, JNI_FALSE, JNI_TRUE};
+use jni::sys::{jboolean, jbyteArray, jlong, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 use std::time::Duration;
 
 fn string(env: &mut JNIEnv, value: &JString) -> Option<String> {
     env.get_string(value).ok().map(Into::into)
+}
+
+fn new_string(env: &mut JNIEnv, value: &str) -> jstring {
+    env.new_string(value)
+        .map(|value| value.into_raw())
+        .unwrap_or(std::ptr::null_mut())
 }
 
 fn catalog_result(env: &mut JNIEnv, result: Result<String, String>) -> jni::sys::jstring {
@@ -67,10 +73,19 @@ pub extern "system" fn Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_
     mut env: JNIEnv,
     _this: JObject,
     token: JString,
-) -> jboolean {
-    match string(&mut env, &token).map(|token| engine::connect(&token)) {
-        Some(Ok(())) => JNI_TRUE,
-        _ => JNI_FALSE,
+) -> jstring {
+    // A failed access-point connection is the one failure the Kotlin side cannot explain from a
+    // boolean: the reason names the host, the port or the TLS state that refused. Null means
+    // connected, so the caller can keep the happy path allocation-free.
+    let Some(token) = string(&mut env, &token) else {
+        return new_string(&mut env, "TOKEN_UNAVAILABLE");
+    };
+    match engine::connect(&token) {
+        Ok(()) => std::ptr::null_mut(),
+        Err(error) => {
+            log::warn!("native connect failed: {error}");
+            new_string(&mut env, &error)
+        }
     }
 }
 

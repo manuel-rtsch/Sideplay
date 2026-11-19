@@ -14,8 +14,21 @@ class NativeSpotifyGateway(
     private val native: SpotifyNative,
     private val settings: () -> SpotifySettings = { SpotifySettings() },
     private val networkAvailable: () -> Boolean = { true },
+    /** Receives the transport's own reason for a failed connect. Developer-facing, never shown. */
+    private val onConnectFailure: (String) -> Unit = {},
     private val accessToken: suspend () -> String?
 ) : SpotifyGateway {
+    /**
+     * Serialises everything that changes the native session.
+     *
+     * Catalog reads run in parallel: on sign-in the library tabs each ask for their own page, and
+     * every one of them called `connect` when no session existed yet. `engine.connect` starts with
+     * `disconnect`, so two of them racing tore down the session the other was still authenticating.
+     * A monitor is the right tool rather than a `Mutex`: every call guarded here is blocking JNI on
+     * an IO thread and never suspends, so nothing can deadlock on a suspended holder.
+     */
+    private val sessionLock = Any()
+
     /** True when a player is attached to the live session; see [ensureConnected] for why that is
      * not the same as "the session is connected". */
     @Volatile
@@ -30,38 +43,46 @@ class NativeSpotifyGateway(
     override suspend fun connect(accessToken: String) = onIo {
         TriageLog.i("native", "connect tokenLength=${accessToken.length} connected=$connected sessionConnected=$sessionConnected")
         requireNative()
-        // `connected` alone is not enough: a session rebuilt by the catalog path drops the player
-        // without touching the flag, and returning here would leave playback without one.
-        if (connected && native.hasPlayer()) return@onIo
-        // A session that is invalid, or was opened with a different OAuth token, must be rebuilt
-        // before a player is attached to it. Otherwise the player would load tracks through a
-        // dead access-point connection and every load would fail.
-        if (sessionConnected && !native.setAccessToken(accessToken)) {
-            sessionConnected = false
-            sessionToken = null
+        synchronized(sessionLock) {
+            // `connected` alone is not enough: a session rebuilt by the catalog path drops the
+            // player without touching the flag, and returning here would leave playback without
+            // one. Re-checking under the lock also means a second caller that waited here finds
+            // the session the first one built instead of rebuilding it.
+            if (connected && native.hasPlayer()) return@onIo
+            // A session that is invalid, or was opened with a different OAuth token, must be
+            // rebuilt before a player is attached to it. Otherwise the player would load tracks
+            // through a dead access-point connection and every load would fail.
+            if (sessionConnected && !native.setAccessToken(accessToken)) {
+                sessionConnected = false
+                sessionToken = null
+            }
+            connectSessionLocked(accessToken)
+            createPlayerLocked()
+            TriageLog.i("native", "connect done connected=$connected sessionConnected=$sessionConnected")
         }
-        connectSession(accessToken)
-        createPlayer()
-        TriageLog.i("native", "connect done connected=$connected sessionConnected=$sessionConnected")
     }
 
     override suspend fun disconnect() = onIo {
-        connected = false
-        sessionConnected = false
-        sessionToken = null
-        if (native.isAvailable) native.disconnect()
+        synchronized(sessionLock) {
+            connected = false
+            sessionConnected = false
+            sessionToken = null
+            if (native.isAvailable) native.disconnect()
+        }
     }
 
     override suspend fun recreatePlayer(): Boolean = onIo {
         requireNative()
-        // No player yet: the next connect creates one with the new settings.
-        if (!connected) return@onIo false
-        val current = settings()
-        if (!native.recreatePlayer(current.bitrateKbps, current.normalization, current.gapless)) {
-            connected = false
-            fail(SpotifyFailure.Unknown, "Could not update the player")
+        synchronized(sessionLock) {
+            // No player yet: the next connect creates one with the new settings.
+            if (!connected) return@onIo false
+            val current = settings()
+            if (!native.recreatePlayer(current.bitrateKbps, current.normalization, current.gapless)) {
+                connected = false
+                fail(SpotifyFailure.Unknown, "Could not update the player")
+            }
+            true
         }
-        true
     }
 
     override suspend fun preload(uri: String) = onIo {
@@ -103,9 +124,11 @@ class NativeSpotifyGateway(
 
     /** Forgets the native session after it has been torn down outside this gateway. */
     fun reset() {
-        connected = false
-        sessionConnected = false
-        sessionToken = null
+        synchronized(sessionLock) {
+            connected = false
+            sessionConnected = false
+            sessionToken = null
+        }
     }
 
     /**
@@ -149,7 +172,9 @@ class NativeSpotifyGateway(
             connect(token)
             return true
         }
-        val tokenAccepted = withContext(Dispatchers.IO) { native.setAccessToken(token) }
+        val tokenAccepted = withContext(Dispatchers.IO) {
+            synchronized(sessionLock) { native.setAccessToken(token) }
+        }
         SidetrackDebug.log("ensureConnected: setAccessToken accepted=$tokenAccepted")
         TriageLog.i("native", "ensureConnected: setAccessToken accepted=$tokenAccepted")
         if (tokenAccepted) {
@@ -173,45 +198,52 @@ class NativeSpotifyGateway(
             if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
             fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
         }
-        if (!sessionConnected) {
-            TriageLog.i("native", "ensureSession: no live session, connecting tokenLength=${token.length}")
-            connectSession(token)
-        } else if (!native.setAccessToken(token)) {
-            // The first call stores the new token. A second call therefore only reports a dead
-            // session, not a token change: a refreshed token must not tear down a live player
-            // from a catalog read, but an invalid session still has to be rebuilt.
-            if (!native.setAccessToken(token)) {
-                TriageLog.w("native", "ensureSession: the session rejected the token twice, rebuilding")
-                sessionConnected = false
-                sessionToken = null
-                connectSession(token)
+        synchronized(sessionLock) {
+            if (!sessionConnected) {
+                TriageLog.i("native", "ensureSession: no live session, connecting tokenLength=${token.length}")
+                connectSessionLocked(token)
+            } else if (!native.setAccessToken(token)) {
+                // The first call stores the new token. A second call therefore only reports a dead
+                // session, not a token change: a refreshed token must not tear down a live player
+                // from a catalog read, but an invalid session still has to be rebuilt.
+                if (!native.setAccessToken(token)) {
+                    TriageLog.w("native", "ensureSession: the session rejected the token twice, rebuilding")
+                    sessionConnected = false
+                    sessionToken = null
+                    connectSessionLocked(token)
+                } else {
+                    TriageLog.i("native", "ensureSession: stored the refreshed token, keeping the session")
+                    sessionToken = token
+                }
             } else {
-                TriageLog.i("native", "ensureSession: stored the refreshed token, keeping the session")
                 sessionToken = token
             }
-        } else {
-            sessionToken = token
         }
     }
 
-    private fun connectSession(token: String) {
+    /** [sessionLock] must be held, so two catalog reads cannot rebuild the session at once. */
+    private fun connectSessionLocked(token: String) {
         if (sessionConnected) return
         SidetrackDebug.log("connectSession begin")
         val started = android.os.SystemClock.elapsedRealtime()
         TriageLog.i("native", "connectSession begin tokenLength=${token.length} network=${networkAvailable()}")
-        val ok = runCatching { native.connect(token) }
+        val reason = runCatching { native.connect(token) }
             .onFailure { TriageLog.e("native", "connectSession threw", it) }
-            .getOrDefault(false)
-        if (!ok) {
-            // An access-point failure is reported to the UI as an expired login. Log the truth
-            // first, because on some GSIs this is a network problem, not a credential problem.
+            .getOrElse { "BRIDGE_FAILURE: ${it.javaClass.simpleName}: ${it.message.orEmpty()}" }
+        if (reason != null) {
+            // The transport's own reason is the only evidence for a failure that happens before
+            // any request is made, so it goes into the shareable log unedited.
             TriageLog.e(
                 "native",
                 "connectSession failed ms=${android.os.SystemClock.elapsedRealtime() - started} " +
-                    "network=${networkAvailable()} nativeAvailable=${native.isAvailable}"
+                    "network=${networkAvailable()} nativeAvailable=${native.isAvailable} " +
+                    "reason=$reason"
             )
+            onConnectFailure(reason)
+            // An access-point failure is a network problem, not an expired login: the stored token
+            // is valid and the sign-in screen would not help.
             if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
-            fail(SpotifyFailure.AuthenticationExpired, "Could not connect")
+            fail(SpotifyFailure.Network, "Couldn't reach Spotify")
         }
         TriageLog.i("native", "connectSession connected ms=${android.os.SystemClock.elapsedRealtime() - started}")
         sessionConnected = true
@@ -227,7 +259,8 @@ class NativeSpotifyGateway(
     /** Native truth, so a session rebuilt outside the playback path cannot leave [connected] stale. */
     private suspend fun playerAttached(): Boolean = withContext(Dispatchers.IO) { native.hasPlayer() }
 
-    private fun createPlayer() {
+    /** [sessionLock] must be held. */
+    private fun createPlayerLocked() {
         val current = settings()
         SidetrackDebug.log("createPlayer bitrateKbps=${current.bitrateKbps} normalization=${current.normalization} gapless=${current.gapless}")
         if (!native.createPlayer(current.bitrateKbps, current.normalization, current.gapless)) {

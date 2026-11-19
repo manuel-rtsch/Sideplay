@@ -98,11 +98,9 @@ class NativeSpotifyCatalog(
 
     override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> = artistRadioStation(artistId, limit).tracks
 
-    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation =
-        parseStation(callText("songRadio/$trackId limit=$limit") { native.catalogSongRadio(trackId, limit.toLong()) })
+    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = parseStation(callText("songRadio/$trackId limit=$limit") { native.catalogSongRadio(trackId, limit.toLong()) })
 
-    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation =
-        parseStation(callText("artistRadio/$artistId limit=$limit") { native.catalogArtistRadio(artistId, limit.toLong()) })
+    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation = parseStation(callText("artistRadio/$artistId limit=$limit") { native.catalogArtistRadio(artistId, limit.toLong()) })
 
     override suspend fun search(
         query: String,

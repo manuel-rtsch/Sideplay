@@ -9,7 +9,15 @@ interface SpotifyNative {
     fun initialize(): Boolean
     fun setTmpDir(path: String)
     fun setCacheDir(path: String, sizeLimitBytes: Long)
-    fun connect(accessToken: String): Boolean
+
+    /**
+     * Connects a librespot session. Returns null on success, otherwise the transport's own reason.
+     *
+     * The reason is developer-facing: it can name a host, a port or a TLS state. It exists because
+     * an access-point failure happens before any request is made, so nothing else on the way up can
+     * describe it — a bare boolean left a device-specific failure undiagnosable.
+     */
+    fun connect(accessToken: String): String?
     fun setAccessToken(accessToken: String): Boolean
     fun disconnect()
 
