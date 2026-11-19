@@ -40,7 +40,8 @@ rootProject.name = "Sidetrack"
 include(":app")
 include(":core")
 include(":provider-navidrome")
-// Jellyfin and Spotify provider modules are added in their own stages.
+include(":provider-jellyfin")
+// The Spotify provider module is added in its own stage.
 
 // Release builds use the published SDK from GitHub Pages. A sibling Sidekit checkout is only a
 // development shortcut and must be requested explicitly with -PsidetrackLocalSidekit=true, so a

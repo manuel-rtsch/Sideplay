@@ -264,6 +264,7 @@ tasks.matching {
 dependencies {
     implementation(project(":core"))
     implementation(project(":provider-navidrome"))
+    implementation(project(":provider-jellyfin"))
     implementation(libs.sidekit.design)
     implementation(libs.sidekit.sdk)
     implementation(libs.androidx.core.ktx)

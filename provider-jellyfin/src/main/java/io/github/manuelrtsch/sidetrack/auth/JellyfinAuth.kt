@@ -1,7 +1,6 @@
 package io.github.manuelrtsch.sidetrack.auth
 
 import android.content.Context
-import io.github.manuelrtsch.sidetrack.BuildConfig
 import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
 import io.github.manuelrtsch.sidetrack.data.AuthInput
@@ -9,6 +8,7 @@ import io.github.manuelrtsch.sidetrack.data.ServiceAccount
 import io.github.manuelrtsch.sidetrack.data.ServiceAuth
 import io.github.manuelrtsch.sidetrack.data.ServiceException
 import io.github.manuelrtsch.sidetrack.data.ServiceFailure
+import io.github.manuelrtsch.sidetrack.jellyfin.BuildConfig
 import io.github.manuelrtsch.sidetrack.storage.EncryptedStoreException
 import io.github.manuelrtsch.sidetrack.storage.GuardedEncryptedStore
 import io.github.manuelrtsch.sidetrack.storage.JsonStore
