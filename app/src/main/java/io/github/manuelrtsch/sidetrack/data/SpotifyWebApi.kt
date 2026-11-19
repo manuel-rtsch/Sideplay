@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import android.os.SystemClock
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.SPOTIFY_PAGE_SIZE
 import io.github.manuelrtsch.sidetrack.SearchScope
@@ -14,6 +15,7 @@ import io.github.manuelrtsch.sidetrack.SpotifySearchResults
 import io.github.manuelrtsch.sidetrack.SpotifyShow
 import io.github.manuelrtsch.sidetrack.SpotifyTrack
 import io.github.manuelrtsch.sidetrack.spotifyIdOrNull
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -399,6 +401,9 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
     private suspend fun token(): String = accessToken() ?: fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
 
     private suspend fun get(url: String, token: String): JSONObject = withContext(Dispatchers.IO) {
+        // The path without the query: enough to identify the endpoint, without logging search terms.
+        val op = url.substringBefore('?')
+        val started = SystemClock.elapsedRealtime()
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = TIMEOUT_MS
@@ -411,29 +416,45 @@ class SpotifyWebApi(private val accessToken: suspend () -> String?) {
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText() }.orEmpty()
             when {
-                status == 401 -> fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
+                status == 401 -> {
+                    TriageLog.e("web", "$op status=401 the token was rejected ms=${elapsed(started)}")
+                    fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
+                }
 
                 status == 429 -> {
                     android.util.Log.w("SidetrackApi", "$url -> 429 retryAfter=${connection.getHeaderField("Retry-After")} ${text.take(300)}")
+                    TriageLog.w(
+                        "web",
+                        "$op status=429 rate limited retryAfter=${connection.getHeaderField("Retry-After")} " +
+                            "ms=${elapsed(started)} body=${text.take(300)}"
+                    )
                     fail(SpotifyFailure.RateLimited, "Spotify is rate-limiting requests")
                 }
 
                 status !in 200..299 -> {
                     android.util.Log.w("SidetrackApi", "$url -> $status ${text.take(300)}")
+                    TriageLog.w("web", "$op status=$status ms=${elapsed(started)} body=${text.take(300)}")
                     fail(SpotifyFailure.Network, "Spotify returned HTTP $status")
                 }
 
-                else -> runCatching { JSONObject(text) }
-                    .getOrElse { fail(SpotifyFailure.Unknown, "Spotify returned an unreadable response") }
+                else -> {
+                    TriageLog.i("web", "$op status=$status bytes=${text.length} ms=${elapsed(started)}")
+                    runCatching { JSONObject(text) }
+                        .onFailure { TriageLog.e("web", "$op unreadable JSON body=${text.take(300)}", it) }
+                        .getOrElse { fail(SpotifyFailure.Unknown, "Spotify returned an unreadable response") }
+                }
             }
         } catch (e: SpotifyGatewayException) {
             throw e
         } catch (e: IOException) {
+            TriageLog.e("web", "$op unreachable ms=${elapsed(started)}", e)
             throw SpotifyGatewayException(SpotifyFailure.Network, "Couldn't reach Spotify", e)
         } finally {
             connection.disconnect()
         }
     }
+
+    private fun elapsed(started: Long): Long = SystemClock.elapsedRealtime() - started
 
     private fun enc(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
 

@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack.bridge
 
 import hrln.interactive.sidekit.sdk.system.NativeLibraries
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 
 /**
  * Guarded entry point to `libsidetrack_spotify.so`. Never calls `System.loadLibrary` from an
@@ -71,33 +72,62 @@ object NativeBridge : SpotifyNative {
 
     override fun pollEvent(): String? = if (isAvailable) runCatching { nativePollEvent() }.getOrNull() else null
 
-    override fun catalogLibrary(filter: String, offset: Long, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogLibrary(filter, offset, limit) }.getOrNull() else null
+    override fun catalogLibrary(filter: String, offset: Long, limit: Long): String? =
+        nativeCall("catalogLibrary filter=$filter offset=$offset") { nativeCatalogLibrary(filter, offset, limit) }
 
-    override fun catalogCollection(kind: String, id: String, offset: Long, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogCollection(kind, id, offset, limit) }.getOrNull() else null
+    override fun catalogCollection(kind: String, id: String, offset: Long, limit: Long): String? =
+        nativeCall("catalogCollection kind=$kind id=$id offset=$offset") { nativeCatalogCollection(kind, id, offset, limit) }
 
-    override fun catalogArtist(id: String): String? = if (isAvailable) runCatching { nativeCatalogArtist(id) }.getOrNull() else null
+    override fun catalogArtist(id: String): String? =
+        nativeCall("catalogArtist id=$id") { nativeCatalogArtist(id) }
 
-    override fun catalogAlbumsBy(id: String, offset: Long, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogAlbumsBy(id, offset, limit) }.getOrNull() else null
+    override fun catalogAlbumsBy(id: String, offset: Long, limit: Long): String? =
+        nativeCall("catalogAlbumsBy id=$id offset=$offset") { nativeCatalogAlbumsBy(id, offset, limit) }
 
-    override fun catalogTopTracks(id: String, offset: Long, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogTopTracks(id, offset, limit) }.getOrNull() else null
+    override fun catalogTopTracks(id: String, offset: Long, limit: Long): String? =
+        nativeCall("catalogTopTracks id=$id offset=$offset") { nativeCatalogTopTracks(id, offset, limit) }
 
-    override fun catalogSongRadio(id: String, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogSongRadio(id, limit) }.getOrNull() else null
+    override fun catalogSongRadio(id: String, limit: Long): String? =
+        nativeCall("catalogSongRadio id=$id") { nativeCatalogSongRadio(id, limit) }
 
-    override fun catalogArtistRadio(id: String, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogArtistRadio(id, limit) }.getOrNull() else null
+    override fun catalogArtistRadio(id: String, limit: Long): String? =
+        nativeCall("catalogArtistRadio id=$id") { nativeCatalogArtistRadio(id, limit) }
 
-    override fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String? = if (isAvailable) runCatching { nativeCatalogSearch(query, scopes, offset, limit) }.getOrNull() else null
+    override fun catalogSearch(query: String, scopes: String, offset: Long, limit: Long): String? =
+        nativeCall("catalogSearch scopes=$scopes offset=$offset") { nativeCatalogSearch(query, scopes, offset, limit) }
 
-    override fun collectionContains(set: String, uris: String): String? = if (isAvailable) runCatching { nativeCollectionContains(set, uris) }.getOrNull() else null
+    override fun collectionContains(set: String, uris: String): String? =
+        nativeCall("collectionContains set=$set") { nativeCollectionContains(set, uris) }
 
-    override fun collectionWrite(set: String, uris: String, removed: Boolean): Boolean = isAvailable && runCatching { nativeCollectionWrite(set, uris, removed) }.getOrDefault(false)
+    override fun collectionWrite(set: String, uris: String, removed: Boolean): Boolean =
+        nativeCall("collectionWrite set=$set removed=$removed", fallback = false) { nativeCollectionWrite(set, uris, removed) } ?: false
 
-    override fun playlistSaved(id: String): String? = if (isAvailable) runCatching { nativePlaylistSaved(id) }.getOrNull() else null
+    override fun playlistSaved(id: String): String? =
+        nativeCall("playlistSaved id=$id") { nativePlaylistSaved(id) }
 
-    override fun playlistSave(id: String, save: Boolean): Boolean = isAvailable && runCatching { nativePlaylistSave(id, save) }.getOrDefault(false)
+    override fun playlistSave(id: String, save: Boolean): Boolean =
+        nativeCall("playlistSave id=$id save=$save", fallback = false) { nativePlaylistSave(id, save) } ?: false
 
-    override fun playlistItemsAdd(id: String, uris: String): String? = if (isAvailable) runCatching { nativePlaylistItemsAdd(id, uris) }.getOrNull() else null
+    override fun playlistItemsAdd(id: String, uris: String): String? =
+        nativeCall("playlistItemsAdd id=$id") { nativePlaylistItemsAdd(id, uris) }
 
-    override fun playlistItemsRemove(id: String, uris: String): Boolean = isAvailable && runCatching { nativePlaylistItemsRemove(id, uris) }.getOrDefault(false)
+    override fun playlistItemsRemove(id: String, uris: String): Boolean =
+        nativeCall("playlistItemsRemove id=$id", fallback = false) { nativePlaylistItemsRemove(id, uris) } ?: false
+
+    /**
+     * Catalog and library calls answer null/false on every failure, which hides a JNI exception or
+     * a library that never loaded behind the same "no data" symptom. Triage needs those apart: the
+     * log names the op, and a missing library is reported instead of silently falling back.
+     */
+    private inline fun <T> nativeCall(op: String, fallback: T? = null, block: () -> T?): T? {
+        if (!isAvailable) {
+            TriageLog.e("native", "$op: libsidetrack_spotify is not loaded")
+            return fallback
+        }
+        return runCatching(block)
+            .onFailure { TriageLog.e("native", "$op threw", it) }
+            .getOrDefault(fallback)
+    }
 
     private external fun nativeInit(): Boolean
     private external fun nativeSetTmpDir(path: String)

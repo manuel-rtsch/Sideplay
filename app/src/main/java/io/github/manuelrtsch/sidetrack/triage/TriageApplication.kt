@@ -13,6 +13,8 @@ class TriageApplication : Application() {
         TriageProbe.logPlatform()
         // Before the keystore probe: a reinstall or ROM change is what invalidates the key.
         TriageProbe.logInstall(this)
+        TriageProbe.logRuntime(this)
+        TriageProbe.logExitReasons(this)
         TriageProbe.probeKeystore()
         TriageProbe.probeSealedFiles(this)
         TriageLog.i("app", "application created")

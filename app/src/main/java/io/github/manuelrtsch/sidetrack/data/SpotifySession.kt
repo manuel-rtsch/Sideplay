@@ -104,8 +104,12 @@ class SpotifySession(
         // account and librespot, so only the read/write side is replaced.
         DemoContentSource.current?.catalog()
             ?: if (nativeAvailable) {
+                TriageLog.i("catalog", "implementation=native (librespot first-party endpoints)")
                 NativeSpotifyCatalog(NativeBridge) { nativeGateway.ensureSession() }
             } else {
+                // The packaged bridge could not be loaded on this device. The Web API fallback is
+                // quota-limited, so this line is the difference between "no data" and "rate-limited".
+                TriageLog.w("catalog", "implementation=web API — the native librespot bridge did not load")
                 SpotifyWebCatalog(webApi)
             }
     }

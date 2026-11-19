@@ -1,9 +1,14 @@
 package io.github.manuelrtsch.sidetrack.triage
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.os.Build
 import android.os.SystemClock
 import android.security.keystore.KeyInfo
+import android.system.Os
+import android.system.OsConstants
+import io.github.manuelrtsch.sidetrack.bridge.NativeBridge
 import java.io.File
 import java.security.KeyStore
 import java.text.SimpleDateFormat
@@ -160,6 +165,81 @@ object TriageProbe {
                 "securityLevel=${keyInfo?.securityLevel ?: "?"} " +
                 "inSecureHardware=${keyInfo?.isInsideSecureHardware ?: "?"}"
         )
+    }
+
+    /**
+     * The fork that decides where catalog reads go: the packaged librespot bridge, or the public
+     * Web API. `NativeLibraries.load` swallows the linker's message, so the load is retried here
+     * directly. A 16 KB page kernel is the usual reason a 4 KB-aligned `.so` refuses to load on a
+     * GSI, and the fallback path is quota-limited, which looks like "no data" rather than an error.
+     */
+    fun logRuntime(context: Context) {
+        val pageSize = runCatching { Os.sysconf(OsConstants._SC_PAGESIZE) }.getOrDefault(-1L)
+        val memory = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        TriageLog.i(
+            "runtime",
+            "abi=${Build.SUPPORTED_ABIS.joinToString()} pageSize=$pageSize 16KB=${pageSize == 16_384L} " +
+                "memoryClass=${memory?.memoryClass ?: "?"} largeMemoryClass=${memory?.largeMemoryClass ?: "?"} " +
+                "maxHeap=${Runtime.getRuntime().maxMemory()}"
+        )
+        val loadError = runCatching { System.loadLibrary(NativeBridge.LIBRARY) }.exceptionOrNull()
+        TriageLog.i(
+            "runtime",
+            if (loadError == null) {
+                "native '${NativeBridge.LIBRARY}' load=ok"
+            } else {
+                "native '${NativeBridge.LIBRARY}' load=failed: ${loadError.javaClass.name}: ${loadError.message}"
+            }
+        )
+        TriageLog.i(
+            "runtime",
+            "NativeBridge.isAvailable=${runCatching { NativeBridge.isAvailable }.getOrElse { false }}"
+        )
+    }
+
+    /**
+     * Why the previous process died. A native crash, an ANR or a low-memory kill leaves no Java
+     * stack, so without this a log that simply stops is indistinguishable from a normal exit.
+     */
+    fun logExitReasons(context: Context) {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
+        val reasons = runCatching {
+            activityManager.getHistoricalProcessExitReasons(context.packageName, 0, 10)
+        }
+            .onFailure { TriageLog.w("exit", "could not read the process exit reasons", it) }
+            .getOrNull()
+        if (reasons.isNullOrEmpty()) {
+            TriageLog.i("exit", "no previous process exit reasons recorded")
+            return
+        }
+        reasons.forEach { info ->
+            TriageLog.i(
+                "exit",
+                "at=${stamp(info.timestamp)} pid=${info.pid} reason=${reasonName(info.reason)}(${info.reason}) " +
+                    "status=${info.status} importance=${info.importance} " +
+                    "pss=${info.pss} rss=${info.rss} description=${info.description ?: "-"}"
+            )
+        }
+    }
+
+    private fun reasonName(reason: Int): String = when (reason) {
+        ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
+        ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+        ApplicationExitInfo.REASON_CRASH -> "CRASH"
+        ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+        ApplicationExitInfo.REASON_ANR -> "ANR"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INITIALIZATION_FAILURE"
+        ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "PERMISSION_CHANGE"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+        ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+        ApplicationExitInfo.REASON_USER_STOPPED -> "USER_STOPPED"
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "DEPENDENCY_DIED"
+        ApplicationExitInfo.REASON_OTHER -> "OTHER"
+        ApplicationExitInfo.REASON_FREEZER -> "FREEZER"
+        ApplicationExitInfo.REASON_PACKAGE_STATE_CHANGE -> "PACKAGE_STATE_CHANGE"
+        ApplicationExitInfo.REASON_PACKAGE_UPDATED -> "PACKAGE_UPDATED"
+        else -> "UNKNOWN"
     }
 
     /** The sealed files themselves: present, how big, and what would open them. */

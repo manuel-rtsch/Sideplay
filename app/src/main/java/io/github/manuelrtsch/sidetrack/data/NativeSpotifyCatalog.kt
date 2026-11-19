@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack.data
 
+import android.os.SystemClock
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.SpotifyAlbum
@@ -15,6 +16,7 @@ import io.github.manuelrtsch.sidetrack.SpotifyStation
 import io.github.manuelrtsch.sidetrack.SpotifyTrack
 import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
 import io.github.manuelrtsch.sidetrack.spotifyIdOrNull
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -32,7 +34,9 @@ class NativeSpotifyCatalog(
 ) : SpotifyCatalog,
     SpotifyLibraryWriter {
     override suspend fun library(filter: LibraryFilter, offset: Int, limit: Int): SpotifyPage<Any> {
-        val text = callText { native.catalogLibrary(filter.name, offset.toLong(), limit.toLong()) }
+        val text = callText("library/${filter.name} offset=$offset limit=$limit") {
+            native.catalogLibrary(filter.name, offset.toLong(), limit.toLong())
+        }
         // The native catalog answers with `{items, total}` so paging does not have to guess from
         // how many entries survived metadata hydration. A bare array is still accepted.
         val payload = if (text.trimStart().startsWith("{")) parseObject(text) else null
@@ -45,6 +49,7 @@ class NativeSpotifyCatalog(
             LibraryFilter.Shows -> array.shows()
         }
         val total = payload?.optInt("total", -1)?.takeIf { it >= 0 }
+        TriageLog.i("catalog", "library/${filter.name} items=${items.size} total=${total ?: "?"}")
         return SpotifyPage.of(items, offset, limit, total)
     }
 
@@ -54,22 +59,38 @@ class NativeSpotifyCatalog(
         offset: Int,
         limit: Int
     ): SpotifyCollection? {
-        val json = call { native.catalogCollection(type.name, id, offset.toLong(), limit.toLong()) }
-        return runCatching { json.collection(type) }.getOrNull()
+        val json = call("collection/${type.name}/$id offset=$offset limit=$limit") {
+            native.catalogCollection(type.name, id, offset.toLong(), limit.toLong())
+        }
+        return runCatching { json.collection(type) }
+            .onFailure { TriageLog.w("catalog", "collection/${type.name}/$id unreadable", it) }
+            .getOrNull()
+            .also { TriageLog.i("catalog", "collection/${type.name}/$id items=${it?.items?.size ?: "null"}") }
     }
 
     override suspend fun artist(id: String): SpotifyArtist? {
-        val json = call { native.catalogArtist(id) }
-        return runCatching { artistFromNative(json) }.getOrNull()
+        val json = call("artist/$id") { native.catalogArtist(id) }
+        return runCatching { artistFromNative(json) }
+            .onFailure { TriageLog.w("catalog", "artist/$id unreadable", it) }
+            .getOrNull()
+            .also { TriageLog.i("catalog", "artist/$id found=${it != null}") }
     }
 
     override suspend fun albumsBy(artist: SpotifyArtist, offset: Int, limit: Int): SpotifyPage<SpotifyAlbum> {
-        val array = parseArray(callText { native.catalogAlbumsBy(artist.id, offset.toLong(), limit.toLong()) })
+        val array = parseArray(
+            callText("albumsBy/${artist.id} offset=$offset limit=$limit") {
+                native.catalogAlbumsBy(artist.id, offset.toLong(), limit.toLong())
+            }
+        )
         return SpotifyPage.of(array.albums(), offset, limit)
     }
 
     override suspend fun topTracks(artist: SpotifyArtist, offset: Int, limit: Int): SpotifyPage<SpotifyTrack> {
-        val array = parseArray(callText { native.catalogTopTracks(artist.id, offset.toLong(), limit.toLong()) })
+        val array = parseArray(
+            callText("topTracks/${artist.id} offset=$offset limit=$limit") {
+                native.catalogTopTracks(artist.id, offset.toLong(), limit.toLong())
+            }
+        )
         return SpotifyPage.of(array.tracks(), offset, limit)
     }
 
@@ -77,9 +98,11 @@ class NativeSpotifyCatalog(
 
     override suspend fun artistRadio(artistId: String, limit: Int): List<SpotifyTrack> = artistRadioStation(artistId, limit).tracks
 
-    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation = parseStation(callText { native.catalogSongRadio(trackId, limit.toLong()) })
+    override suspend fun songRadioStation(trackId: String, limit: Int): SpotifyStation =
+        parseStation(callText("songRadio/$trackId limit=$limit") { native.catalogSongRadio(trackId, limit.toLong()) })
 
-    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation = parseStation(callText { native.catalogArtistRadio(artistId, limit.toLong()) })
+    override suspend fun artistRadioStation(artistId: String, limit: Int): SpotifyStation =
+        parseStation(callText("artistRadio/$artistId limit=$limit") { native.catalogArtistRadio(artistId, limit.toLong()) })
 
     override suspend fun search(
         query: String,
@@ -88,14 +111,22 @@ class NativeSpotifyCatalog(
         limit: Int
     ): SpotifySearchResults {
         val scopeJson = JSONArray(scopes.map { it.name }).toString()
-        val json = call { native.catalogSearch(query.trim(), scopeJson, offset.toLong(), limit.toLong()) }
-        return SpotifySearchResults(
+        val json = call("search scopes=${scopes.joinToString(",")} offset=$offset limit=$limit") {
+            native.catalogSearch(query.trim(), scopeJson, offset.toLong(), limit.toLong())
+        }
+        val results = SpotifySearchResults(
             tracks = json.optJSONArray("tracks").tracks(),
             artists = json.optJSONArray("artists").artists(),
             albums = json.optJSONArray("albums").albums(),
             playlists = json.optJSONArray("playlists").playlists(),
             shows = json.optJSONArray("shows").shows()
         )
+        TriageLog.i(
+            "catalog",
+            "search tracks=${results.tracks.size} artists=${results.artists.size} " +
+                "albums=${results.albums.size} playlists=${results.playlists.size} shows=${results.shows.size}"
+        )
+        return results
     }
 
     override suspend fun isTrackSaved(id: String): Boolean? = contains("collection", "spotify:track:$id")
@@ -121,76 +152,115 @@ class NativeSpotifyCatalog(
     override suspend fun setArtistFollowed(id: String, followed: Boolean) = writeCollection("artist", "spotify:artist:$id", followed)
 
     override suspend fun addToPlaylist(playlistId: String, uri: String): Int? = withContext(Dispatchers.IO) {
-        ensureSession()
-        val text = native.playlistItemsAdd(playlistId, JSONArray(listOf(uri)).toString())
-            ?: fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
-        runCatching { text.trim().toInt() }.getOrElse {
-            fail(SpotifyFailure.Unknown, "Spotify returned an unreadable playlist response")
+        writeCall("addToPlaylist/$playlistId") {
+            ensureSession()
+            val text = native.playlistItemsAdd(playlistId, JSONArray(listOf(uri)).toString())
+                ?: fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
+            runCatching { text.trim().toInt() }.getOrElse {
+                fail(SpotifyFailure.Unknown, "Spotify returned an unreadable playlist response")
+            }
         }
     }
 
     override suspend fun removeFromPlaylist(playlistId: String, uri: String) {
         withContext(Dispatchers.IO) {
-            ensureSession()
-            if (!native.playlistItemsRemove(playlistId, JSONArray(listOf(uri)).toString())) {
-                fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
+            writeCall("removeFromPlaylist/$playlistId") {
+                ensureSession()
+                if (!native.playlistItemsRemove(playlistId, JSONArray(listOf(uri)).toString())) {
+                    fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
+                }
             }
         }
     }
 
     private suspend fun contains(set: String, uri: String): Boolean? {
-        val text = callText {
+        val text = callText("contains $set $uri") {
             native.collectionContains(set, JSONArray(listOf(uri)).toString())
         }
         return runCatching { JSONArray(text).optBoolean(0) }.getOrNull()
     }
 
     private suspend fun playlistSaved(id: String): Boolean? {
-        val text = callText { native.playlistSaved(id) }
+        val text = callText("playlistSaved/$id") { native.playlistSaved(id) }
         return runCatching { text.toBooleanStrict() }.getOrNull()
     }
 
     private suspend fun writeCollection(set: String, uri: String, saved: Boolean) {
         withContext(Dispatchers.IO) {
-            ensureSession()
-            if (!native.collectionWrite(set, JSONArray(listOf(uri)).toString(), !saved)) {
-                fail(SpotifyFailure.Network, "Spotify didn't accept the library change")
+            writeCall("writeCollection $set $uri saved=$saved") {
+                ensureSession()
+                if (!native.collectionWrite(set, JSONArray(listOf(uri)).toString(), !saved)) {
+                    fail(SpotifyFailure.Network, "Spotify didn't accept the library change")
+                }
             }
         }
     }
 
     private suspend fun writePlaylist(id: String, saved: Boolean) {
         withContext(Dispatchers.IO) {
-            ensureSession()
-            if (!native.playlistSave(id, saved)) {
-                fail(SpotifyFailure.Network, "Spotify didn't accept the library change")
+            writeCall("writePlaylist/$id saved=$saved") {
+                ensureSession()
+                if (!native.playlistSave(id, saved)) {
+                    fail(SpotifyFailure.Network, "Spotify didn't accept the library change")
+                }
             }
         }
     }
 
-    private suspend fun call(block: () -> String?): JSONObject {
-        val text = callText(block)
+    private suspend fun call(op: String, block: () -> String?): JSONObject {
+        val text = callText(op, block)
         return runCatching { JSONObject(text) }.getOrElse {
+            TriageLog.e("catalog", "$op returned unreadable JSON", it)
             fail(SpotifyFailure.Unknown, "Spotify returned an unreadable catalog response")
         }
     }
 
-    private suspend fun callText(block: () -> String?): String = withContext(Dispatchers.IO) {
-        ensureSession()
-        val text = block() ?: fail(SpotifyFailure.Network, "Spotify didn't return a catalog response")
-        if (text.startsWith("{")) {
-            val error = runCatching { JSONObject(text).optString("error") }.getOrDefault("")
-            if (error.isNotEmpty()) {
-                android.util.Log.w("SidetrackCatalog", error)
-                val failure = if (error.contains("SESSION", ignoreCase = true)) {
-                    SpotifyFailure.AuthenticationExpired
-                } else {
-                    SpotifyFailure.Network
+    /**
+     * Triage logging for the native catalog: the op, how long the session took to be usable, how
+     * big the answer was, and every failure with its class and message. Failures used to exist only
+     * in logcat, which a device without `adb` (the whole reason this branch exists) cannot show.
+     */
+    private suspend fun callText(op: String, block: () -> String?): String = withContext(Dispatchers.IO) {
+        val started = SystemClock.elapsedRealtime()
+        try {
+            ensureSession()
+            val sessionMs = SystemClock.elapsedRealtime() - started
+            val text = block() ?: fail(SpotifyFailure.Network, "Spotify didn't return a catalog response")
+            if (text.startsWith("{")) {
+                val error = runCatching { JSONObject(text).optString("error") }.getOrDefault("")
+                if (error.isNotEmpty()) {
+                    android.util.Log.w("SidetrackCatalog", error)
+                    val failure = if (error.contains("SESSION", ignoreCase = true)) {
+                        SpotifyFailure.AuthenticationExpired
+                    } else {
+                        SpotifyFailure.Network
+                    }
+                    // The catch below logs the failure with its class; the server's text is the
+                    // exception message, so it is not repeated here.
+                    fail(failure, error)
                 }
-                fail(failure, error)
             }
+            TriageLog.i(
+                "catalog",
+                "$op ok sessionMs=$sessionMs bytes=${text.length} ms=${SystemClock.elapsedRealtime() - started}"
+            )
+            text
+        } catch (e: Exception) {
+            TriageLog.e("catalog", "$op failed ms=${SystemClock.elapsedRealtime() - started}", e)
+            throw e
         }
-        text
+    }
+
+    private suspend fun <T> writeCall(op: String, block: suspend () -> T): T {
+        val started = SystemClock.elapsedRealtime()
+        return try {
+            block().also {
+                TriageLog.i("catalog", "$op ok ms=${SystemClock.elapsedRealtime() - started}")
+            }
+        } catch (e: Exception) {
+            TriageLog.e("catalog", "$op failed ms=${SystemClock.elapsedRealtime() - started}", e)
+            throw e
+        }
     }
 
     private fun parseArray(text: String): JSONArray = runCatching { JSONArray(text) }.getOrElse {

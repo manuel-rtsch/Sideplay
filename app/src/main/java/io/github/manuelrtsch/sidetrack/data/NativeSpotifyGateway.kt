@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack.data
 
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
 import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
+import io.github.manuelrtsch.sidetrack.triage.TriageLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -27,6 +28,7 @@ class NativeSpotifyGateway(
     private var sessionToken: String? = null
 
     override suspend fun connect(accessToken: String) = onIo {
+        TriageLog.i("native", "connect tokenLength=${accessToken.length} connected=$connected sessionConnected=$sessionConnected")
         requireNative()
         // `connected` alone is not enough: a session rebuilt by the catalog path drops the player
         // without touching the flag, and returning here would leave playback without one.
@@ -40,6 +42,7 @@ class NativeSpotifyGateway(
         }
         connectSession(accessToken)
         createPlayer()
+        TriageLog.i("native", "connect done connected=$connected sessionConnected=$sessionConnected")
     }
 
     override suspend fun disconnect() = onIo {
@@ -128,6 +131,7 @@ class NativeSpotifyGateway(
             fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
         }
         SidetrackDebug.log("ensureConnected connected=$connected sessionConnected=$sessionConnected tokenLength=${token.length} forceReconnect=$forceReconnect")
+        TriageLog.i("native", "ensureConnected connected=$connected sessionConnected=$sessionConnected tokenLength=${token.length} forceReconnect=$forceReconnect")
         if (forceReconnect) {
             // A stall can leave librespot's access-point connection dead without marking the
             // session invalid yet. Rebuilding is the only reliable way to get a fresh connection
@@ -141,16 +145,19 @@ class NativeSpotifyGateway(
         }
         if (!connected || !playerAttached()) {
             SidetrackDebug.log("ensureConnected: no player, connecting")
+            TriageLog.i("native", "ensureConnected: no player attached, connecting")
             connect(token)
             return true
         }
         val tokenAccepted = withContext(Dispatchers.IO) { native.setAccessToken(token) }
         SidetrackDebug.log("ensureConnected: setAccessToken accepted=$tokenAccepted")
+        TriageLog.i("native", "ensureConnected: setAccessToken accepted=$tokenAccepted")
         if (tokenAccepted) {
             sessionToken = token
             return false
         }
         SidetrackDebug.log("ensureConnected: session rejected token, rebuilding")
+        TriageLog.w("native", "ensureConnected: the live session rejected the token, rebuilding")
         connected = false
         sessionConnected = false
         sessionToken = null
@@ -167,16 +174,19 @@ class NativeSpotifyGateway(
             fail(SpotifyFailure.AuthenticationExpired, "Sign in again")
         }
         if (!sessionConnected) {
+            TriageLog.i("native", "ensureSession: no live session, connecting tokenLength=${token.length}")
             connectSession(token)
         } else if (!native.setAccessToken(token)) {
             // The first call stores the new token. A second call therefore only reports a dead
             // session, not a token change: a refreshed token must not tear down a live player
             // from a catalog read, but an invalid session still has to be rebuilt.
             if (!native.setAccessToken(token)) {
+                TriageLog.w("native", "ensureSession: the session rejected the token twice, rebuilding")
                 sessionConnected = false
                 sessionToken = null
                 connectSession(token)
             } else {
+                TriageLog.i("native", "ensureSession: stored the refreshed token, keeping the session")
                 sessionToken = token
             }
         } else {
@@ -187,11 +197,23 @@ class NativeSpotifyGateway(
     private fun connectSession(token: String) {
         if (sessionConnected) return
         SidetrackDebug.log("connectSession begin")
-        if (!native.connect(token)) {
+        val started = android.os.SystemClock.elapsedRealtime()
+        TriageLog.i("native", "connectSession begin tokenLength=${token.length} network=${networkAvailable()}")
+        val ok = runCatching { native.connect(token) }
+            .onFailure { TriageLog.e("native", "connectSession threw", it) }
+            .getOrDefault(false)
+        if (!ok) {
+            // An access-point failure is reported to the UI as an expired login. Log the truth
+            // first, because on some GSIs this is a network problem, not a credential problem.
+            TriageLog.e(
+                "native",
+                "connectSession failed ms=${android.os.SystemClock.elapsedRealtime() - started} " +
+                    "network=${networkAvailable()} nativeAvailable=${native.isAvailable}"
+            )
             if (!networkAvailable()) fail(SpotifyFailure.Network, "No internet connection")
             fail(SpotifyFailure.AuthenticationExpired, "Could not connect")
         }
-        SidetrackDebug.log("connectSession connected")
+        TriageLog.i("native", "connectSession connected ms=${android.os.SystemClock.elapsedRealtime() - started}")
         sessionConnected = true
         sessionToken = token
         // The player belongs to the session it was created with, so the native connect above
@@ -210,12 +232,14 @@ class NativeSpotifyGateway(
         SidetrackDebug.log("createPlayer bitrateKbps=${current.bitrateKbps} normalization=${current.normalization} gapless=${current.gapless}")
         if (!native.createPlayer(current.bitrateKbps, current.normalization, current.gapless)) {
             SidetrackDebug.log("createPlayer failed")
+            TriageLog.e("native", "createPlayer failed bitrate=${current.bitrateKbps}")
             native.disconnect()
             sessionConnected = false
             sessionToken = null
             fail(SpotifyFailure.Unknown, "Could not create the player")
         }
         SidetrackDebug.log("createPlayer created")
+        TriageLog.i("native", "createPlayer created bitrate=${current.bitrateKbps}")
         connected = true
     }
 
