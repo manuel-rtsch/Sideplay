@@ -30,6 +30,7 @@ import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.data.AppSessions
 import io.github.manuelrtsch.sidetrack.data.KnownServices
+import io.github.manuelrtsch.sidetrack.data.NavidromeDemo
 import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -73,9 +74,10 @@ private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Flo
 private fun notesRoute(key: String) = "$ROOT/notes/${Uri.encode(key)}"
 
 /**
- * Routes whose left action is Back (or a named "Home"/"Library" back). The keypad's Back key uses
- * the same set, so it must not pop a screen that has no back action: Home, Sign in and Welcome
- * leave the press to the system.
+ * Routes with a way back: either a Back action (or a named "Home"/"Library" back), or, for the
+ * service picker, no action bar at all but a step behind it. The keypad's Back key uses the same
+ * set, so it must not pop a screen that offers no way out: Home, Sign in and Welcome leave the
+ * press to the system.
  */
 private val KEYPAD_BACK_ROUTES = setOf(
     HISTORY,
@@ -781,15 +783,11 @@ fun NavGraphBuilder.sidetrackGraph(
         composable(SERVICE_PICKER) {
             val context = LocalContext.current
             val appSession = remember(context) { AppSessions.get(context) }
-            val active by appSession.active.collectAsStateWithLifecycle()
-            // The picker is the first screen on a fresh install, where there is nothing to go
-            // back to; from Sign in it goes back there, and it has no entry in Settings.
-            val previous = nav.previousBackStackEntry?.destination?.route
+            // The picker is the first screen on a fresh install and a pushed screen when it comes
+            // from Sign in. Either way it is the same neutral screen: no pre-selection and no
+            // action bar, so the Sign in buttons are not morphed into a back button here.
             ServicePickerScreen(
                 services = KnownServices,
-                selected = active,
-                backLabel = if (previous == SIGN_IN) "Sign in" else "Back",
-                onBack = if (previous != null) ({ nav.popBackStack() }) else null,
                 onSelect = { id ->
                     if (!AppSessions.select(context, id)) {
                         false
@@ -872,15 +870,26 @@ fun NavGraphBuilder.sidetrackGraph(
                 }
             }
             val appSession = AppSessions.get(context)
+            val passwordAuth = appSession.provider?.id == ServiceId.Navidrome
             SignInScreen(
-                account,
                 chrome,
                 onAbout = { nav.navigate(ABOUT) },
                 onSignIn = vm::signIn,
                 onDismissNotice = vm::dismissNotice,
                 onChangeService = { nav.navigate(SERVICE_PICKER) { launchSingleTop = true } },
                 serviceName = appSession.serviceName.ifEmpty { "your music service" },
-                passwordAuth = appSession.provider?.id == ServiceId.Navidrome,
+                passwordAuth = passwordAuth,
+                // Navidrome's form offers the public demo, so the app can be tried without a
+                // server of one's own. Other providers keep their own sign-in route.
+                defaults = if (passwordAuth) {
+                    PasswordSignInDefaults(
+                        NavidromeDemo.SERVER_URL,
+                        NavidromeDemo.USERNAME,
+                        NavidromeDemo.PASSWORD
+                    )
+                } else {
+                    null
+                },
                 onPasswordSignIn = vm::signIn
             )
         }

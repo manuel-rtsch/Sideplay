@@ -1,12 +1,12 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.text.format.Formatter
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.BasicTextField
@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -31,7 +32,6 @@ import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.action.withNotice
-import hrln.interactive.sidekit.design.components.ItemColour
 import hrln.interactive.sidekit.design.components.SidekitCard
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
@@ -109,11 +109,27 @@ fun SettingsScreen(
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
         SidekitList(padding, state = listState) {
-            item(key = "account") {
+            // listFade keys off the row's real index in the list. Conditional rows (quality,
+            // normalization, gapless, appearance, keyboard) shift every index after them, so
+            // advance a counter as each row is registered instead of hard-coding slots.
+            var rowIndex = 0
+            fun LazyListScope.row(key: String, content: @Composable (Modifier) -> Unit) {
+                val index = rowIndex++
+                item(key = key) { content(Modifier.listFade(listState, index)) }
+            }
+
+            row("account") { modifier ->
+                // One row for the whole account: which service this is, and the sign-out it leads
+                // to. A service is chosen once, before sign-in, so there is nothing to switch here;
+                // naming it on the account row says which one signing out would leave.
                 SidetrackItem(
                     "Account",
-                    Modifier.listFade(listState, 0).focusRequester(first),
-                    secondary = if (account.signedIn) "Signed in" else "Not signed in",
+                    modifier.focusRequester(first),
+                    secondary = if (account.signedIn) {
+                        serviceName.ifEmpty { "Signed in" }
+                    } else {
+                        "Not signed in"
+                    },
                     secondaryToEnd = true,
                     onClick = if (account.signedIn) {
                         { confirmation = SettingsConfirmation.SignOut }
@@ -122,22 +138,11 @@ fun SettingsScreen(
                     }
                 )
             }
-            item(key = "service") {
-                // Informational, deliberately not a link: a service is chosen once, before sign-in,
-                // and changing it means signing out. One service at a time is the whole point.
-                SidetrackItem(
-                    "Service",
-                    Modifier.listFade(listState, 10),
-                    secondary = serviceName,
-                    secondaryToEnd = true,
-                    colour = ItemColour.Muted
-                )
-            }
             if (capabilities.supportsQualitySelection) {
-                item(key = "quality") {
+                row("quality") { modifier ->
                     SidetrackItem(
                         "Audio quality",
-                        Modifier.listFade(listState, 1),
+                        modifier,
                         secondary = account.audioQuality.label,
                         secondaryToEnd = true,
                         showLinkArrow = true,
@@ -146,10 +151,10 @@ fun SettingsScreen(
                     )
                 }
             }
-            item(key = "autoplay") {
+            row("autoplay") { modifier ->
                 SidetrackItem(
                     "Autoplay",
-                    Modifier.listFade(listState, 2),
+                    modifier,
                     secondary = if (account.autoplay) "On" else "Off",
                     secondaryToEnd = true,
                     toggleable = account.autoplay,
@@ -157,10 +162,10 @@ fun SettingsScreen(
                 )
             }
             if (capabilities.supportsNormalization) {
-                item(key = "normalization") {
+                row("normalization") { modifier ->
                     SidetrackItem(
                         "Normalize volume",
-                        Modifier.listFade(listState, 3),
+                        modifier,
                         secondary = if (account.normalization) "On" else "Off",
                         secondaryToEnd = true,
                         toggleable = account.normalization,
@@ -169,10 +174,10 @@ fun SettingsScreen(
                 }
             }
             if (capabilities.supportsGapless) {
-                item(key = "gapless") {
+                row("gapless") { modifier ->
                     SidetrackItem(
                         "Gapless playback",
-                        Modifier.listFade(listState, 4),
+                        modifier,
                         secondary = if (account.gapless) "On" else "Off",
                         secondaryToEnd = true,
                         toggleable = account.gapless,
@@ -180,19 +185,19 @@ fun SettingsScreen(
                     )
                 }
             }
-            item(key = "cache") {
+            row("cache") { modifier ->
                 SidetrackItem(
                     "Clear cache",
-                    Modifier.listFade(listState, 5),
+                    modifier,
                     secondary = Formatter.formatShortFileSize(context, account.cacheSizeBytes),
                     secondaryToEnd = true,
                     onClick = onClearCache
                 )
             }
-            item(key = "history") {
+            row("history") { modifier ->
                 SidetrackItem(
                     "Clear history",
-                    Modifier.listFade(listState, 6),
+                    modifier,
                     secondary = recentCount.toString(),
                     secondaryToEnd = true,
                     onClick = {
@@ -201,10 +206,10 @@ fun SettingsScreen(
                     }
                 )
             }
-            item(key = "artworkBackdrop") {
+            row("artworkBackdrop") { modifier ->
                 SidetrackItem(
                     "Art backdrop",
-                    Modifier.listFade(listState, 7),
+                    modifier,
                     secondary = if (backdrop.enabled) "On" else "Off",
                     secondaryToEnd = true,
                     toggleable = backdrop.enabled,
@@ -212,10 +217,10 @@ fun SettingsScreen(
                 )
             }
             if (onAppearance != null) {
-                item(key = "appearance") {
+                row("appearance") { modifier ->
                     SidetrackItem(
                         "Appearance",
-                        Modifier.listFade(listState, 8),
+                        modifier,
                         showLinkArrow = true,
                         showLinkArrowWithSecondary = true,
                         onClick = onAppearance
@@ -223,10 +228,10 @@ fun SettingsScreen(
                 }
             }
             if (onKeyboard != null) {
-                item(key = "keyboard") {
+                row("keyboard") { modifier ->
                     SidetrackItem(
                         "Keyboard",
-                        Modifier.listFade(listState, 9),
+                        modifier,
                         showLinkArrow = true,
                         showLinkArrowWithSecondary = true,
                         onClick = onKeyboard
@@ -238,33 +243,31 @@ fun SettingsScreen(
 }
 
 /**
- * The one place a service is chosen: first run, and again after signing out.
+ * The one place a service is chosen: first run, and again after signing out or asking to change
+ * service from Sign in.
  *
  * Selection is deliberately not reachable while signed in. The app runs one service at a time,
  * so a picker in Settings would promise a switch that would have to tear down a live session.
+ *
+ * The screen is always the same screen: no row is pre-selected and there is no action bar. It is
+ * shown before any commitment, so marking the service in use as "Selected" would claim one that
+ * has not been made; and the back action that used to sit in the bar was a leftover of the Sign
+ * in screen's buttons, not a choice this screen offers. The keypad Back key and the system back
+ * gesture still leave it.
  */
 @Composable
 fun ServicePickerScreen(
     services: List<ServiceChoice>,
-    selected: ServiceId?,
-    backLabel: String = "Back",
-    onBack: (() -> Unit)? = null,
     onSelect: (ServiceId) -> Boolean
 ) {
     // A service that cannot be opened stays selected nowhere and says so on its own row, so the
     // tap is never silently lost.
     var unavailable by remember { mutableStateOf<ServiceId?>(null) }
-    val baseActions = remember(backLabel, onBack) {
-        listOfNotNull(onBack?.let { SideAction.back("back", backLabel, it) })
-    }
-    SidekitScaffold(
-        title = "Choose service",
-        actions = baseActions
-    ) { padding ->
+    SidekitScaffold(title = "Choose service") { padding ->
         val listState = rememberLazyListState()
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-        SidekitList(padding, modifier = Modifier.selectableGroup(), state = listState) {
+        SidekitList(padding, state = listState) {
             item(key = "explain") {
                 SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
                     SidekitText(
@@ -277,24 +280,14 @@ fun ServicePickerScreen(
                 }
             }
             services.forEachIndexed { index, provider ->
-                val isSelected = provider.id == selected
                 item(key = provider.id.value) {
                     SidetrackItem(
                         provider.displayName,
                         Modifier.listFade(listState, index + 1).then(
                             if (index == 0) Modifier.focusRequester(first) else Modifier
                         ),
-                        secondary = when {
-                            isSelected -> "Selected"
-                            unavailable == provider.id -> "Unavailable"
-                            else -> null
-                        },
+                        secondary = if (unavailable == provider.id) "Unavailable" else null,
                         secondaryToEnd = true,
-                        icon = if (isSelected) SidekitIcon.Check else null,
-                        containerColor = if (isSelected) SidekitTheme.colors.successA1 else null,
-                        secondaryColor = if (isSelected) SidekitTheme.colors.light else null,
-                        selected = isSelected,
-                        selectionRole = Role.RadioButton,
                         onClick = {
                             if (onSelect(provider.id)) unavailable = null else unavailable = provider.id
                         }
@@ -347,9 +340,35 @@ fun AudioQualityScreen(
     }
 }
 
+/**
+ * The values a password form shows as placeholders, and submits when the user presses Sign in
+ * without typing anything. Used by Navidrome to offer its public demo. Null leaves the form
+ * literal: empty fields stay empty and fail validation as before.
+ */
+data class PasswordSignInDefaults(
+    val serverUrl: String,
+    val username: String,
+    val password: String
+)
+
+/**
+ * The credentials a password form submits: [defaults] when every field is blank (the placeholders
+ * are a fallback, not examples), otherwise exactly what was typed. A partly filled form is never
+ * completed from the defaults, so a server address cannot be paired with someone else's account.
+ */
+internal fun passwordSignInValues(
+    serverUrl: String,
+    username: String,
+    password: String,
+    defaults: PasswordSignInDefaults?
+): Triple<String, String, String> {
+    val untouched = serverUrl.isBlank() && username.isBlank() && password.isBlank()
+    if (!untouched || defaults == null) return Triple(serverUrl, username, password)
+    return Triple(defaults.serverUrl, defaults.username, defaults.password)
+}
+
 @Composable
 fun SignInScreen(
-    account: AccountUiState,
     chrome: ChromeUiState,
     onAbout: () -> Unit,
     onSignIn: () -> Unit,
@@ -357,6 +376,7 @@ fun SignInScreen(
     onChangeService: (() -> Unit)? = null,
     serviceName: String = "your music service",
     passwordAuth: Boolean = false,
+    defaults: PasswordSignInDefaults? = null,
     onPasswordSignIn: (serverUrl: String, username: String, password: String) -> Unit = { _, _, _ -> }
 ) {
     val colors = SidekitTheme.colors
@@ -364,7 +384,10 @@ fun SignInScreen(
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val submit = if (passwordAuth) {
-        { onPasswordSignIn(serverUrl, username, password) }
+        {
+            val (server, user, secret) = passwordSignInValues(serverUrl, username, password, defaults)
+            onPasswordSignIn(server, user, secret)
+        }
     } else {
         onSignIn
     }
@@ -391,8 +414,14 @@ fun SignInScreen(
     ) { padding ->
         val listState = rememberLazyListState()
         SidekitList(padding, state = listState) {
-            item(key = "explain") {
-                SidekitCard(Modifier.listFade(listState, 0).fillMaxWidth()) {
+            var rowIndex = 0
+            fun LazyListScope.row(key: String, content: @Composable (Modifier) -> Unit) {
+                val index = rowIndex++
+                item(key = key) { content(Modifier.listFade(listState, index)) }
+            }
+
+            row("explain") { modifier ->
+                SidekitCard(modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidekitText(
                             "Connect Sidetrack with your $serviceName account",
@@ -400,10 +429,15 @@ fun SignInScreen(
                             maxLines = Int.MAX_VALUE
                         )
                         SidekitText(
-                            if (passwordAuth) {
-                                "Your password is stored encrypted on this device and only used to sign requests to your server."
-                            } else {
-                                "Sidetrack never sees your password or sensitive information."
+                            when {
+                                !passwordAuth ->
+                                    "Sidetrack never sees your password or sensitive information."
+                                defaults != null ->
+                                    "Your password is stored encrypted on this device and only used to sign " +
+                                        "requests to your server. Leave empty to try the shared demo."
+                                else ->
+                                    "Your password is stored encrypted on this device and only used to sign " +
+                                        "requests to your server."
                             },
                             style = SidekitTheme.typography.caption,
                             color = colors.surfaceA6,
@@ -413,78 +447,113 @@ fun SignInScreen(
                 }
             }
             if (passwordAuth) {
-                item(key = "server") {
-                    SidekitTextField(
+                row("server") { modifier ->
+                    FormField(
                         serverUrl,
                         { serverUrl = it },
-                        Modifier.listFade(listState, 1).fillMaxWidth(),
-                        placeholder = "Server, e.g. 192.168.1.10:4533",
-                        singleLine = true,
-                        dictation = true
+                        label = "Server",
+                        placeholder = defaults?.serverUrl ?: "host:port",
+                        modifier = modifier
                     )
                 }
-                item(key = "username") {
-                    SidekitTextField(
+                row("username") { modifier ->
+                    FormField(
                         username,
                         { username = it },
-                        Modifier.listFade(listState, 2).fillMaxWidth(),
-                        placeholder = "Username",
-                        singleLine = true
+                        label = "Username",
+                        placeholder = defaults?.username,
+                        modifier = modifier
                     )
                 }
-                item(key = "password") {
-                    PasswordField(password, { password = it }, Modifier.listFade(listState, 3).fillMaxWidth())
+                row("password") { modifier ->
+                    PasswordField(
+                        password,
+                        { password = it },
+                        label = "Password",
+                        placeholder = defaults?.password,
+                        modifier = modifier
+                    )
                 }
-            }
-            item(key = "status") {
-                SidetrackItem(
-                    "Status",
-                    Modifier.listFade(listState, 1),
-                    secondary = when {
-                        account.authPending -> if (passwordAuth) "Signing in" else "Waiting for browser"
-                        account.signedIn -> "Connected"
-                        else -> "Waiting"
-                    },
-                    secondaryToEnd = true,
-                    colour = ItemColour.Muted
-                )
             }
         }
     }
 }
 
-/** A masked password field; the keypad's T9 bar is for search, not secrets. */
+/**
+ * A labelled one-line Sidekit field in an item card, the boxed form used across Sidekit's apps.
+ * The label sits inside the card so the placeholder can carry an example (the demo credentials)
+ * without having to say what the field is for.
+ */
+@Composable
+private fun FormField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String?,
+    modifier: Modifier = Modifier
+) {
+    SidekitCard(modifier.fillMaxWidth().heightIn(min = SidekitTheme.spacing.itemHeight)) {
+        Column(Modifier.fillMaxWidth().align(Alignment.CenterStart)) {
+            SidekitText(
+                label,
+                style = SidekitTheme.typography.caption,
+                color = SidekitTheme.colors.surfaceA6,
+                maxLines = 1
+            )
+            SidekitTextField(
+                value,
+                onValueChange,
+                Modifier.fillMaxWidth(),
+                placeholder = placeholder,
+                singleLine = true
+            )
+        }
+    }
+}
+
+/**
+ * A masked password field in the same card as [FormField]. SidekitTextField has no visual
+ * transformation, and the keypad's T9 bar is for search, not secrets.
+ */
 @Composable
 private fun PasswordField(
     value: String,
     onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String?,
     modifier: Modifier = Modifier
 ) {
     val colors = SidekitTheme.colors
-    Box(
-        modifier
-            .background(colors.surfaceA2)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-    ) {
-        if (value.isEmpty()) {
+    SidekitCard(modifier.fillMaxWidth().heightIn(min = SidekitTheme.spacing.itemHeight)) {
+        Column(Modifier.fillMaxWidth().align(Alignment.CenterStart)) {
             SidekitText(
-                "Password",
-                style = SidekitTheme.typography.body,
-                color = colors.surfaceA6
+                label,
+                style = SidekitTheme.typography.caption,
+                color = colors.surfaceA6,
+                maxLines = 1
             )
+            Box(Modifier.fillMaxWidth()) {
+                if (value.isEmpty() && placeholder != null) {
+                    SidekitText(
+                        placeholder,
+                        style = SidekitTheme.typography.body,
+                        color = colors.surfaceA6
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = SidekitTheme.typography.body.copy(color = colors.light),
+                    singleLine = true,
+                    cursorBrush = SolidColor(colors.light),
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    )
+                )
+            }
         }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            textStyle = SidekitTheme.typography.body.copy(color = colors.light),
-            singleLine = true,
-            cursorBrush = SolidColor(colors.light),
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            )
-        )
     }
 }

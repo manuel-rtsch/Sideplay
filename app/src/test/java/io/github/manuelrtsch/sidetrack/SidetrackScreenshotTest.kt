@@ -8,6 +8,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import hrln.interactive.sidekit.design.input.KeypadModule
 import io.github.manuelrtsch.sidetrack.data.EpisodeProgress
 import io.github.manuelrtsch.sidetrack.data.KnownServices
+import io.github.manuelrtsch.sidetrack.data.NavidromeDemo
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
@@ -412,7 +413,6 @@ class SidetrackScreenshotTest {
 
     @Test fun signIn() = shoot("sidetrack_sign_in") {
         SignInScreen(
-            SidetrackUiState(signedIn = false).account,
             SidetrackUiState(signedIn = false).chrome,
             onAbout = {},
             onSignIn = {},
@@ -423,21 +423,24 @@ class SidetrackScreenshotTest {
     @Test fun servicePicker() = shoot("sidetrack_service_picker") {
         ServicePickerScreen(
             services = KnownServices,
-            selected = null,
             onSelect = { true }
         )
     }
 
     @Test fun navidromeSignIn() = shoot("sidetrack_sign_in_navidrome") {
         SignInScreen(
-            SidetrackUiState(signedIn = false).account,
             SidetrackUiState(signedIn = false).chrome,
             onAbout = {},
             onSignIn = {},
             onDismissNotice = {},
             onChangeService = {},
             serviceName = "Navidrome",
-            passwordAuth = true
+            passwordAuth = true,
+            defaults = PasswordSignInDefaults(
+                NavidromeDemo.SERVER_URL,
+                NavidromeDemo.USERNAME,
+                NavidromeDemo.PASSWORD
+            )
         )
     }
 }
