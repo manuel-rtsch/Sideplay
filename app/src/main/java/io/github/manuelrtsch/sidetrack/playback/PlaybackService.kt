@@ -30,11 +30,11 @@ class PlaybackService : Service() {
         // session constructs the native library, reads the encrypted credential store and touches
         // disk, none of which may sit inside the five second foreground-service deadline.
         val manager = getSystemService(NotificationManager::class.java)
-        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+        if (manager.getNotificationChannel(PlaybackNotificationHooks.CHANNEL_ID) == null) {
             manager.createNotificationChannel(
                 NotificationChannel(
-                    CHANNEL_ID,
-                    CHANNEL_NAME,
+                    PlaybackNotificationHooks.CHANNEL_ID,
+                    PlaybackNotificationHooks.CHANNEL_NAME,
                     NotificationManager.IMPORTANCE_LOW
                 ).apply { setShowBadge(false) }
             )
@@ -53,7 +53,7 @@ class PlaybackService : Service() {
         // foreground: otherwise the real notification is replaced by the placeholder on each press.
         if (!foreground) {
             startForeground(
-                NOTIFICATION_ID,
+                PlaybackNotificationHooks.NOTIFICATION_ID,
                 placeholderNotification(),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             )
@@ -127,7 +127,7 @@ class PlaybackService : Service() {
      * Notification posted the instant the service starts, before the player state is available.
      * It only has to satisfy the foreground requirement; [update] replaces it right after.
      */
-    private fun placeholderNotification(): Notification = Notification.Builder(this, CHANNEL_ID)
+    private fun placeholderNotification(): Notification = Notification.Builder(this, PlaybackNotificationHooks.CHANNEL_ID)
         .setSmallIcon(SidekitIcon.MusicNote2.drawable)
         .setContentTitle("Sidetrack")
         .setContentIntent(openIntent())
@@ -209,20 +209,22 @@ class PlaybackService : Service() {
     )
 
     companion object {
-        /**
-         * Channel and id live here so the placeholder can be posted without a player, and
-         * [PlaybackController] reads them from here so the two cannot drift apart.
-         */
-        const val CHANNEL_ID = "sidetrack"
-        const val CHANNEL_NAME = "Sidetrack playback"
-        const val NOTIFICATION_ID = 0x6D76
-
         private const val ACTION_PLAY_PAUSE = "io.github.manuelrtsch.sidetrack.PLAY_PAUSE"
         private const val ACTION_NEXT = "io.github.manuelrtsch.sidetrack.NEXT"
         private const val ACTION_PREVIOUS = "io.github.manuelrtsch.sidetrack.PREVIOUS"
         private const val ACTION_STOP = "io.github.manuelrtsch.sidetrack.STOP"
 
         private var running: PlaybackService? = null
+
+        /**
+         * Wires the core player's notification hooks to this service. Called once from the app's
+         * activity startup, before any player can demand a notification, so core never has to name
+         * this service. Idempotent.
+         */
+        fun installPlaybackNotificationHooks() {
+            PlaybackNotificationHooks.refresh = ::refresh
+            PlaybackNotificationHooks.sync = ::sync
+        }
 
         /** Rebuilds the notification for a state-only change, such as a sleep-timer minute tick. */
         fun refresh(context: Context, playback: PlaybackController) {

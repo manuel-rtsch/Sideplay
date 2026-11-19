@@ -18,6 +18,7 @@ import hrln.interactive.sidekit.sdk.config.SidekitConfigClient
 import hrln.interactive.sidekit.sdk.input.applyInputMode
 import hrln.interactive.sidekit.sdk.system.KeypadSystemBack
 import io.github.manuelrtsch.sidetrack.data.AppSessions
+import io.github.manuelrtsch.sidetrack.playback.PlaybackService
 
 /**
  * The Sidetrack shell. It reads Sidekit's configuration when a compatible host is installed and
@@ -61,6 +62,10 @@ class SidetrackActivity : SidekitActivity() {
 
     override fun onSidekitCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState == null) SidetrackLinks.handle(intent)
+        // The media notification is app-owned and driven from core through injected hooks. They
+        // must be installed here, before any player can demand a notification, so core never has
+        // to name the service.
+        PlaybackService.installPlaybackNotificationHooks()
     }
 
     /**

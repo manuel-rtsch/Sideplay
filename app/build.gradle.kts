@@ -262,6 +262,7 @@ tasks.matching {
 }
 
 dependencies {
+    implementation(project(":core"))
     implementation(libs.sidekit.design)
     implementation(libs.sidekit.sdk)
     implementation(libs.androidx.core.ktx)

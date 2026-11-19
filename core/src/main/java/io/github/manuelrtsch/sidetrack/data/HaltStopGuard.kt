@@ -8,7 +8,7 @@ package io.github.manuelrtsch.sidetrack.data
  * the app halted makes the echo distinguishable from a genuine stop after the user reopened and
  * resumed: the new playback carries a different id, the old echo carries the remembered one.
  */
-internal class HaltStopGuard(private val graceMs: Long) {
+class HaltStopGuard(private val graceMs: Long) {
     private var uri: String? = null
     private var playRequestId = -1L
     private var armedAt = 0L

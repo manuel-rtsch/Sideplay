@@ -9,8 +9,10 @@ import android.util.Log
  *   adb shell setprop log.tag.SidetrackDebug DEBUG
  *
  * The tag is checked at every call, so the property can be toggled without reinstalling.
+ *
+ * Shared across modules, hence public.
  */
-internal object SidetrackDebug {
+object SidetrackDebug {
     const val TAG = "SidetrackDebug"
 
     val enabled: Boolean get() = Log.isLoggable(TAG, Log.DEBUG)

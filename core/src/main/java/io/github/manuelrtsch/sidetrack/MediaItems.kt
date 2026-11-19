@@ -10,7 +10,7 @@ import androidx.annotation.DrawableRes
  * argument then fails verification while navigating and takes the process down, so ids are
  * normalised here before they reach a route.
  */
-internal fun String?.mediaIdOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
+fun String?.mediaIdOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
 
 /** A saved album, playlist or show. Collections share one screen, so they share one shape. */
 enum class CollectionType(val route: String, val mediaType: MediaType) {

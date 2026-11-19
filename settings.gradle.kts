@@ -38,6 +38,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "Sidetrack"
 include(":app")
+include(":core")
+// Provider modules are added in their own stages: Navidrome and Jellyfin exist today, Spotify
+// follows, so each stage can land one module with its files and stay green.
 
 // Release builds use the published SDK from GitHub Pages. A sibling Sidekit checkout is only a
 // development shortcut and must be requested explicitly with -PsidetrackLocalSidekit=true, so a

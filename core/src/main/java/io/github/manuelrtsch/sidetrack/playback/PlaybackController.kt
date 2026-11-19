@@ -32,6 +32,10 @@ import kotlinx.coroutines.launch
  * engine-agnostic: librespot and the future Media3 engine both plug in here.
  *
  * Main-thread only, like [MediaSessionOwner]. Long-running engine work is moved onto [scope].
+ *
+ * The media notification is app-owned: rather than depending on a concrete service from core, the
+ * controller asks the app-installed [PlaybackNotificationHooks] to refresh or start it. The
+ * callbacks default to the app hooks and can be overridden per instance (e.g. in tests).
  */
 class PlaybackController(
     val engine: PlaybackEngine,
@@ -39,12 +43,16 @@ class PlaybackController(
     private val registry: MediaSessionRegistry = MediaSessions,
     private val context: Context? = null,
     /** Monotonic clock seam: the sleep timer's deadline math is the only consumer. */
-    private val elapsedTime: () -> Long = { SystemClock.elapsedRealtime() }
+    private val elapsedTime: () -> Long = { SystemClock.elapsedRealtime() },
+    /** Rebuilds the notification for a state-only change, such as a sleep-timer tick. */
+    private val notifyRefresh: (Context, PlaybackController) -> Unit = { c, p -> PlaybackNotificationHooks.refresh(c, p) },
+    /** Starts or brings the notification in line with the player. */
+    private val notifySync: (Context, PlaybackController) -> Unit = { c, p -> PlaybackNotificationHooks.sync(c, p) }
 ) : MediaSessionOwner {
     override val sessionId = "sidetrack"
-    override val notificationChannelId = PlaybackService.CHANNEL_ID
-    override val notificationChannelName = PlaybackService.CHANNEL_NAME
-    override val notificationId = PlaybackService.NOTIFICATION_ID
+    override val notificationChannelId = PlaybackNotificationHooks.CHANNEL_ID
+    override val notificationChannelName = PlaybackNotificationHooks.CHANNEL_NAME
+    override val notificationId = PlaybackNotificationHooks.NOTIFICATION_ID
 
     @Volatile
     private var playing = false
@@ -174,7 +182,7 @@ class PlaybackController(
         // republished. The service refresh path deliberately does not call publish().
         if (context != null) {
             scope.launch {
-                _sleepTimer.collect { PlaybackService.refresh(context, this@PlaybackController) }
+                _sleepTimer.collect { notifyRefresh(context, this@PlaybackController) }
             }
         }
     }
@@ -525,7 +533,7 @@ class PlaybackController(
             )
         }
         updateNoisy()
-        context?.let { PlaybackService.sync(it, this) }
+        context?.let { notifySync(it, this) }
     }
 
     private fun updateNoisy() {
@@ -601,4 +609,24 @@ class PlaybackController(
         /** Guards against a zero-delay spin when the clock lands exactly on a minute edge. */
         const val SLEEP_TIMER_MIN_DELAY_MS = 1_000L
     }
+}
+
+/**
+ * App-installed notification hooks, plus the channel identity the media player uses, kept together
+ * so core's [PlaybackController] and the app's notification service cannot drift apart.
+ *
+ * Core never names the app's service: it calls these hooks, and the app installs the real
+ * implementations once at startup (see PlaybackService). Defaults are no-ops so tests and any
+ * player built before the hooks are installed never touch the notification system.
+ */
+object PlaybackNotificationHooks {
+    const val CHANNEL_ID = "sidetrack"
+    const val CHANNEL_NAME = "Sidetrack playback"
+    const val NOTIFICATION_ID = 0x6D76
+
+    /** Rebuilds the notification for a state-only change, such as a sleep-timer minute tick. */
+    var refresh: (Context, PlaybackController) -> Unit = { _, _ -> }
+
+    /** Starts or brings the notification in line with the player. Main thread only. */
+    var sync: (Context, PlaybackController) -> Unit = { _, _ -> }
 }

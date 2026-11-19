@@ -15,7 +15,7 @@ package io.github.manuelrtsch.sidetrack.playback
  *    the UI's point of view while it is silent. After a dead access-point connection the app
  *    stayed in that state for half an hour, so the silence needs a deadline.
  */
-internal class DrainPolicy(
+class DrainPolicy(
     /** Bytes to buffer before playback starts; half the AudioTrack buffer in practice. */
     private val prefillBytes: Int,
     /** How long to wait for that prefill before starting anyway. */
