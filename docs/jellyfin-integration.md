@@ -6,9 +6,13 @@ Steps 10 (WebSocket invalidation, discovery UI, Quick Connect, 10.x) remain defe
 playlist add/remove write paths are implemented but have no in-app entry point yet (create has
 one); the UI work is scheduled for 0.4.1 and tracked in
 [provider-capabilities.md](provider-capabilities.md#playlist-editing--deferred-to-041). The
-dev-container checks named in D14 — empty-id `createPlaylist`, `editable` from `openAccess`/
-`shares`, direct FLAC via the profile — are covered by the opt-in
-`JellyfinIntegrationTest` and still need a run against a real 12.x server. This document records
+dev-container checks named in D14 have now been run against a real 12.4 server
+(2026-11-19, see [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md)):
+empty-id `createPlaylist` works, direct FLAC streams as `206 audio/flac` with byte ranges, and
+`editable` does **not** follow from `openAccess`/`shares` for a playlist's own creator (a fresh
+playlist comes back `OpenAccess:false, Shares:[]`). `JellyfinIntegrationTest` is runnable again —
+Robolectric's null `ANDROID_ID` and a missing slf4j test binding had made it fail before any
+request — and passes 2/2 against 12.4. This document records
 what the official Kotlin SDK gives us, what it does not, how Jellyfin maps onto Sidetrack's
 provider-neutral model, the decisions taken (§8), and the order in which the adapter was built.
 
@@ -406,7 +410,7 @@ decision and the consequence the implementation has to live with.
 | D11 | **`getPostedPlaybackInfo` + a music `DeviceProfile`** is the playback path; a direct play falls back to `/Audio/{id}/stream?static=true`, never to the universal URL. | Owns `playSessionId` (needed for accurate progress) and `transcodingUrl` (prefix `api.baseUrl`) plus `requiredHttpHeaders`; the profile has to advertise direct play for Media3's containers or servers transcode FLAC away silently; more code and more failure modes than a bare URL builder. |
 | D12 | **`markPlayedItem` only when the item finishes.** | Skips do not count as plays, matching the server's model; `reportPlaybackStopped` still reports where playback ended, so the server keeps its positions. No invented percentage rule. |
 | D13 | **Seed `ResumePoint` from `getResumeItems` at sign-in**; local state is authoritative afterwards. | Resume survives a reinstall and follows the account across devices; costs one call at sign-in; no two-way reconciliation rules, so a position advanced elsewhere only lands at the next sign-in. |
-| D14 | **No production 12.x server to test against; a throwaway `jellyfin/jellyfin` 12.x container in dev is the reference.** | `JellyfinIntegrationTest` stays opt-in (`JELLYFIN_TEST_URL`/`_USER`/`_PASSWORD`, skipped when absent) so CI is green; the three unverified claims in §2.11 — `createPlaylist` with empty `ids`, `editable` from `openAccess`/`shares`, direct FLAC via the profile — are exercised there and must be confirmed against the container before the adapter is called server-verified. |
+| D14 | **No production 12.x server to test against; a throwaway `jellyfin/jellyfin` 12.x container in dev is the reference.** *Run 2026-11-19 on `jellyfin/jellyfin:12.4`: 2/2 green; empty-id `createPlaylist` and direct FLAC confirmed, `editable` from shares disproved (see [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md)).* | `JellyfinIntegrationTest` stays opt-in (`JELLYFIN_TEST_URL`/`_USER`/`_PASSWORD`, skipped when absent) so CI is green; the three unverified claims in §2.11 — `createPlaylist` with empty `ids`, `editable` from `openAccess`/`shares`, direct FLAC via the profile — are exercised there and must be confirmed against the container before the adapter is called server-verified. |
 
 ---
 

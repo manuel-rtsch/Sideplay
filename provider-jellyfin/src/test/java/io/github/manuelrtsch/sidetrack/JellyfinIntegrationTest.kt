@@ -1,6 +1,7 @@
 package io.github.manuelrtsch.sidetrack
 
 import android.content.Context
+import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import io.github.manuelrtsch.sidetrack.auth.SdkJellyfinAuthenticator
 import io.github.manuelrtsch.sidetrack.auth.normalizeJellyfinServerUrl
@@ -12,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -28,6 +30,19 @@ class JellyfinIntegrationTest {
     private val baseUrl = System.getenv("JELLYFIN_TEST_URL").orEmpty()
     private val username = System.getenv("JELLYFIN_TEST_USER").orEmpty()
     private val password = System.getenv("JELLYFIN_TEST_PASSWORD").orEmpty()
+
+    /**
+     * The SDK builds its `DeviceInfo` from `Settings.Global.DEVICE_NAME` and
+     * `Settings.Secure.ANDROID_ID`, and it requires the id; Robolectric leaves the id null, so
+     * `createJellyfin` threw a `NullPointerException` before any request was made and this suite
+     * could never run — even with the env vars set. Stating both here is what makes the only
+     * end-to-end verification of this adapter (D14) actually executable.
+     */
+    @Before fun stateADevice() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        Settings.Global.putString(context.contentResolver, Settings.Global.DEVICE_NAME, "Sidetrack Test Phone")
+        Settings.Secure.putString(context.contentResolver, Settings.Secure.ANDROID_ID, "sidetrack-test-device")
+    }
 
     private fun requireServer() {
         assumeTrue(

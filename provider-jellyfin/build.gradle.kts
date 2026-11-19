@@ -61,4 +61,7 @@ dependencies {
     testImplementation(libs.robolectric)
     // The opt-in integration test needs ApplicationProvider under Robolectric.
     testImplementation(libs.androidx.junit)
+    // On the JVM the SDK's kotlin-logging resolves the slf4j backend, which the android runtime
+    // never loads; without it every real-server sign-in fails with NoClassDefFoundError.
+    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.1")
 }
