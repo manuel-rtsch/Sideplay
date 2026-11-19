@@ -9,6 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -105,24 +106,69 @@ class NavidromeIntegrationTest {
         assertFalse(source.uri.contains(password))
     }
 
+    private suspend fun playlistUnderTest(catalog: NavidromeCatalog): Playlist {
+        val playlists = catalog.library(LibrarySection.Playlists, 0, 20).items.filterIsInstance<Playlist>()
+        val playlist = playlists.firstOrNull { it.name.startsWith("Sidetrack Test") }
+        assumeTrue("Create a playlist named 'Sidetrack Test…' first", playlist != null)
+        return playlist!!
+    }
+
+    /** The playlist's tracks, in order — the assertion unit. A size alone hides a rotation. */
+    private suspend fun tracksOf(catalog: NavidromeCatalog, playlist: Playlist): List<Track> =
+        catalog.collection(playlist.key, 0, 200)!!.items.filterIsInstance<Track>()
+
+    /** A track the playlist does not already hold, so the edit appends a distinct id. */
+    private suspend fun trackNotIn(api: NavidromeApi, playlist: List<Track>): Track? {
+        val ids = playlist.map { it.id }.toSet()
+        for (album in api.albumList(0, 10).items) {
+            val track = api.album(album.id)?.tracks?.firstOrNull { it.id !in ids }
+            if (track != null) return track
+        }
+        return null
+    }
+
     @Test fun `catalog reads and edits a playlist`() = runTest {
         requireServer()
         val api = api()
         val catalog = NavidromeCatalog(api = { api })
 
-        val playlists = catalog.library(LibrarySection.Playlists, 0, 20).items.filterIsInstance<Playlist>()
-        val playlist = playlists.firstOrNull { it.name.startsWith("Sidetrack Test") }
-        assumeTrue("Create a playlist named 'Sidetrack Test…' first", playlist != null)
-        playlist!!
+        val playlist = playlistUnderTest(catalog)
+        val before = tracksOf(catalog, playlist)
+        assertTrue(before.isNotEmpty())
 
-        val collection = catalog.collection(playlist.key, 0, 50)!!
-        assertTrue(collection.items.isNotEmpty())
+        val song = trackNotIn(api, before)
+        assumeTrue("Needs a track that is not already in the playlist", song != null)
+        song!!
 
-        val song = collection.items.filterIsInstance<Track>().first()
         val index = catalog.addToPlaylist(playlist.key, song)
-        assertEquals(collection.items.size, index)
-        assertTrue(catalog.collection(playlist.key, 0, 50)!!.items.size > collection.items.size)
+        assertEquals(before.size, index)
+        // Contents, not size: an append that rotated the entries would keep the size and fail here.
+        assertEquals(before.map { it.id } + song.id, tracksOf(catalog, playlist).map { it.id })
+
         catalog.removeFromPlaylist(playlist.key, song)
-        assertEquals(collection.items.size, catalog.collection(playlist.key, 0, 50)!!.items.size)
+        assertEquals(before.map { it.id }, tracksOf(catalog, playlist).map { it.id })
+    }
+
+    /**
+     * The defect recorded in `docs/release-readiness-jellyfin-navidrome.md` §1.4: removal resolves
+     * the row with `indexOfFirst { it.id == songId }`, so with `[A, B, C, A]` removing the last `A`
+     * deletes index 0. Size is preserved, contents rotate — which is why the test above asserts
+     * contents. Un-ignore with the fix.
+     */
+    @Ignore("Known: removing a duplicated track deletes the first occurrence, not the appended copy")
+    @Test fun `removing a duplicated track leaves the other entries in place`() = runTest {
+        requireServer()
+        val api = api()
+        val catalog = NavidromeCatalog(api = { api })
+
+        val playlist = playlistUnderTest(catalog)
+        val before = tracksOf(catalog, playlist)
+        assumeTrue("Needs a playlist with two distinct tracks", before.map { it.id }.distinct().size >= 2)
+
+        val duplicate = before.first()
+        catalog.addToPlaylist(playlist.key, duplicate)
+        // The appended copy is the last entry; removing it must leave the rest untouched.
+        catalog.removeFromPlaylist(playlist.key, duplicate)
+        assertEquals(before.map { it.id }, tracksOf(catalog, playlist).map { it.id })
     }
 }
