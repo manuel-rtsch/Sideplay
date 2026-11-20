@@ -349,6 +349,49 @@ class SpotifyFallbackStateTest {
         assertEquals(station.drop(2).map { it.id }, vm.state.value.upcoming.map { it.id })
     }
 
+    @Test fun `a collection row tap plays the visible page instead of waiting for every page`() = runTest(dispatcher) {
+        val vm = viewModel(MockSpotifyDataSource)
+        val page = MockSpotifyDataSource.collection(CollectionType.Playlist, "late_night", 0, 3)!!
+        val full = MockSpotifyDataSource.playlist("late_night")!!.tracks
+        assertTrue(page.hasMore)
+
+        vm.playCollection(page, 0)
+
+        // The tap plays immediately: no dispatcher advance, no request in front of the first note.
+        assertEquals(page.items.first().id, vm.state.value.current?.id)
+        assertEquals(page.items.drop(1).map { it.id }, vm.state.value.upcoming.map { it.id })
+
+        advanceUntilIdle()
+
+        // The pages behind "See more" join the tail once they arrive, so the queue still matches
+        // the whole playlist and repeat-context loops all of it.
+        assertEquals(full.drop(1).map { it.id }, vm.state.value.upcoming.map { it.id })
+    }
+
+    @Test fun `a failed later page still plays the tapped track`() = runTest(dispatcher) {
+        val catalog = object : SpotifyCatalog by MockSpotifyDataSource {
+            override suspend fun collection(
+                type: CollectionType,
+                id: String,
+                offset: Int,
+                limit: Int
+            ): Collection? = if (offset > 0) {
+                throw SpotifyGatewayException(SpotifyFailure.Network, "offline")
+            } else {
+                MockSpotifyDataSource.collection(type, id, offset, limit)
+            }
+        }
+        val vm = viewModel(catalog)
+        val page = MockSpotifyDataSource.collection(CollectionType.Playlist, "late_night", 0, 3)!!
+
+        vm.playCollection(page, 0)
+        advanceUntilIdle()
+
+        assertEquals(page.items.first().id, vm.state.value.current?.id)
+        assertEquals(page.items.drop(1).map { it.id }, vm.state.value.upcoming.map { it.id })
+        assertTrue(vm.state.value.notice.orEmpty().startsWith("Playing what's loaded"))
+    }
+
     private fun viewModel(catalog: SpotifyCatalog) = SidetrackViewModel(SpotifyMediaCatalog(catalog), simulatePlayback = false).also { viewModels += it }
 
     private class FlakyCatalog : SpotifyCatalog by MockSpotifyDataSource {
