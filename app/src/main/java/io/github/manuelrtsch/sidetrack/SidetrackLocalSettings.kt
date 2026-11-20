@@ -34,6 +34,18 @@ internal class SidetrackLocalSettings(context: Context) {
 
     fun observeArtworkBackdrop(onChange: () -> Unit): () -> Unit = observe(KEY_ARTWORK_BACKDROP, onChange)
 
+    /**
+     * Shrinks the media rows by about a fifth so five fit where four used to. Off by default: the
+     * four-row layout is the one the app was designed around.
+     */
+    var compactRows: Boolean
+        get() = prefs.getBoolean(KEY_COMPACT_ROWS, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_COMPACT_ROWS, value).apply()
+        }
+
+    fun observeCompactRows(onChange: () -> Unit): () -> Unit = observe(KEY_COMPACT_ROWS, onChange)
+
     private fun observe(key: String, onChange: () -> Unit): () -> Unit {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changed ->
             if (changed == null || changed == key) onChange()
@@ -71,6 +83,7 @@ internal class SidetrackLocalSettings(context: Context) {
         const val KEYPAD_FILE = "sidetrack_keypad"
         private const val KEY_INPUT_MODE = "input_mode"
         private const val KEY_ARTWORK_BACKDROP = "artwork_backdrop"
+        private const val KEY_COMPACT_ROWS = "compact_rows"
         private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
 
         // Must match the key SharedPreferencesSidekitThemeStore reads and writes.

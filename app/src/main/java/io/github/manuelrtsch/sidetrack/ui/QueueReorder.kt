@@ -17,7 +17,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sidetrack.rememberMediaRowPitch
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -201,9 +201,7 @@ private const val MAX_AUTO_SCROLL_PX = 16f
 /** One long-press drag at a time, measured against the SideKit row pitch. */
 @Composable
 fun rememberQueueReorderState(listState: LazyListState): QueueReorderState {
-    val pitch = with(LocalDensity.current) {
-        (SidekitTheme.spacing.itemHeight + SidekitTheme.spacing.itemOuterGap).toPx()
-    }
+    val pitch = with(LocalDensity.current) { rememberMediaRowPitch().toPx() }
     return remember(listState, pitch) { QueueReorderState(listState, pitch) }
 }
 

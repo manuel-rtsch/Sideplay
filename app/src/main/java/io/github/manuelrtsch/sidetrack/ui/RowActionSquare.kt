@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sidetrack.rememberMediaRowMetrics
 
 /** How long a row must hold the focus before its gutter appears. */
 const val GUTTER_DELAY_MS = 250L
@@ -47,9 +48,10 @@ fun RowActionSquare(
     icon: SidekitIcon? = null,
     content: (@Composable () -> Unit)? = null
 ) {
+    val square = rememberMediaRowMetrics().height
     Box(
         modifier
-            .width(SidekitTheme.spacing.itemHeight)
+            .width(square)
             .fillMaxHeight()
             .clip(SidekitTheme.shapes.item)
             .background(color)

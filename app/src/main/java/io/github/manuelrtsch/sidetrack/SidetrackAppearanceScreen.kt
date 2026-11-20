@@ -23,6 +23,7 @@ fun SidetrackAppearanceScreen(onBack: () -> Unit) {
         SharedPreferencesSidekitThemeStore(context, SidetrackLocalSettings.FILE)
     }
     val theme = rememberSidekitThemeConfig(store)
+    val compactRows = rememberCompactRows()
     val list = rememberLazyListState()
 
     SidekitScaffold("Appearance", actions = listOf(SideAction.back("back", "Settings", onBack))) { padding ->
@@ -34,6 +35,15 @@ fun SidetrackAppearanceScreen(onBack: () -> Unit) {
                     secondaryToEnd = true,
                     toggleable = theme.compact,
                     onClick = { store.writeCompact(!theme.compact) }
+                )
+            }
+            item {
+                SidetrackItem(
+                    "Compact rows",
+                    secondary = if (compactRows) "On" else "Off",
+                    secondaryToEnd = true,
+                    toggleable = compactRows,
+                    onClick = { SidetrackLocalSettings(context).compactRows = !compactRows }
                 )
             }
             caseColourChoices(theme.caseColour) { store.writeCaseColour(it) }

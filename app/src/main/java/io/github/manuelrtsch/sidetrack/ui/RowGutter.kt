@@ -32,7 +32,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
-import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sidetrack.rememberMediaRowMetrics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 
@@ -127,7 +127,7 @@ fun GutterRow(
     content: @Composable (gutterVisible: Boolean) -> Unit,
     actions: @Composable () -> Unit
 ) {
-    val square = SidekitTheme.spacing.itemHeight
+    val square = rememberMediaRowMetrics().height
     val open = state.isOpen(key)
     val targetGutter = if (open) square * squares + GutterGap * (squares - 1) else 0.dp
     val gutter by animateDpAsState(targetGutter, tween(GUTTER_ANIM_MS), label = "rowGutter")

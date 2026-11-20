@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,12 +21,6 @@ import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 import io.github.manuelrtsch.sidetrack.ui.LinkArrow
 import io.github.manuelrtsch.sidetrack.ui.LocalSwipeActionRevealed
-
-/**
- * Fixed slot for a track's position in a collection. Wide enough for three digits at the small
- * type size, so row 100+ does not ellipsize while every row keeps the same text alignment.
- */
-private val TrackNumberWidth = 44.dp
 
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
@@ -49,30 +44,31 @@ fun MediaRow(
     onClick: () -> Unit
 ) {
     val colors = SidekitTheme.colors
+    val metrics = rememberMediaRowMetrics()
     // A revealed side button is the thing being read: give its row the trailing space back.
     val actionRevealed = LocalSwipeActionRevealed.current
     SidekitTile(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().height(metrics.height),
         color = if (item.playable) colors.surfaceA3 else colors.surfaceA2,
         onClick = onClick
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 15.dp),
+            Modifier.fillMaxWidth().padding(horizontal = metrics.horizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(13.dp)
+            horizontalArrangement = Arrangement.spacedBy(metrics.contentGap)
         ) {
             if (showArt) {
-                Cover(item.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl, requestSize = ListArtworkSize)
+                Cover(item.artRes, Modifier.size(metrics.artworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl, requestSize = metrics.artworkSize)
             } else if (index != null) {
-                Box(Modifier.width(TrackNumberWidth), contentAlignment = Alignment.Center) {
-                    SidekitText("${index + 1}", style = SidekitTheme.typography.small, color = colors.surfaceA6)
+                Box(Modifier.width(metrics.trackNumberWidth), contentAlignment = Alignment.Center) {
+                    SidekitText("${index + 1}", style = metrics.secondaryStyle, color = colors.surfaceA6)
                 }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                SidekitText(item.title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.textGap)) {
+                SidekitText(item.title, style = metrics.titleStyle, maxLines = 1)
                 SidekitText(
                     secondary + if (item.explicit) " · E" else "",
-                    style = SidekitTheme.typography.caption,
+                    style = metrics.secondaryStyle,
                     color = colors.surfaceA6,
                     maxLines = 1
                 )
@@ -82,7 +78,7 @@ fun MediaRow(
             } else if (trailing != null && !actionRevealed) {
                 SidekitText(
                     trailing,
-                    style = SidekitTheme.typography.caption,
+                    style = metrics.secondaryStyle,
                     color = colors.surfaceA6
                 )
             }
@@ -113,16 +109,21 @@ fun LibraryRow(
     onClick: () -> Unit
 ) {
     val colors = SidekitTheme.colors
-    SidekitTile(modifier.fillMaxWidth(), color = colors.surfaceA3, onClick = onClick) {
+    val metrics = rememberMediaRowMetrics()
+    SidekitTile(
+        modifier.fillMaxWidth().height(metrics.height),
+        color = colors.surfaceA3,
+        onClick = onClick
+    ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 15.dp),
+            Modifier.fillMaxWidth().padding(horizontal = metrics.horizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(13.dp)
+            horizontalArrangement = Arrangement.spacedBy(metrics.contentGap)
         ) {
-            Cover(artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = artUrl, requestSize = ListArtworkSize)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
-                SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)
+            Cover(artRes, Modifier.size(metrics.artworkSize), shape = SidekitTheme.shapes.artwork, artUrl = artUrl, requestSize = metrics.artworkSize)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.textGap)) {
+                SidekitText(title, style = metrics.titleStyle, maxLines = 1)
+                SidekitText(secondary, style = metrics.secondaryStyle, color = colors.surfaceA6, maxLines = 1)
             }
             if (showArrow) LinkArrow()
         }

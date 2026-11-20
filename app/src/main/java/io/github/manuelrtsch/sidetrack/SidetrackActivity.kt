@@ -3,6 +3,7 @@ package io.github.manuelrtsch.sidetrack
 import android.content.Intent
 import android.os.Bundle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -139,13 +140,18 @@ class SidetrackActivity : SidekitActivity() {
         LaunchedEffect(search) {
             if (search > 0) nav.navigate(SIDE_PLAY_SEARCH) { launchSingleTop = true }
         }
-        NavHost(navController = nav, startDestination = SIDE_PLAY_ROOT) {
-            sidetrackGraph(
-                nav,
-                startDestination = start,
-                hostBacked = stores.isHostBacked,
-                onKeypadBackOverride = ::setKeypadBackOverride
-            )
+        // One read for the whole graph: every list row follows the same density, and switching
+        // the setting recomposes the graph rather than each list re-reading the preference.
+        val compactRows = rememberCompactRows()
+        CompositionLocalProvider(LocalCompactRows provides compactRows) {
+            NavHost(navController = nav, startDestination = SIDE_PLAY_ROOT) {
+                sidetrackGraph(
+                    nav,
+                    startDestination = start,
+                    hostBacked = stores.isHostBacked,
+                    onKeypadBackOverride = ::setKeypadBackOverride
+                )
+            }
         }
     }
 

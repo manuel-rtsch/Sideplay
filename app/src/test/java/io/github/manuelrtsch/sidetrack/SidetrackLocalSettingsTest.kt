@@ -35,6 +35,16 @@ class SidetrackLocalSettingsTest {
         assertFalse(themeStore.read().compact)
     }
 
+    @Test fun `compact rows are off until chosen`() {
+        assertFalse(SidetrackLocalSettings(context).compactRows)
+    }
+
+    @Test fun `the compact rows choice is remembered across instances`() {
+        SidetrackLocalSettings(context).compactRows = true
+
+        assertTrue(SidetrackLocalSettings(context).compactRows)
+    }
+
     @Test fun `an existing install has not seen the welcome yet`() {
         assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
     }

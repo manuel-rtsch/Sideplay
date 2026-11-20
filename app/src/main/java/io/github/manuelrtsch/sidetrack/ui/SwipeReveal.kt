@@ -54,6 +54,7 @@ import androidx.compose.ui.util.lerp
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.motion.SidekitMotion
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sidetrack.rememberMediaRowMetrics
 import kotlin.math.min
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -138,7 +139,8 @@ fun SidekitSwipeRow(
         destructive = true,
         onClick = onDelete
     )
-    val buttonPx = with(density) { spacing.itemHeight.toPx() }
+    val rowHeight = rememberMediaRowMetrics().height
+    val buttonPx = with(density) { rowHeight.toPx() }
     val gapPx = with(density) { spacing.itemOuterGap.toPx() }
     val radiusPx = with(density) { 36.dp.toPx() }
     val iconPx = with(density) { spacing.iconSize.toPx() }
@@ -326,7 +328,7 @@ fun SidekitSwipeRow(
             Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
                 Box(
                     Modifier
-                        .width(spacing.itemHeight)
+                        .width(rowHeight)
                         .fillMaxHeight()
                         .onFocusChanged { actionFocused = it.isFocused }
                         .clickable(role = Role.Button, onClickLabel = swipeAction.label) {

@@ -78,7 +78,7 @@ internal fun QueueUpcomingRow(
     // A swiped-open row already shows its Remove button; the gutter would be
     // a second copy of the same action.
     val focused = host.gutterKey == key && !pickedUp && !host.reorderMode && host.swipes.openKey == null
-    val square = SidekitTheme.spacing.itemHeight
+    val square = rememberMediaRowMetrics().height
     val targetGutter = when {
         pickedUp -> LiftedGutter
         focused -> square

@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
 import androidx.compose.ui.platform.LocalDensity
-import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sidetrack.rememberMediaRowPitch
 import io.github.manuelrtsch.sidetrack.ui.QueueReorderState
 import kotlin.math.roundToInt
 
@@ -55,7 +55,7 @@ internal fun rememberQueueRowBand(
     firstQueueItem: Int
 ): QueueRowBand {
     val density = LocalDensity.current
-    val pitch = with(density) { (SidekitTheme.spacing.itemHeight + SidekitTheme.spacing.itemOuterGap).toPx() }
+    val pitch = with(density) { rememberMediaRowPitch().toPx() }
     val top = with(density) { padding.calculateTopPadding().toPx() }
     return remember(listState, pitch, top, firstQueueItem) { QueueRowBand(listState, pitch, top, firstQueueItem) }
 }
