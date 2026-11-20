@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -340,18 +341,142 @@ fun AlbumGutterRow(
     onAddToQueue: () -> Unit,
     onClick: () -> Unit
 ) {
+    val secondary = if (album.year > 0) "${album.artist} · ${album.year}" else album.artist
+    LibraryCollectionGutterRow(
+        key,
+        album.artRes,
+        album.artUrl,
+        album.title,
+        secondary,
+        focus,
+        bar,
+        saved,
+        RowAction(
+            key = "addToQueue",
+            label = "Add to queue",
+            contentDescription = "Add ${album.title} to queue",
+            icon = SidekitIcon.PlaylistAdd,
+            tone = ActionTone.Primary,
+            onClick = onAddToQueue
+        ),
+        modifier,
+        focusRequester,
+        onSave,
+        onClick
+    )
+}
+
+/**
+ * A playlist row in the library. Save/Unsave mirrors the playlist page's library tile; Add to
+ * queue is the same list shortcut album rows have, so a playlist can be queued without opening it.
+ */
+@Composable
+fun PlaylistGutterRow(
+    key: Any,
+    playlist: Playlist,
+    focus: RowGutterState,
+    bar: RowActionBarState,
+    saved: Boolean,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onSave: () -> Unit,
+    onAddToQueue: () -> Unit,
+    onClick: () -> Unit
+) {
+    LibraryCollectionGutterRow(
+        key,
+        playlist.artRes,
+        playlist.artUrl,
+        playlist.name,
+        playlistSubtitle(playlist),
+        focus,
+        bar,
+        saved,
+        RowAction(
+            key = "addToQueue",
+            label = "Add to queue",
+            contentDescription = "Add ${playlist.name} to queue",
+            icon = SidekitIcon.PlaylistAdd,
+            tone = ActionTone.Primary,
+            onClick = onAddToQueue
+        ),
+        modifier,
+        focusRequester,
+        onSave,
+        onClick
+    )
+}
+
+/**
+ * A podcast show row. Save/Unsave is the same state as the show page's library tile; Add latest to
+ * queue is the one episode-level verb that makes sense before the show page is open. Show notes
+ * stay on the page, where the notes row already reads them.
+ */
+@Composable
+fun ShowGutterRow(
+    key: Any,
+    show: Show,
+    focus: RowGutterState,
+    bar: RowActionBarState,
+    saved: Boolean,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onSave: () -> Unit,
+    onAddLatestToQueue: () -> Unit,
+    onClick: () -> Unit
+) {
+    LibraryCollectionGutterRow(
+        key,
+        show.artRes,
+        show.artUrl,
+        show.name,
+        show.publisher,
+        focus,
+        bar,
+        saved,
+        RowAction(
+            key = "addLatestToQueue",
+            label = "Add latest to queue",
+            contentDescription = "Add latest episode of ${show.name} to queue",
+            icon = SidekitIcon.PlaylistAdd,
+            tone = ActionTone.Primary,
+            onClick = onAddLatestToQueue
+        ),
+        modifier,
+        focusRequester,
+        onSave,
+        onClick
+    )
+}
+
+/** Shared meatball gutter for the three collection-shaped library rows: album, playlist and show. */
+@Composable
+private fun LibraryCollectionGutterRow(
+    key: Any,
+    @DrawableRes artRes: Int,
+    artUrl: String?,
+    title: String,
+    secondary: String,
+    focus: RowGutterState,
+    bar: RowActionBarState,
+    saved: Boolean,
+    extraAction: RowAction,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onSave: () -> Unit,
+    onClick: () -> Unit
+) {
     val selected = bar.selection?.key == key
     val rowFocus = remember { FocusRequester() }
     CloseRowActionsWhenDisposed(selected, bar)
-    val secondary = if (album.year > 0) "${album.artist} · ${album.year}" else album.artist
     val actions = listOf(
         RowAction(
             key = "save",
             label = if (saved) "Unsave" else "Save",
             contentDescription = if (saved) {
-                "Remove ${album.title} from your library"
+                "Remove $title from your library"
             } else {
-                "Save ${album.title} to your library"
+                "Save $title to your library"
             },
             icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
             tone = if (saved) ActionTone.Destructive else ActionTone.Primary,
@@ -360,21 +485,14 @@ fun AlbumGutterRow(
                 if (saved) {
                     bar.showUndo(
                         RowActionUndo(
-                            contentDescription = "Undo remove ${album.title} from your library",
+                            contentDescription = "Undo remove $title from your library",
                             onClick = onSave
                         )
                     )
                 }
             }
         ),
-        RowAction(
-            key = "addToQueue",
-            label = "Add to queue",
-            contentDescription = "Add ${album.title} to queue",
-            icon = SidekitIcon.PlaylistAdd,
-            tone = ActionTone.Primary,
-            onClick = onAddToQueue
-        )
+        extraAction
     )
     GutterRow(
         key,
@@ -383,8 +501,8 @@ fun AlbumGutterRow(
         modifier = modifier,
         content = { gutterVisible ->
             LibraryRow(
-                album.artRes,
-                album.title,
+                artRes,
+                title,
                 secondary,
                 Modifier
                     .focusRequester(rowFocus)
@@ -399,7 +517,7 @@ fun AlbumGutterRow(
                             Modifier
                         }
                     ),
-                artUrl = album.artUrl,
+                artUrl = artUrl,
                 showArrow = !gutterVisible,
                 onClick = {
                     focus.touchDismissed(key)
@@ -411,12 +529,12 @@ fun AlbumGutterRow(
         val squareFocus = rememberGutterSquareFocus(key, focus)
         RowActionSquare(
             color = SidekitTheme.colors.surfaceA4,
-            label = "Actions for ${album.title}",
+            label = "Actions for $title",
             content = { MeatballIcon() },
             modifier = squareFocus,
             onClick = {
                 focus.touchDismissed(key)
-                bar.show(RowActionSelection(key, album.title, actions, rowFocus))
+                bar.show(RowActionSelection(key, title, actions, rowFocus))
             }
         )
     }

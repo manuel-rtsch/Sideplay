@@ -184,6 +184,10 @@ fun LibraryScreen(
     canRadio: Boolean = true,
     onSaveAlbum: (Album) -> Unit = {},
     onQueueAlbum: (Album) -> Unit = {},
+    onSavePlaylist: (Playlist) -> Unit = {},
+    onQueuePlaylist: (Playlist) -> Unit = {},
+    onSaveShow: (Show) -> Unit = {},
+    onAddLatestShowToQueue: (Show) -> Unit = {},
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
@@ -337,6 +341,10 @@ fun LibraryScreen(
                         onArtistRadio = onArtistRadio,
                         onSaveAlbum = onSaveAlbum,
                         onQueueAlbum = onQueueAlbum,
+                        onSavePlaylist = onSavePlaylist,
+                        onQueuePlaylist = onQueuePlaylist,
+                        onSaveShow = onSaveShow,
+                        onAddLatestShowToQueue = onAddLatestShowToQueue,
                         onTrack = onTrack,
                         onPlaylist = onPlaylist,
                         onAlbum = onAlbum,
@@ -527,22 +535,35 @@ private fun LibraryRow(
     onArtistRadio: (Artist) -> Unit,
     onSaveAlbum: (Album) -> Unit,
     onQueueAlbum: (Album) -> Unit,
+    onSavePlaylist: (Playlist) -> Unit,
+    onQueuePlaylist: (Playlist) -> Unit,
+    onSaveShow: (Show) -> Unit,
+    onAddLatestShowToQueue: (Show) -> Unit,
     onTrack: (Track) -> Unit,
     onPlaylist: (Playlist) -> Unit,
     onAlbum: (Album) -> Unit,
     onArtist: (Artist) -> Unit,
     onShow: (Show) -> Unit
 ) {
-    // LibraryRow applies its modifier to the focusable tile, so the requester can ride on
-    // the modifier there. TrackRow, AlbumGutterRow and ArtistGutterRow wrap the focusable row in
-    // a gutter, so they take the requester directly.
-    val rowModifier = if (focusRequester != null) modifier.focusRequester(focusRequester) else modifier
+    // Every library row now wraps its focusable tile in a gutter, so each takes the load-more
+    // focus requester directly instead of receiving it through an already-modified tile.
     when (item) {
         // Library rows carry no list index: a track can appear once per category, so its id is
         // already unique here.
         is Track -> TrackRow(item.id, item, rows, modifier, focusRequester = focusRequester) { onTrack(item) }
 
-        is Playlist -> LibraryRow(item.artRes, item.name, playlistSubtitle(item), rowModifier, artUrl = item.artUrl) { onPlaylist(item) }
+        is Playlist -> PlaylistGutterRow(
+            item.key.encode(),
+            item,
+            libraryGutters,
+            rows.bar,
+            item.key.encode() in saved.savedCollectionKeys,
+            modifier,
+            focusRequester = focusRequester,
+            onSave = { onSavePlaylist(item) },
+            onAddToQueue = { onQueuePlaylist(item) },
+            onClick = { onPlaylist(item) }
+        )
 
         is Album -> AlbumGutterRow(
             item.key.encode(),
@@ -572,7 +593,18 @@ private fun LibraryRow(
             onClick = { onArtist(item) }
         )
 
-        is Show -> LibraryRow(item.artRes, item.name, item.publisher, rowModifier, artUrl = item.artUrl) { onShow(item) }
+        is Show -> ShowGutterRow(
+            item.key.encode(),
+            item,
+            libraryGutters,
+            rows.bar,
+            item.key.encode() in saved.savedCollectionKeys,
+            modifier,
+            focusRequester = focusRequester,
+            onSave = { onSaveShow(item) },
+            onAddLatestToQueue = { onAddLatestShowToQueue(item) },
+            onClick = { onShow(item) }
+        )
 
         else -> Unit
     }

@@ -88,12 +88,11 @@ fun ShowScreen(
         )
     )
     val showNotes = remember(collection.description) { plainPodcastText(collection.description) }
+    // Show notes already have their own terminal row below the header. Keeping a second text
+    // entry in the options menu made this the only screen with three item options.
     val options = buildList {
         collection.items.firstOrNull()?.let {
             add(SideAction("addToQueue", "Add latest to queue", SidekitIcon.PlaylistAdd, onClick = onAddLatestToQueue))
-        }
-        if (showNotes.isNotBlank()) {
-            add(SideAction("notes", "Show notes", SidekitIcon.Docs, onClick = onShowNotes))
         }
         add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
     }

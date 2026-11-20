@@ -1232,8 +1232,13 @@ class SidetrackViewModel(
 
     fun toggleSaved(collection: Collection) = toggleSaved(collection.type, collection.id, collection)
 
-    /** A library album row already represents the saved item; it has no collection page loaded. */
+    /** A library row already represents the saved item; it has no collection page loaded. */
     fun toggleSaved(album: Album) = toggleSaved(CollectionType.Album, album.id, libraryItem = album)
+
+    fun toggleSaved(playlist: Playlist) =
+        toggleSaved(CollectionType.Playlist, playlist.id, libraryItem = playlist)
+
+    fun toggleSaved(show: Show) = toggleSaved(CollectionType.Show, show.id, libraryItem = show)
 
     private fun toggleSaved(
         type: CollectionType,
@@ -1518,27 +1523,42 @@ class SidetrackViewModel(
      * Queues an album straight from a library row. The album's tracks are not loaded until its page
      * opens, so the collection is fetched first and queued as one complete batch.
      */
-    fun queueAlbum(album: Album) {
-        val cacheKey = album.key.encode()
+    fun queueAlbum(album: Album) = queueLibraryCollection(album.key, "album")
+
+    /** Playlist pages are paged too, so the same complete-collection rule applies. */
+    fun queuePlaylist(playlist: Playlist) = queueLibraryCollection(playlist.key, "playlist")
+
+    /** Queues the newest episode from a show row without opening the show page. */
+    fun queueLatestEpisode(show: Show) {
+        val latest = show.episodes.firstOrNull()
+        if (latest == null) {
+            _state.update { it.say("No episodes to queue yet") }
+            return
+        }
+        addToQueue(latest)
+    }
+
+    private fun queueLibraryCollection(key: MediaKey, noun: String) {
+        val cacheKey = key.encode()
         _state.value.collections[cacheKey]?.let { cached ->
             queueCollection(cached)
             return
         }
         if (cacheKey in _state.value.collectionMorePending) {
-            _state.update { it.say("This album is still loading — try again") }
+            _state.update { it.say("This $noun is still loading — try again") }
             return
         }
         _state.update { it.copy(collectionMorePending = it.collectionMorePending + cacheKey) }
         viewModelScope.launch {
             try {
-                val first = catalog.collection(album.key, 0, CATALOG_PAGE_SIZE)
+                val first = catalog.collection(key, 0, CATALOG_PAGE_SIZE)
                 if (first == null) {
                     _state.update { it.say("Nothing to queue") }
                     return@launch
                 }
                 val complete = loadAllCollection(first)
                 if (complete.hasMore) {
-                    _state.update { it.say("Couldn't load the whole album — nothing added") }
+                    _state.update { it.say("Couldn't load the whole $noun — nothing added") }
                     return@launch
                 }
                 addToQueue(complete.items)
