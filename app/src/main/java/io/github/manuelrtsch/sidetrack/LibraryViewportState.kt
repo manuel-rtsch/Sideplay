@@ -65,6 +65,10 @@ internal fun rememberLibraryViewport(
     }
     var lastFocusedRowKey by remember { mutableStateOf<String?>(null) }
     var pendingViewport by remember { mutableStateOf<LibraryViewport?>(null) }
+    // A switch from the category row is browsing, not entering a list: the cursor stays on the
+    // row so Left/Right can keep stepping. A switch from a row body (held arrow) came from the
+    // list, so that one may put the cursor back into the category's settled row.
+    var restoreListFocus by remember { mutableStateOf(true) }
     var restoreFocusIndex by remember { mutableStateOf<Int?>(null) }
     var focusFilterRow by remember { mutableStateOf(false) }
     val restoreFocus = remember { FocusRequester() }
@@ -94,7 +98,7 @@ internal fun rememberLibraryViewport(
         if (itemIndex < 0) return@LaunchedEffect
         viewports[filter] = listState.captureViewport(settled.toString())
     }
-    val switchFilter: (LibraryFilter) -> Unit = { next ->
+    val switchFilter: (LibraryFilter, Boolean) -> Unit = { next, fromRow ->
         if (next != filter) {
             val focusedKey = rows.focus.focusedKey ?: libraryGutters.focusedKey
             val focusedIndex = focusedKey?.let { key ->
@@ -111,6 +115,7 @@ internal fun rememberLibraryViewport(
                 )
             }
             pendingViewport = viewports[next]
+            restoreListFocus = !fromRow
             restoreFocusIndex = null
             lastFocusedRowKey = null
             onFilter(next)
@@ -121,7 +126,7 @@ internal fun rememberLibraryViewport(
         supportedFilters = supportedFilters,
         enabled = rows.bar.selection == null,
         gate = gate,
-        onSwitch = switchFilter
+        onSwitch = { switchFilter(it, false) }
     )
     LaunchedEffect(filter, branch) {
         if (branch != "list") {
@@ -130,12 +135,16 @@ internal fun rememberLibraryViewport(
             return@LaunchedEffect
         }
         val viewport = pendingViewport
-        if (viewport == null) {
+        pendingViewport = null
+        if (viewport == null || !restoreListFocus) {
+            // The category row is the first list item, so it can only keep the cursor while the
+            // list sits at the top. Browsing the row must not scroll it away and drop the cursor
+            // into the restored content; a held arrow from a row body is the only switch allowed
+            // to restore that category's row.
             listState.scrollToItem(0)
             runCatching { filterFocus.getValue(filter).requestFocus() }
             return@LaunchedEffect
         }
-        pendingViewport = null
         listState.scrollToItem(
             viewport.index.coerceIn(0, items.size),
             viewport.offset.coerceAtLeast(0)
@@ -189,7 +198,7 @@ internal fun rememberLibraryViewport(
     return LibraryViewportState(
         restoreFocusIndex = restoreFocusIndex,
         restoreFocus = restoreFocus,
-        switchFilter = switchFilter,
+        switchFilter = { switchFilter(it, true) },
         holdSwitch = holdSwitch,
         firstRowModifier = firstRowModifier
     )

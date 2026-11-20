@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -101,14 +100,15 @@ internal fun <T> ContentFilterRow(
                                 Modifier.focusProperties { canFocus = false }
                             }
                         )
-                        .onFocusChanged { state ->
-                            if (isEnabled && acceptsFocus && state.isFocused && !isSelected) onSelect(filter)
-                        }
                         // Left/Right move to the adjacent enabled category by request. Geometric
                         // focus search picked the action bar (below and to the right) instead of
                         // the neighbouring button, and the loading swap re-created the row, so the
                         // buttons to the right were unreachable. Down/Up keep their default path
                         // into and out of the content below. Disabled buttons are skipped.
+                        // Only a deliberate Left/Right (or a click) selects a category. Selecting
+                        // on any focus change meant a focus restoration could walk the row by
+                        // itself: when a held arrow's row was removed on a category switch, the
+                        // focus system parked on the first button and instantly selected it.
                         .onPreviewKeyEvent { event ->
                             if (event.type != KeyEventType.KeyDown) {
                                 false
@@ -116,11 +116,13 @@ internal fun <T> ContentFilterRow(
                                 when (event.key) {
                                     Key.DirectionRight -> {
                                         focusAdjacent(filters, index, 1, enabled, focusRequesters)
+                                            ?.let(onSelect)
                                         true
                                     }
 
                                     Key.DirectionLeft -> {
                                         focusAdjacent(filters, index, -1, enabled, focusRequesters)
+                                            ?.let(onSelect)
                                         true
                                     }
 
@@ -145,23 +147,28 @@ internal fun <T> ContentFilterRow(
     }
 }
 
-/** Moves focus past disabled entries in the row; stays put when there is no enabled one left. */
+/**
+ * Moves focus past disabled entries in the row, returning the category that took it, or null when
+ * there is no enabled one left. The caller selects the returned category: the focus move alone is
+ * navigation, so a focus restoration can never change the shown page.
+ */
 private fun <T> focusAdjacent(
     filters: List<T>,
     from: Int,
     step: Int,
     enabled: (T) -> Boolean,
     focusRequesters: Map<T, FocusRequester>
-) {
+): T? {
     var index = from + step
     while (index in filters.indices) {
         val candidate = filters[index]
         if (enabled(candidate)) {
             focusRequesters[candidate]?.requestFocus()
-            return
+            return candidate
         }
         index += step
     }
+    return null
 }
 
 private val LibraryFilter.icon: SidekitIcon

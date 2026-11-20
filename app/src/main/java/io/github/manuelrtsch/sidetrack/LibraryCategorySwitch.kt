@@ -74,16 +74,14 @@ internal fun Modifier.libraryCategoryHoldSwitch(
         })
     }
     LaunchedEffect(enabled) {
-        if (!enabled) {
-            hold.reset()
-            gate.reset()
-        }
+        if (!enabled) hold.reset()
     }
+    // The gate is shared by every row and by the screen root, which resets it when the physical
+    // key comes up. A row must not reset it on dispose: a hold switches category by disposing
+    // the very row that fired it, and clearing the gate mid-press let the rest of the hold
+    // through as a second switch. Only this row's own pending press belongs to this composable.
     DisposableEffect(hold) {
-        onDispose {
-            hold.reset()
-            gate.reset()
-        }
+        onDispose { hold.reset() }
     }
     return onPreviewKeyEvent { event ->
         if (!currentEnabled) return@onPreviewKeyEvent false

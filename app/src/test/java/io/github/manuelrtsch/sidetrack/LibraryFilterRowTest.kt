@@ -1,6 +1,5 @@
 package io.github.manuelrtsch.sidetrack
 
-import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,16 +18,13 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import hrln.interactive.sidekit.design.canvas.SidekitCanvas
-import hrln.interactive.sidekit.design.input.KeypadTiming
 import hrln.interactive.sidekit.design.theme.SidekitSpacing
 import hrln.interactive.sidekit.design.theme.SidekitTheme
-import java.time.Duration
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Shadows.shadowOf
 
 /** The category row is part of the list: it scrolls away and Up returns to the selected button. */
 @RunWith(AndroidJUnit4::class)
@@ -109,7 +105,7 @@ class LibraryFilterRowTest {
     }
 
     @Test
-    fun returningToACategoryRestoresItsRowAndFocus() {
+    fun steppingAwayAndBackKeepsTheCursorOnTheRow() {
         val libraries = LibraryFilter.entries.associateWith {
             runBlocking { MockSpotifyDataSource.library(it).items }
         }
@@ -155,26 +151,20 @@ class LibraryFilterRowTest {
         compose.mainClock.advanceTimeBy(1_000)
         compose.waitForIdle()
 
-        // Climb back to the category row, as the user does today, and switch away and back.
+        // Climb back to the category row and step away and back. Albums was visited, so it has a
+        // saved row; stepping through it must still keep the cursor up on the row instead of
+        // diving into the restored content.
         compose.onAllNodes(hasScrollAction())[0].performScrollToIndex(0)
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Playlists").requestFocus()
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Playlists").assertIsSelected()
         compose.onNodeWithContentDescription("Albums").requestFocus()
         compose.waitForIdle()
-
-        // The restored viewport scrolled the category row away again, so the row itself is no
-        // longer on screen: the cursor is back on the album we left.
-        compose.onNodeWithContentDescription("Albums").assertIsNotDisplayed()
-        compose.onNodeWithText("Soft Focus").assertIsFocused()
-
-        // A held Right steps one category without needing the filter row, and the title says
-        // which category is now live.
-        compose.onNodeWithText("Soft Focus").performKeyInput { keyDown(Key.DirectionRight) }
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(KeypadTiming.LONG_PRESS_MS + 100))
+        compose.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionRight) }
         compose.waitForIdle()
-        compose.onNodeWithText("Followed artists").assertExists()
+        compose.onNodeWithContentDescription("Followed artists").assertIsFocused()
+        compose.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Albums").assertIsSelected()
+        compose.onNodeWithContentDescription("Albums").assertIsFocused()
     }
 
     @Test
