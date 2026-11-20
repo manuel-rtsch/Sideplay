@@ -605,7 +605,7 @@ fun QueueScreen(
                     add(
                         RowAction(
                             key = "remove",
-                            label = "Delete",
+                            label = "Remove",
                             contentDescription = "Remove ${item.title} from queue",
                             icon = SidekitIcon.DeleteForever,
                             tone = ActionTone.Destructive,
