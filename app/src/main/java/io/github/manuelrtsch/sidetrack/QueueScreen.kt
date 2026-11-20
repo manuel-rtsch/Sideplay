@@ -1,23 +1,13 @@
 package io.github.manuelrtsch.sidetrack
 
-import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -32,35 +22,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
-import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
-import io.github.manuelrtsch.sidetrack.R
-import io.github.manuelrtsch.sidetrack.playback.formatDuration
-import io.github.manuelrtsch.sidetrack.ui.MeatballIcon
-import io.github.manuelrtsch.sidetrack.ui.QueueIndication
 import io.github.manuelrtsch.sidetrack.ui.QueueReorderAutoScroll
-import io.github.manuelrtsch.sidetrack.ui.SidekitSwipeRow
-import io.github.manuelrtsch.sidetrack.ui.SwipeAction
-import io.github.manuelrtsch.sidetrack.ui.longPressHaptic
-import io.github.manuelrtsch.sidetrack.ui.queueReorder
 import io.github.manuelrtsch.sidetrack.ui.rememberQueueReorderState
 import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
-import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 @Composable
@@ -377,26 +353,7 @@ fun QueueScreen(
         modifier = Modifier
             .dismissRowActionsOnVerticalKey(rowActions)
             .onPreviewKeyEvent { event ->
-                val native = event.nativeKeyEvent
-                if (!reorderMode || native.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                when (native.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        val delta = if (native.keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else +1
-                        // Rows keep their identity across a move, so the lifted row keeps focus and
-                        // nothing has to be re-requested: that is what makes stepping smooth.
-                        reorder.step(delta)?.let { (from, to) -> onMoveUpcoming(from, to) }
-                        true
-                    }
-
-                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> true
-
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        finishReorder()
-                        true
-                    }
-
-                    else -> false
-                }
+                reorderMode && queueReorderKey(event, reorder, onMoveUpcoming, finishReorder)
             },
         actions = actions,
         options = options
@@ -412,37 +369,10 @@ fun QueueScreen(
         // faster than that animation can finish, so the focus outruns the scroll, the focused row
         // leaves the viewport, the list disposes it and the focus is lost. Parking the row in the
         // same measure pass keeps the scroll level with the key, exactly as the keypad lift does.
-        val density = LocalDensity.current
-        val pitchPx = with(density) { (SidekitTheme.spacing.itemHeight + SidekitTheme.spacing.itemOuterGap).toPx() }
-        val bandTop = with(density) { padding.calculateTopPadding().toPx() }
-        fun keepRowInBand(index: Int, key: Any) {
-            val info = listState.layoutInfo
-            val item = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return
-            val offset = item.offset - info.viewportStartOffset
-            val listIndex = firstQueueItem + index
-            // Park the focused row one slot below the band top, never at the very top. The row
-            // above it must stay composed, or the next Up has no focusable neighbour and the
-            // keypad loses focus. Down already parked here; Up used to park at the top, which is
-            // why holding Up stalled after a row or two while Down kept working.
-            val target = bandTop + pitchPx
-            if (offset < target - 1f || offset > target + 1f) {
-                listState.requestScrollToItem(listIndex, -pitchPx.roundToInt())
-            }
-        }
+        val band = rememberQueueRowBand(padding, listState, firstQueueItem)
+        val keepRowInBand: (Int, Any) -> Unit = { index, key -> band.keep(index, key) }
         val keepInView = if (reorderMode) reorder.to else -1
-        var lastKeptInView by remember { mutableStateOf(-1) }
-        SideEffect {
-            if (keepInView < 0) {
-                lastKeptInView = -1
-            } else if (keepInView != lastKeptInView) {
-                val lifted = firstQueueItem + keepInView
-                // The gap and header are not rows: at the top of the queue, park on the
-                // now-playing row instead of a label.
-                val above = if (keepInView == 0) 0 else lifted - 1
-                listState.requestScrollToItem(above)
-                lastKeptInView = keepInView
-            }
-        }
+        SideEffect { band.trackLift(keepInView) }
         // A mode's left action is Cancel, not Back. Claim the keypad Back key while either mode
         // is open so it closes the mode instead of popping the queue.
         DisposableEffect(reorderMode, rowActions.selection, onKeypadBackOverride) {
@@ -496,7 +426,7 @@ fun QueueScreen(
             current = current,
             lastIndex = visibleUpcoming.lastIndex,
             onFocusedKey = { focusedKey = it },
-            keepRowInBand = ::keepRowInBand,
+            keepRowInBand = keepRowInBand,
             openRowActions = openRowActions,
             onJump = onJump,
             onMoveUpcoming = onMoveUpcoming,
@@ -553,34 +483,4 @@ fun QueueScreen(
             }
         }
     }
-}
-
-/** A non-focusable label that makes the tail and shuffle state visible at a glance. */
-@Composable
-private fun QueueSectionHeader(count: Int, shuffled: Boolean, modifier: Modifier = Modifier) {
-    val label = buildString {
-        append("Up next · ")
-        append(count)
-        append(if (count == 1) " track" else " tracks")
-        if (shuffled && count > 1) append(" · Shuffled")
-    }
-    // Same heading as Home, Library, search and album/playlist sections: uppercase, small, muted.
-    SectionLabel(label, modifier.fillMaxWidth())
-}
-
-/** Stable keys for the upcoming list: track identity plus an occurrence rank for duplicates. */
-private fun entryKeys(items: List<MediaItem>): List<String> {
-    val seen = HashMap<String, Int>(items.size)
-    return items.map { item ->
-        val rank = seen[item.id] ?: 0
-        seen[item.id] = rank + 1
-        "u${item.id}#$rank"
-    }
-}
-
-/** What the bar's Undo will put back. */
-private sealed interface QueueUndo {
-    class Cleared(val items: List<MediaItem>) : QueueUndo
-
-    class Removed(val index: Int, val item: MediaItem) : QueueUndo
 }
