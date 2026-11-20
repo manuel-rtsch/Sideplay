@@ -89,14 +89,12 @@ fun LibraryScreen(
             .dismissRowActionsOnVerticalKey(rows.bar)
             .consumeCategoryHoldRepeats(holdGate),
         actions = actions,
-        options = buildList {
+        options = sidetrackOptions(
             // Creating a playlist is a per-service capability, and it only belongs on the
             // playlists category where the result would appear.
-            if (canCreatePlaylist && library.filter == LibraryFilter.Playlists) {
-                add(SideAction("createPlaylist", "New playlist", SidekitIcon.PlaylistAdd, onClick = onCreatePlaylist))
-            }
-            add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
-        }
+            if (canCreatePlaylist && library.filter == LibraryFilter.Playlists) newPlaylistOption(onCreatePlaylist) else null,
+            onNowPlaying = onNowPlaying
+        )
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)

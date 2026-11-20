@@ -18,7 +18,6 @@ import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitText
-import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.input.KeypadModule
 import hrln.interactive.sidekit.design.input.LocalKeypad
 import hrln.interactive.sidekit.design.theme.SidekitTheme
@@ -114,9 +113,7 @@ internal fun SidetrackOnboardingContent(
             }
         ),
         // A real extra action, so pressing Options here demonstrates what the card explains.
-        options = listOf(
-            SideAction("about", "About Sidetrack", SidekitIcon.BrandAwareness, onClick = onAbout)
-        )
+        options = sidetrackOptions(aboutOption(onAbout))
     ) { padding ->
         SidetrackKeypadWelcomeList(
             padding = padding,

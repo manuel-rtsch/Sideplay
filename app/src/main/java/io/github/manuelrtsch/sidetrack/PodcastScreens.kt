@@ -27,8 +27,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import hrln.interactive.sidekit.design.action.ActionTone
-import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitCard
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitList
@@ -90,12 +88,10 @@ fun ShowScreen(
     val showNotes = remember(collection.description) { plainPodcastText(collection.description) }
     // Show notes already have their own terminal row below the header. Keeping a second text
     // entry in the options menu made this the only screen with three item options.
-    val options = buildList {
-        collection.items.firstOrNull()?.let {
-            add(SideAction("addToQueue", "Add latest to queue", SidekitIcon.PlaylistAdd, onClick = onAddLatestToQueue))
-        }
-        add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
-    }
+    val options = sidetrackOptions(
+        collection.items.firstOrNull()?.let { addToQueueOption("Add latest to queue", onAddLatestToQueue) },
+        onNowPlaying = onNowPlaying
+    )
     SidekitScaffold(
         title = collection.title,
         modifier = Modifier.dismissRowActionsOnVerticalKey(rowActions),
@@ -372,30 +368,10 @@ private fun EpisodeRow(
                         key = key,
                         title = episode.title,
                         focusRequester = rowFocus,
-                        actions = buildList {
-                            add(
-                                RowAction(
-                                    key = "addToQueue",
-                                    label = "Add to queue",
-                                    contentDescription = "Add ${episode.title} to queue",
-                                    icon = SidekitIcon.PlaylistAdd,
-                                    tone = ActionTone.Primary,
-                                    onClick = { onAddToQueue(episode) }
-                                )
-                            )
-                            if (notes.isNotBlank()) {
-                                add(
-                                    RowAction(
-                                        key = "notes",
-                                        label = "Notes",
-                                        contentDescription = "Read notes for ${episode.title}",
-                                        icon = SidekitIcon.Docs,
-                                        tone = ActionTone.Primary,
-                                        onClick = onNotes
-                                    )
-                                )
-                            }
-                        }
+                        actions = rowActions(
+                            addToQueueRowAction(episode.title) { onAddToQueue(episode) },
+                            if (notes.isNotBlank()) episodeNotesRowAction(episode.title, onNotes) else null
+                        )
                     )
                 )
             }

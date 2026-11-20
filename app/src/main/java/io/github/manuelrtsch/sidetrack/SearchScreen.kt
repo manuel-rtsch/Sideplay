@@ -184,7 +184,7 @@ fun SearchScreen(
             }
         },
         actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        options = sidetrackOptions(onNowPlaying = onNowPlaying)
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
@@ -445,7 +445,7 @@ fun SearchScopesScreen(
     SidekitScaffold(
         title = "Search in",
         actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        options = sidetrackOptions(onNowPlaying = onNowPlaying)
     ) { padding ->
         val listState = rememberLazyListState()
         SidekitList(padding, state = listState) {

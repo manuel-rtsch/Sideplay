@@ -10,7 +10,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.key
-import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
@@ -71,10 +70,10 @@ fun ArtistScreen(
         title = artist.name,
         modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
         actions = actions,
-        options = buildList {
-            if (canRadio) add(SideAction("artistRadio", "Artist radio", SidekitIcon.Explore, onClick = onRadio))
-            add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
-        }
+        options = sidetrackOptions(
+            if (canRadio) artistRadioOption(onRadio) else null,
+            onNowPlaying = onNowPlaying
+        )
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)

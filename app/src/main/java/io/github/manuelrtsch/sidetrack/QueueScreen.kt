@@ -43,6 +43,7 @@ import kotlinx.coroutines.delay
 fun QueueScreen(
     playback: PlaybackUiState,
     chrome: ChromeUiState,
+    sleepTimerActive: Boolean = false,
     onBack: () -> Unit,
     onNowPlaying: () -> Unit,
     onSleepTimer: () -> Unit,
@@ -241,43 +242,24 @@ fun QueueScreen(
                 key = key,
                 title = item.title,
                 focusRequester = rowFocus,
-                actions = buildList {
-                    add(
-                        RowAction(
-                            key = "remove",
-                            label = "Remove",
-                            contentDescription = "Remove ${item.title} from queue",
-                            icon = SidekitIcon.DeleteForever,
-                            tone = ActionTone.Destructive,
-                            onClick = { removeFromQueue(index, item) }
-                        )
-                    )
-                    if (canReorder) {
-                        add(
-                            RowAction(
-                                key = "move",
-                                label = "Move",
-                                contentDescription = "Move ${item.title}",
-                                icon = SidekitIcon.SwapVert,
-                                tone = ActionTone.Primary,
-                                onClick = { startReorderAt(index) }
-                            )
-                        )
-                    }
-                }
+                actions = rowActions(
+                    if (canReorder) moveRowAction(item.title) { startReorderAt(index) } else null,
+                    removeFromQueueRowAction(item.title) { removeFromQueue(index, item) }
+                )
             )
         )
     }
-    // Clear is the one list-wide action in the main bar. Shuffle is a toggle, so it lives in
-    // Options beside the other list-wide destinations.
-    val clearAction = if (hasUpcoming && !reorderMode) {
-        SideAction(
-            "clear",
-            "Clear",
-            SidekitIcon.Close,
-            tone = ActionTone.Destructive,
-            contentDescription = "Clear upcoming",
-            onClick = clearUpcoming
+    // The bar keeps the screen's own controls: Back, and the list-wide Shuffle toggle. Everything
+    // that leads somewhere else — including the one destructive list-wide action — lives in
+    // Options, so the bar is never a menu of destinations and its buttons never sit in two places.
+    val shuffleAction = if (playback.upcoming.size > 1 && !reorderMode) {
+        toggleAction(
+            key = "shuffle",
+            icon = SidekitIcon.Shuffle,
+            offLabel = "Shuffle off",
+            onLabel = "Shuffle on",
+            on = playback.shuffle,
+            onClick = onShuffle
         )
     } else {
         null
@@ -289,7 +271,7 @@ fun QueueScreen(
         onDismissNotice,
         onNowPlaying,
         onDismissNowPlaying,
-        listOfNotNull(back, clearAction),
+        listOfNotNull(back, shuffleAction),
         showNowPlayingNotice = false
     )
     val undo = when (val pending = pendingUndo) {
@@ -324,26 +306,27 @@ fun QueueScreen(
 
         else -> normal
     }
-    // Reordering is a list mode, not a row menu. Shuffle is an icon-only toggle; the sleep timer
-    // is the list-wide destination that replaces the old Now Playing shortcut.
+    // Reordering is a list mode, not a row menu. Options holds the list-wide destinations and the
+    // list-wide destructive action; the toggle it would otherwise hold sits in the bar itself.
+    val clearOption = if (hasUpcoming && !reorderMode) {
+        SideAction(
+            key = "clearUpcoming",
+            label = "Clear",
+            icon = SidekitIcon.DeleteForever,
+            tone = ActionTone.Destructive,
+            contentDescription = "Clear upcoming",
+            onClick = clearUpcoming
+        )
+    } else {
+        null
+    }
     val options = if (reorderMode) {
         emptyList()
     } else {
-        buildList {
-            if (playback.upcoming.size > 1) {
-                add(
-                    SideAction.square(
-                        "shuffle",
-                        SidekitIcon.Shuffle,
-                        if (playback.shuffle) "Shuffle on" else "Shuffle off",
-                        onShuffle,
-                        tone = if (playback.shuffle) ActionTone.Secondary else ActionTone.Muted,
-                        keepOptionsOpen = true
-                    )
-                )
-            }
-            add(SideAction("sleepTimer", "Sleep timer", SidekitIcon.Bedtime, onClick = onSleepTimer))
-        }
+        sidetrackOptions(
+            sleepTimerOption(sleepTimerActive, onSleepTimer),
+            clearOption
+        )
     }
     SidekitScaffold(
         title = "Queue",

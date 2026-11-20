@@ -213,9 +213,13 @@ internal fun NavGraphBuilder.playbackGraph(
         val vm = entry.sidetrackViewModel(nav)
         val playback by vm.playbackState.collectAsStateWithLifecycle()
         val chrome by vm.chromeState.collectAsStateWithLifecycle()
+        // Collected here so the queue's Options entry can say the timer is armed, as Now Playing's
+        // does. Only a timer change recomposes this route, not the whole list.
+        val sleepTimer by vm.sleepTimer.collectAsStateWithLifecycle()
         QueueScreen(
             playback,
             chrome,
+            sleepTimerActive = sleepTimer.active,
             onBack = { nav.popBackStack() },
             onKeypadBackOverride = onKeypadBackOverride,
             onNowPlaying = { nav.openNowPlaying(vm) },

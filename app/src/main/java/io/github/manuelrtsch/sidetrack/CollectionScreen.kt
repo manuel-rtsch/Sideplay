@@ -19,7 +19,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
@@ -85,10 +84,10 @@ fun CollectionScreen(
     // The header keeps the three primary actions: play, artwork and save. The artist lives in the
     // metadata line below it, so collections keep the same play / image / save-or-follow layout
     // without a third Options entry.
-    val options = buildList {
-        collection.items.firstOrNull()?.let { add(SideAction("addToQueue", "Add to queue", SidekitIcon.PlaylistAdd, onClick = onAddToQueue)) }
-        add(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
-    }
+    val options = sidetrackOptions(
+        collection.items.firstOrNull()?.let { addToQueueOption(onClick = onAddToQueue) },
+        onNowPlaying = onNowPlaying
+    )
     val artist = if (collection.type == CollectionType.Album) {
         collection.artistId.mediaIdOrNull()?.let { collection.subtitle.substringBefore(" · ").takeIf(String::isNotBlank) }
     } else {

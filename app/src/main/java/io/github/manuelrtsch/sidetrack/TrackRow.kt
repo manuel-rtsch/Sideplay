@@ -9,7 +9,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
-import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
@@ -132,70 +131,33 @@ fun TrackRow(
             modifier = squareFocus,
             onClick = {
                 rows.focus.touchDismissed(key)
-                val actions = buildList {
-                    add(
-                        RowAction(
-                            key = "addToQueue",
-                            label = "Add to queue",
-                            contentDescription = "Add ${track.title} to queue",
-                            icon = SidekitIcon.QueueMusic,
-                            tone = ActionTone.Primary,
-                            onClick = { rows.onAddToQueue(track) }
-                        )
-                    )
-                    val addToPlaylist = rows.onAddToPlaylist
-                    if (addToPlaylist != null) {
-                        add(
-                            RowAction(
-                                key = "addToPlaylist",
-                                label = "Add to playlist",
-                                contentDescription = "Add ${track.title} to a playlist",
-                                icon = SidekitIcon.PlaylistAdd,
-                                onClick = { addToPlaylist(track) }
-                            )
-                        )
-                    }
-                    val removeFromPlaylist = rows.onRemoveFromPlaylist
+                val addToPlaylist = rows.onAddToPlaylist
+                val removeFromPlaylist = rows.onRemoveFromPlaylist
+                val actions = rowActions(
+                    addToQueueRowAction(track.title) { rows.onAddToQueue(track) },
+                    addToPlaylist?.let { add -> addToPlaylistRowAction(track.title) { add(track) } },
                     if (removeFromPlaylist != null && entryIndex != null) {
-                        add(
-                            RowAction(
-                                key = "removeFromPlaylist",
-                                label = "Remove from playlist",
-                                contentDescription = "Remove ${track.title} from this playlist",
-                                icon = SidekitIcon.DeleteForever,
-                                tone = ActionTone.Destructive,
-                                onClick = {
-                                    // Removal is destructive and cannot be undone at its old
-                                    // position, so the bar asks once more before writing.
-                                    rows.bar.show(
-                                        RowActionSelection(
-                                            key = key,
-                                            title = "Remove ${track.title}?",
-                                            focusRequester = rowFocus,
-                                            actions = listOf(
-                                                RowAction(
-                                                    key = "cancelRemove",
-                                                    label = "Cancel",
-                                                    icon = SidekitIcon.Close,
-                                                    tone = ActionTone.Muted,
-                                                    onClick = {}
-                                                ),
-                                                RowAction(
-                                                    key = "confirmRemove",
-                                                    label = "Remove",
-                                                    contentDescription = "Remove ${track.title} from this playlist",
-                                                    icon = SidekitIcon.DeleteForever,
-                                                    tone = ActionTone.Destructive,
-                                                    onClick = { removeFromPlaylist(track, entryIndex) }
-                                                )
-                                            )
-                                        )
+                        removeFromPlaylistRowAction(track.title) {
+                            // Removal is destructive and cannot be undone at its old position, so
+                            // the bar asks once more before writing.
+                            rows.bar.show(
+                                RowActionSelection(
+                                    key = key,
+                                    title = "Remove ${track.title}?",
+                                    focusRequester = rowFocus,
+                                    actions = rowActions(
+                                        cancelRowAction(),
+                                        confirmRemoveFromPlaylistRowAction(track.title) {
+                                            removeFromPlaylist(track, entryIndex)
+                                        }
                                     )
-                                }
+                                )
                             )
-                        )
+                        }
+                    } else {
+                        null
                     }
-                }
+                )
                 rows.bar.show(
                     RowActionSelection(
                         key = key,

@@ -131,7 +131,8 @@ class PlaylistShowGutterTest {
         openGutter(gutter, showKey)
         compose.onNodeWithContentDescription("Actions for ${show.name}").performClick()
         compose.runOnIdle {
-            bar().selection?.actions?.first { it.key == "addLatestToQueue" }?.onClick?.invoke()
+            // The show queues its latest episode, but it is the same entry as any other add-to-queue.
+            bar().selection?.actions?.first { it.key == "addToQueue" }?.onClick?.invoke()
         }
         assertEquals(1, queued)
     }

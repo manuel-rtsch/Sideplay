@@ -58,9 +58,7 @@ fun SidetrackHomeScreen(
         title = "Sidetrack",
         modifier = Modifier.dismissRowActionsOnVerticalKey(rowActions),
         actions = bar,
-        options = listOf(
-            SideAction("settings", "Settings", SidekitIcon.Settings, onClick = onSettings)
-        )
+        options = sidetrackOptions(settingsOption(onSettings))
     ) { padding ->
         val listState = rememberLazyListState()
         rowActions.dismissOnScroll(listState)

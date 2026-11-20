@@ -26,8 +26,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import hrln.interactive.sidekit.design.action.ActionMotion
-import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitIconImage
 import hrln.interactive.sidekit.design.components.SidekitItemRow
@@ -92,13 +90,14 @@ fun NowPlayingScreen(
     // Episodes have no saved-track endpoint, so Save is a track-only action.
     val save = remember(current?.id, savedCurrent) {
         (current as? Track)?.let {
-            SideAction.square(
-                "save",
-                if (savedCurrent) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-                if (savedCurrent) "Saved" else "Save",
-                onSave,
-                tone = if (savedCurrent) ActionTone.Secondary else ActionTone.Muted,
-                motion = ActionMotion.Up
+            toggleAction(
+                key = "save",
+                icon = SidekitIcon.BookmarkBorder,
+                offLabel = "Save",
+                onLabel = "Saved",
+                on = savedCurrent,
+                onClick = onSave,
+                onIcon = SidekitIcon.Bookmark
             )
         }
     }
@@ -115,28 +114,22 @@ fun NowPlayingScreen(
     val options = if (current == null) {
         emptyList()
     } else {
-        buildList {
-            add(SideAction.square("queue", SidekitIcon.QueueMusic, "Open queue", onOpenQueue))
-            // Three options at most: the bar is icon-only and a fourth square crowds it. Song
+        sidetrackOptions(
+            // Open queue and the episode notes are the two playback shortcuts, and they stay
+            // icon-only: this bar sits beside the five transport tiles and reads as transport. Song
             // radio stays in the middle in both layouts; the backdrop layout opens the album by
-            // tapping the artwork, so it does not need a square of its own. The art backdrop
-            // toggle itself lives in Settings.
+            // tapping the artwork, so it does not need a square of its own. The art backdrop toggle
+            // itself lives in Settings.
+            openQueueOption(onOpenQueue),
             when (current) {
-                is Track ->
-                    add(SideAction.square("songRadio", SidekitIcon.Explore, "Song radio", onRadio))
-
-                is Episode ->
-                    add(SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onEpisodeNotes))
-            }
-            add(
-                SideAction.square(
-                    "sleepTimer",
-                    SidekitIcon.Bedtime,
-                    if (timer.active) "Sleep timer on" else "Sleep timer",
-                    onSleepTimer
-                )
-            )
-        }
+                is Track -> songRadioOption(onRadio)
+                is Episode -> episodeNotesOption(onEpisodeNotes)
+            },
+            // The sleep timer keeps its label here as everywhere else, and absorbs the width the
+            // two squares leave, so an armed timer is readable instead of a differently coloured
+            // square.
+            sleepTimerOption(timer.active, onSleepTimer)
+        )
     }
     Box(Modifier.fillMaxSize()) {
         if (backdropped && current is Track) {

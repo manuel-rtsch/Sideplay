@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.ChromeState
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.canvas.SidekitCanvas
@@ -95,6 +96,34 @@ class RowActionBarTest {
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription("Undo remove Row from Liked Songs").assertExists()
+    }
+
+    @Test
+    fun rowActionsPutTheDestructiveButtonLastAndDropWhatTheRowCannotOffer() {
+        val actions = rowActions(
+            removeFromQueueRowAction("A") {},
+            if (false) moveRowAction("A") {} else null,
+            addToQueueRowAction("A") {}
+        )
+
+        assertEquals(listOf("addToQueue", "remove"), actions.map { it.key })
+        assertEquals(ActionTone.Primary, actions.first().tone)
+        assertEquals(ActionTone.Destructive, actions.last().tone)
+    }
+
+    @Test
+    fun aRowActionIsLiveByDefaultAndOnlyCancelIsGrey() {
+        val menu = rowActions(
+            removeFromPlaylistRowAction("A") {},
+            addToPlaylistRowAction("A") {},
+            cancelRowAction()
+        )
+
+        assertEquals(ActionTone.Primary, addToPlaylistRowAction("A") {}.tone)
+        assertEquals(ActionTone.Muted, menu.first { it.key == "cancelRemove" }.tone)
+        assertEquals("Cancel", menu.first { it.key == "cancelRemove" }.label)
+        // Cancel is not destructive, so removing from the playlist stays last.
+        assertEquals("removeFromPlaylist", menu.last().key)
     }
 
     @Test

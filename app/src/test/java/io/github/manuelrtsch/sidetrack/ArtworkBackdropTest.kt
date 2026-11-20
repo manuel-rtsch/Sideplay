@@ -75,7 +75,7 @@ class ArtworkBackdropTest {
         compose.onNodeWithContentDescription("Open queue").assertExists()
         compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
-        // The backdrop toggle lives in Settings; a fourth square would crowd the bar.
+        // The backdrop toggle lives in Settings; a third square would crowd the bar.
         compose.onNodeWithContentDescription("Art backdrop off").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
     }
@@ -90,7 +90,7 @@ class ArtworkBackdropTest {
         compose.waitForIdle()
 
         // The artwork itself opens the album, so the middle square stays Song radio in both
-        // layouts and the bar keeps its three buttons.
+        // layouts and the bar keeps its two squares plus the labelled sleep timer.
         compose.onNodeWithContentDescription("Open queue").assertExists()
         compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()

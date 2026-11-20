@@ -6,11 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.listFade
-import hrln.interactive.sidekit.design.icons.SidekitIcon
 import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 
 /**
@@ -39,7 +37,7 @@ fun HistoryScreen(
         title = "History",
         modifier = Modifier.dismissRowActionsOnVerticalKey(rowActions),
         actions = actions,
-        options = listOf(SideAction("nowPlaying", "Now playing", SidekitIcon.MusicNote2, onClick = onNowPlaying))
+        options = sidetrackOptions(onNowPlaying = onNowPlaying)
     ) { padding ->
         val listState = rememberLazyListState()
         rowActions.dismissOnScroll(listState)

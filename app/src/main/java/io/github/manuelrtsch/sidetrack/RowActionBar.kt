@@ -25,16 +25,129 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
 import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
 
-/** One action offered by the contextual row bar. */
+/**
+ * One action offered by the contextual row bar.
+ *
+ * A row action is a live action, so it wears the theme accent like every option in the Options bar
+ * (see `docs/options-menu-audit.md`); [ActionTone.Destructive] marks a removal, and
+ * [ActionTone.Muted] is left to Cancel. Build the list with [rowActions] rather than by hand.
+ */
 data class RowAction(
     val key: String,
     val label: String,
     val icon: SidekitIcon,
-    val tone: ActionTone = ActionTone.Muted,
+    val tone: ActionTone = ActionTone.Primary,
     val contentDescription: String = label,
     /** Custom glyph drawn instead of [icon], for actions that need more than one symbol. */
     val art: (@Composable () -> Unit)? = null,
     val onClick: () -> Unit
+)
+
+/**
+ * A row's contextual menu, built in one place for the same reason [sidetrackOptions] is: eight rows
+ * offer overlapping actions, and assembling them here keeps the wording, glyph, colour and order
+ * from drifting apart.
+ *
+ * Two rules:
+ *
+ * - **Order.** Destructive actions come last, whatever order the caller lists them in, so the
+ *   destructive button is never the one the focus ring lands on first.
+ * - **Colour.** Accent for every action, [ActionTone.Destructive] for a removal, grey only for
+ *   Cancel. Pass `null` for an action the row cannot offer and it leaves no gap.
+ *
+ * Shape stays with the bar: three or more actions are icon-only squares, one or two keep their
+ * label, because a contextual bar earns its space from the gesture that opened it.
+ */
+fun rowActions(vararg entries: RowAction?): List<RowAction> = entries.filterNotNull().sortedBy { if (it.tone == ActionTone.Destructive) 1 else 0 }
+
+fun addToQueueRowAction(
+    title: String,
+    label: String = "Add to queue",
+    onClick: () -> Unit
+) = RowAction(
+    key = "addToQueue",
+    label = label,
+    contentDescription = "Add $title to queue",
+    icon = SidekitIcon.PlaylistAdd,
+    onClick = onClick
+)
+
+/** Adding to a playlist is an action like any other, not a quiet alternative. */
+fun addToPlaylistRowAction(title: String, onClick: () -> Unit) = RowAction(
+    key = "addToPlaylist",
+    label = "Add to playlist",
+    contentDescription = "Add $title to a playlist",
+    icon = SidekitIcon.PlaylistAdd,
+    onClick = onClick
+)
+
+fun removeFromPlaylistRowAction(title: String, onClick: () -> Unit) = RowAction(
+    key = "removeFromPlaylist",
+    label = "Remove from playlist",
+    contentDescription = "Remove $title from this playlist",
+    icon = SidekitIcon.DeleteForever,
+    tone = ActionTone.Destructive,
+    onClick = onClick
+)
+
+fun removeFromQueueRowAction(title: String, onClick: () -> Unit) = RowAction(
+    key = "remove",
+    label = "Remove",
+    contentDescription = "Remove $title from queue",
+    icon = SidekitIcon.DeleteForever,
+    tone = ActionTone.Destructive,
+    onClick = onClick
+)
+
+fun removeFromHistoryRowAction(title: String, onClick: () -> Unit) = RowAction(
+    key = "remove",
+    label = "Remove",
+    contentDescription = "Remove $title from history",
+    icon = SidekitIcon.DeleteForever,
+    tone = ActionTone.Destructive,
+    onClick = onClick
+)
+
+fun moveRowAction(title: String, onClick: () -> Unit) = RowAction(
+    key = "move",
+    label = "Move",
+    contentDescription = "Move $title",
+    icon = SidekitIcon.SwapVert,
+    onClick = onClick
+)
+
+fun artistRadioRowAction(artist: String, onClick: () -> Unit) = RowAction(
+    key = "artistRadio",
+    label = "Artist radio",
+    contentDescription = "Artist radio for $artist",
+    icon = SidekitIcon.Explore,
+    onClick = onClick
+)
+
+fun episodeNotesRowAction(title: String, onClick: () -> Unit) = RowAction(
+    key = "notes",
+    label = "Notes",
+    contentDescription = "Read notes for $title",
+    icon = SidekitIcon.Docs,
+    onClick = onClick
+)
+
+/** The question a destructive row action asks before it writes. Cancel is the only grey action. */
+fun cancelRowAction(onClick: () -> Unit = {}) = RowAction(
+    key = "cancelRemove",
+    label = "Cancel",
+    icon = SidekitIcon.Close,
+    tone = ActionTone.Muted,
+    onClick = onClick
+)
+
+fun confirmRemoveFromPlaylistRowAction(title: String, onClick: () -> Unit) = RowAction(
+    key = "confirmRemove",
+    label = "Remove",
+    contentDescription = "Remove $title from this playlist",
+    icon = SidekitIcon.DeleteForever,
+    tone = ActionTone.Destructive,
+    onClick = onClick
 )
 
 /** A destructive row action that can still be taken back from the bar. */

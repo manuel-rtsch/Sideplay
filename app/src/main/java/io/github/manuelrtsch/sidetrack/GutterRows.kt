@@ -9,8 +9,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
-import hrln.interactive.sidekit.design.action.ActionTone
-import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.formatDuration
 import io.github.manuelrtsch.sidetrack.ui.GutterRow
@@ -53,16 +51,7 @@ fun ArtistGutterRow(
         )
         return
     }
-    val actions = listOf(
-        RowAction(
-            key = "artistRadio",
-            label = "Artist radio",
-            contentDescription = "Artist radio for ${artist.name}",
-            icon = SidekitIcon.Explore,
-            tone = ActionTone.Primary,
-            onClick = onRadio
-        )
-    )
+    val actions = rowActions(artistRadioRowAction(artist.name, onRadio))
     GutterRow(
         key,
         focus,
@@ -135,14 +124,7 @@ fun AlbumGutterRow(
         secondary,
         focus,
         bar,
-        RowAction(
-            key = "addToQueue",
-            label = "Add to queue",
-            contentDescription = "Add ${album.title} to queue",
-            icon = SidekitIcon.PlaylistAdd,
-            tone = ActionTone.Primary,
-            onClick = onAddToQueue
-        ),
+        addToQueueRowAction(album.title, onClick = onAddToQueue),
         modifier,
         bodyModifier,
         focusRequester,
@@ -174,14 +156,7 @@ fun PlaylistGutterRow(
         playlistSubtitle(playlist),
         focus,
         bar,
-        RowAction(
-            key = "addToQueue",
-            label = "Add to queue",
-            contentDescription = "Add ${playlist.name} to queue",
-            icon = SidekitIcon.PlaylistAdd,
-            tone = ActionTone.Primary,
-            onClick = onAddToQueue
-        ),
+        addToQueueRowAction(playlist.name, onClick = onAddToQueue),
         modifier,
         bodyModifier,
         focusRequester,
@@ -213,14 +188,7 @@ fun ShowGutterRow(
         show.publisher,
         focus,
         bar,
-        RowAction(
-            key = "addLatestToQueue",
-            label = "Add latest to queue",
-            contentDescription = "Add latest episode of ${show.name} to queue",
-            icon = SidekitIcon.PlaylistAdd,
-            tone = ActionTone.Primary,
-            onClick = onAddLatestToQueue
-        ),
+        addToQueueRowAction("latest episode of ${show.name}", label = "Add latest to queue", onClick = onAddLatestToQueue),
         modifier,
         bodyModifier,
         focusRequester,
@@ -353,33 +321,19 @@ fun HistoryRow(
                         key = key,
                         title = item.title,
                         focusRequester = rowFocus,
-                        actions = listOf(
-                            RowAction(
-                                key = "addToQueue",
-                                label = "Add to queue",
-                                contentDescription = "Add ${item.title} to queue",
-                                icon = SidekitIcon.PlaylistAdd,
-                                tone = ActionTone.Primary,
-                                onClick = { onAddToQueue(item) }
-                            ),
-                            RowAction(
-                                key = "remove",
-                                label = "Remove",
-                                contentDescription = "Remove ${item.title} from history",
-                                icon = SidekitIcon.DeleteForever,
-                                tone = ActionTone.Destructive,
-                                onClick = {
-                                    val undo = onRemove(item)
-                                    if (undo != null) {
-                                        bar.showUndo(
-                                            RowActionUndo(
-                                                contentDescription = "Undo remove ${item.title} from history",
-                                                onClick = undo
-                                            )
+                        actions = rowActions(
+                            addToQueueRowAction(item.title) { onAddToQueue(item) },
+                            removeFromHistoryRowAction(item.title) {
+                                val undo = onRemove(item)
+                                if (undo != null) {
+                                    bar.showUndo(
+                                        RowActionUndo(
+                                            contentDescription = "Undo remove ${item.title} from history",
+                                            onClick = undo
                                         )
-                                    }
+                                    )
                                 }
-                            )
+                            }
                         )
                     )
                 )
