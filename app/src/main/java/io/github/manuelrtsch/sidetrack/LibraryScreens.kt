@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
+import android.view.KeyEvent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,18 +13,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -33,6 +42,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -50,6 +60,8 @@ import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
+import hrln.interactive.sidekit.design.input.HoldToAct
+import hrln.interactive.sidekit.design.input.KeypadTiming
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import io.github.manuelrtsch.sidetrack.ui.InlineLinkArrowSize
@@ -152,6 +164,59 @@ fun SidetrackHomeScreen(
 }
 
 /**
+ * Where a category was left: its first visible row and the row that owned the focus. The focused
+ * row is stored by its row key rather than its index, so an item inserted above it does not move
+ * the cursor to a stranger.
+ */
+private data class LibraryViewport(
+    val index: Int,
+    val offset: Int,
+    val focusedRowKey: String?
+)
+
+private fun LazyListState.captureViewport(focusedRowKey: String?): LibraryViewport = LibraryViewport(
+    index = firstVisibleItemIndex,
+    offset = firstVisibleItemScrollOffset,
+    focusedRowKey = focusedRowKey
+)
+
+private fun libraryRowFocusKey(item: Any): String = when (item) {
+    is Track -> item.id
+    is Album -> item.key.encode()
+    is Playlist -> item.key.encode()
+    is Artist -> item.key.encode()
+    is Show -> item.key.encode()
+    else -> item.toString()
+}
+
+/** Saves the five viewports as a flat list of strings, so a process restart keeps the cache. */
+private val LibraryViewportsSaver: Saver<MutableMap<LibraryFilter, LibraryViewport>, List<String>> = Saver(
+    save = { viewports ->
+        viewports.entries.flatMap { (filter, viewport) ->
+            listOf(
+                filter.name,
+                viewport.index.toString(),
+                viewport.offset.toString(),
+                viewport.focusedRowKey.orEmpty()
+            )
+        }
+    },
+    restore = { saved ->
+        mutableStateMapOf<LibraryFilter, LibraryViewport>().apply {
+            saved.chunked(4).forEach { parts ->
+                if (parts.size != 4) return@forEach
+                runCatching {
+                    put(
+                        LibraryFilter.valueOf(parts[0]),
+                        LibraryViewport(parts[1].toInt(), parts[2].toInt(), parts[3].ifEmpty { null })
+                    )
+                }
+            }
+        }
+    }
+)
+
+/**
  * The Library: one category at a time, chosen from a row of five square filter buttons under
  * the title. Moving focus across the row attaches that category's list, so the keypad can
  * browse the library without opening a second screen per category.
@@ -202,9 +267,15 @@ fun LibraryScreen(
         rows.bar,
         sidetrackActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     )
+    // The gate outlives any one row: after a hold switches category, the list may rebuild and move
+    // focus before the physical key comes up. The screen root uses the same gate to swallow the
+    // repeats and the release so the category row cannot walk sideways through every category.
+    val holdGate = remember { CategoryHoldGate() }
     SidekitScaffold(
-        title = "Library",
-        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
+        title = library.filter.label,
+        modifier = Modifier
+            .dismissRowActionsOnVerticalKey(rows.bar)
+            .consumeCategoryHoldRepeats(holdGate),
         actions = actions,
         options = buildList {
             // Creating a playlist is a per-service capability, and it only belongs on the
@@ -224,6 +295,22 @@ fun LibraryScreen(
         }
         val moreFocus = rememberLoadMoreFocus()
         val loading = items.isEmpty() && library.libraryLoading
+        // One viewport per category, remembered across a switch and across process death. The
+        // focused row is keyed by the row, not its old index: saving or removing a row above the
+        // cursor must not move the cursor to a different item when the category comes back.
+        val viewports = rememberSaveable(saver = LibraryViewportsSaver) {
+            mutableStateMapOf<LibraryFilter, LibraryViewport>()
+        }
+        var lastFocusedRowKey by remember { mutableStateOf<String?>(null) }
+        var pendingViewport by remember { mutableStateOf<LibraryViewport?>(null) }
+        var restoreFocusIndex by remember { mutableStateOf<Int?>(null) }
+        var focusFilterRow by remember { mutableStateOf(false) }
+        val restoreFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) {
+            snapshotFlow { rows.focus.focusedKey ?: libraryGutters.focusedKey }.collect { key ->
+                if (key != null) lastFocusedRowKey = key.toString()
+            }
+        }
         // Switching category swaps this screen between the status body and the list, which
         // re-creates the filter row and drops focus. Re-attach focus to the selected category
         // whenever the category or the body branch changes, so keyboard navigation across the row
@@ -234,19 +321,104 @@ fun LibraryScreen(
             items.isEmpty() -> "empty"
             else -> "list"
         }
+        // A row that has settled under the focus is a reading position: the user stopped moving
+        // through the list. Recording it here keeps the last real position even when the next
+        // thing they do is climb all the way up to the category row.
+        val settledRowKey = rows.focus.openKey ?: libraryGutters.openKey
+        LaunchedEffect(settledRowKey, filter, branch) {
+            val settled = settledRowKey ?: return@LaunchedEffect
+            if (branch != "list") return@LaunchedEffect
+            val itemIndex = items.indexOfFirst { libraryRowFocusKey(it) == settled.toString() }
+            if (itemIndex < 0) return@LaunchedEffect
+            viewports[filter] = listState.captureViewport(settled.toString())
+        }
+        val switchFilter: (LibraryFilter) -> Unit = { next ->
+            if (next != filter) {
+                val focusedKey = rows.focus.focusedKey ?: libraryGutters.focusedKey
+                val focusedIndex = focusedKey?.let { key ->
+                    items.indexOfFirst { libraryRowFocusKey(it) == key.toString() }
+                } ?: -1
+                val focusedVisible = focusedIndex >= 0 &&
+                    listState.layoutInfo.visibleItemsInfo.any { it.index == focusedIndex + 1 }
+                // A quick switch from the list records the exact position. A switch from the
+                // category row keeps the last settled viewport instead of the temporary top of
+                // the list the user climbed through to reach the row.
+                if (focusedVisible || viewports[filter] == null) {
+                    viewports[filter] = listState.captureViewport(
+                        focusedKey?.toString() ?: lastFocusedRowKey
+                    )
+                }
+                pendingViewport = viewports[next]
+                restoreFocusIndex = null
+                lastFocusedRowKey = null
+                onFilter(next)
+            }
+        }
+        val holdSwitch = Modifier.libraryCategoryHoldSwitch(
+            filter = filter,
+            supportedFilters = supportedFilters,
+            enabled = rows.bar.selection == null,
+            gate = holdGate,
+            onSwitch = switchFilter
+        )
         LaunchedEffect(filter, branch) {
-            if (branch != "list") moreFocus.reset()
-            runCatching { filterFocus.getValue(library.filter).requestFocus() }
+            if (branch != "list") {
+                moreFocus.reset()
+                runCatching { filterFocus.getValue(filter).requestFocus() }
+                return@LaunchedEffect
+            }
+            val viewport = pendingViewport
+            if (viewport == null) {
+                listState.scrollToItem(0)
+                runCatching { filterFocus.getValue(filter).requestFocus() }
+                return@LaunchedEffect
+            }
+            pendingViewport = null
+            listState.scrollToItem(
+                viewport.index.coerceIn(0, items.size),
+                viewport.offset.coerceAtLeast(0)
+            )
+            val focusedIndex = viewport.focusedRowKey?.let { key ->
+                items.indexOfFirst { libraryRowFocusKey(it) == key }.takeIf { it >= 0 }
+            }
+            restoreFocusIndex = focusedIndex
+                ?: (viewport.index - 1).coerceIn(0, items.lastIndex)
         }
         LaunchedEffect(filter) {
             moreFocus.reset()
-            listState.scrollToItem(0)
+        }
+        LaunchedEffect(restoreFocusIndex) {
+            if (restoreFocusIndex == null) return@LaunchedEffect
+            // The scroll above composes the restored row. Give that frame a chance to attach the
+            // requester before asking it to take the cursor.
+            repeat(3) {
+                withFrameNanos { }
+                if (runCatching { restoreFocus.requestFocus() }.isSuccess) {
+                    restoreFocusIndex = null
+                    return@LaunchedEffect
+                }
+            }
+            restoreFocusIndex = null
         }
         // Up from the first row returns to the keyboard row rather than letting focus search pick
-        // the geometrically nearest button, which is the middle one.
+        // the geometrically nearest button, which is the middle one. The category row can be
+        // outside the composed window when the first item sits at the top, so scroll it back in
+        // and attach its focus requester before asking it to take the cursor.
+        LaunchedEffect(focusFilterRow) {
+            if (!focusFilterRow) return@LaunchedEffect
+            listState.scrollToItem(0)
+            repeat(3) {
+                withFrameNanos { }
+                if (runCatching { filterFocus.getValue(filter).requestFocus() }.isSuccess) {
+                    focusFilterRow = false
+                    return@LaunchedEffect
+                }
+            }
+            focusFilterRow = false
+        }
         val firstRowModifier = Modifier.onPreviewKeyEvent { event ->
             if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
-                filterFocus.getValue(filter).requestFocus()
+                focusFilterRow = true
                 true
             } else {
                 false
@@ -259,7 +431,7 @@ fun LibraryScreen(
             Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
                 LibraryFilterRow(
                     filter,
-                    onFilter,
+                    switchFilter,
                     filterFocus,
                     supportedFilters = supportedFilters,
                     acceptsFocus = rows.bar.selection == null
@@ -303,7 +475,7 @@ fun LibraryScreen(
                 item(key = "filters") {
                     LibraryFilterRow(
                         filter,
-                        onFilter,
+                        switchFilter,
                         filterFocus,
                         Modifier.listFade(listState, 0)
                             .padding(bottom = SidekitTheme.spacing.pageGap),
@@ -326,9 +498,14 @@ fun LibraryScreen(
                     LibraryRow(
                         item,
                         modifier,
+                        holdSwitch,
                         rows,
                         libraryGutters,
-                        focusRequester = moreFocus.requesterFor(index),
+                        focusRequester = if (index == restoreFocusIndex) {
+                            restoreFocus
+                        } else {
+                            moreFocus.requesterFor(index)
+                        },
                         canRadio = canRadio,
                         onArtistRadio = onArtistRadio,
                         onQueueAlbum = onQueueAlbum,
@@ -360,6 +537,127 @@ fun LibraryScreen(
             }
         }
     }
+}
+
+/** One category step per physical hold, even if the key repeats faster than the composable. */
+private class CategoryHoldGate {
+    var keyCode: Int? = null
+    var switched: Boolean = false
+
+    fun reset() {
+        keyCode = null
+        switched = false
+    }
+}
+
+/** Swallows the rest of a held arrow at the screen root, before focus can land on the category row. */
+private fun Modifier.consumeCategoryHoldRepeats(gate: CategoryHoldGate): Modifier = onPreviewKeyEvent { event ->
+    val native = event.nativeKeyEvent
+    if (gate.switched && native.keyCode == gate.keyCode &&
+        (native.action == KeyEvent.ACTION_DOWN || native.action == KeyEvent.ACTION_UP)
+    ) {
+        if (native.action == KeyEvent.ACTION_UP) gate.reset()
+        true
+    } else {
+        false
+    }
+}
+
+/**
+ * A held Left/Right on a library row body steps to the adjacent category. A tap keeps its old
+ * meaning (into the gutter on Right, back out on Left), so the press is held back until release
+ * or the shared keypad long-press threshold fires.
+ */
+@Composable
+private fun Modifier.libraryCategoryHoldSwitch(
+    filter: LibraryFilter,
+    supportedFilters: Set<LibraryFilter>,
+    enabled: Boolean,
+    gate: CategoryHoldGate,
+    onSwitch: (LibraryFilter) -> Unit
+): Modifier {
+    val currentFilter by rememberUpdatedState(filter)
+    val currentSupported by rememberUpdatedState(supportedFilters)
+    val currentEnabled by rememberUpdatedState(enabled)
+    val currentOnSwitch by rememberUpdatedState(onSwitch)
+    val focusManager = LocalFocusManager.current
+    val hold = remember {
+        HoldToAct(holdMs = KeypadTiming.LONG_PRESS_MS, onHold = { action, _ ->
+            if (!currentEnabled || gate.switched) return@HoldToAct
+            val step = when (action) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> -1
+                KeyEvent.KEYCODE_DPAD_RIGHT -> 1
+                else -> return@HoldToAct
+            }
+            val next = adjacentLibraryFilter(currentFilter, step, currentSupported) ?: return@HoldToAct
+            gate.switched = true
+            currentOnSwitch(next)
+        })
+    }
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            hold.reset()
+            gate.reset()
+        }
+    }
+    DisposableEffect(hold) {
+        onDispose {
+            hold.reset()
+            gate.reset()
+        }
+    }
+    return onPreviewKeyEvent { event ->
+        if (!currentEnabled) return@onPreviewKeyEvent false
+        val native = event.nativeKeyEvent
+        when {
+            // A hold already stepped. Swallow every repeat until the physical key comes up, even
+            // if the input source reports each repeat as a fresh press with a zero repeat count.
+            native.action == KeyEvent.ACTION_DOWN &&
+                gate.switched &&
+                native.keyCode == gate.keyCode -> return@onPreviewKeyEvent true
+
+            native.action == KeyEvent.ACTION_UP && native.keyCode == gate.keyCode -> gate.reset()
+
+            native.action == KeyEvent.ACTION_DOWN && native.repeatCount == 0 -> gate.keyCode = native.keyCode
+        }
+        when (
+            val result = hold.handle(native) { keyCode ->
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> keyCode
+                    else -> null
+                }
+            }
+        ) {
+            HoldToAct.Result.Pass -> false
+
+            HoldToAct.Result.Consume -> true
+
+            is HoldToAct.Result.Deliver -> {
+                // A tap: replay the direction the swallowed press would have performed.
+                when (native.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> focusManager.moveFocus(FocusDirection.Left)
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> focusManager.moveFocus(FocusDirection.Right)
+                }
+                true
+            }
+        }
+    }
+}
+
+/** The next category in [step] order that the service can fill, skipping empty slots. */
+private fun adjacentLibraryFilter(
+    from: LibraryFilter,
+    step: Int,
+    supported: Set<LibraryFilter>
+): LibraryFilter? {
+    val filters = LibraryFilter.entries
+    var index = from.ordinal + step
+    while (index in filters.indices) {
+        val candidate = filters[index]
+        if (candidate in supported) return candidate
+        index += step
+    }
+    return null
 }
 
 /**
@@ -514,6 +812,7 @@ private val LibraryFilter.icon: SidekitIcon
 private fun LibraryRow(
     item: Any,
     modifier: Modifier,
+    bodyModifier: Modifier,
     rows: TrackRows,
     libraryGutters: RowGutterState,
     focusRequester: FocusRequester? = null,
@@ -533,7 +832,14 @@ private fun LibraryRow(
     when (item) {
         // Library rows carry no list index: a track can appear once per category, so its id is
         // already unique here.
-        is Track -> TrackRow(item.id, item, rows, modifier, focusRequester = focusRequester) { onTrack(item) }
+        is Track -> TrackRow(
+            item.id,
+            item,
+            rows,
+            modifier,
+            bodyModifier,
+            focusRequester = focusRequester
+        ) { onTrack(item) }
 
         is Playlist -> PlaylistGutterRow(
             item.key.encode(),
@@ -541,6 +847,7 @@ private fun LibraryRow(
             libraryGutters,
             rows.bar,
             modifier,
+            bodyModifier,
             focusRequester = focusRequester,
             onAddToQueue = { onQueuePlaylist(item) },
             onClick = { onPlaylist(item) }
@@ -552,6 +859,7 @@ private fun LibraryRow(
             libraryGutters,
             rows.bar,
             modifier,
+            bodyModifier,
             focusRequester = focusRequester,
             onAddToQueue = { onQueueAlbum(item) },
             onClick = { onAlbum(item) }
@@ -563,6 +871,7 @@ private fun LibraryRow(
             libraryGutters,
             rows.bar,
             modifier,
+            bodyModifier,
             focusRequester = focusRequester,
             canRadio = canRadio,
             onRadio = { onArtistRadio(item) },
@@ -575,6 +884,7 @@ private fun LibraryRow(
             libraryGutters,
             rows.bar,
             modifier,
+            bodyModifier,
             focusRequester = focusRequester,
             onAddLatestToQueue = { onAddLatestShowToQueue(item) },
             onClick = { onShow(item) }

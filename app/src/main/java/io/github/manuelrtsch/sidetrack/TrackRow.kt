@@ -68,6 +68,7 @@ fun TrackRow(
     track: Track,
     rows: TrackRows,
     modifier: Modifier = Modifier,
+    bodyModifier: Modifier = Modifier,
     index: Int? = null,
     showArt: Boolean = true,
     secondary: String = track.artist,
@@ -83,6 +84,7 @@ fun TrackRow(
             Modifier
                 .focusRequester(rowFocus)
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .then(bodyModifier)
                 .onFocusChanged { state ->
                     if (state.isFocused) rows.focus.rowFocused(key) else rows.focus.rowUnfocused(key)
                 }
@@ -196,6 +198,7 @@ fun ArtistGutterRow(
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
+    bodyModifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     canRadio: Boolean = true,
     onRadio: () -> Unit,
@@ -205,10 +208,8 @@ fun ArtistGutterRow(
     val rowFocus = remember { FocusRequester() }
     CloseRowActionsWhenDisposed(selected, bar)
     if (!canRadio) {
-        val plainModifier = if (focusRequester != null) {
-            modifier.focusRequester(focusRequester)
-        } else {
-            modifier
+        val plainModifier = modifier.then(bodyModifier).let { base ->
+            if (focusRequester != null) base.focusRequester(focusRequester) else base
         }
         LibraryRow(
             artist.artRes,
@@ -243,6 +244,7 @@ fun ArtistGutterRow(
                 Modifier
                     .focusRequester(rowFocus)
                     .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                    .then(bodyModifier)
                     .onFocusChanged { state ->
                         if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
                     }
@@ -287,6 +289,7 @@ fun AlbumGutterRow(
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
+    bodyModifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     onAddToQueue: () -> Unit,
     onClick: () -> Unit
@@ -309,6 +312,7 @@ fun AlbumGutterRow(
             onClick = onAddToQueue
         ),
         modifier,
+        bodyModifier,
         focusRequester,
         onClick
     )
@@ -325,6 +329,7 @@ fun PlaylistGutterRow(
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
+    bodyModifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     onAddToQueue: () -> Unit,
     onClick: () -> Unit
@@ -346,6 +351,7 @@ fun PlaylistGutterRow(
             onClick = onAddToQueue
         ),
         modifier,
+        bodyModifier,
         focusRequester,
         onClick
     )
@@ -362,6 +368,7 @@ fun ShowGutterRow(
     focus: RowGutterState,
     bar: RowActionBarState,
     modifier: Modifier = Modifier,
+    bodyModifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     onAddLatestToQueue: () -> Unit,
     onClick: () -> Unit
@@ -383,6 +390,7 @@ fun ShowGutterRow(
             onClick = onAddLatestToQueue
         ),
         modifier,
+        bodyModifier,
         focusRequester,
         onClick
     )
@@ -400,6 +408,7 @@ private fun LibraryCollectionGutterRow(
     bar: RowActionBarState,
     action: RowAction,
     modifier: Modifier = Modifier,
+    bodyModifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
@@ -420,6 +429,7 @@ private fun LibraryCollectionGutterRow(
                 Modifier
                     .focusRequester(rowFocus)
                     .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                    .then(bodyModifier)
                     .onFocusChanged { state ->
                         if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
                     }
