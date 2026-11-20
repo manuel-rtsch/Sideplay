@@ -323,6 +323,106 @@ fun ArtistGutterRow(
 }
 
 /**
+ * An album row in a library list. Its single grey meatball gutter publishes Save/Unsave and Add to
+ * queue to the contextual action bar. Unsaving offers Undo, since the album disappears from the
+ * saved list the moment the action lands.
+ */
+@Composable
+fun AlbumGutterRow(
+    key: Any,
+    album: Album,
+    focus: RowGutterState,
+    bar: RowActionBarState,
+    saved: Boolean,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onSave: () -> Unit,
+    onAddToQueue: () -> Unit,
+    onClick: () -> Unit
+) {
+    val selected = bar.selection?.key == key
+    val rowFocus = remember { FocusRequester() }
+    CloseRowActionsWhenDisposed(selected, bar)
+    val secondary = if (album.year > 0) "${album.artist} · ${album.year}" else album.artist
+    val actions = listOf(
+        RowAction(
+            key = "save",
+            label = if (saved) "Unsave" else "Save",
+            contentDescription = if (saved) {
+                "Remove ${album.title} from your library"
+            } else {
+                "Save ${album.title} to your library"
+            },
+            icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
+            tone = if (saved) ActionTone.Destructive else ActionTone.Primary,
+            onClick = {
+                onSave()
+                if (saved) {
+                    bar.showUndo(
+                        RowActionUndo(
+                            contentDescription = "Undo remove ${album.title} from your library",
+                            onClick = onSave
+                        )
+                    )
+                }
+            }
+        ),
+        RowAction(
+            key = "addToQueue",
+            label = "Add to queue",
+            contentDescription = "Add ${album.title} to queue",
+            icon = SidekitIcon.PlaylistAdd,
+            tone = ActionTone.Primary,
+            onClick = onAddToQueue
+        )
+    )
+    GutterRow(
+        key,
+        focus,
+        squares = 1,
+        modifier = modifier,
+        content = { gutterVisible ->
+            LibraryRow(
+                album.artRes,
+                album.title,
+                secondary,
+                Modifier
+                    .focusRequester(rowFocus)
+                    .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
+                    }
+                    .then(
+                        if (selected) {
+                            Modifier.border(2.dp, SidekitTheme.colors.light, SidekitTheme.shapes.item)
+                        } else {
+                            Modifier
+                        }
+                    ),
+                artUrl = album.artUrl,
+                showArrow = !gutterVisible,
+                onClick = {
+                    focus.touchDismissed(key)
+                    onClick()
+                }
+            )
+        }
+    ) {
+        val squareFocus = rememberGutterSquareFocus(key, focus)
+        RowActionSquare(
+            color = SidekitTheme.colors.surfaceA4,
+            label = "Actions for ${album.title}",
+            content = { MeatballIcon() },
+            modifier = squareFocus,
+            onClick = {
+                focus.touchDismissed(key)
+                bar.show(RowActionSelection(key, album.title, actions, rowFocus))
+            }
+        )
+    }
+}
+
+/**
  * A Recently played/History row. Saving does not belong to history: that is what the saved lists
  * are for. Its contextual bar offers the two actions the context implies — replay it later, or
  * forget it.

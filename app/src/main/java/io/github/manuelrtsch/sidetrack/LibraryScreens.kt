@@ -182,6 +182,8 @@ fun LibraryScreen(
     onArtistRadio: (Artist) -> Unit = {},
     canFollowArtist: Boolean = true,
     canRadio: Boolean = true,
+    onSaveAlbum: (Album) -> Unit = {},
+    onQueueAlbum: (Album) -> Unit = {},
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
@@ -191,9 +193,9 @@ fun LibraryScreen(
         onEnsureSavedTrack,
         onAddToQueue
     )
-    // Artist rows own a gutter of their own: follow/unfollow and radio are list verbs here, not
-    // destinations. Track rows keep their contextual bar, so the two states never mix.
-    val artistGutters = rememberRowGutterState()
+    // Artist and album rows own a gutter of their own: follow/radio and save/queue are list
+    // verbs here, not destinations. Track rows keep their contextual bar, so the states never mix.
+    val libraryGutters = rememberRowGutterState()
     val baseActions = remember {
         listOf(sidetrackBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     }
@@ -327,12 +329,14 @@ fun LibraryScreen(
                         modifier,
                         rows,
                         saved,
-                        artistGutters,
+                        libraryGutters,
                         focusRequester = moreFocus.requesterFor(index),
                         canFollowArtist = canFollowArtist,
                         canRadio = canRadio,
                         onFollowArtist = onFollowArtist,
                         onArtistRadio = onArtistRadio,
+                        onSaveAlbum = onSaveAlbum,
+                        onQueueAlbum = onQueueAlbum,
                         onTrack = onTrack,
                         onPlaylist = onPlaylist,
                         onAlbum = onAlbum,
@@ -515,12 +519,14 @@ private fun LibraryRow(
     modifier: Modifier,
     rows: TrackRows,
     saved: SavedUiState,
-    artistGutters: RowGutterState,
+    libraryGutters: RowGutterState,
     focusRequester: FocusRequester? = null,
     canFollowArtist: Boolean,
     canRadio: Boolean,
     onFollowArtist: (Artist) -> Unit,
     onArtistRadio: (Artist) -> Unit,
+    onSaveAlbum: (Album) -> Unit,
+    onQueueAlbum: (Album) -> Unit,
     onTrack: (Track) -> Unit,
     onPlaylist: (Playlist) -> Unit,
     onAlbum: (Album) -> Unit,
@@ -528,8 +534,8 @@ private fun LibraryRow(
     onShow: (Show) -> Unit
 ) {
     // LibraryRow applies its modifier to the focusable tile, so the requester can ride on
-    // the modifier there. TrackRow and ArtistGutterRow wrap the focusable row in a gutter, so
-    // they take the requester directly.
+    // the modifier there. TrackRow, AlbumGutterRow and ArtistGutterRow wrap the focusable row in
+    // a gutter, so they take the requester directly.
     val rowModifier = if (focusRequester != null) modifier.focusRequester(focusRequester) else modifier
     when (item) {
         // Library rows carry no list index: a track can appear once per category, so its id is
@@ -538,18 +544,23 @@ private fun LibraryRow(
 
         is Playlist -> LibraryRow(item.artRes, item.name, playlistSubtitle(item), rowModifier, artUrl = item.artUrl) { onPlaylist(item) }
 
-        is Album -> LibraryRow(
-            item.artRes,
-            item.title,
-            if (item.year > 0) "${item.artist} · ${item.year}" else item.artist,
-            rowModifier,
-            artUrl = item.artUrl
-        ) { onAlbum(item) }
+        is Album -> AlbumGutterRow(
+            item.key.encode(),
+            item,
+            libraryGutters,
+            rows.bar,
+            item.key.encode() in saved.savedCollectionKeys,
+            modifier,
+            focusRequester = focusRequester,
+            onSave = { onSaveAlbum(item) },
+            onAddToQueue = { onQueueAlbum(item) },
+            onClick = { onAlbum(item) }
+        )
 
         is Artist -> ArtistGutterRow(
             item.key.encode(),
             item,
-            artistGutters,
+            libraryGutters,
             rows.bar,
             item.key.encode() in saved.followedArtistIds,
             modifier,

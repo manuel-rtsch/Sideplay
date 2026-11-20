@@ -285,6 +285,8 @@ fun NavGraphBuilder.sidetrackGraph(
                 onArtistRadio = { nav.navigate(artistRadioRoute(it.key)) },
                 canFollowArtist = vm.capabilities.supportsFollowArtist,
                 canRadio = vm.capabilities.supportsRadio,
+                onSaveAlbum = { vm.toggleSaved(it) },
+                onQueueAlbum = { vm.queueAlbum(it) },
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
             )

@@ -1232,23 +1232,27 @@ class SidetrackViewModel(
 
     fun toggleSaved(collection: Collection) = toggleSaved(collection.type, collection.id, collection)
 
+    /** A library album row already represents the saved item; it has no collection page loaded. */
+    fun toggleSaved(album: Album) = toggleSaved(CollectionType.Album, album.id, libraryItem = album)
+
     private fun toggleSaved(
         type: CollectionType,
         id: String,
-        collection: Collection? = null
+        collection: Collection? = null,
+        /** The already-known library row, when the caller has it without a collection page. */
+        libraryItem: Any? = null
     ) {
         val key = collectionKey(type, id)
         val wasSaved = key in _state.value.savedCollectionKeys
         val saved = !wasSaved
+        val addedItem = libraryItem ?: collection?.let { libraryItemFor(it) }
         savedCollectionTouched += key
         _state.update {
             val keys = it.savedCollectionKeys.toMutableSet()
             if (saved) keys.add(key) else keys.remove(key)
             val next = it.copy(savedCollectionKeys = keys)
             if (saved) {
-                collection?.let { item -> libraryItemFor(item) }?.let { item ->
-                    next.withLibraryItemAdded(libraryFilterFor(type), item)
-                } ?: next
+                addedItem?.let { item -> next.withLibraryItemAdded(libraryFilterFor(type), item) } ?: next
             } else {
                 next.withLibraryItemRemoved(libraryFilterFor(type), id)
             }
@@ -1265,9 +1269,7 @@ class SidetrackViewModel(
                     if (wasSaved) keys.add(key) else keys.remove(key)
                     val next = it.copy(savedCollectionKeys = keys).say(playbackNotice(e))
                     if (wasSaved) {
-                        collection?.let { item -> libraryItemFor(item) }?.let { item ->
-                            next.withLibraryItemAdded(libraryFilterFor(type), item)
-                        } ?: next
+                        addedItem?.let { item -> next.withLibraryItemAdded(libraryFilterFor(type), item) } ?: next
                     } else {
                         next.withLibraryItemRemoved(libraryFilterFor(type), id)
                     }
@@ -1508,6 +1510,44 @@ class SidetrackViewModel(
                 _state.update { it.say(playbackNotice(e)) }
             } finally {
                 _state.update { it.copy(collectionMorePending = it.collectionMorePending - key) }
+            }
+        }
+    }
+
+    /**
+     * Queues an album straight from a library row. The album's tracks are not loaded until its page
+     * opens, so the collection is fetched first and queued as one complete batch.
+     */
+    fun queueAlbum(album: Album) {
+        val cacheKey = album.key.encode()
+        _state.value.collections[cacheKey]?.let { cached ->
+            queueCollection(cached)
+            return
+        }
+        if (cacheKey in _state.value.collectionMorePending) {
+            _state.update { it.say("This album is still loading — try again") }
+            return
+        }
+        _state.update { it.copy(collectionMorePending = it.collectionMorePending + cacheKey) }
+        viewModelScope.launch {
+            try {
+                val first = catalog.collection(album.key, 0, CATALOG_PAGE_SIZE)
+                if (first == null) {
+                    _state.update { it.say("Nothing to queue") }
+                    return@launch
+                }
+                val complete = loadAllCollection(first)
+                if (complete.hasMore) {
+                    _state.update { it.say("Couldn't load the whole album — nothing added") }
+                    return@launch
+                }
+                addToQueue(complete.items)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.say(playbackNotice(e)) }
+            } finally {
+                _state.update { it.copy(collectionMorePending = it.collectionMorePending - cacheKey) }
             }
         }
     }
