@@ -28,7 +28,7 @@ internal data class KeypadEssential(
 )
 
 /**
- * The three keypad habits Sidetrack depends on, written for the attached module.
+ * The keypad habits Sidetrack depends on, written for the attached module.
  *
  * T9 and QWERTY have dedicated Back and Options keys; the Sundial and GamePad turn gestures on
  * other keys into the same controls. Keeping the translation here means Welcome and Keyboard
@@ -46,8 +46,10 @@ internal fun keypadEssentials(module: KeypadModule): List<KeypadEssential> {
         )
 
         KeypadModule.Sundial -> listOf(
+            KeypadEssential("Centre", "Tap to play or pause. Hold to confirm."),
+            KeypadEssential("Edges", "Tap the left edge for the previous track, the right edge for the next."),
             back("Tab", "Hold Tab to go back a screen."),
-            options("Enter"),
+            options("Enter", "Hold Enter for this page’s actions."),
             item
         )
 
@@ -62,7 +64,7 @@ internal fun keypadEssentials(module: KeypadModule): List<KeypadEssential> {
 /**
  * The compact key cheat sheet shared by Welcome and Keyboard. It is deliberately not a diagram:
  * the full [hrln.interactive.sidekit.sdk.settings.KeypadGuide] is a reference and lives behind
- * "Keypad guide", while these three rows are the actions a new listener has to know immediately.
+ * "Keypad guide", while these rows are the actions a new listener has to know immediately.
  */
 @Composable
 internal fun KeypadEssentials(

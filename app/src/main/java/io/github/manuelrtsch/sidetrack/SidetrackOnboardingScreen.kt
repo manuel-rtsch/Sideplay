@@ -144,7 +144,7 @@ private fun SidetrackKeypadWelcomeList(
     SidekitList(padding, state = list) {
         item(key = "intro") {
             SidekitText(
-                "Learn three keypad habits.",
+                "Learn your keypad.",
                 Modifier.padding(horizontal = 18.dp),
                 style = SidekitTheme.typography.caption,
                 maxLines = 1

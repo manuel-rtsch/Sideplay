@@ -18,9 +18,10 @@ media3 = "1.11.1"
 ktlint = "1.8.0"
 spotless = "8.11.0"
 kover = "0.9.11"
-# 1.9.0 adds the request headers artwork needs for Jellyfin. It is published on SidekitPages,
-# which is resolved before mavenLocal so a same-version staging cannot shadow the release files.
-sidekit = "1.9.0"
+# 1.9.2 keeps the Sundial's Previous/Next edges as media keys; 1.9.0 added the artwork request
+# headers Jellyfin needs. Releases come from SidekitPages, which is resolved before mavenLocal so
+# a same-version staging cannot shadow the published files.
+sidekit = "1.9.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

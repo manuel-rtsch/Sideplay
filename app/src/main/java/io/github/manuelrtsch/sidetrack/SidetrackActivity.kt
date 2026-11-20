@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -36,6 +37,25 @@ class SidetrackActivity : SidekitActivity() {
     private var keypadBackOverride: (() -> Boolean)? = null
     private val systemBack: () -> Boolean = {
         keypadBackOverride?.invoke() ?: (navController?.keypadBack() == true)
+    }
+
+    /**
+     * The Sundial's centre and edge keys, whose taps Sidekit re-delivers as window events.
+     *
+     * The transport is looked up per event instead of held: the service can be chosen, signed out
+     * of or replaced while the activity stays alive, and a key with no player is left to the
+     * platform.
+     */
+    private val mediaKeys = SidetrackMediaKeys {
+        AppSessions.get(this).runtimeOrNull?.let { runtime ->
+            MediaKeyTransport { command ->
+                when (command) {
+                    MediaKeyCommand.TogglePlayback -> runtime.togglePlayback()
+                    MediaKeyCommand.Next -> runtime.playback.requestNext()
+                    MediaKeyCommand.Previous -> runtime.playback.requestPrevious()
+                }
+            }
+        }
     }
 
     /**
@@ -99,6 +119,15 @@ class SidetrackActivity : SidekitActivity() {
         if (KeypadSystemBack.delegate === systemBack) KeypadSystemBack.delegate = null
         super.onStop()
     }
+
+    /**
+     * Media keys arrive here after Sidekit has had its chance at them. A Sundial tap is a synthetic
+     * press Sidekit re-sent while watching for a hold, so the platform's own media-button routing
+     * never sees it; the player is driven from the same callback the notification uses.
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = mediaKeys.handle(event) || super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = mediaKeys.handle(event) || super.onKeyUp(keyCode, event)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
