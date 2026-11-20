@@ -76,7 +76,6 @@ internal class PlaybackDriver(
 
     fun beginPlayback(snapshot: QueueRepository.Snapshot, item: MediaItem) {
         if (item is Track) ensureTrackSaved(item.id)
-        effects.recorded(item)
         val resume = effects.itemStartPosition(item)
         effects.applyQueue(snapshot, positionMs = resume, playing = true)
         store.update { it.copy(notice = null) }
@@ -124,7 +123,6 @@ internal class PlaybackDriver(
         if (snapshot.current !== before) {
             val next = snapshot.current
             val resume = next?.let(effects::itemStartPosition) ?: 0L
-            next?.let(effects::recorded)
             effects.applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
             next?.let { startRemote(it, resume, resuming = resume > 0L) }
         }
@@ -140,7 +138,6 @@ internal class PlaybackDriver(
             if (snapshot.current !== s.current) {
                 val previous = snapshot.current
                 val resume = previous?.let(effects::itemStartPosition) ?: 0L
-                previous?.let(effects::recorded)
                 effects.applyQueue(snapshot, positionMs = resume, playing = previous?.playable == true)
                 previous?.let { startRemote(it, resume, resuming = resume > 0L) }
             } else {
@@ -161,7 +158,6 @@ internal class PlaybackDriver(
         if (snapshot.current !== s.current) {
             val previous = snapshot.current
             val resume = previous?.let(effects::itemStartPosition) ?: 0L
-            previous?.let(effects::recorded)
             effects.applyQueue(snapshot, positionMs = resume, playing = previous?.playable == true)
             previous?.let { startRemote(it, resume, resuming = resume > 0L) }
         } else {
@@ -192,7 +188,6 @@ internal class PlaybackDriver(
         if (snapshot.current !== s.current) {
             val next = snapshot.current
             val resume = next?.let(effects::itemStartPosition) ?: 0L
-            next?.let(effects::recorded)
             effects.applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
             next?.takeIf { it.playable }?.let(effects::showNowPlayingNotice)
             next?.let { startRemote(it, resume, resuming = resume > 0L) }
@@ -262,7 +257,6 @@ internal class PlaybackDriver(
             val snapshot = queue.next(auto = true)
             val next = snapshot.current
             val resume = next?.let(effects::itemStartPosition) ?: 0L
-            next?.let(effects::recorded)
             effects.applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
             next?.let { startRemote(it, resume, gapless = auto && store.value.gapless, resuming = resume > 0L) }
             return
@@ -276,7 +270,6 @@ internal class PlaybackDriver(
         if (snapshot.current !== current) {
             val next = snapshot.current
             val resume = next?.let(effects::itemStartPosition) ?: 0L
-            next?.let(effects::recorded)
             effects.applyQueue(snapshot, positionMs = resume, playing = next?.playable == true)
             next?.let { startRemote(it, resume, gapless = auto && store.value.gapless, resuming = resume > 0L) }
         } else {
@@ -405,7 +398,7 @@ internal class PlaybackDriver(
                 shuffle = restored.shuffle,
                 repeat = restored.repeat,
                 isPlaying = playback.isActive,
-                recent = effects.recentItems()
+                recent = effects.recentItems(excluding = current)
             )
         }
     }

@@ -149,7 +149,14 @@ internal class PlaybackEvents(
                 clock.clearSeek()
                 session?.playback?.updateState(false, 0L)
                 val halting = session?.halting == true
-                effects.applyQueue(if (halting) queue.snapshot else queue.stop(), positionMs = 0L, playing = false)
+                // Stopping is not a switch to another item: the track that was playing must not
+                // slide into recently played just because playback ended.
+                effects.applyQueue(
+                    if (halting) queue.snapshot else queue.stop(),
+                    positionMs = 0L,
+                    playing = false,
+                    recordPrevious = false
+                )
             }
 
             is PlaybackEvent.Unavailable -> if (matchesCurrent(event.uri)) {

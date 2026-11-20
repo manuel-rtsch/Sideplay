@@ -3,7 +3,7 @@ package io.github.manuelrtsch.sidetrack.data
 import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.MediaKey
 
-/** A played item and when it last started. Timestamps are local and never uploaded. */
+/** A played item and when it last played. Timestamps are local and never uploaded. */
 data class HistoryEntry(
     val item: MediaItem,
     val playedAtMs: Long

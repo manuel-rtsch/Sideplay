@@ -25,7 +25,7 @@ internal class SpotifyTransportCommands(
     fun skipNext() {
         val before = queue.snapshot.current ?: return
         val snapshot = queue.next(auto = false)
-        if (snapshot.current !== before) snapshot.current?.let(::startFromTransport)
+        if (snapshot.current !== before) snapshot.current?.let { startFromTransport(before, it) }
     }
 
     /** Restarts the current item past the 3 s threshold, otherwise returns to queue history. */
@@ -37,15 +37,19 @@ internal class SpotifyTransportCommands(
         }
         val snapshot = queue.previous(playback.position)
         if (snapshot.current !== current) {
-            snapshot.current?.let(::startFromTransport)
+            snapshot.current?.let { startFromTransport(current, it) }
         } else {
             playbackScope.launch { runCatching { playback.seek(0L) } }
         }
     }
 
-    private fun startFromTransport(item: MediaItem) {
+    private fun startFromTransport(previous: MediaItem, item: MediaItem) {
         onStart()
-        history.record(item, System.currentTimeMillis())
+        // As in the app, recently played records the item the user left behind, not the one
+        // that is starting now. An old entry for the starting item is dropped until the user
+        // moves on from it again.
+        history.record(previous, System.currentTimeMillis())
+        history.remove(item)
         playback.setNowPlaying(item, 0L)
         val uri = item.uri ?: return
         playbackScope.launch {

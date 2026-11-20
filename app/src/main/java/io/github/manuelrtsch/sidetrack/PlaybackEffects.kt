@@ -39,11 +39,21 @@ internal class PlaybackEffects(
         snapshot: QueueRepository.Snapshot,
         positionMs: Long? = null,
         playing: Boolean? = null,
-        syncNowPlaying: Boolean = true
+        syncNowPlaying: Boolean = true,
+        recordPrevious: Boolean = true
     ) {
         // Leaving an episode is the last chance to save where it stopped, before the new item
         // resets the seek bar to its own offset.
         val previous = store.value.current
+        // Recently played lists what the user moved on from, not what is playing now. The
+        // outgoing item enters the history only when the queue switches to a different one, so
+        // the first row cannot mirror the now-playing section.
+        val left = previous?.takeIf { it.id != snapshot.current?.id }
+        if (recordPrevious) left?.let { history.record(it, System.currentTimeMillis()) }
+        // The item playing now belongs to Now Playing, not Recently played. Replaying one from
+        // that list takes its old entry out until the user moves on to something else.
+        val droppedCurrent = snapshot.current?.let { history.removeEntry(it) != null } ?: false
+        val historyChanged = (recordPrevious && left != null) || droppedCurrent
         if (previous is Episode && (snapshot.current?.id != previous.id || positionMs != null)) {
             episodes.record(previous.id, clock.value, previous.durationMs)
         }
@@ -63,7 +73,8 @@ internal class PlaybackEffects(
                 history = snapshot.history,
                 shuffle = snapshot.shuffle,
                 repeat = snapshot.repeat,
-                isPlaying = playing ?: it.isPlaying
+                isPlaying = playing ?: it.isPlaying,
+                recent = if (historyChanged) history.items() else it.recent
             )
         }
         if (syncNowPlaying) {
@@ -77,8 +88,15 @@ internal class PlaybackEffects(
         store.update { it.copy(nowPlayingNotice = null) }
     }
 
-    /** The history rows the screen shows, newest first. */
-    fun recentItems(): List<MediaItem> = history.items()
+    /**
+     * The history rows the screen shows, newest first. The item playing now is not one of them;
+     * [excluding] is passed explicitly while restoring, before the store holds the restored
+     * item.
+     */
+    fun recentItems(excluding: MediaItem? = store.value.current): List<MediaItem> {
+        if (excluding != null) history.remove(excluding)
+        return history.items()
+    }
 
     /** Episode offsets are saved every few seconds while playing, and immediately on pauses/seeks. */
     fun recordEpisodeProgress(force: Boolean = false) {
@@ -98,11 +116,6 @@ internal class PlaybackEffects(
     fun markEpisodeFinished(item: MediaItem) {
         if (item !is Episode) return
         episodes.record(item.id, item.durationMs, item.durationMs, completed = true)
-    }
-
-    fun recorded(item: MediaItem) {
-        history.record(item, System.currentTimeMillis())
-        store.update { it.copy(recent = history.items()) }
     }
 
     /**

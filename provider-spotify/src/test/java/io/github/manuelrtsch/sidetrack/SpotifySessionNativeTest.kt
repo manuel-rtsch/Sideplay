@@ -165,6 +165,8 @@ class SpotifySessionNativeTest {
 
         awaitCalls { native.calls.contains("load:spotify:track:b@0:true") }
         assertEquals("b", session.queue.snapshot.current?.id)
+        // The item left behind is the one that enters the history, not the one now playing.
+        assertEquals(listOf("a"), session.history.items().map { it.id })
         session.playback.stop()
     }
 
@@ -194,6 +196,8 @@ class SpotifySessionNativeTest {
 
         awaitCalls { native.calls.contains("load:spotify:track:a@0:true") }
         assertEquals("a", session.queue.snapshot.current?.id)
+        // The item the user returns from is recorded; the item that becomes current is not.
+        assertEquals(listOf("b"), session.history.items().map { it.id })
         session.playback.stop()
     }
 

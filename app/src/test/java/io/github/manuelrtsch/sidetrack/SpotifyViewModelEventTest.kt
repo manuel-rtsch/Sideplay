@@ -173,13 +173,42 @@ class SpotifyViewModelEventTest {
         assertNull(vm.state.value.nowPlayingNotice)
     }
 
-    @Test fun `playing an episode adds it to recently played`() = runTest(dispatcher) {
+    @Test fun `a started item enters recently played only after switching away from it`() = runTest(dispatcher) {
         val vm = viewModel()
-        val episode = MockSpotifyDataSource.shows.first().episodes.first()
+        val items = MockSpotifyDataSource.recentlyPlayed.take(2)
 
-        vm.playItem(episode)
+        vm.play(items, 0)
 
-        assertEquals(episode.id, vm.state.value.recent.firstOrNull()?.id)
+        // The now-playing row and the first recently played row must not be the same item.
+        assertTrue(vm.state.value.recent.isEmpty())
+
+        vm.handlePlaybackEvent(event("""{"type":"ended"}"""))
+
+        assertEquals(items[0].id, vm.state.value.recent.firstOrNull()?.id)
+        assertEquals(items[1].id, vm.state.value.current?.id)
+    }
+
+    @Test fun `replaying an item from recently played takes it back out of the list`() = runTest(dispatcher) {
+        val vm = viewModel()
+        val items = MockSpotifyDataSource.recentlyPlayed.take(2)
+        vm.play(items, 0)
+        vm.next()
+        assertEquals(listOf(items[0].id), vm.state.value.recent.map { it.id })
+
+        vm.playRecent(items[0])
+
+        // The item is playing now, so it belongs to Now Playing until the user switches away.
+        assertEquals(items[0].id, vm.state.value.current?.id)
+        assertEquals(listOf(items[1].id), vm.state.value.recent.map { it.id })
+    }
+
+    @Test fun `stopping playback does not add the stopped item to recently played`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.playItem(MockSpotifyDataSource.recentlyPlayed.first())
+
+        vm.handlePlaybackEvent(event("""{"type":"stopped"}"""))
+
+        assertTrue(vm.state.value.recent.isEmpty())
     }
 
     @Test fun `a show episode plays alone and ends on itself`() = runTest(dispatcher) {
