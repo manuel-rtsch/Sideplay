@@ -255,6 +255,8 @@ class PlaybackControllerTest {
             MediaSessionRegistry(),
             elapsedTime = { testScheduler.currentTime }
         )
+        // The countdown measures listening time: armed while idle it holds instead of ticking.
+        playback.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
 
         playback.setSleepTimer(5)
         assertEquals(SleepTimerState.Countdown(5, 300_000L, 5), playback.sleepTimer.value)
@@ -280,7 +282,8 @@ class PlaybackControllerTest {
         advanceTimeBy(5 * 60_000L + 1)
         runCurrent()
 
-        assertEquals(SleepTimerState.Off, playback.sleepTimer.value)
+        // Expiry reports Finished, not Off, so Home and Now Playing can explain the pause.
+        assertEquals(SleepTimerState.Finished, playback.sleepTimer.value)
         assertFalse(playback.isActive)
         assertTrue(gateway.paused)
     }
@@ -336,7 +339,7 @@ class PlaybackControllerTest {
         playback.setSleepTimerEndOfTrack()
 
         assertTrue(playback.consumeEndOfTrackTimer())
-        assertEquals(SleepTimerState.Off, playback.sleepTimer.value)
+        assertEquals(SleepTimerState.Finished, playback.sleepTimer.value)
         assertFalse(playback.consumeEndOfTrackTimer())
     }
 
