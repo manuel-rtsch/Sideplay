@@ -33,9 +33,8 @@ internal class SearchController(
         if (query.trim().length < 2) {
             store.update {
                 it.copy(
-                    searchResults = SearchResults(),
+                    searchPages = emptyMap(),
                     searchPending = false,
-                    searchHasMore = emptySet(),
                     searchMorePending = emptySet()
                 )
             }
@@ -45,7 +44,6 @@ internal class SearchController(
             it.copy(
                 searchPending = true,
                 searchError = null,
-                searchHasMore = emptySet(),
                 searchMorePending = emptySet()
             )
         }
@@ -64,11 +62,21 @@ internal class SearchController(
             store.update {
                 if (it.query == query && it.searchScopes == scopes) {
                     val empty = results.isEmpty
-                    val next = it.copy(
-                        searchResults = results,
+                    // Each returned category becomes a first page in this query's cache. A category
+                    // that is already paged deeper keeps its rows: a search triggered by toggling a
+                    // scope must not flatten the lists it left untouched.
+                    var next = it
+                    for (scope in scopes) {
+                        next = next.withSearchFirstPage(
+                            scope = scope,
+                            items = results.itemsFor(scope),
+                            hasMore = results.sizeFor(scope) >= SEARCH_PAGE_SIZE,
+                            error = null
+                        )
+                    }
+                    next = next.copy(
                         searchPending = false,
-                        searchError = if (empty) failure else null,
-                        searchHasMore = scopes.filterTo(mutableSetOf()) { scope -> results.sizeFor(scope) >= SEARCH_PAGE_SIZE }
+                        searchError = if (empty) failure else null
                     )
                     // A failed search with old results stays a notice; an empty one becomes the
                     // screen's fallback so the retry action is visible.
@@ -89,7 +97,7 @@ internal class SearchController(
         val snapshot = store.value
         val query = snapshot.query
         if (scope !in snapshot.searchHasMore || scope in snapshot.searchMorePending) return
-        val offset = snapshot.searchResults.sizeFor(scope)
+        val offset = snapshot.searchPagesForQuery[scope]?.items?.size ?: 0
         store.update { it.copy(searchMorePending = it.searchMorePending + scope) }
         coroutineScope.launch {
             try {
@@ -98,16 +106,11 @@ internal class SearchController(
                     if (it.query != query) {
                         it.copy(searchMorePending = it.searchMorePending - scope)
                     } else {
-                        val hasMore = if (more.sizeFor(scope) >= SEARCH_PAGE_SIZE) {
-                            it.searchHasMore + scope
-                        } else {
-                            it.searchHasMore - scope
-                        }
-                        it.copy(
-                            searchResults = it.searchResults.merge(scope, more),
-                            searchHasMore = hasMore,
-                            searchMorePending = it.searchMorePending - scope
-                        )
+                        it.withSearchMorePage(
+                            scope = scope,
+                            next = more.itemsFor(scope),
+                            hasMore = more.sizeFor(scope) >= SEARCH_PAGE_SIZE
+                        ).copy(searchMorePending = it.searchMorePending - scope)
                     }
                 }
             } catch (e: CancellationException) {
@@ -120,24 +123,15 @@ internal class SearchController(
         }
     }
 
-    private fun SearchResults.sizeFor(scope: SearchScope): Int = when (scope) {
-        SearchScope.Tracks -> tracks.size
-        SearchScope.Artists -> artists.size
-        SearchScope.Albums -> albums.size
-        SearchScope.Playlists -> playlists.size
-        SearchScope.Shows -> shows.size
-    }
-
-    private fun SearchResults.merge(scope: SearchScope, next: SearchResults): SearchResults = when (scope) {
-        SearchScope.Tracks -> copy(tracks = (tracks + next.tracks).distinctBy { it.id })
-        SearchScope.Artists -> copy(artists = (artists + next.artists).distinctBy { it.id })
-        SearchScope.Albums -> copy(albums = (albums + next.albums).distinctBy { it.id })
-        SearchScope.Playlists -> copy(playlists = (playlists + next.playlists).distinctBy { it.id })
-        SearchScope.Shows -> copy(shows = (shows + next.shows).distinctBy { it.id })
-    }
-
     fun setQuery(query: String) {
-        store.update { it.copy(query = query) }
+        // A new query is a fresh browse: the pages of the previous query have no worth under it.
+        store.update {
+            it.copy(
+                query = query,
+                searchPages = emptyMap(),
+                searchMorePending = emptySet()
+            )
+        }
         search(debounceMs = 250L)
     }
 
@@ -146,10 +140,9 @@ internal class SearchController(
         store.update {
             it.copy(
                 query = "",
-                searchResults = SearchResults(),
+                searchPages = emptyMap(),
                 searchPending = false,
                 searchError = null,
-                searchHasMore = emptySet(),
                 searchMorePending = emptySet()
             )
         }

@@ -24,8 +24,12 @@ internal fun screenshotState(): SidetrackUiState {
             LibraryFilter.entries.associateWith { MockSpotifyDataSource.library(it, 0, LIBRARY_SECTION_SIZE).items }
         },
         librarySectionHasMore = LibraryFilter.entries.toSet(),
-        searchResults = runBlocking { MockSpotifyDataSource.search("night", SearchScope.entries.toSet()) },
-        searchHasMore = SearchScope.entries.toSet(),
+        searchPages = mapOf(
+            "night" to SearchScope.entries.associateWith { scope ->
+                val items = runBlocking { MockSpotifyDataSource.search("night", setOf(scope)) }.itemsFor(scope)
+                LibraryPage(items = items, hasMore = items.size >= SEARCH_PAGE_SIZE)
+            }
+        ),
         isPlaying = true,
         savedTrackIds = setOf(current.id),
         filter = LibraryFilter.Albums

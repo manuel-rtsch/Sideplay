@@ -12,7 +12,9 @@ data class SidetrackUiState(
     val libraryPages: Map<LibraryFilter, LibraryPage> = emptyMap(),
     val librarySections: Map<LibraryFilter, List<Any>> = emptyMap(),
     val librarySectionHasMore: Set<LibraryFilter> = emptySet(),
-    val searchResults: SearchResults = SearchResults(),
+    /** Cached search pages keyed by query, then by category, so a scope toggle never drops the
+     *  pages of the categories it leaves untouched. */
+    val searchPages: Map<String, Map<SearchScope, LibraryPage>> = emptyMap(),
     val searchPending: Boolean = false,
     val authPending: Boolean = false,
     /** Categories whose first page is in flight with nothing cached to show meanwhile. */
@@ -27,7 +29,6 @@ data class SidetrackUiState(
     /** Failed artist loads, keyed by artist id, so the screen can offer a retry. */
     val artistErrors: Map<String, String> = emptyMap(),
     val libraryMorePendingPages: Set<LibraryFilter> = emptySet(),
-    val searchHasMore: Set<SearchScope> = emptySet(),
     val searchMorePending: Set<SearchScope> = emptySet(),
     val collectionMorePending: Set<String> = emptySet(),
     val artistAlbumHasMore: Map<String, Boolean> = emptyMap(),
@@ -84,10 +85,18 @@ data class SidetrackUiState(
     // so a page that arrives for a category the user has left is still worth keeping.
     val libraryItems: List<Any> get() = libraryPages[filter]?.items.orEmpty()
     val libraryHasMore: Boolean get() = libraryPages[filter]?.hasMore == true
+
     /** Set when the open category could not load and has no items to show. */
     val libraryError: String? get() = libraryPages[filter]?.error
     val libraryLoading: Boolean get() = filter in libraryPendingPages
     val libraryMorePending: Boolean get() = filter in libraryMorePendingPages
+
+    // Search, like the library, keeps its rows in a per-category cache and projects the open view
+    // from it. The cache here is keyed by the active query as well, because a search result set has
+    // no meaning outside the query that produced it: typing a new query is always a fresh browse.
+    val searchPagesForQuery: Map<SearchScope, LibraryPage> get() = searchPages[query].orEmpty()
+    val searchResults: SearchResults get() = searchResultsFor(searchPagesForQuery)
+    val searchHasMore: Set<SearchScope> get() = searchPagesForQuery.filterValues { it.hasMore }.keys
 }
 
 /** Sets the transient bar message together with the kind the bar renders it with. */

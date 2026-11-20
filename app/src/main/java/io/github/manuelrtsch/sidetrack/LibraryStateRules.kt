@@ -88,11 +88,13 @@ internal fun SidetrackUiState.withLibraryItemRemoved(
         libraryPages = if (page == null) {
             libraryPages
         } else {
-            libraryPages + (filter to page.copy(
-                items = if (removedFromPage) page.items.filterNot(::matches) else page.items,
-                // Removing a row makes space for the next server page, even when the list was full.
-                hasMore = if (removedFromPage) true else page.hasMore
-            ))
+            libraryPages + (
+                filter to page.copy(
+                    items = if (removedFromPage) page.items.filterNot(::matches) else page.items,
+                    // Removing a row makes space for the next server page, even when the list was full.
+                    hasMore = if (removedFromPage) true else page.hasMore
+                )
+                )
         }
     )
 }
@@ -103,15 +105,18 @@ internal fun SidetrackUiState.withLibraryItemRemoved(
  */
 internal fun SidetrackUiState.withPlaylistTrackCount(key: MediaKey, count: Int): SidetrackUiState {
     val encoded = key.encode()
-    fun Playlist.updated(): Playlist =
-        if (this.key.encode() == encoded && trackCount != count) copy(trackCount = count) else this
+    fun Playlist.updated(): Playlist = if (this.key.encode() == encoded && trackCount != count) copy(trackCount = count) else this
 
     fun Any.updated(): Any = if (this is Playlist) this.updated() else this
 
+    // Every cached search playlist renders trackCount too, so patch each one.
+    val search = searchPages.mapValues { (_, byScope) ->
+        byScope.mapValues { (_, page) -> page.copy(items = page.items.map { it.updated() }) }
+    }
     return copy(
         librarySections = librarySections.mapValues { (_, items) -> items.map { it.updated() } },
         libraryPages = libraryPages.mapValues { (_, page) -> page.copy(items = page.items.map { it.updated() }) },
-        searchResults = searchResults.copy(playlists = searchResults.playlists.map { it.updated() }),
+        searchPages = search,
         playlistChoices = playlistChoices.map { it.updated() }
     )
 }

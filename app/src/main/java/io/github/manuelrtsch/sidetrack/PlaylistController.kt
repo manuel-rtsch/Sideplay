@@ -247,7 +247,9 @@ internal class PlaylistController(
         librarySections.values.forEach { items ->
             items.filterIsInstance<Playlist>().firstOrNull { it.matches() }?.let { return it.trackCount }
         }
-        searchResults.playlists.firstOrNull { it.matches() }?.let { return it.trackCount }
+        searchResultsFor(searchPagesForQuery).run {
+            playlists.firstOrNull { it.matches() }?.let { return it.trackCount }
+        }
         return fallback
     }
 }
