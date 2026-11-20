@@ -1,15 +1,9 @@
 package io.github.manuelrtsch.sidetrack.playback
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.media.AudioAttributes
-import android.media.AudioManager
-import android.media.MediaMetadata
 import android.media.session.MediaSession
-import android.media.session.PlaybackState as SessionState
 import android.os.SystemClock
 import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.MediaItem
@@ -142,11 +136,19 @@ class PlaybackController(
     /** Lets the process owner clear queue state whenever playback is stopped from any control. */
     var onStopped: (() -> Unit)? = null
 
-    private var mediaSession: MediaSession? = null
     private var artJob: Job? = null
 
-    private var lastSessionUpdate = 0L
-    private var noisyRegistered = false
+    private val sessionBinder = PlaybackSessionBinder(
+        context,
+        onPlay = { scope.launch { runCatching { resume() } } },
+        onPause = { pause() },
+        onNext = { requestNext() },
+        onPrevious = { requestPrevious() },
+        onSeekTo = { requestSeek(it) },
+        onStop = { scope.launch { runCatching { stop() } } }
+    )
+
+    private val noisy = NoisyAudioGuard(context) { pause() }
 
     /**
      * The last play/pause intent. librespot events can arrive out of order after rapid taps;
@@ -157,10 +159,6 @@ class PlaybackController(
 
     @Volatile
     private var lastCommandAt = 0L
-
-    private val noisy = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = onAudioBecomingNoisy()
-    }
 
     /** Headphones unplugged: pause rather than play out loud. */
     fun onAudioBecomingNoisy() = pause()
@@ -177,7 +175,7 @@ class PlaybackController(
         )
     }
 
-    val sessionToken: MediaSession.Token? get() = session()?.sessionToken
+    val sessionToken: MediaSession.Token? get() = sessionBinder.token
 
     init {
         engine.onFailure = ::onAudioStalled
@@ -252,7 +250,7 @@ class PlaybackController(
         engine.updatePosition(position)
         artJob?.cancel()
         notificationArt = null
-        if (context != null) updateMetadata()
+        sessionBinder.updateMetadata(current, notificationArt)
         publish()
         val artUrl = item?.artUrl.mediaTextOrNull()
         if (artUrl != null && context != null) {
@@ -266,8 +264,8 @@ class PlaybackController(
                 }
                 if (current?.id == item?.id) {
                     notificationArt = bitmap
-                    lastSessionUpdate = 0L
-                    updateMetadata()
+                    sessionBinder.clearMetadataThrottle()
+                    sessionBinder.updateMetadata(current, notificationArt)
                     publish()
                 }
             }
@@ -449,13 +447,7 @@ class PlaybackController(
         registry.deactivate(this)
         engine.invalidateCommands()
         engine.stop()
-        mediaSession?.let {
-            it.setPlaybackState(
-                SessionState.Builder()
-                    .setState(SessionState.STATE_STOPPED, 0L, 0f, SystemClock.elapsedRealtime())
-                    .build()
-            )
-        }
+        sessionBinder.markStopped()
         current = null
         currentSource = null
         notificationArt = null
@@ -467,8 +459,7 @@ class PlaybackController(
     suspend fun disconnect() {
         stop()
         engine.disconnect()
-        mediaSession?.release()
-        mediaSession = null
+        sessionBinder.release()
     }
 
     /** One engine event, or null when nothing has happened since the last poll. */
@@ -482,94 +473,9 @@ class PlaybackController(
 
     private fun publish() {
         SidetrackDebug.log { "publish playing=$playing positionMs=$positionMs current=${current?.uri}" }
-        session()?.let { session ->
-            val now = SystemClock.elapsedRealtime()
-            if (current != null) updateMetadata(session, now)
-            session.setPlaybackState(
-                SessionState.Builder()
-                    .setActions(
-                        SessionState.ACTION_PLAY or SessionState.ACTION_PAUSE or
-                            SessionState.ACTION_PLAY_PAUSE or SessionState.ACTION_SKIP_TO_NEXT or
-                            SessionState.ACTION_SKIP_TO_PREVIOUS or SessionState.ACTION_SEEK_TO or
-                            SessionState.ACTION_STOP
-                    )
-                    .setState(
-                        when {
-                            current == null -> SessionState.STATE_STOPPED
-                            playing -> SessionState.STATE_PLAYING
-                            else -> SessionState.STATE_PAUSED
-                        },
-                        positionMs,
-                        if (playing) 1f else 0f,
-                        now
-                    )
-                    .build()
-            )
-        }
-        updateNoisy()
+        sessionBinder.publish(current, playing, positionMs, notificationArt)
+        noisy.update(playing)
         context?.let { notifySync(it, this) }
-    }
-
-    private fun updateNoisy() {
-        val context = context ?: return
-        if (playing == noisyRegistered) return
-        noisyRegistered = playing
-        if (playing) {
-            context.registerReceiver(noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
-        } else {
-            runCatching { context.unregisterReceiver(noisy) }
-        }
-    }
-
-    private fun updateMetadata(session: MediaSession? = session(), now: Long = SystemClock.elapsedRealtime()) {
-        val item = current ?: return
-        session ?: return
-        if (lastSessionUpdate != 0L && now - lastSessionUpdate < 250L) return
-        lastSessionUpdate = now
-        session.setMetadata(
-            MediaMetadata.Builder()
-                .putString(MediaMetadata.METADATA_KEY_TITLE, item.title)
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, item.creator)
-                .putString(MediaMetadata.METADATA_KEY_ALBUM, item.creator)
-                .putLong(MediaMetadata.METADATA_KEY_DURATION, item.durationMs)
-                .apply { notificationArt?.let { putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, it) } }
-                .build()
-        )
-    }
-
-    private fun session(): MediaSession? {
-        val context = context ?: return null
-        return mediaSession ?: MediaSession(context, "SideKit Sidetrack").also { session ->
-            session.setCallback(
-                object : MediaSession.Callback() {
-                    override fun onPlay() {
-                        scope.launch { runCatching { resume() } }
-                    }
-
-                    override fun onPause() {
-                        pause()
-                    }
-
-                    override fun onSkipToNext() {
-                        requestNext()
-                    }
-
-                    override fun onSkipToPrevious() {
-                        requestPrevious()
-                    }
-
-                    override fun onSeekTo(pos: Long) {
-                        requestSeek(pos)
-                    }
-
-                    override fun onStop() {
-                        scope.launch { runCatching { stop() } }
-                    }
-                }
-            )
-            session.isActive = true
-            mediaSession = session
-        }
     }
 
     private companion object {
