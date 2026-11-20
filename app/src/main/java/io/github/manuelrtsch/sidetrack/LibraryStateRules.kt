@@ -97,6 +97,25 @@ internal fun SidetrackUiState.withLibraryItemRemoved(
     )
 }
 
+/**
+ * Patches the row count on every cached copy of a playlist: the open category page, the preload
+ * preview, a search result and the Add-to-playlist picker all render `Playlist.trackCount`.
+ */
+internal fun SidetrackUiState.withPlaylistTrackCount(key: MediaKey, count: Int): SidetrackUiState {
+    val encoded = key.encode()
+    fun Playlist.updated(): Playlist =
+        if (this.key.encode() == encoded && trackCount != count) copy(trackCount = count) else this
+
+    fun Any.updated(): Any = if (this is Playlist) this.updated() else this
+
+    return copy(
+        librarySections = librarySections.mapValues { (_, items) -> items.map { it.updated() } },
+        libraryPages = libraryPages.mapValues { (_, page) -> page.copy(items = page.items.map { it.updated() }) },
+        searchResults = searchResults.copy(playlists = searchResults.playlists.map { it.updated() }),
+        playlistChoices = playlistChoices.map { it.updated() }
+    )
+}
+
 fun libraryItemFor(collection: Collection): Any? = when (collection.type) {
     CollectionType.Album -> Album(
         id = collection.id,

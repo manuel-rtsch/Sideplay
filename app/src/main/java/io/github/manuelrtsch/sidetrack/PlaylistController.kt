@@ -155,8 +155,12 @@ internal class PlaylistController(
             if (index == null) {
                 store.update { it.say("This service cannot add to playlists") }
             } else {
-                // The target may already be on the back stack with its old track list cached.
-                store.update { it.copy(collections = it.collections - playlist.key.encode()) }
+                store.update { state ->
+                    val count = state.playlistTrackCount(playlist.key, playlist.trackCount) + 1
+                    // The target may already be on the back stack with its old track list cached.
+                    state.copy(collections = state.collections - playlist.key.encode())
+                        .withPlaylistTrackCount(playlist.key, count)
+                }
                 store.update { it.say("Added ${item.title} to ${playlist.name}", NoticeKind.Success) }
             }
             index
@@ -173,7 +177,11 @@ internal class PlaylistController(
         val writer = writer ?: return
         try {
             writer.removeFromPlaylist(playlist.key, item, index)
-            store.update { it.copy(collections = it.collections - playlist.key.encode()) }
+            store.update { state ->
+                val count = (state.playlistTrackCount(playlist.key, playlist.trackCount) - 1).coerceAtLeast(0)
+                state.copy(collections = state.collections - playlist.key.encode())
+                    .withPlaylistTrackCount(playlist.key, count)
+            }
             store.update { it.say("Removed ${item.title} from ${playlist.name}", NoticeKind.Success) }
         } catch (e: CancellationException) {
             throw e
@@ -211,6 +219,7 @@ internal class PlaylistController(
                         totalItems = (current.totalItems - if (at != null) 1 else 0).coerceAtLeast(items.size)
                     )
                     state.copy(collections = state.collections + (cacheKey to next))
+                        .withPlaylistTrackCount(collection.key, next.totalItems)
                         .say("Removed ${item.title} from ${current.title}", NoticeKind.Success)
                 }
             } catch (e: CancellationException) {
@@ -219,5 +228,26 @@ internal class PlaylistController(
                 store.update { it.say(playbackNotice(e)) }
             }
         }
+    }
+
+    /**
+     * The count currently shown for a playlist, wherever a cached row holds it. The object passed
+     * from the UI can be older than the state after an earlier add or remove, so Undo must read the
+     * patched count rather than `Playlist.trackCount` from the argument.
+     */
+    private fun SidetrackUiState.playlistTrackCount(key: MediaKey, fallback: Int): Int {
+        val encoded = key.encode()
+        fun Playlist.matches() = this.key.encode() == encoded
+
+        collections[encoded]?.let { return it.totalItems }
+        playlistChoices.firstOrNull { it.matches() }?.let { return it.trackCount }
+        libraryPages.values.forEach { page ->
+            page.items.filterIsInstance<Playlist>().firstOrNull { it.matches() }?.let { return it.trackCount }
+        }
+        librarySections.values.forEach { items ->
+            items.filterIsInstance<Playlist>().firstOrNull { it.matches() }?.let { return it.trackCount }
+        }
+        searchResults.playlists.firstOrNull { it.matches() }?.let { return it.trackCount }
+        return fallback
     }
 }

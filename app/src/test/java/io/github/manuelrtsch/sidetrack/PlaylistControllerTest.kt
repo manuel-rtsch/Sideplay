@@ -65,8 +65,12 @@ class PlaylistControllerTest {
         val target = playlist("target", PlaylistActions.All)
         val cacheKey = target.key.encode()
         val stale = collection("target", listOf(first), PlaylistActions.All)
+        val row = target.copy(trackCount = 1)
         val writer = FakeWriter(addIndex = 7)
-        val store = store(collections = mapOf(cacheKey to stale))
+        val store = store(
+            collections = mapOf(cacheKey to stale),
+            libraryPages = mapOf(LibraryFilter.Playlists to LibraryPage(listOf(row)))
+        )
         val controller = controller(FakeCatalog(), store, this, writer = writer)
 
         val index = controller.add(target, second)
@@ -75,6 +79,7 @@ class PlaylistControllerTest {
         assertEquals(target.key, writer.addedPlaylist)
         assertEquals(second, writer.addedItem)
         assertTrue(cacheKey !in store.value.collections)
+        assertEquals(2, store.value.playlistRow("target").trackCount)
         assertEquals("Added ${second.title} to ${target.name}", store.value.notice)
         assertEquals(NoticeKind.Success, store.value.noticeKind)
     }
@@ -84,8 +89,12 @@ class PlaylistControllerTest {
         val target = playlist("target", PlaylistActions.All)
         val cacheKey = target.key.encode()
         val cached = collection("target", listOf(first, second, third), PlaylistActions.All)
+        val row = target.copy(trackCount = 3)
         val writer = FakeWriter()
-        val store = store(collections = mapOf(cacheKey to cached))
+        val store = store(
+            collections = mapOf(cacheKey to cached),
+            libraryPages = mapOf(LibraryFilter.Playlists to LibraryPage(listOf(row)))
+        )
         val controller = controller(FakeCatalog(), store, this, writer = writer)
 
         controller.remove(cached, second, 1)
@@ -94,6 +103,7 @@ class PlaylistControllerTest {
         val updated = store.value.collections.getValue(cacheKey)
         assertEquals(listOf(first, third), updated.items)
         assertEquals(2, updated.totalItems)
+        assertEquals(2, store.value.playlistRow("target").trackCount)
         assertEquals(target.key, writer.removedPlaylist)
         assertEquals(second, writer.removedItem)
         assertEquals(1, writer.removedIndex)
@@ -109,8 +119,32 @@ class PlaylistControllerTest {
         assertEquals(0, writer.addCalls)
     }
 
-    private fun store(collections: Map<String, Collection> = emptyMap()) = UiStateStore(
-        SidetrackUiState(signedIn = true, collections = collections)
+    @Test
+    fun `undo add decrements the patched count, not the stale argument`() = runTest {
+        val target = playlist("target", PlaylistActions.All)
+        val row = target.copy(trackCount = 4)
+        val writer = FakeWriter(addIndex = 2)
+        val store = store(libraryPages = mapOf(LibraryFilter.Playlists to LibraryPage(listOf(row))))
+        val controller = controller(FakeCatalog(), store, this, writer = writer)
+
+        assertEquals(2, controller.add(target, second))
+        assertEquals(5, store.value.playlistRow("target").trackCount)
+
+        controller.undoAdd(target, second, 2)
+
+        assertEquals(4, store.value.playlistRow("target").trackCount)
+    }
+
+    private fun SidetrackUiState.playlistRow(id: String): Playlist = libraryPages.values
+        .flatMap { it.items }
+        .filterIsInstance<Playlist>()
+        .first { it.id == id }
+
+    private fun store(
+        collections: Map<String, Collection> = emptyMap(),
+        libraryPages: Map<LibraryFilter, LibraryPage> = emptyMap()
+    ) = UiStateStore(
+        SidetrackUiState(signedIn = true, collections = collections, libraryPages = libraryPages)
     )
 
     private fun controller(
