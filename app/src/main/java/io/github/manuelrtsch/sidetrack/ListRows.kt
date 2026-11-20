@@ -26,7 +26,8 @@ import io.github.manuelrtsch.sidetrack.ui.LocalSwipeActionRevealed
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     SidekitText(
         text.uppercase(),
-        modifier.padding(start = 18.dp, top = 7.dp, bottom = 1.dp),
+        // Keep the label sitting the same distance inside the row content it heads.
+        modifier.padding(start = rememberMediaRowMetrics().horizontalPadding + 3.dp, top = 7.dp, bottom = 1.dp),
         style = SidekitTheme.typography.small,
         color = SidekitTheme.colors.surfaceA6
     )
@@ -61,7 +62,7 @@ fun MediaRow(
                 Cover(item.artRes, Modifier.size(metrics.artworkSize), shape = SidekitTheme.shapes.artwork, artUrl = item.artUrl, requestSize = metrics.artworkSize)
             } else if (index != null) {
                 Box(Modifier.width(metrics.trackNumberWidth), contentAlignment = Alignment.Center) {
-                    SidekitText("${index + 1}", style = metrics.secondaryStyle, color = colors.surfaceA6)
+                    SidekitText("${index + 1}", style = metrics.trackNumberStyle, color = colors.surfaceA6)
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(metrics.textGap)) {

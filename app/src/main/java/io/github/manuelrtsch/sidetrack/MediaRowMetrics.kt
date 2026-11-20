@@ -30,7 +30,7 @@ private val CompactArtworkSize = 64.dp
 private val CompactHorizontalPadding = 12.dp
 private val CompactContentGap = 10.dp
 private val CompactTextGap = 1.dp
-private val CompactTrackNumberWidth = 36.dp
+private val CompactTrackNumberWidth = 40.dp
 
 /**
  * The measured sizes of a media row. Both branches name every value, so a row reads one object
@@ -45,7 +45,8 @@ data class MediaRowMetrics(
     val textGap: Dp,
     val trackNumberWidth: Dp,
     val titleStyle: TextStyle,
-    val secondaryStyle: TextStyle
+    val secondaryStyle: TextStyle,
+    val trackNumberStyle: TextStyle
 )
 
 /** The metrics for the rows currently on screen, following the compact-rows setting. */
@@ -66,7 +67,8 @@ fun rememberMediaRowMetrics(): MediaRowMetrics {
                 // 32 -> 27 and 28 -> 24: the two-line block still reads as a title over a
                 // subtitle inside the shorter row without dropping to the tiny label size.
                 titleStyle = typography.bodySmall.copy(fontSize = 27.sp, lineHeight = 33.sp),
-                secondaryStyle = typography.small
+                secondaryStyle = typography.small,
+                trackNumberStyle = typography.tiny
             )
         } else {
             MediaRowMetrics(
@@ -77,7 +79,8 @@ fun rememberMediaRowMetrics(): MediaRowMetrics {
                 textGap = 2.dp,
                 trackNumberWidth = 44.dp,
                 titleStyle = typography.bodySmall,
-                secondaryStyle = typography.caption
+                secondaryStyle = typography.caption,
+                trackNumberStyle = typography.small
             )
         }
     }
