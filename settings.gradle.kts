@@ -21,14 +21,18 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        mavenLocal {
+        // The published release is the default source of truth. It must stay ahead of
+        // mavenLocal: Sidekit re-cuts a release tag under the same version number, and a staged
+        // build would otherwise silently shadow the release files. A source build is still
+        // explicit through -PsidetrackLocalSidekit=true.
+        maven {
+            name = "SidekitPages"
+            url = uri("https://manuel-rtsch.github.io/Sidekit/maven")
             content {
                 includeGroup("hrln.interactive.sidekit")
             }
         }
-        maven {
-            name = "SidekitPages"
-            url = uri("https://manuel-rtsch.github.io/Sidekit/maven")
+        mavenLocal {
             content {
                 includeGroup("hrln.interactive.sidekit")
             }

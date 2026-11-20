@@ -18,8 +18,8 @@ media3 = "1.11.1"
 ktlint = "1.8.0"
 spotless = "8.11.0"
 kover = "0.9.11"
-# 1.9.0 adds the request headers artwork needs for Jellyfin. It is staged in ~/.m2 until the
-# Sidekit tag publishes it to GitHub Pages; release builds need that publication first.
+# 1.9.0 adds the request headers artwork needs for Jellyfin. It is published on SidekitPages,
+# which is resolved before mavenLocal so a same-version staging cannot shadow the release files.
 sidekit = "1.9.0"
 
 [libraries]
