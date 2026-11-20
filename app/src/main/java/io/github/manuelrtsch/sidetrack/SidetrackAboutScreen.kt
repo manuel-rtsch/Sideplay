@@ -65,6 +65,19 @@ internal fun plainVersionName(versionName: String): String = versionName
     .removeSuffix("-dirty")
     .ifBlank { versionName }
 
+/**
+ * Which Spotify path this APK was built for. The native bridge needs a Rust toolchain and the
+ * NDK at build time, so building without it is legitimate for local iteration — but such a build
+ * falls back to the public Web API, which rate-limits the desktop client ID and stalls. The
+ * version card names the engine so a tester's bug report does not have to be guessed at.
+ */
+internal val spotifyEngineLabel: String
+    get() = if (BuildConfig.NATIVE_SPOTIFY) {
+        "Native Spotify engine"
+    } else {
+        "Spotify Web API, no native bridge"
+    }
+
 private val licences = listOf(
     Licence("Sidetrack", "MIT"),
     Licence("Sidekit", "MIT"),
@@ -115,6 +128,12 @@ fun SidetrackAboutScreen(onBack: () -> Unit, backLabel: String = "Settings") {
                         if (showBuild) {
                             SidekitText(
                                 "Build $versionCode",
+                                style = SidekitTheme.typography.caption,
+                                color = SidekitTheme.colors.surfaceA6,
+                                maxLines = Int.MAX_VALUE
+                            )
+                            SidekitText(
+                                spotifyEngineLabel,
                                 style = SidekitTheme.typography.caption,
                                 color = SidekitTheme.colors.surfaceA6,
                                 maxLines = Int.MAX_VALUE

@@ -152,6 +152,37 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # The librespot bridge is built by a Gradle task that is off by default, so nothing compiled
+  # native/sidetrack-spotify until someone cut a release. A release without the bridge does not
+  # fail: Spotify falls back to the rate-limited Web API, which looks like a working app that
+  # keeps stalling. This job builds the bridge and packages a release APK, which runs
+  # verifySpotifyNative and verifyReleaseApk and so fails on exactly that regression.
+  native-bridge:
+    name: Native Spotify bridge
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/android-setup
+      - uses: ./.github/actions/rust-native-setup
+      - name: Assemble a release APK with the bridge
+        run: ./gradlew :app:assembleRelease -PsidetrackNative=true --stacktrace
+      - name: Upload the release APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-native
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
   android-lint:
     name: Android Lint
     runs-on: ubuntu-latest

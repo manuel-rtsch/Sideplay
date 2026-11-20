@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.zip.ZipFile
 import kotlinx.kover.gradle.plugin.dsl.AggregationType
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 
@@ -289,6 +290,128 @@ tasks.matching {
 }.configureEach {
     dependsOn(buildSpotifyNative)
 }
+
+// A release APK without the bridge does not fail at runtime: Spotify falls back to the public Web
+// API, which rate-limits the desktop client ID, so a native-less build looks like a working app
+// that keeps stalling. That is a tester-facing regression rather than a build variant, so
+// packaging a release refuses to produce one. Debug, dev and profile builds stay native-optional
+// so local iteration does not need a Rust toolchain or the NDK.
+val nativeBridgeAbis = listOf("arm64-v8a", "x86_64")
+// `-PsidetrackAbis` narrows both the packaged ABI set and the set this gate demands.
+val requiredBridgeAbis = packagedAbis.ifEmpty { nativeBridgeAbis }
+// The symbol the Kotlin bridge resolves through `NativeLibraries`. A file that merely exists but
+// has nothing to bind to fails just as quietly, so presence is not enough.
+val nativeBridgeSymbol = "Java_io_github_manuelrtsch_sidetrack_bridge_NativeBridge_nativeConnect"
+val nativeBridgeSizeFloor = 1_000_000L
+
+val verifySpotifyNative = tasks.register("verifySpotifyNative") {
+    group = "verification"
+    description = "Fails when a release build would ship without libsidetrack_spotify.so."
+    dependsOn(buildSpotifyNative)
+    // Captured as plain values: a closure that reaches back into the script object cannot be
+    // stored in the configuration cache.
+    val abis = requiredBridgeAbis
+    val symbol = nativeBridgeSymbol
+    val sizeFloor = nativeBridgeSizeFloor
+    val libsDir = spotifyJniLibs
+    // Whether this build can produce the bridge at all. Checked first, so the gate does not pass
+    // on a stale generated directory left behind by an earlier native build.
+    val canBuildBridge = nativeEnabled && cargo != null && ndk != null
+    inputs.dir(libsDir)
+    doLast {
+        if (!canBuildBridge) {
+            throw GradleException(
+                buildString {
+                    appendLine("Sidetrack: this release build has no native Spotify bridge.")
+                    appendLine("  - native playback is off, or cargo / the Android NDK is missing")
+                    appendLine("Build it with -PsidetrackNative=true, which needs cargo and the Android NDK.")
+                    appendLine("For local iteration use assembleDebug / assembleDev, which do not need either.")
+                }
+            )
+        }
+        val root = libsDir.get().asFile
+        val problems = abis.mapNotNull { abi ->
+            val so = root.resolve("$abi/libsidetrack_spotify.so")
+            val problem = when {
+                !so.isFile -> "libsidetrack_spotify.so is missing"
+
+                so.length() < sizeFloor -> "libsidetrack_spotify.so is only ${so.length()} bytes"
+
+                !so.readBytes().toString(Charsets.ISO_8859_1).contains(symbol) ->
+                    "libsidetrack_spotify.so does not export $symbol"
+
+                else -> null
+            }
+            problem?.let { "$abi: $it" }
+        }
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("Sidetrack: this release build has no native Spotify bridge.")
+                    problems.forEach { appendLine("  - $it") }
+                    appendLine("Build it with -PsidetrackNative=true, which needs cargo and the Android NDK.")
+                    appendLine("For local iteration use assembleDebug / assembleDev, which do not need either.")
+                }
+            )
+        }
+        logger.lifecycle("Sidetrack: native Spotify bridge verified for ${abis.joinToString(", ")}.")
+    }
+}
+
+// The input check above catches a build that never produced the library. This one reads the APK
+// that was actually packaged, because that is the only place where abiFilters, splits and
+// packaging rules have all had their say.
+val verifyReleaseApk = tasks.register("verifyReleaseApk") {
+    group = "verification"
+    description = "Checks that the packaged release APK carries the native bridge for every ABI it ships."
+    dependsOn("packageRelease")
+    val apkDir = layout.buildDirectory.dir("outputs/apk/release")
+    val abis = requiredBridgeAbis
+    inputs.dir(apkDir)
+    doLast {
+        val apks = apkDir.get().asFile.listFiles { file -> file.isFile && file.extension == "apk" }.orEmpty()
+        if (apks.isEmpty()) throw GradleException("Sidetrack: no release APK was packaged into $apkDir.")
+        apks.forEach { apk ->
+            val bridgeAbis = ZipFile(apk).use { zip ->
+                zip.entries().asSequence()
+                    .map { it.name }
+                    .filter { it.startsWith("lib/") && it.endsWith("/libsidetrack_spotify.so") }
+                    .map { it.split('/')[1] }
+                    .toSet()
+            }
+            val missing = abis.filterNot { it in bridgeAbis }
+            if (missing.isNotEmpty()) {
+                throw GradleException(
+                    buildString {
+                        appendLine("Sidetrack: ${apk.name} ships without the native Spotify bridge.")
+                        appendLine("  expected: ${abis.joinToString(", ")}")
+                        appendLine("  packaged: ${bridgeAbis.sorted().joinToString(", ").ifBlank { "none" }}")
+                        appendLine("  missing:  ${missing.joinToString(", ")}")
+                    }
+                )
+            }
+            logger.lifecycle("Sidetrack: ${apk.name} carries libsidetrack_spotify.so for ${bridgeAbis.sorted().joinToString(", ")}.")
+        }
+    }
+}
+
+tasks.matching { it.name == "packageRelease" }.configureEach {
+    // Fail before R8 and the packaging work, not after: the point is to stop a native-less
+    // release as early as the build can know about it.
+    dependsOn(verifySpotifyNative)
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    dependsOn(verifyReleaseApk)
+}
+
+// What the About screen reports, so an installed APK states which Spotify engine it carries
+// instead of leaving it to be inferred from a rate-limit notice.
+android.defaultConfig.buildConfigField(
+    "boolean",
+    "NATIVE_SPOTIFY",
+    (nativeEnabled && cargo != null && ndk != null).toString()
+)
 
 dependencies {
     implementation(project(":core"))

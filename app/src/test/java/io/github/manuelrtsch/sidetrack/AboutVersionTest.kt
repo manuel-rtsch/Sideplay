@@ -46,8 +46,20 @@ class AboutVersionTest {
 
         compose.onNodeWithText("Sidetrack $versionName").assertExists()
         compose.onNodeWithText("Build $versionCode").assertDoesNotExist()
+        compose.onNodeWithText(spotifyEngineLabel).assertDoesNotExist()
         compose.onNodeWithText("Sidetrack $versionName").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("Build $versionCode").assertExists()
+        // The engine is part of the same reveal: a tester's screenshot then says whether the APK
+        // carries the native bridge or the rate-limited Web API fallback.
+        compose.onNodeWithText(spotifyEngineLabel).assertExists()
+    }
+
+    @Test
+    fun `the engine label names the bridge only when the build packaged it`() {
+        assertEquals(
+            if (BuildConfig.NATIVE_SPOTIFY) "Native Spotify engine" else "Spotify Web API, no native bridge",
+            spotifyEngineLabel
+        )
     }
 }
