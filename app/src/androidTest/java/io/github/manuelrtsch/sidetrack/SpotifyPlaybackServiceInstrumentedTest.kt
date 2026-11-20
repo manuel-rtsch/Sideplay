@@ -78,13 +78,14 @@ class SpotifyPlaybackServiceInstrumentedTest {
      * The service posts a placeholder the instant it enters the foreground, and the placeholder
      * shares [notificationId] with the real notification. Waiting for the id alone therefore
      * returns the placeholder and makes the content assertions flaky on a cold service, so wait
-     * for the transport actions only the real notification carries.
+     * for the transport actions only the real notification carries. The placeholder builds no
+     * actions at all, so the field is null rather than empty and has to be null-checked.
      */
     private fun waitForNotification(): Notification {
         val deadline = SystemClock.elapsedRealtime() + 5_000L
         while (true) {
             manager.activeNotifications.firstOrNull { it.id == notificationId }?.notification?.let { notification ->
-                if (notification.actions.isNotEmpty()) return notification
+                if (notification.actions?.isNotEmpty() == true) return notification
             }
             if (SystemClock.elapsedRealtime() > deadline) throw AssertionError("Notification was not posted")
             Thread.sleep(20L)
