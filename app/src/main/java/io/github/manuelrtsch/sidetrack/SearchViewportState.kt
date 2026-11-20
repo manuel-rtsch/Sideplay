@@ -17,28 +17,32 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import io.github.manuelrtsch.sidetrack.ui.RowGutterState
 
-// The search page's reading-position rules mirror the library's: which category was left on, and
-// how Up from the first result returns to the category row. Kept out of SearchScreen's body so the
-// composition reads as layout rather than focus choreography.
+// The search page's reading-position rules mirror the library's: where each category was left,
+// which row takes focus when a held arrow brings it back, and how a category switch is recorded.
+// Kept out of SearchScreen's body so the composition reads as layout rather than focus choreography.
 
 /**
- * What [rememberSearchViewport] hands back to the screen: the category-row switch callback and
- * the modifier the first data row attaches so Up returns to the category row.
+ * What [rememberSearchViewport] hands back to the screen: the category-row switch, the held-arrow
+ * switch modifier, the restore pieces the list needs while composing rows, and the first-row
+ * modifier that returns Up to the category row.
  */
 internal class SearchViewportState(
+    val restoreFocusIndex: Int?,
+    val restoreFocus: FocusRequester,
     val switchScope: (SearchScope) -> Unit,
+    val holdSwitch: Modifier,
     val firstRowModifier: Modifier
 )
 
 /**
  * Remembers one reading position per category, discarded whenever the query changes because a new
- * query is a fresh browse.
+ * query is a fresh browse. The focused row is keyed by the row, not its index, so an item inserted
+ * above it does not move the cursor to a stranger.
  *
- * Only the category-row path is active today: selecting a category keeps the cursor on the row and
- * the returned-to category paints from the top, exactly like the library's row switches. A held
- * arrow from a row body, which would restore a deeper list position, is not part of search yet, so
- * the saved positions only await that step rather than being consumed here.
+ * A switch from the category row keeps the cursor on the row so Left/Right can keep stepping; a
+ * held arrow from a row body restores that category's settled position.
  */
 @Composable
 internal fun rememberSearchViewport(
@@ -52,28 +56,37 @@ internal fun rememberSearchViewport(
     results: SearchResults,
     listState: LazyListState,
     rows: TrackRows,
+    searchGutters: RowGutterState,
     moreFocus: LoadMoreFocusState,
-    scopeFocus: Map<SearchScope, FocusRequester>
+    scopeFocus: Map<SearchScope, FocusRequester>,
+    gate: CategoryHoldGate
 ): SearchViewportState {
-    // A category's place while this query is on screen; a new query resets it because a fresh
-    // search has no reading position to come back to.
     val viewports = remember(query) { mutableStateMapOf<SearchScope, LibraryViewport>() }
     var lastFocusedRowKey by remember { mutableStateOf<String?>(null) }
+    var pendingViewport by remember { mutableStateOf<LibraryViewport?>(null) }
+    var restoreListFocus by remember { mutableStateOf(true) }
+    var restoreFocusIndex by remember { mutableStateOf<Int?>(null) }
     var focusFilterRow by remember { mutableStateOf(false) }
+    val restoreFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { rows.focus.focusedKey }.collect { key ->
+        snapshotFlow { rows.focus.focusedKey ?: searchGutters.focusedKey }.collect { key ->
             if (key != null) lastFocusedRowKey = key.toString()
         }
     }
 
-    // A row that has settled under the cursor is a reading position: record it so a switch away
-    // and back can return to it once a held-arrow switch exists.
     val items = results.itemsFor(scope)
-    val settledRowKey = rows.focus.openKey
+    val branch = when {
+        !showFilters || failed -> "top"
+        items.isEmpty() -> "empty"
+        else -> "list"
+    }
+    // A row that has settled under the cursor is a reading position: record it so a held arrow can
+    // bring that category back to where it was.
+    val settledRowKey = rows.focus.openKey ?: searchGutters.openKey
     LaunchedEffect(settledRowKey, scope) {
         val settled = settledRowKey ?: return@LaunchedEffect
-        if (!showFilters || failed) return@LaunchedEffect
+        if (branch != "list") return@LaunchedEffect
         val itemIndex = items.indexOfFirst { libraryRowFocusKey(it) == settled.toString() }
         if (itemIndex < 0) return@LaunchedEffect
         viewports[scope] = listState.captureViewport(settled.toString())
@@ -93,9 +106,9 @@ internal fun rememberSearchViewport(
         }
     }
 
-    val switchScope: (SearchScope) -> Unit = { next ->
+    val switchScope: (SearchScope, Boolean) -> Unit = { next, fromRow ->
         if (next != scope) {
-            val focusedKey = rows.focus.focusedKey?.toString() ?: lastFocusedRowKey
+            val focusedKey = (rows.focus.focusedKey ?: searchGutters.focusedKey)?.toString() ?: lastFocusedRowKey
             val focusedIndex = focusedKey?.let { key ->
                 items.indexOfFirst { libraryRowFocusKey(it) == key }
             } ?: -1
@@ -106,20 +119,59 @@ internal fun rememberSearchViewport(
             if (focusedVisible || viewports[scope] == null) {
                 viewports[scope] = listState.captureViewport(focusedKey)
             }
+            pendingViewport = viewports[next]
+            restoreListFocus = !fromRow
+            restoreFocusIndex = null
             lastFocusedRowKey = null
             setScope(next)
         }
     }
 
-    // Chosen a category (row click or Left/Right): the new page is a repaint from the top and the
-    // cursor stays on the category row so Left/Right can keep stepping. The typing and failed
-    // states own their own focus, so only the filter-row states scroll and re-point the cursor.
+    val holdSwitch = Modifier.searchCategoryHoldSwitch(
+        scope = scope,
+        includedScopes = includedScopes,
+        enabled = rows.bar.selection == null,
+        gate = gate,
+        onSwitch = { switchScope(it, false) }
+    )
+
+    // Chosen a category (row click or Left/Right): the cursor stays on the category row so Left/
+    // Right can keep stepping. A held arrow from a row body restores that category's position. The
+    // typing, loading and failed states own their own focus, so only the browse states touch it
+    // here; an empty category has no position to restore, so its cursor stays on the row too.
     LaunchedEffect(scope) {
         moreFocus.reset()
-        if (showFilters && !failed) {
+        if (!showFilters || failed) return@LaunchedEffect
+        val viewport = pendingViewport
+        pendingViewport = null
+        if (viewport == null || !restoreListFocus || branch == "empty") {
             listState.scrollToItem(0)
             focusFilterRow = true
+            return@LaunchedEffect
         }
+        listState.scrollToItem(
+            viewport.index.coerceIn(0, items.size),
+            viewport.offset.coerceAtLeast(0)
+        )
+        val focusedIndex = viewport.focusedRowKey?.let { key ->
+            items.indexOfFirst { libraryRowFocusKey(it) == key }.takeIf { it >= 0 }
+        }
+        restoreFocusIndex = focusedIndex
+            ?: (viewport.index - 1).coerceIn(0, items.lastIndex)
+    }
+
+    LaunchedEffect(restoreFocusIndex) {
+        if (restoreFocusIndex == null) return@LaunchedEffect
+        // The scroll above composes the restored row. Give that frame a chance to attach the
+        // requester before asking it to take the cursor.
+        repeat(3) {
+            withFrameNanos { }
+            if (runCatching { restoreFocus.requestFocus() }.isSuccess) {
+                restoreFocusIndex = null
+                return@LaunchedEffect
+            }
+        }
+        restoreFocusIndex = null
     }
 
     // Up from the first result returns to the category row rather than letting focus search pick
@@ -148,7 +200,10 @@ internal fun rememberSearchViewport(
     }
 
     return SearchViewportState(
-        switchScope = { switchScope(it) },
+        restoreFocusIndex = restoreFocusIndex,
+        restoreFocus = restoreFocus,
+        switchScope = { switchScope(it, true) },
+        holdSwitch = holdSwitch,
         firstRowModifier = firstRowModifier
     )
 }

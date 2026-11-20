@@ -109,6 +109,10 @@ fun SearchScreen(
     // Artist/album/playlist/show rows share one gutter state so their action squares behave like
     // the library's, and the list settles under the cursor into a reading position.
     val searchGutters = rememberRowGutterState()
+    // The gate outlives any one row: after a held arrow switches scope, the list may rebuild and
+    // move focus before the physical key comes up. The screen root uses the same gate to swallow
+    // the repeats and the release so the switch cannot walk sideways through every scope.
+    val holdGate = remember { CategoryHoldGate() }
     // The category buttons only choose which result list is shown. Which categories get queried is
     // still decided on the "Search in" page, and that page is reached from the idle/typing state.
     // The selection survives a trip into a result and back.
@@ -151,7 +155,9 @@ fun SearchScreen(
     // the last row is left to focus search, which finds the action bar below the list.
     SidekitScaffold(
         title = null,
-        modifier = Modifier.dismissRowActionsOnVerticalKey(rows.bar),
+        modifier = Modifier
+            .dismissRowActionsOnVerticalKey(rows.bar)
+            .consumeCategoryHoldRepeats(holdGate),
         header = {
             Box(
                 Modifier.fillMaxWidth().height(SidekitTheme.spacing.headerHeight)
@@ -193,9 +199,14 @@ fun SearchScreen(
             results = results,
             listState = listState,
             rows = rows,
+            searchGutters = searchGutters,
             moreFocus = moreFocus,
-            scopeFocus = filterFocus
+            scopeFocus = filterFocus,
+            gate = holdGate
         )
+        val holdSwitch = viewport.holdSwitch
+        val restoreFocus = viewport.restoreFocus
+        val restoreFocusIndex = viewport.restoreFocusIndex
         // A new query shows a different page from the top; keeping the old scroll offset would open
         // it in the middle. A scope change is handled by the viewport, which also keeps the cursor
         // on the category row.
@@ -299,15 +310,23 @@ fun SearchScreen(
                         contentType = { _, item -> searchItemKey(item).take(1) }
                     ) { index, item ->
                         // Every result row carries its own focus target, so the load-more requester
-                        // travels with the row instead of riding a wrapper that has no focusable.
-                        val focusRequester = moreFocus.requesterFor(index)
+                        // travels with a row requester instead of riding a wrapper that has no
+                        // focusable. A held-arrow switch may restore exactly one row, which takes
+                        // the shared restore requester for its one index.
+                        val focusRequester = if (index == restoreFocusIndex) {
+                            restoreFocus
+                        } else {
+                            moreFocus.requesterFor(index)
+                        }
+                        val modifier = Modifier.listFade(listState, index + 1)
+                            .then(if (index == 0) viewport.firstRowModifier else Modifier)
                         when (item) {
                             is Track -> TrackRow(
                                 searchItemKey(item),
                                 item,
                                 rows,
-                                Modifier.listFade(listState, index + 1)
-                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                modifier,
+                                bodyModifier = holdSwitch,
                                 focusRequester = focusRequester
                             ) { onTrack(item) }
 
@@ -316,8 +335,8 @@ fun SearchScreen(
                                 item,
                                 searchGutters,
                                 rows.bar,
-                                Modifier.listFade(listState, index + 1)
-                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                modifier,
+                                bodyModifier = holdSwitch,
                                 focusRequester = focusRequester,
                                 canRadio = canRadio,
                                 onRadio = { onArtistRadio(item) },
@@ -329,8 +348,8 @@ fun SearchScreen(
                                 item,
                                 searchGutters,
                                 rows.bar,
-                                Modifier.listFade(listState, index + 1)
-                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                modifier,
+                                bodyModifier = holdSwitch,
                                 focusRequester = focusRequester,
                                 onAddToQueue = { onQueueAlbum(item) },
                                 onClick = { onAlbum(item) }
@@ -341,8 +360,8 @@ fun SearchScreen(
                                 item,
                                 searchGutters,
                                 rows.bar,
-                                Modifier.listFade(listState, index + 1)
-                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                modifier,
+                                bodyModifier = holdSwitch,
                                 focusRequester = focusRequester,
                                 onAddToQueue = { onQueuePlaylist(item) },
                                 onClick = { onPlaylist(item) }
@@ -353,8 +372,8 @@ fun SearchScreen(
                                 item,
                                 searchGutters,
                                 rows.bar,
-                                Modifier.listFade(listState, index + 1)
-                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                modifier,
+                                bodyModifier = holdSwitch,
                                 focusRequester = focusRequester,
                                 onAddLatestToQueue = { onAddLatestShowToQueue(item) },
                                 onClick = { onShow(item) }
