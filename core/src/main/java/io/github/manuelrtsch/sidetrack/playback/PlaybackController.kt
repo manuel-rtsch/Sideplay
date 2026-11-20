@@ -16,6 +16,8 @@ import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.MediaKey
 import io.github.manuelrtsch.sidetrack.SidetrackDebug
 import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
+import io.github.manuelrtsch.sidetrack.mediaTextOrNull
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -304,10 +306,17 @@ class PlaybackController(
         notificationArt = null
         if (context != null) updateMetadata()
         publish()
-        if (item?.artUrl != null && context != null) {
+        val artUrl = item?.artUrl.mediaTextOrNull()
+        if (artUrl != null && context != null) {
             artJob = scope.launch {
-                val bitmap = RemoteArtwork.load(context, item.artUrl!!, ART_PX, ART_PX, ArtworkAccess.current())
-                if (current?.id == item.id) {
+                val bitmap = try {
+                    RemoteArtwork.load(context, artUrl, ART_PX, ART_PX, ArtworkAccess.current())
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+                if (current?.id == item?.id) {
                     notificationArt = bitmap
                     lastSessionUpdate = 0L
                     updateMetadata()

@@ -71,7 +71,10 @@ private fun collectionRoute(key: MediaKey) = "$ROOT/collection/${Uri.encode(key.
 private fun artistRoute(key: MediaKey) = "$ROOT/artist/${Uri.encode(key.encode())}"
 private fun artistRadioRoute(key: MediaKey) = "$ROOT/artist-radio/${Uri.encode(key.encode())}"
 private fun MediaKey.with(type: MediaType, id: String) = MediaKey(service, type, id)
-private fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f) = "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.orEmpty())}&label=${Uri.encode(label)}&ratio=$ratio"
+internal fun artworkRoute(artRes: Int, artUrl: String?, label: String, ratio: Float = 1f): String {
+    val safeLabel = label.mediaTextOrNull() ?: "Artwork"
+    return "$ROOT/artwork/$artRes?url=${Uri.encode(artUrl.mediaTextOrNull().orEmpty())}&label=${Uri.encode(safeLabel)}&ratio=$ratio"
+}
 private fun notesRoute(key: String) = "$ROOT/notes/${Uri.encode(key)}"
 
 /**

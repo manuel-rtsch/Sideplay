@@ -41,6 +41,8 @@ class JellyfinCatalogTest {
         assertTrue(playlist.editable)
         assertEquals(3, playlist.trackCount)
         assertEquals(ServiceId.Jellyfin, playlist.service)
+        // No primary image tag means the server has no artwork for this playlist.
+        assertNull(playlist.artUrl)
 
         api.albums = JellyfinPage(listOf(album("a1")), total = 1)
         assertEquals("a1", (catalog.library(LibrarySection.Albums, 0, 10).items.single() as Album).id)
@@ -87,6 +89,7 @@ class JellyfinCatalogTest {
         assertEquals(CollectionType.Playlist, collection.type)
         assertEquals("Night Drive", collection.title)
         assertEquals(2, collection.items.size)
+        assertTrue(collection.artUrl!!.contains("tag-list"))
         assertFalse(collection.saveable)
         assertFalse(collection.hasMore)
     }

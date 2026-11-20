@@ -67,6 +67,16 @@ class SidetrackGraphTest {
         assertTrue(keypadBackIsLeftAction("sidetrack/notes/{key}", canPop = true))
     }
 
+    @Test fun `a JSON null artwork url does not become a null route argument`() {
+        // Navigation's StringType turns the literal "null" into a real null, which fails a
+        // non-nullable argument before the artwork screen is even built.
+        val route = artworkRoute(0, "null", "null")
+        assertTrue(route.contains("url=&"))
+        assertFalse(route.contains("url=null"))
+        assertTrue(route.contains("label=Artwork"))
+        assertFalse(route.contains("label=null"))
+    }
+
     @Test fun `an unknown route leaves Back to the system`() {
         assertFalse(keypadBackIsLeftAction("sidetrack/not-a-screen", canPop = true))
     }

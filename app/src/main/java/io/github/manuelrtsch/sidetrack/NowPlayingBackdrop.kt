@@ -51,6 +51,7 @@ import hrln.interactive.sidekit.sdk.media.RemoteArtwork
 import io.github.manuelrtsch.sidetrack.data.ArtworkAccess
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 
 /*
@@ -171,11 +172,12 @@ internal fun ArtworkBackdrop(
 
 @Composable
 private fun BackdropImage(artRes: Int, artUrl: String?, side: Dp, modifier: Modifier = Modifier) {
+    val remoteUrl = artUrl.mediaTextOrNull()
     Box(modifier.size(side)) {
         when {
             // The demo pack (and the screenshot tests) ship their covers as drawables, which are
             // available on the first frame, so they can go straight into the blur layer.
-            artUrl != null -> RemoteBackdrop(artUrl, side)
+            remoteUrl != null -> RemoteBackdrop(remoteUrl, side)
 
             artRes != 0 -> Image(
                 painterResource(artRes),
@@ -194,7 +196,13 @@ private fun RemoteBackdrop(url: String, side: Dp) {
     // would cost three times the bytes for a picture nobody sees sharply.
     val px = with(LocalDensity.current) { (side * 0.6f).roundToPx() }.coerceIn(96, 768)
     val bitmap by produceState<ImageBitmap?>(null, url, px) {
-        value = RemoteArtwork.load(context, url, px, px, ArtworkAccess.current())?.asImageBitmap()
+        value = try {
+            RemoteArtwork.load(context, url, px, px, ArtworkAccess.current())?.asImageBitmap()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
     }
     bitmap?.let { image ->
         key(image) {

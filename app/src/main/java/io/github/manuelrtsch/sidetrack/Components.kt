@@ -135,6 +135,7 @@ fun Cover(
     requestSize: Dp? = null
 ) {
     val colors = SidekitTheme.colors
+    val remoteUrl = artUrl.mediaTextOrNull()
     Box(
         modifier
             .clip(shape)
@@ -143,8 +144,8 @@ fun Cover(
             .then(if (onClick != null) Modifier.clickable(onClickLabel = onClickLabel, onClick = onClick) else Modifier)
     ) {
         when {
-            artUrl != null && requestSize != null -> RemoteArtworkImage(
-                artUrl,
+            remoteUrl != null && requestSize != null -> RemoteArtworkImage(
+                remoteUrl,
                 width = requestSize,
                 height = requestSize,
                 modifier = Modifier.fillMaxSize(),
@@ -155,8 +156,8 @@ fun Cover(
                 headers = ArtworkAccess.current()
             )
 
-            artUrl != null -> RemoteArtworkImage(
-                artUrl,
+            remoteUrl != null -> RemoteArtworkImage(
+                remoteUrl,
                 Modifier.fillMaxSize(),
                 placeholder = SidekitIcon.Album,
                 contentDescription = contentDescription,

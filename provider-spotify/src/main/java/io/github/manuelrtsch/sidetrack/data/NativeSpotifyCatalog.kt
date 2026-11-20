@@ -17,6 +17,7 @@ import io.github.manuelrtsch.sidetrack.Station
 import io.github.manuelrtsch.sidetrack.Track
 import io.github.manuelrtsch.sidetrack.bridge.SpotifyNative
 import io.github.manuelrtsch.sidetrack.mediaIdOrNull
+import io.github.manuelrtsch.sidetrack.mediaTextOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -268,7 +269,7 @@ internal fun JSONObject.collection(type: CollectionType): Collection? {
         artRes = 0,
         items = items,
         artistId = optString("artistId").mediaIdOrNull(),
-        artUrl = optString("artUrl").takeIf { it.isNotEmpty() },
+        artUrl = optString("artUrl").mediaTextOrNull(),
         totalItems = optInt("totalItems", items.size),
         hasMore = optBoolean("hasMore", false),
         description = optString("description"),
@@ -289,7 +290,7 @@ private fun trackFromNative(json: JSONObject): Track? {
         explicit = json.optBoolean("explicit", false),
         playable = json.optBoolean("playable", true),
         uri = json.optString("uri").takeIf { it.isNotEmpty() },
-        artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+        artUrl = json.optString("artUrl").mediaTextOrNull(),
         service = ServiceId.Spotify
     )
 }
@@ -304,7 +305,7 @@ private fun albumFromNative(json: JSONObject): Album? {
         year = json.optInt("year", 0),
         artRes = 0,
         tracks = json.optJSONArray("tracks").tracks(),
-        artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+        artUrl = json.optString("artUrl").mediaTextOrNull(),
         trackCount = json.optInt("trackCount", 0),
         service = ServiceId.Spotify
     )
@@ -320,7 +321,7 @@ private fun artistFromNative(json: JSONObject): Artist? {
         albumIds = buildList {
             for (i in 0 until albumIds.length()) albumIds.optString(i).takeIf { it.isNotEmpty() }?.let(::add)
         },
-        artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+        artUrl = json.optString("artUrl").mediaTextOrNull(),
         albumCount = json.optInt("albumCount", albumIds.length()),
         service = ServiceId.Spotify
     )
@@ -335,7 +336,7 @@ private fun playlistFromNative(json: JSONObject): Playlist? {
         ownerId = json.optString("ownerId").mediaIdOrNull(),
         artRes = 0,
         tracks = json.optJSONArray("tracks").tracks(),
-        artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+        artUrl = json.optString("artUrl").mediaTextOrNull(),
         trackCount = json.optInt("trackCount", 0),
         editable = json.optBoolean("editable", false),
         folder = json.optString("folder").takeIf { it.isNotEmpty() },
@@ -351,7 +352,7 @@ private fun showFromNative(json: JSONObject): Show? {
         publisher = json.optString("publisher", "Podcast"),
         artRes = 0,
         episodes = json.optJSONArray("episodes").episodes(null),
-        artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+        artUrl = json.optString("artUrl").mediaTextOrNull(),
         episodeCount = json.optInt("episodeCount", 0),
         description = json.optString("description"),
         service = ServiceId.Spotify
@@ -374,7 +375,7 @@ private fun JSONArray?.episodes(show: Show?): List<Episode> = buildList {
                 durationMs = json.optLong("durationMs", 0L),
                 video = json.optBoolean("video", false),
                 uri = json.optString("uri").takeIf { it.isNotEmpty() },
-                artUrl = json.optString("artUrl").takeIf { it.isNotEmpty() },
+                artUrl = json.optString("artUrl").mediaTextOrNull(),
                 description = json.optString("description"),
                 episodeNumber = json.optInt("number", 0).takeIf { it > 0 },
                 explicit = json.optBoolean("explicit", false),

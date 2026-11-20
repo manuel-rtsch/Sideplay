@@ -18,6 +18,7 @@ import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.ServiceCapabilities
 import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.Track
+import io.github.manuelrtsch.sidetrack.mediaTextOrNull
 import io.github.manuelrtsch.sidetrack.playback.PlaybackSource
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -199,8 +200,8 @@ class NavidromeApi(
     }
 
     fun coverUrl(coverArt: String?, size: Int = 600): String? {
-        if (coverArt.isNullOrBlank()) return null
-        return url("getCoverArt", "id" to coverArt, "size" to size.toString())
+        val id = coverArt.mediaTextOrNull() ?: return null
+        return url("getCoverArt", "id" to id, "size" to size.toString())
     }
 
     private suspend fun call(method: String, vararg params: Pair<String, String>): JSONObject {
@@ -314,7 +315,7 @@ private fun JSONObject.toTrack(cover: (String?) -> String?): Track {
         artRes = 0,
         durationMs = optLong("duration", 0L) * 1_000L,
         uri = null,
-        artUrl = cover(optString("coverArt").takeIf { it.isNotEmpty() }),
+        artUrl = cover(optString("coverArt").mediaTextOrNull()),
         service = ServiceId.Navidrome
     )
 }
@@ -329,7 +330,7 @@ private fun JSONObject.toAlbum(cover: (String?) -> String?): Album {
         year = optInt("year", 0),
         artRes = 0,
         tracks = songs,
-        artUrl = cover(optString("coverArt").takeIf { it.isNotEmpty() }),
+        artUrl = cover(optString("coverArt").mediaTextOrNull()),
         trackCount = optInt("songCount", songs.size),
         service = ServiceId.Navidrome
     )
@@ -344,7 +345,7 @@ private fun JSONObject.toArtist(cover: (String?) -> String?): Artist {
         name = optString("name"),
         artRes = 0,
         albumIds = albums.map { it.optString("id") },
-        artUrl = image ?: cover(optString("coverArt").takeIf { it.isNotEmpty() }),
+        artUrl = image ?: cover(optString("coverArt").mediaTextOrNull()),
         albumCount = optInt("albumCount", albums.size),
         service = ServiceId.Navidrome
     )
@@ -360,7 +361,7 @@ private fun JSONObject.toPlaylist(cover: (String?) -> String?): Playlist {
         ownerId = optString("owner").takeIf { it.isNotEmpty() },
         artRes = 0,
         tracks = entries,
-        artUrl = cover(optString("coverArt").takeIf { it.isNotEmpty() }),
+        artUrl = cover(optString("coverArt").mediaTextOrNull()),
         trackCount = optInt("songCount", entries.size),
         editable = true,
         service = ServiceId.Navidrome

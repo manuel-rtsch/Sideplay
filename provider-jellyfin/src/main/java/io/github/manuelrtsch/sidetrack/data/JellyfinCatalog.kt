@@ -209,7 +209,10 @@ internal fun AudioQuality.jellyfinBitrateKbps(): Int? = when (this) {
     AudioQuality.VeryHigh -> 320
 }
 
-internal fun JellyfinItem.artUrl(client: JellyfinApi): String? = client.imageUrl(artItemId, imageTag)
+internal fun JellyfinItem.artUrl(client: JellyfinApi): String? = imageTag?.let { client.imageUrl(artItemId, it) }
+
+/** A hint without a primary image tag names an item whose artwork the server does not have. */
+internal fun JellyfinSearchHint.artUrl(client: JellyfinApi): String? = imageTag?.let { client.imageUrl(imageItemId ?: itemId, it) }
 
 internal fun JellyfinItem.toTrack(client: JellyfinApi): Track = Track(
     id = id,
@@ -277,7 +280,7 @@ internal fun JellyfinSearchHint.toTrack(client: JellyfinApi): Track = Track(
     albumId = albumId.orEmpty(),
     artRes = 0,
     durationMs = (runTimeTicks ?: 0L).ticksToMs(),
-    artUrl = client.imageUrl(imageItemId ?: itemId, imageTag),
+    artUrl = artUrl(client),
     service = ServiceId.Jellyfin
 )
 
@@ -289,7 +292,7 @@ internal fun JellyfinSearchHint.toAlbum(client: JellyfinApi): Album = Album(
     year = productionYear ?: 0,
     artRes = 0,
     tracks = emptyList(),
-    artUrl = client.imageUrl(imageItemId ?: itemId, imageTag),
+    artUrl = artUrl(client),
     trackCount = songCount ?: 0,
     service = ServiceId.Jellyfin
 )
@@ -299,7 +302,7 @@ internal fun JellyfinSearchHint.toArtist(client: JellyfinApi): Artist = Artist(
     name = name,
     artRes = 0,
     albumIds = emptyList(),
-    artUrl = client.imageUrl(imageItemId ?: itemId, imageTag),
+    artUrl = artUrl(client),
     albumCount = songCount ?: 0,
     service = ServiceId.Jellyfin
 )
@@ -311,7 +314,7 @@ internal fun JellyfinSearchHint.toPlaylist(client: JellyfinApi, editable: Boolea
     ownerId = itemId,
     artRes = 0,
     tracks = emptyList(),
-    artUrl = client.imageUrl(imageItemId ?: itemId, imageTag),
+    artUrl = artUrl(client),
     trackCount = songCount ?: 0,
     editable = editable,
     service = ServiceId.Jellyfin

@@ -19,6 +19,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -88,6 +89,25 @@ class NavidromeApiTest {
         assertEquals(ServiceId.Navidrome, artist.service)
         assertTrue(artist.artUrl!!.contains("/rest/getCoverArt"))
         assertTrue(artist.artUrl!!.contains("id=ar1"))
+    }
+
+    @Test fun `a json null cover id means the playlist has no artwork`() = runTest {
+        val api = NavidromeApi(
+            NavidromeCredentials("http://nas.local", "joe", "sesame"),
+            FakeTransport {
+                ok(
+                    """{"status":"ok","playlists":{"playlist":[
+                        {"id":"p1","name":"Night Drive","coverArt":null}
+                    ]}}"""
+                )
+            },
+            salt = { "salt" }
+        )
+
+        val playlist = api.playlists().single()
+
+        assertEquals("p1", playlist.id)
+        assertNull(playlist.artUrl)
     }
 
     @Test fun `search3 maps each requested scope`() = runTest {

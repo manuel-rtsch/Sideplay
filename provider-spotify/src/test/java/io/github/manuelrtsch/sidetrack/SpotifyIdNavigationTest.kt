@@ -30,6 +30,19 @@ class SpotifyIdNavigationTest {
     }
 
     @Test
+    fun jsonNullArtworkUrlsNeverBecomeRouteText() {
+        val album = JSONObject("""{"id":"abc","title":"Album","artUrl":null,"items":[]}""")
+        // org.json's trap: a JSON null arrives as the literal string "null".
+        assertEquals("null", album.optString("artUrl"))
+        assertNull(album.collection(CollectionType.Album)?.artUrl)
+
+        val withArt = JSONObject(
+            """{"id":"abc","title":"Album","artUrl":"https://example.test/a.jpg","items":[]}"""
+        )
+        assertEquals("https://example.test/a.jpg", withArt.collection(CollectionType.Album)?.artUrl)
+    }
+
+    @Test
     fun jsonNullCollectionIdsNeverBecomeRoutes() {
         val album = JSONObject("""{"id":"abc","title":"Album","artistId":null,"items":[]}""")
         // org.json's trap: a JSON null arrives as the literal string "null".

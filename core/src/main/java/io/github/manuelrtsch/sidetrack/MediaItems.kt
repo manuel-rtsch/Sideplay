@@ -3,14 +3,17 @@ package io.github.manuelrtsch.sidetrack
 import androidx.annotation.DrawableRes
 
 /**
- * Service ids as they can safely travel through a navigation route.
+ * Text as it can safely travel through a navigation route.
  *
  * org.json's `optString` returns the literal string "null" for a JSON null, and Navigation's
- * `NavType.StringType` parses the literal "null" back into a real null. A non-nullable route
- * argument then fails verification while navigating and takes the process down, so ids are
- * normalised here before they reach a route.
+ * `NavType.StringType` parses the literal "null" back into a real null. A route argument that
+ * does not allow nulls then fails verification while navigating and takes the process down, so
+ * route-bound text is normalised here before it reaches a route.
  */
-fun String?.mediaIdOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
+fun String?.mediaTextOrNull(): String? = this?.takeIf { it.isNotBlank() && it != "null" }
+
+/** Service ids are route text with the same JSON-null trap as [mediaTextOrNull]. */
+fun String?.mediaIdOrNull(): String? = mediaTextOrNull()
 
 /** A saved album, playlist or show. Collections share one screen, so they share one shape. */
 enum class CollectionType(val route: String, val mediaType: MediaType) {
