@@ -104,7 +104,7 @@ fun SidetrackHomeScreen(
         SidekitList(padding, state = listState) {
             item(key = "tiles") {
                 SidekitItemRow(Modifier.listFade(listState, 0)) {
-                    NowPlayingTile(playback.current, sleepTimer, onNowPlaying, Modifier.weight(1f))
+                    NowPlayingTile(playback.current, playback.isPlaying, sleepTimer, onNowPlaying, Modifier.weight(1f))
                     LibraryTile(onLibrary, Modifier.width(SidekitTheme.spacing.itemHeight))
                 }
             }

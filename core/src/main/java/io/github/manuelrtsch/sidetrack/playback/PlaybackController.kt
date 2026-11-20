@@ -231,14 +231,23 @@ class PlaybackController(
             clearSleepTimer()
             return
         }
-        val now = elapsedTime()
-        val deadline = now + minutes * SLEEP_TIMER_MINUTE_MS
+        val total = minutes * SLEEP_TIMER_MINUTE_MS
+        // The countdown measures listening time, so a timer armed while paused waits for playback.
         installSleepTimer(
-            SleepTimerState.Countdown(
-                minutes = minutes,
-                deadlineElapsedMs = deadline,
-                remainingMinutes = sleepTimerRemainingMinutes(deadline, now)
-            )
+            if (playing) {
+                SleepTimerState.Countdown(
+                    minutes = minutes,
+                    deadlineElapsedMs = elapsedTime() + total,
+                    remainingMinutes = minutes
+                )
+            } else {
+                SleepTimerState.Countdown(
+                    minutes = minutes,
+                    deadlineElapsedMs = 0L,
+                    remainingMinutes = minutes,
+                    heldMs = total
+                )
+            }
         )
     }
 
@@ -257,7 +266,7 @@ class PlaybackController(
      */
     fun consumeEndOfTrackTimer(): Boolean {
         if (_sleepTimer.value != SleepTimerState.EndOfTrack) return false
-        clearSleepTimer()
+        _sleepTimer.value = SleepTimerState.Finished
         return true
     }
 
@@ -265,10 +274,12 @@ class PlaybackController(
         sleepTimerJob?.cancel()
         sleepTimerJob = null
         _sleepTimer.value = state
-        if (state !is SleepTimerState.Countdown) return
+        val countdown = state as? SleepTimerState.Countdown ?: return
+        if (countdown.heldMs != null) return
         sleepTimerJob = scope.launch {
             while (true) {
                 val current = _sleepTimer.value as? SleepTimerState.Countdown ?: return@launch
+                if (current.heldMs != null) return@launch
                 val now = elapsedTime()
                 if (now >= current.deadlineElapsedMs) {
                     expireSleepTimer()
@@ -288,9 +299,48 @@ class PlaybackController(
     private fun expireSleepTimer() {
         sleepTimerJob?.cancel()
         sleepTimerJob = null
-        _sleepTimer.value = SleepTimerState.Off
+        // Kept until playback starts again, so a returning user still learns what stopped the music.
+        _sleepTimer.value = SleepTimerState.Finished
         // Pause never touches system volume, and an already-paused player needs no pause call.
         if (playing) pause()
+    }
+
+    /** Freezes a running countdown while no audio plays, so a paused night does not spend it. */
+    private fun holdSleepTimer() {
+        val current = _sleepTimer.value as? SleepTimerState.Countdown ?: return
+        if (current.heldMs != null) return
+        val remaining = (current.deadlineElapsedMs - elapsedTime()).coerceAtLeast(0L)
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        if (remaining == 0L) {
+            _sleepTimer.value = SleepTimerState.Finished
+        } else {
+            _sleepTimer.value = current.copy(
+                heldMs = remaining,
+                remainingMinutes = sleepTimerRemainingMinutes(remaining)
+            )
+        }
+    }
+
+    /** Rebases a held countdown onto the current instant when playback starts again. */
+    private fun resumeSleepTimerClock() {
+        val current = _sleepTimer.value as? SleepTimerState.Countdown ?: return
+        val held = current.heldMs ?: return
+        installSleepTimer(
+            current.copy(
+                deadlineElapsedMs = elapsedTime() + held,
+                remainingMinutes = sleepTimerRemainingMinutes(held),
+                heldMs = null
+            )
+        )
+    }
+
+    /** A start or resume ends the finished notice and lets a held countdown run again. */
+    private fun onPlaybackStarted() {
+        if (_sleepTimer.value == SleepTimerState.Finished) {
+            _sleepTimer.value = SleepTimerState.Off
+        }
+        resumeSleepTimerClock()
     }
 
     fun setNowPlaying(
@@ -298,6 +348,9 @@ class PlaybackController(
         position: Long = 0L,
         source: PlaybackSource? = null
     ) {
+        if (item != null && item.id != current?.id && _sleepTimer.value == SleepTimerState.Finished) {
+            _sleepTimer.value = SleepTimerState.Off
+        }
         current = item
         currentSource = source ?: item?.uri?.let { PlaybackSource(item.key.encode(), it) }
         positionMs = position
@@ -329,6 +382,7 @@ class PlaybackController(
     /** Mirrors native player events into the media session and notification. */
     fun updateState(isPlaying: Boolean, position: Long) {
         playing = isPlaying
+        if (isPlaying) onPlaybackStarted() else holdSleepTimer()
         positionMs = position
         engine.updateState(isPlaying, position)
         publish()
@@ -387,6 +441,7 @@ class PlaybackController(
             publish()
             throw t
         }
+        onPlaybackStarted()
     }
 
     suspend fun resume(): Boolean {
@@ -412,6 +467,7 @@ class PlaybackController(
         playing = true
         publish()
         val started = engine.resume(positionMs)
+        if (started) onPlaybackStarted()
         if (!started) {
             // Symmetric with [start]: an engine that cannot deliver audio has not earned the
             // session or the focus request. Leaving the registry pointed at a silent owner would
@@ -441,6 +497,7 @@ class PlaybackController(
         // The UI clock owns the position; the decoder's `paused` event is ahead by the PCM
         // buffer and must not be used as the resume point.
         playing = false
+        holdSleepTimer()
         _buffering.value = false
         lastCommandWasPause = true
         lastCommandAt = SystemClock.elapsedRealtime()

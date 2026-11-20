@@ -18,19 +18,33 @@ sealed interface SleepTimerState {
         val minutes: Int,
         val deadlineElapsedMs: Long,
         /** Whole minutes still on the clock, rounded up. Updated once per minute. */
-        val remainingMinutes: Int = minutes
+        val remainingMinutes: Int = minutes,
+        /**
+         * Exact time left when playback paused. While set the clock is stopped: the deadline is
+         * stale and [remainingMinutes] is held until playback resumes and rebases the deadline.
+         */
+        val heldMs: Long? = null
     ) : SleepTimerState
 
     data object EndOfTrack : SleepTimerState
 
-    val active: Boolean get() = this != Off
+    /**
+     * Playback was stopped by the timer. It stays visible, explaining the pause, until playback
+     * starts again or the process that holds the timer ends.
+     */
+    data object Finished : SleepTimerState
+
+    val active: Boolean get() = this == EndOfTrack || this is Countdown
 }
 
 /** Whole minutes left, rounded up so the first minute still reads as the chosen duration. */
-fun sleepTimerRemainingMinutes(deadlineElapsedMs: Long, nowElapsedMs: Long): Int {
-    val left = deadlineElapsedMs - nowElapsedMs
-    if (left <= 0L) return 0
-    return ((left + MINUTE_MS - 1) / MINUTE_MS).toInt()
+fun sleepTimerRemainingMinutes(deadlineElapsedMs: Long, nowElapsedMs: Long): Int =
+    sleepTimerRemainingMinutes(deadlineElapsedMs - nowElapsedMs)
+
+/** Whole minutes left in an already-computed remainder, rounded up. */
+fun sleepTimerRemainingMinutes(remainingMs: Long): Int {
+    if (remainingMs <= 0L) return 0
+    return ((remainingMs + MINUTE_MS - 1) / MINUTE_MS).toInt()
 }
 
 /** Slim status line on Now Playing. Null when no timer is active. */
@@ -38,6 +52,7 @@ fun SleepTimerState.statusText(): String? = when (this) {
     SleepTimerState.Off -> null
     SleepTimerState.EndOfTrack -> "ends with this track"
     is SleepTimerState.Countdown -> "$remainingMinutes min left"
+    SleepTimerState.Finished -> "paused by sleep timer"
 }
 
 private fun SleepTimerState.Countdown.minuteWord(): String = if (remainingMinutes == 1) "minute" else "minutes"
@@ -47,6 +62,7 @@ fun SleepTimerState.statusDescription(): String? = when (this) {
     SleepTimerState.Off -> null
     SleepTimerState.EndOfTrack -> "Sleep timer, ends with this track"
     is SleepTimerState.Countdown -> "Sleep timer, $remainingMinutes ${minuteWord()} left"
+    SleepTimerState.Finished -> "Sleep timer finished, playback paused"
 }
 
 /** Overline indicator on Home's now-playing tile, replacing the NOW PLAYING label. */
@@ -54,6 +70,8 @@ fun SleepTimerState.tileText(): String? = when (this) {
     SleepTimerState.Off -> null
     SleepTimerState.EndOfTrack -> "end of track"
     is SleepTimerState.Countdown -> "$remainingMinutes min left"
+    // Shorter than the Now Playing line: the home overline must not ellipsize.
+    SleepTimerState.Finished -> "paused by timer"
 }
 
 /** Secondary notification line, appended to the artist. Null when no timer is active. */
@@ -61,4 +79,6 @@ fun SleepTimerState.notificationSuffix(): String? = when (this) {
     SleepTimerState.Off -> null
     SleepTimerState.EndOfTrack -> "ends with this track"
     is SleepTimerState.Countdown -> "sleep ${remainingMinutes}m"
+    // The timer already did its job; a suffix would claim one is still running.
+    SleepTimerState.Finished -> null
 }

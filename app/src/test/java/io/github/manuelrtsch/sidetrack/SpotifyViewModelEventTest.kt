@@ -130,7 +130,7 @@ class SpotifyViewModelEventTest {
 
         assertEquals(items[0].id, vm.state.value.current?.id)
         assertFalse(vm.state.value.isPlaying)
-        assertEquals(SleepTimerState.Off, vm.sleepTimer.value)
+        assertEquals(SleepTimerState.Finished, vm.sleepTimer.value)
     }
 
     @Test fun `starting a new item shows the now-playing notice`() = runTest(dispatcher) {

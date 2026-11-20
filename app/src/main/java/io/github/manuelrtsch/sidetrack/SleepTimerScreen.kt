@@ -43,7 +43,8 @@ fun SleepTimerScreen(
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
         SidekitList(padding, modifier = Modifier.selectableGroup(), state = listState) {
             item(key = "off") {
-                val selected = timer == SleepTimerState.Off
+                // Finished is not an armed timer either, so the Off row owns that state.
+                val selected = !timer.active
                 SidetrackItem(
                     "Off",
                     Modifier.listFade(listState, 0).then(Modifier.focusRequester(first)),

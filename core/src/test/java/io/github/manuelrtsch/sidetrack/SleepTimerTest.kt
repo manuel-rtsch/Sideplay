@@ -51,4 +51,20 @@ class SleepTimerTest {
         assertNull(SleepTimerState.Off.notificationSuffix())
         assertFalse(SleepTimerState.Off.active)
     }
+
+    @Test fun `finished explains the pause but is no longer armed`() {
+        assertEquals("paused by sleep timer", SleepTimerState.Finished.statusText())
+        assertEquals("Sleep timer finished, playback paused", SleepTimerState.Finished.statusDescription())
+        assertEquals("paused by timer", SleepTimerState.Finished.tileText())
+        assertNull(SleepTimerState.Finished.notificationSuffix())
+        assertFalse(SleepTimerState.Finished.active)
+    }
+
+    @Test fun `a held countdown keeps its rounded remainder`() {
+        val held = SleepTimerState.Countdown(2, 0L, 1, heldMs = 59_000L)
+
+        assertEquals(59_000L, held.heldMs)
+        assertEquals(1, sleepTimerRemainingMinutes(held.heldMs!!))
+        assertTrue(held.active)
+    }
 }

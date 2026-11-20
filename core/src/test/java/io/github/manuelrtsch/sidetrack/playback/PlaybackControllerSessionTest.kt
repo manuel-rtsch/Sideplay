@@ -434,7 +434,7 @@ class PlaybackControllerSessionTest {
         advanceTimeBy(61_000L)
         runCurrent()
 
-        assertEquals(SleepTimerState.Off, controller.sleepTimer.value)
+        assertEquals(SleepTimerState.Finished, controller.sleepTimer.value)
         assertFalse(controller.isActive)
         assertEquals(1, engine.pauses)
     }
@@ -448,16 +448,49 @@ class PlaybackControllerSessionTest {
         assertEquals(SleepTimerState.Off, controller.sleepTimer.value)
     }
 
-    @Test fun `the sleep timer does not pause an idle session at the deadline`() = runTest {
+    @Test fun `a timer armed while idle waits for playback`() = runTest {
         val engine = FakeEngine()
         controller = newController(engine, elapsedTime = { testScheduler.currentTime })
         controller.setSleepTimer(1)
+        val held = controller.sleepTimer.value as SleepTimerState.Countdown
+        assertEquals(60_000L, held.heldMs)
 
         advanceTimeBy(61_000L)
         runCurrent()
 
-        assertEquals(SleepTimerState.Off, controller.sleepTimer.value)
+        assertEquals(held, controller.sleepTimer.value)
         assertEquals(0, engine.pauses)
+    }
+
+    @Test fun `pausing holds the countdown and resuming continues it`() = runTest {
+        focusResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        val engine = FakeEngine()
+        controller = newController(engine, context = context, elapsedTime = { testScheduler.currentTime })
+        controller.setNowPlaying(track(uri = "spotify:track:a"), 0L)
+        controller.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
+        controller.setSleepTimer(2)
+        advanceTimeBy(61_000L)
+        runCurrent()
+
+        controller.pause()
+        runCurrent()
+        val held = controller.sleepTimer.value as SleepTimerState.Countdown
+        assertEquals(1, held.remainingMinutes)
+        assertEquals(59_000L, held.heldMs)
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(held, controller.sleepTimer.value)
+
+        controller.resume()
+        runCurrent()
+        val resumed = controller.sleepTimer.value as SleepTimerState.Countdown
+        assertNull(resumed.heldMs)
+        assertEquals(1, resumed.remainingMinutes)
+
+        advanceTimeBy(61_000L)
+        runCurrent()
+        assertEquals(SleepTimerState.Finished, controller.sleepTimer.value)
     }
 
     @Test fun `sleep-timer ticks refresh the notification`() = runTest {
@@ -470,6 +503,9 @@ class PlaybackControllerSessionTest {
         )
         runCurrent()
         val initial = refreshes
+        focusResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        controller.setNowPlaying(track(uri = "spotify:track:a"), 0L)
+        controller.start(MediaKey(ServiceId.Spotify, MediaType.Track, "a"), "spotify:track:a", 0L)
 
         controller.setSleepTimer(2)
         runCurrent()
@@ -484,8 +520,18 @@ class PlaybackControllerSessionTest {
         controller.setSleepTimerEndOfTrack()
 
         assertTrue(controller.consumeEndOfTrackTimer())
-        assertEquals(SleepTimerState.Off, controller.sleepTimer.value)
+        assertEquals(SleepTimerState.Finished, controller.sleepTimer.value)
         assertFalse(controller.consumeEndOfTrackTimer())
+    }
+
+    @Test fun `finished clears when the next track starts`() = runTest {
+        controller = newController(FakeEngine())
+        controller.setSleepTimerEndOfTrack()
+        controller.consumeEndOfTrackTimer()
+
+        controller.setNowPlaying(track(uri = "spotify:track:b"), 0L)
+
+        assertEquals(SleepTimerState.Off, controller.sleepTimer.value)
     }
 
     @Test fun `setNowPlaying keeps the source and the engine position in step`() = runTest {

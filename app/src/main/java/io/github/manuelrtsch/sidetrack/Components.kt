@@ -340,6 +340,7 @@ enum class TileTone {
 @Composable
 fun NowPlayingTile(
     current: MediaItem?,
+    isPlaying: Boolean,
     sleepTimer: StateFlow<SleepTimerState>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -347,6 +348,43 @@ fun NowPlayingTile(
     val colors = SidekitTheme.colors
     val timer by sleepTimer.collectAsStateWithLifecycle()
     val timerLabel = timer.tileText()
+    val countdown = timer as? SleepTimerState.Countdown
+    // One overline slot, ranked: the sleep timer's outcome explains the pause, a frozen or live
+    // timer rides next to a plain pause, and the playing label is the fallback.
+    val paused = current != null && !isPlaying
+    val overlineIcon: SidekitIcon?
+    val overlineLabel: String
+    when {
+        current == null -> {
+            overlineIcon = null
+            overlineLabel = "NOTHING PLAYING"
+        }
+        timer == SleepTimerState.Finished && timerLabel != null -> {
+            overlineIcon = SidekitIcon.Bedtime
+            overlineLabel = timerLabel
+        }
+        paused && countdown != null -> {
+            overlineIcon = SidekitIcon.Pause
+            // Compact remainder: the full "23 min left" would ellipsize beside PAUSED.
+            overlineLabel = "PAUSED · ${countdown.remainingMinutes}m"
+        }
+        paused && timerLabel != null -> {
+            overlineIcon = SidekitIcon.Pause
+            overlineLabel = "PAUSED · track end"
+        }
+        paused -> {
+            overlineIcon = SidekitIcon.Pause
+            overlineLabel = "PAUSED"
+        }
+        timerLabel != null -> {
+            overlineIcon = SidekitIcon.Bedtime
+            overlineLabel = timerLabel
+        }
+        else -> {
+            overlineIcon = null
+            overlineLabel = "NOW PLAYING"
+        }
+    }
     SidekitTile(modifier, onClick = onClick, onClickLabel = "Now playing") {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp),
@@ -361,31 +399,21 @@ fun NowPlayingTile(
                 Cover(current.artRes, Modifier.size(ListArtworkSize), shape = SidekitTheme.shapes.artwork, artUrl = current.artUrl, requestSize = ListArtworkSize)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                // With a live timer the overline becomes the indicator, so the title keeps the
-                // full width and never competes with a trailing label.
+                // The overline carries the state, so the title keeps the full width and never
+                // competes with a trailing label.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (timerLabel != null) {
-                        SidekitIconImage(
-                            SidekitIcon.Bedtime,
-                            size = 24.dp,
-                            tint = colors.surfaceA6
-                        )
-                        SidekitText(
-                            timerLabel,
-                            style = SidekitTheme.typography.small,
-                            color = colors.surfaceA6,
-                            maxLines = 1
-                        )
-                    } else {
-                        SidekitText(
-                            if (current == null) "NOTHING PLAYING" else "NOW PLAYING",
-                            style = SidekitTheme.typography.small,
-                            color = colors.surfaceA6
-                        )
+                    overlineIcon?.let {
+                        SidekitIconImage(it, size = 24.dp, tint = colors.surfaceA6)
                     }
+                    SidekitText(
+                        overlineLabel,
+                        style = SidekitTheme.typography.small,
+                        color = colors.surfaceA6,
+                        maxLines = 1
+                    )
                 }
                 SidekitText(
                     current?.title ?: "Pick a track",

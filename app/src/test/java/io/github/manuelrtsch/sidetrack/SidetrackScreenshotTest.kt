@@ -69,6 +69,63 @@ class SidetrackScreenshotTest {
         )
     }
 
+    @Test fun homePaused() = shoot("sidetrack_home_paused") {
+        SidetrackHomeScreen(
+            state.copy(isPlaying = false).playback,
+            state.chrome,
+            sleepTimer = MutableStateFlow(SleepTimerState.Off),
+            onNowPlaying = {},
+            onLibrary = {},
+            onSearch = {},
+            onSettings = {},
+            onPlay = {},
+            onOpenQueue = {},
+            onAddToQueue = {},
+            onRemoveHistory = { null },
+            onHistory = {},
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
+        )
+    }
+
+    @Test fun homePausedWithSleepTimer() = shoot("sidetrack_home_paused_timer") {
+        SidetrackHomeScreen(
+            state.copy(isPlaying = false).playback,
+            state.chrome,
+            sleepTimer = MutableStateFlow(SleepTimerState.Countdown(30, 1_800_000L, 23)),
+            onNowPlaying = {},
+            onLibrary = {},
+            onSearch = {},
+            onSettings = {},
+            onPlay = {},
+            onOpenQueue = {},
+            onAddToQueue = {},
+            onRemoveHistory = { null },
+            onHistory = {},
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
+        )
+    }
+
+    @Test fun homeSleepTimerFinished() = shoot("sidetrack_home_sleep_timer_finished") {
+        SidetrackHomeScreen(
+            state.copy(isPlaying = false).playback,
+            state.chrome,
+            sleepTimer = MutableStateFlow(SleepTimerState.Finished),
+            onNowPlaying = {},
+            onLibrary = {},
+            onSearch = {},
+            onSettings = {},
+            onPlay = {},
+            onOpenQueue = {},
+            onAddToQueue = {},
+            onRemoveHistory = { null },
+            onHistory = {},
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
+        )
+    }
+
     @Test fun nowPlayingNotice() = shoot("sidetrack_now_playing_notice") {
         SidetrackHomeScreen(
             state.copy(nowPlayingNotice = state.current).playback,
