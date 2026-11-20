@@ -107,6 +107,10 @@ class SidetrackActivity : SidekitActivity() {
         keypad.applyInputMode(config?.inputModeOrDefault() ?: local.inputMode)
         val module = config?.keypadModuleOrDefault() ?: keypadPreferences.module()
         if (module != null) keypad.useModule(module)
+        // The stored module is only a memory, and it is wrong whenever the keypad tile was swapped
+        // while Sidetrack was not looking. The attached hardware knows better, and it is read here
+        // so every screen starts on the module that is really there.
+        keypad.followInputDevice(attachedKeypadModule())
         keypad.useCustomMapping(config?.customModuleOrDefault() ?: keypadPreferences.customModule())
         KeypadSystemBack.delegate = systemBack
     }
@@ -125,7 +129,19 @@ class SidetrackActivity : SidekitActivity() {
      * press Sidekit re-sent while watching for a hold, so the platform's own media-button routing
      * never sees it; the player is driven from the same callback the notification uses.
      */
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = mediaKeys.handle(event) || super.onKeyDown(keyCode, event)
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Any key, the D-pad included, names the keypad that sent it. Sidekit's own detection only
+        // reads the keys a module does not share, so this is what catches the rest.
+        keypad.followInputDevice(keypadModuleForDevice(event.device?.name))
+        // The keys Sidekit passes on, with the module it currently believes is attached. The
+        // consumed ones (Options, the gamepad's X/Y/Start) never get here, so this is the other
+        // half of the keypad picture, not the whole of it.
+        SidetrackDebug.log {
+            "key=${KeyEvent.keyCodeToString(keyCode)} device=${event.device?.name} " +
+                "module=${keypad.module} custom=${keypad.mapper.customModule}"
+        }
+        return mediaKeys.handle(event) || super.onKeyDown(keyCode, event)
+    }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = mediaKeys.handle(event) || super.onKeyUp(keyCode, event)
 

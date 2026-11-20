@@ -1,28 +1,40 @@
 package io.github.manuelrtsch.sidetrack
 
+import android.view.KeyEvent
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import hrln.interactive.sidekit.design.action.LocalChrome
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitText
+import hrln.interactive.sidekit.design.input.Keypad
 import hrln.interactive.sidekit.design.input.KeypadModule
 import hrln.interactive.sidekit.design.input.LocalKeypad
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.sdk.input.SharedPreferencesKeypadPreferences
 import hrln.interactive.sidekit.sdk.settings.KeypadGuide
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * The one-time welcome shown after sign-in. It teaches the three keypad actions a new listener
@@ -33,8 +45,9 @@ import hrln.interactive.sidekit.sdk.settings.KeypadGuide
  * returns instead of starting the app, and the onboarding flag stays unwritten so the real welcome
  * still happens once a service is chosen.
  *
- * A Sidekit host owns the keypad choice, so with a host installed the keyboard row is
- * informational and the module and input mode keep coming from Sidekit.
+ * The page teaches the module that is attached right now. It follows Sidekit's detection while it
+ * is open, and a tap on the Keyboard row steps to the next module by hand, so a keypad Sidekit
+ * guessed wrong can be corrected without leaving the page the instructions are on.
  */
 @Composable
 fun SidetrackOnboardingScreen(
@@ -59,10 +72,29 @@ fun SidetrackOnboardingScreen(
         accessRevision++
         onPauseOrDispose {}
     }
-    val module = keypad?.module ?: custom ?: keypadPrefs.module() ?: KeypadModule.T9
+    // The attached module is the truth and it can change while this screen is open: swapping the
+    // module, or pressing a key Sidekit has not seen yet, re-detects it (Keypad.observe). Reading
+    // it here is what makes the page follow along without being reopened.
+    val attached = keypad?.module ?: custom ?: keypadPrefs.module() ?: KeypadModule.T9
+    // A manual cycle holds only until the next key reveals a different module, so the page can
+    // never settle on a keypad that is not the one attached.
+    var manual by remember { mutableStateOf<KeypadModule?>(null) }
+    LaunchedEffect(attached) { if (manual != null && manual != attached) manual = null }
+    val module = manual ?: attached
+    LaunchedEffect(keypad) {
+        SidetrackDebug.log {
+            "welcome keypad=${keypad != null} module=${keypad?.module} custom=${keypad?.mapper?.customModule}"
+        }
+        val attachedKeypad = keypad ?: return@LaunchedEffect
+        snapshotFlow { attachedKeypad.module to attachedKeypad.mapper.customModule }
+            .distinctUntilChanged()
+            .collect { (shown, customModule) ->
+                SidetrackDebug.log("welcome module=$shown custom=$customModule")
+            }
+    }
     val keyboardLabel = when {
+        custom != null -> "${module.label} · custom"
         hostBacked -> "${module.label} · Sidekit"
-        custom != null -> "${custom.label} · custom"
         else -> module.label
     }
 
@@ -70,8 +102,23 @@ fun SidetrackOnboardingScreen(
         module = module,
         keyboardLabel = keyboardLabel,
         customMapping = custom != null,
+        followsHardware = manual == null,
         canOpenKeyboard = !hostBacked,
         onOpenKeyboard = onKeyboard,
+        onCycleKeyboard = {
+            val next = nextKeypadModule(module)
+            manual = next
+            when {
+                // Without a keypad there is nothing to re-map, so the choice is only remembered.
+                keypad == null -> keypadPrefs.writeModule(next)
+
+                // A custom mapping fixes the module by design: cycling it is choosing which module
+                // the attached keys are read as, which is exactly what useCustomMapping does.
+                keypad.mapper.customModule != null -> keypad.useCustomMapping(next)
+
+                else -> keypad.useModule(next)
+            }
+        },
         canManageKeypadAccess = !hostBacked,
         keypadBackEnabled = keypadBackEnabled,
         onAbout = onAbout,
@@ -92,8 +139,11 @@ internal fun SidetrackOnboardingContent(
     module: KeypadModule,
     keyboardLabel: String,
     customMapping: Boolean = false,
+    /** False once the user cycled by hand: their choice outlives the keys they press after it. */
+    followsHardware: Boolean = true,
     canOpenKeyboard: Boolean = true,
     onOpenKeyboard: () -> Unit = {},
+    onCycleKeyboard: () -> Unit = {},
     canManageKeypadAccess: Boolean = false,
     keypadBackEnabled: Boolean = false,
     onAbout: () -> Unit,
@@ -101,6 +151,8 @@ internal fun SidetrackOnboardingContent(
     onBack: (() -> Unit)? = null
 ) {
     val list = rememberLazyListState()
+    val keys = rememberWelcomeKeys(module, LocalKeypad.current, followsHardware)
+    val optionsOpen = LocalChrome.current?.optionsOpen == true
 
     SidekitScaffold(
         title = "Welcome",
@@ -118,30 +170,85 @@ internal fun SidetrackOnboardingContent(
         SidetrackKeypadWelcomeList(
             padding = padding,
             list = list,
+            modifier = keys.modifier,
             module = module,
             keyboardLabel = keyboardLabel,
             customMapping = customMapping,
             canOpenKeyboard = canOpenKeyboard,
             onOpenKeyboard = onOpenKeyboard,
+            onCycleKeyboard = onCycleKeyboard,
             canManageKeypadAccess = canManageKeypadAccess,
-            keypadBackEnabled = keypadBackEnabled
+            keypadBackEnabled = keypadBackEnabled,
+            pressed = keys.pressed,
+            optionsOpen = optionsOpen
         )
     }
+}
+
+/**
+ * The key presses the page answers, and the modifier that lets it hear them.
+ *
+ * A page that only reads the attached module still teaches silently: press a key and get nothing
+ * back and it reads as "not recognised". The screen therefore watches the keys that reach it,
+ * asks Sidekit to re-detect the module from them, and lights up the row the press demonstrated.
+ * The modifier never consumes an event, so every key keeps its normal job.
+ */
+private class WelcomeKeys(val pressed: KeypadHabit?, val modifier: Modifier)
+
+@Composable
+private fun rememberWelcomeKeys(
+    module: KeypadModule,
+    keypad: Keypad?,
+    followsHardware: Boolean
+): WelcomeKeys {
+    val focus = remember { FocusRequester() }
+    var pressed by remember { mutableStateOf<KeypadHabit?>(null) }
+    // Compose only receives key events for a focused node, and this screen started with none: the
+    // first press went to the platform and the page looked deaf until focus was moved by hand.
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(pressed) {
+        if (pressed == null) return@LaunchedEffect
+        delay(1_500L)
+        pressed = null
+    }
+    val modifier = Modifier
+        .focusRequester(focus)
+        .focusable()
+        .onPreviewKeyEvent { event ->
+            val native = event.nativeKeyEvent
+            if (native.action == KeyEvent.ACTION_DOWN) {
+                // Detection belongs to Sidekit, but asking again from the keys this screen sees is
+                // what makes a module swapped while the page is open teach its keys immediately.
+                keypad?.observe(native)
+                // Sidekit's detector cannot read a shared key such as the D-pad, so the keypad that
+                // sent this one is the better answer - unless the user has already overruled it.
+                if (followsHardware) {
+                    keypad?.followInputDevice(keypadModuleForDevice(native.device?.name))
+                }
+                keypadHabitForKey(module, native.keyCode)?.let { pressed = it }
+            }
+            false
+        }
+    return WelcomeKeys(pressed, modifier)
 }
 
 @Composable
 private fun SidetrackKeypadWelcomeList(
     padding: PaddingValues,
     list: LazyListState,
+    modifier: Modifier,
     module: KeypadModule,
     keyboardLabel: String,
     customMapping: Boolean,
     canOpenKeyboard: Boolean,
     onOpenKeyboard: () -> Unit,
+    onCycleKeyboard: () -> Unit,
     canManageKeypadAccess: Boolean,
-    keypadBackEnabled: Boolean
+    keypadBackEnabled: Boolean,
+    pressed: KeypadHabit?,
+    optionsOpen: Boolean
 ) {
-    SidekitList(padding, state = list) {
+    SidekitList(padding, modifier = modifier, state = list) {
         item(key = "intro") {
             SidekitText(
                 "Learn your keypad.",
@@ -151,7 +258,12 @@ private fun SidetrackKeypadWelcomeList(
             )
         }
         item(key = "essentials") {
-            KeypadEssentials(module, customMapping = customMapping)
+            KeypadEssentials(
+                module,
+                customMapping = customMapping,
+                pressed = pressed,
+                optionsOpen = optionsOpen
+            )
         }
         item(key = "tryIt") {
             SidekitText(
@@ -182,21 +294,28 @@ private fun SidetrackKeypadWelcomeList(
                 )
             }
         }
+        // The rows above teach the attached module, and a host owns the choice, so this row is
+        // where it can be corrected: tapping steps to the next module and the rows follow.
         item(key = "keyboard") {
-            val backStatus = when {
-                !canManageKeypadAccess -> null
-                keypadBackEnabled -> "Back on"
-                else -> "Back off"
-            }
             SidekitCompactItem(
                 "Keyboard",
-                secondary = if (canOpenKeyboard) {
-                    listOfNotNull(keyboardLabel, backStatus).joinToString(" · ") + " ›"
-                } else {
-                    keyboardLabel
-                },
-                onClick = if (canOpenKeyboard) onOpenKeyboard else null
+                secondary = "$keyboardLabel · tap to switch",
+                onClick = onCycleKeyboard
             )
+        }
+        if (canOpenKeyboard) {
+            item(key = "keyboardSettings") {
+                val backStatus = when {
+                    !canManageKeypadAccess -> null
+                    keypadBackEnabled -> "Back on"
+                    else -> "Back off"
+                }
+                SidekitCompactItem(
+                    "Keyboard settings",
+                    secondary = listOfNotNull("Input, mapping, guide", backStatus).joinToString(" · ") + " ›",
+                    onClick = onOpenKeyboard
+                )
+            }
         }
     }
 }

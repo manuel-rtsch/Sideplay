@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,15 +18,55 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.input.KeypadModule
+import hrln.interactive.sidekit.design.input.SystemKeys
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import hrln.interactive.sidekit.design.theme.contentColorFor
+
+/**
+ * The habit a welcome row teaches. Rows are compared by habit, not by their printed label, so a
+ * key press can light up the one row it demonstrates on any module.
+ */
+internal enum class KeypadHabit { Back, Options, RowMenu, Centre, Edges }
 
 /** One printed key and the one or two sentences a new listener needs to remember it. */
 internal data class KeypadEssential(
     /** The label printed on the key. The gesture is described in [detail]. */
     val key: String,
-    val detail: String
+    val detail: String,
+    val habit: KeypadHabit
 )
+
+/**
+ * The welcome row a key press demonstrates, or null when the key teaches nothing.
+ *
+ * [keyCode] is the code the screen receives: Sidekit rewrites the game controller's and the mini
+ * QWERTY's navigation keys to the canonical ones first (see `NavControls`), so B arrives as Back
+ * and X as Options. Options itself never reaches a screen - the bar swallows it - which is why
+ * [KeypadEssentials] also lights that row while the bar is open.
+ */
+internal fun keypadHabitForKey(module: KeypadModule, keyCode: Int): KeypadHabit? = when {
+    SystemKeys.isOptions(keyCode) -> KeypadHabit.Options
+
+    keyCode == KeyEvent.KEYCODE_CALL || keyCode == KeyEvent.KEYCODE_BACK -> KeypadHabit.Back
+
+    // The Sundial's centre and edges are media keys, and a headset sends the same codes; only
+    // claim them while the Sundial is the module the screen is teaching.
+    module == KeypadModule.Sundial && keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ->
+        KeypadHabit.Centre
+
+    module == KeypadModule.Sundial &&
+        (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT || keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) ->
+        KeypadHabit.Edges
+
+    else -> null
+}
+
+/** The module after [current] in the order the modules are printed, wrapping at the end. */
+internal fun nextKeypadModule(current: KeypadModule): KeypadModule {
+    val modules = KeypadModule.entries
+    val index = modules.indexOf(current).takeIf { it >= 0 } ?: 0
+    return modules[(index + 1) % modules.size]
+}
 
 /**
  * The keypad habits Sidetrack depends on, written for the attached module.
@@ -35,9 +76,11 @@ internal data class KeypadEssential(
  * cannot drift into giving different instructions for the same module.
  */
 internal fun keypadEssentials(module: KeypadModule): List<KeypadEssential> {
-    fun back(key: String, detail: String = "Go back a screen.") = KeypadEssential(key, detail)
-    fun options(key: String, detail: String = "Tap for this page’s actions. Hold for the action bar.") = KeypadEssential(key, detail)
-    val item = KeypadEssential("•••", "Press ••• for a focused row’s actions.")
+    fun back(key: String, detail: String = "Go back a screen.") = KeypadEssential(key, detail, KeypadHabit.Back)
+
+    fun options(key: String, detail: String = "Tap for this page’s actions. Hold for the action bar.") = KeypadEssential(key, detail, KeypadHabit.Options)
+
+    val item = KeypadEssential("•••", "Press ••• for a focused row’s actions.", KeypadHabit.RowMenu)
     return when (module) {
         KeypadModule.T9, KeypadModule.Qwerty -> listOf(
             back("Back"),
@@ -46,8 +89,12 @@ internal fun keypadEssentials(module: KeypadModule): List<KeypadEssential> {
         )
 
         KeypadModule.Sundial -> listOf(
-            KeypadEssential("Centre", "Tap to play or pause. Hold to confirm."),
-            KeypadEssential("Edges", "Tap the left edge for the previous track, the right edge for the next."),
+            KeypadEssential("Centre", "Tap to play or pause. Hold to confirm.", KeypadHabit.Centre),
+            KeypadEssential(
+                "Edges",
+                "Tap the left edge for the previous track, the right edge for the next.",
+                KeypadHabit.Edges
+            ),
             back("Tab", "Hold Tab to go back a screen."),
             options("Enter", "Hold Enter for this page’s actions."),
             item
@@ -70,7 +117,11 @@ internal fun keypadEssentials(module: KeypadModule): List<KeypadEssential> {
 internal fun KeypadEssentials(
     module: KeypadModule,
     modifier: Modifier = Modifier,
-    customMapping: Boolean = false
+    customMapping: Boolean = false,
+    /** The row the last key press demonstrated, held for a moment so the press has an answer. */
+    pressed: KeypadHabit? = null,
+    /** The Options bar is open, which is what that key did even though it never reaches a screen. */
+    optionsOpen: Boolean = false
 ) {
     val essentials = remember(module) { keypadEssentials(module) }
     val surface = SidekitTheme.colors.surfaceA3
@@ -85,12 +136,14 @@ internal fun KeypadEssentials(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             essentials.forEach { essential ->
+                val highlighted = essential.habit == pressed ||
+                    (optionsOpen && essential.habit == KeypadHabit.Options)
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Keycap(essential.key)
+                    Keycap(essential.key, highlighted = highlighted)
                     SidekitText(
                         essential.detail,
                         Modifier.weight(1f),
@@ -129,8 +182,9 @@ internal fun KeypadEssentials(
 }
 
 @Composable
-private fun Keycap(label: String) {
-    val color = SidekitTheme.colors.surfaceA4
+private fun Keycap(label: String, highlighted: Boolean = false) {
+    // The accent is the case colour every live action wears, so the answer reads as "that key, now".
+    val color = if (highlighted) SidekitTheme.colors.primaryA2 else SidekitTheme.colors.surfaceA4
     Box(
         Modifier
             .height(38.dp)

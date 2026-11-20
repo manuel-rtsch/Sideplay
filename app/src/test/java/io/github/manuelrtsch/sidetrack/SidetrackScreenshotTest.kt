@@ -24,7 +24,7 @@ class SidetrackScreenshotTest {
     @get:Rule val compose = createComposeRule()
 
     private fun shoot(name: String, content: @Composable () -> Unit) {
-        compose.setContent { SidekitPreviewFrame(content) }
+        compose.setContent { SidekitPreviewFrame { content() } }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/$name.png")
     }
