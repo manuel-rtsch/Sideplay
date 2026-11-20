@@ -39,9 +39,11 @@ private fun MediaType.toCollectionType(): CollectionType? = when (this) {
 
 /** Spotify's existing catalog behind the neutral [MediaCatalog] contract. */
 class SpotifyMediaCatalog(
-    private val catalog: SpotifyCatalog
+    private val catalog: SpotifyCatalog,
+    private val catalogCapabilities: () -> ServiceCapabilities = { ServiceCapabilities.All }
 ) : MediaCatalog {
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.All
+    /** The runtime supplies this so a read-only fallback can turn playlist editing off. */
+    override val capabilities: ServiceCapabilities get() = catalogCapabilities()
 
     override suspend fun library(section: LibrarySection, offset: Int, limit: Int): Page<LibraryEntry> = catalog.library(section.toFilter(), offset, limit)
 

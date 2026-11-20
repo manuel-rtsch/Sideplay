@@ -45,7 +45,7 @@ class NativeBridgeTest {
         assertNull(NativeBridge.playlistSaved("playlist"))
         assertFalse(NativeBridge.playlistSave("playlist", save = true))
         assertNull(NativeBridge.playlistItemsAdd("playlist", "spotify:track:1"))
-        assertFalse(NativeBridge.playlistItemsRemove("playlist", "spotify:track:1"))
+        assertNull(NativeBridge.playlistItemsRemove("playlist", "spotify:track:1"))
         // Fire-and-forget calls must also be safe without a library.
         NativeBridge.setTmpDir("/tmp")
         NativeBridge.setCacheDir("/tmp", 1_000L)
@@ -77,7 +77,7 @@ class NativeBridgeTest {
         assertNull(NativeBridge.catalogArtist("artist"))
         assertNull(NativeBridge.catalogSongRadio("track", 10L))
         assertNull(NativeBridge.playlistItemsAdd("playlist", "spotify:track:1"))
-        assertFalse(NativeBridge.playlistItemsRemove("playlist", "spotify:track:1"))
+        assertNull(NativeBridge.playlistItemsRemove("playlist", "spotify:track:1"))
         NativeBridge.setTmpDir("/tmp")
         NativeBridge.setCacheDir("/tmp", 1_000L)
         NativeBridge.disconnect()

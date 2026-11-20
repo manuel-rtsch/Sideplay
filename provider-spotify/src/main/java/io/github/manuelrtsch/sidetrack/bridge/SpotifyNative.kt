@@ -57,5 +57,7 @@ interface SpotifyNative {
 
     /** Appends [uris] to a playlist. Returns the index the first item landed at, or null. */
     fun playlistItemsAdd(id: String, uris: String): String?
-    fun playlistItemsRemove(id: String, uris: String): Boolean
+
+    /** Removes [uris] from a playlist. Returns `"ok"`, or `{"error": "..."}` on refusal. */
+    fun playlistItemsRemove(id: String, uris: String): String?
 }

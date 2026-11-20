@@ -78,6 +78,25 @@ struct AlbumJson {
     track_count: i32,
 }
 
+/// What the signed-in user may do to one playlist. Add and remove are separate so a future
+/// transport can report one without the other; Spotify currently grants them together.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaylistEditJson {
+    can_add_items: bool,
+    can_remove_items: bool,
+}
+
+fn playlist_edit(can_edit_items: bool, owned: bool) -> PlaylistEditJson {
+    // `can_edit_items` is the service's own permission bit. A playlist the user owns is editable
+    // even when the decorated metadata omitted capabilities.
+    let editable = can_edit_items || owned;
+    PlaylistEditJson {
+        can_add_items: editable,
+        can_remove_items: editable,
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PlaylistJson {
@@ -91,8 +110,9 @@ struct PlaylistJson {
     track_count: i32,
     /// Whether the signed-in user may add or remove items. The add-to-playlist picker only
     /// offers playlists that report `true`, so a followed playlist cannot be chosen and then
-    /// rejected by the service.
+    /// rejected by the service. Kept for older readers; [actions] breaks it into add/remove.
     editable: bool,
+    actions: PlaylistEditJson,
     #[serde(skip_serializing_if = "Option::is_none")]
     folder: Option<String>,
 }
@@ -154,6 +174,9 @@ struct CollectionJson {
     art_url: Option<String>,
     total_items: i32,
     has_more: bool,
+    /// Present for a playlist only; albums and shows have no edit actions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    actions: Option<PlaylistEditJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
 }
@@ -287,6 +310,7 @@ fn playlist_art(playlist: &Playlist) -> Option<String> {
 
 fn playlist_json(playlist: &Playlist, tracks: Vec<TrackJson>, current_user: &str) -> PlaylistJson {
     let (owner, owner_id) = playlist_owner(playlist);
+    let actions = playlist_edit(playlist.capabilities.can_edit_items, owner == current_user);
     PlaylistJson {
         id: id_of(&playlist.id),
         name: playlist.name().to_string(),
@@ -296,7 +320,8 @@ fn playlist_json(playlist: &Playlist, tracks: Vec<TrackJson>, current_user: &str
         tracks,
         art_url: playlist_art(playlist),
         track_count: playlist.length.max(0),
-        editable: playlist.capabilities.can_edit_items || owner == current_user,
+        editable: actions.can_add_items || actions.can_remove_items,
+        actions,
         folder: None,
     }
 }
@@ -792,6 +817,7 @@ fn pf_playlist(data: &Value, current_user: &str) -> Option<PlaylistJson> {
         // editable, so report that and leave collaborative playlists to the rootlist, which does
         // decorate capabilities.
         editable: owner_name == current_user,
+        actions: playlist_edit(false, owner_name == current_user),
         folder: None,
     })
 }
@@ -1353,6 +1379,12 @@ async fn rootlist_playlists(
             } else {
                 Some(owner.clone())
             };
+            let actions = playlist_edit(
+                metadata
+                    .and_then(|m| m.capabilities.as_ref())
+                    .is_some_and(|capabilities| capabilities.can_edit_items()),
+                owner == user,
+            );
             playlists.push(PlaylistJson {
                 id: uri.rsplit(':').next().unwrap_or_default().to_string(),
                 name,
@@ -1362,10 +1394,8 @@ async fn rootlist_playlists(
                 tracks: Vec::new(),
                 art_url,
                 track_count: metadata.map(|m| m.length()).unwrap_or(0),
-                editable: metadata
-                    .and_then(|m| m.capabilities.as_ref())
-                    .is_some_and(|capabilities| capabilities.can_edit_items())
-                    || owner == user,
+                editable: actions.can_add_items || actions.can_remove_items,
+                actions,
                 folder: (!folders.is_empty()).then(|| folders.join(" / ")),
             });
             if playlists.len() >= limit {
@@ -1775,7 +1805,7 @@ pub async fn playlist_items_add(
             .is_some_and(|capabilities| capabilities.can_edit_items())
             || owner == session.username();
         if !editable {
-            return Err("this playlist is not yours to edit".to_string());
+            return Err("forbidden: this playlist is not yours to edit".to_string());
         }
         let index = content
             .contents
@@ -1831,6 +1861,18 @@ pub async fn playlist_items_remove(
     let mut last_error = String::new();
     for attempt in 0..2 {
         let content = playlist_content(session, token, &playlist_id).await?;
+        // Removing is an item edit. A followed, non-collaborative playlist is read-only; ask the
+        // same capability question the add path asks so the app can report a refusal, not a
+        // network failure.
+        let owner = content.owner_username();
+        let editable = content
+            .capabilities
+            .as_ref()
+            .is_some_and(|capabilities| capabilities.can_edit_items())
+            || owner == session.username();
+        if !editable {
+            return Err("forbidden: this playlist is not yours to edit".to_string());
+        }
         let items = content
             .contents
             .as_ref()
@@ -2002,6 +2044,7 @@ pub async fn collection(
                 art_url: album_json.art_url.clone(),
                 total_items: total as i32,
                 has_more: offset + album_json.tracks.len() < total,
+                actions: None,
                 description: None,
             };
             Ok(serde_json::to_string(&collection).map_err(|e| e.to_string())?)
@@ -2036,6 +2079,7 @@ pub async fn collection(
                 art_url: playlist_json.art_url.clone(),
                 total_items: total as i32,
                 has_more: offset + playlist_json.tracks.len() < total,
+                actions: Some(playlist_json.actions),
                 description: None,
             };
             Ok(serde_json::to_string(&collection).map_err(|e| e.to_string())?)
@@ -2123,6 +2167,7 @@ pub async fn collection(
                 art_url,
                 total_items: total as i32,
                 has_more: offset + episodes.len() < total,
+                actions: None,
                 description: Some(description),
             };
             Ok(serde_json::to_string(&collection).map_err(|e| e.to_string())?)

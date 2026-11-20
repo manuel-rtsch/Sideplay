@@ -39,6 +39,7 @@ class JellyfinCatalogTest {
         val playlists = catalog.library(LibrarySection.Playlists, offset = 0, limit = 10)
         val playlist = playlists.items.single() as Playlist
         assertTrue(playlist.editable)
+        assertTrue(playlist.actions.unconfirmed)
         assertEquals(3, playlist.trackCount)
         assertEquals(ServiceId.Jellyfin, playlist.service)
         // No primary image tag means the server has no artwork for this playlist.
@@ -122,8 +123,9 @@ class JellyfinCatalogTest {
         assertEquals(listOf("a1"), results.albums.map { it.id })
         assertEquals(listOf("p1"), results.playlists.map { it.id })
         // A playlist from search is offered as editable like one from the library list: the server
-        // does not say who may edit it (see PLAYLIST_EDITABLE).
+        // does not say who may edit it, so the action is offered unconfirmed.
         assertTrue(results.playlists.single().editable)
+        assertTrue(results.playlists.single().actions.unconfirmed)
     }
 
     @Test fun `radio asks for offset plus limit and drops the front`() = runTest {
@@ -205,6 +207,7 @@ class JellyfinCatalogTest {
         // 12.4 answers a playlist the account just created with OpenAccess:false and Shares:[], so
         // deriving editability from those fields made a creator's own playlist read as read-only.
         assertTrue(playlist.editable)
+        assertTrue(playlist.actions.unconfirmed)
     }
 
     @Test fun `a removal passes the row the caller acted on`() = runTest {

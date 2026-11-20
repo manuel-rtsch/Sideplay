@@ -211,6 +211,47 @@ class NavidromeApiTest {
         assertEquals(ServiceId.Navidrome, playlist.service)
         assertTrue(transport.urls.single().contains("createPlaylist"))
         assertTrue(transport.urls.single().contains("name=Road+Trip"))
+        assertEquals(PlaylistActions.All, playlist.actions)
+    }
+
+    @Test fun `a playlist owned by another account is read-only`() = runTest {
+        val transport = FakeTransport { url ->
+            when {
+                url.contains("getPlaylist") -> ok(
+                    """{"status":"ok","playlist":{"id":"p1","name":"Mix","owner":"alex","songCount":1,"entry":[{"id":"s1"}]}}"""
+                )
+
+                else -> ok("""{"status":"ok"}""")
+            }
+        }
+        val api = NavidromeApi(
+            NavidromeCredentials("http://nas.local", "joe", "sesame"),
+            transport,
+            salt = { "salt" }
+        )
+
+        val playlist = api.playlist("p1")!!
+
+        assertEquals("alex", playlist.owner)
+        assertEquals(PlaylistActions.None, playlist.actions)
+        assertFalse(playlist.editable)
+
+        val add = runCatching { api.addToPlaylist("p1", "s1") }.exceptionOrNull()
+        assertEquals(ServiceFailure.NotAllowed, (add as ServiceException).failure)
+
+        val remove = runCatching { api.removeFromPlaylist("p1", "s1") }.exceptionOrNull()
+        assertEquals(ServiceFailure.NotAllowed, (remove as ServiceException).failure)
+        assertFalse(transport.urls.any { it.contains("updatePlaylist") })
+    }
+
+    @Test fun `a playlist without an owner is offered for editing and the server decides`() = runTest {
+        val api = NavidromeApi(
+            NavidromeCredentials("http://nas.local", "joe", "sesame"),
+            FakeTransport { ok("""{"status":"ok","playlist":{"id":"p1","name":"Mix"}}""") },
+            salt = { "salt" }
+        )
+
+        assertEquals(PlaylistActions.ServerDecides, api.playlist("p1")!!.actions)
     }
 
     @Test fun `saved state reads the starred marker`() = runTest {

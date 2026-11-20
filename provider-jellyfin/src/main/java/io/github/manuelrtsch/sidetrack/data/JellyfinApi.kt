@@ -2,6 +2,7 @@ package io.github.manuelrtsch.sidetrack.data
 
 import android.content.Context
 import io.github.manuelrtsch.sidetrack.MediaType as SidetrackMediaType
+import io.github.manuelrtsch.sidetrack.PlaylistActions
 import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.auth.JellyfinCredentials
 import io.github.manuelrtsch.sidetrack.auth.jellyfinFailure
@@ -96,9 +97,17 @@ data class JellyfinPage(
 data class JellyfinPlaylist(
     val item: JellyfinItem,
     val itemIds: List<String>,
+    /** The server's raw `OpenAccess`/shares answer, kept for diagnostics. It is not authoritative. */
     val editable: Boolean,
     val ownerId: String? = null
-)
+) {
+    /**
+     * What the UI may offer. A `false` from [editable] is not a refusal: 12.4 answers a creator's
+     * own fresh playlist with `OpenAccess:false, Shares:[]`, and no field names the owner. So the
+     * adapter offers editing and marks it unconfirmed; the server rejects a write it won't take.
+     */
+    val actions: PlaylistActions get() = if (editable) PlaylistActions.All else PlaylistActions.ServerDecides
+}
 
 /** A search hint, which carries enough metadata to build a row without a per-hit lookup. */
 data class JellyfinSearchHint(

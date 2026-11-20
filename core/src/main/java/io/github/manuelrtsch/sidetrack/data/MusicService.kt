@@ -41,6 +41,9 @@ enum class ServiceFailure {
     Network,
     RateLimited,
     TrackUnavailable,
+
+    /** The service understood the request and refused it: the account may not change this item. */
+    NotAllowed,
     Unknown
 }
 

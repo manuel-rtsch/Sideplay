@@ -13,6 +13,7 @@ import io.github.manuelrtsch.sidetrack.MediaKey
 import io.github.manuelrtsch.sidetrack.MediaType
 import io.github.manuelrtsch.sidetrack.Page
 import io.github.manuelrtsch.sidetrack.Playlist
+import io.github.manuelrtsch.sidetrack.PlaylistActions
 import io.github.manuelrtsch.sidetrack.SearchResults
 import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.ServiceCapabilities
@@ -101,9 +102,11 @@ class NavidromeApi(
             starred.objects("artist").map { it.toArtist { id -> coverUrl(id) } }
     }
 
-    suspend fun playlists(): List<Playlist> = call("getPlaylists").optJSONObject("playlists").objects("playlist").map { it.toPlaylist { id -> coverUrl(id) } }
+    suspend fun playlists(): List<Playlist> = call("getPlaylists").optJSONObject("playlists").objects("playlist")
+        .map { it.toPlaylist({ id -> coverUrl(id) }, credentials.username) }
 
-    suspend fun playlist(id: String): Playlist? = call("getPlaylist", "id" to id).optJSONObject("playlist")?.toPlaylist { id -> coverUrl(id) }
+    suspend fun playlist(id: String): Playlist? = call("getPlaylist", "id" to id).optJSONObject("playlist")
+        ?.toPlaylist({ id -> coverUrl(id) }, credentials.username)
 
     suspend fun search(query: String, scopes: Set<SearchScope>, offset: Int, limit: Int): SearchResults {
         val result = call(
@@ -159,13 +162,21 @@ class NavidromeApi(
 
     suspend fun createPlaylist(name: String): Playlist {
         val playlist = call("createPlaylist", "name" to name).optJSONObject("playlist")
-            ?.toPlaylist { coverUrl(it) }
+            ?.toPlaylist({ coverUrl(it) }, credentials.username)
             ?: throw ServiceException(ServiceFailure.Unknown, "Navidrome did not return the new playlist")
-        return playlist
+        // A playlist the account just created is always its own to edit.
+        return playlist.copy(actions = PlaylistActions.All)
     }
 
     suspend fun addToPlaylist(playlistId: String, songId: String): Int {
-        val before = playlist(playlistId)?.tracks?.size ?: 0
+        val current = playlist(playlistId)
+        // The server decides on a playlist it did not describe. When it did describe one, do not
+        // send a write the owner rule already rules out: Subsonic has no permission flag, and a
+        // foreign playlist only publishes its owner.
+        if (current != null && !current.actions.canAddItems) {
+            throw ServiceException(ServiceFailure.NotAllowed, "This Navidrome playlist belongs to another account")
+        }
+        val before = current?.tracks?.size ?: 0
         call("updatePlaylist", "playlistId" to playlistId, "songIdToAdd" to songId)
         return before
     }
@@ -179,7 +190,11 @@ class NavidromeApi(
      * `[A, B, C, A]` removing the second `A` deleted the first one: size preserved, order rotated.
      */
     suspend fun removeFromPlaylist(playlistId: String, songId: String, index: Int? = null) {
-        val tracks = playlist(playlistId)?.tracks.orEmpty()
+        val current = playlist(playlistId)
+        if (current != null && !current.actions.canRemoveItems) {
+            throw ServiceException(ServiceFailure.NotAllowed, "This Navidrome playlist belongs to another account")
+        }
+        val tracks = current?.tracks.orEmpty()
         val target = index?.takeIf { tracks.getOrNull(it)?.id == songId }
             ?: tracks.indexOfLast { it.id == songId }
         if (target < 0) return
@@ -351,9 +366,19 @@ private fun JSONObject.toArtist(cover: (String?) -> String?): Artist {
     )
 }
 
-private fun JSONObject.toPlaylist(cover: (String?) -> String?): Playlist {
+private fun JSONObject.toPlaylist(cover: (String?) -> String?, currentUser: String): Playlist {
     val entries = objects("entry").map { it.toTrack(cover) }
     val owner = optString("owner").ifEmpty { optString("username") }
+    // Subsonic has no per-playlist permission flag. A playlist without an owner is one the server
+    // did not describe; offer editing and let the server refuse, rather than muting a playlist
+    // that may well be the account's own.
+    val knownOwner = owner.isNotEmpty()
+    val owned = !knownOwner || currentUser.isBlank() || owner == currentUser
+    val actions = when {
+        !owned -> PlaylistActions.None
+        !knownOwner || currentUser.isBlank() -> PlaylistActions.ServerDecides
+        else -> PlaylistActions.All
+    }
     return Playlist(
         id = optString("id"),
         name = optString("name"),
@@ -363,7 +388,7 @@ private fun JSONObject.toPlaylist(cover: (String?) -> String?): Playlist {
         tracks = entries,
         artUrl = cover(optString("coverArt").mediaTextOrNull()),
         trackCount = optInt("songCount", entries.size),
-        editable = true,
+        actions = actions,
         service = ServiceId.Navidrome
     )
 }
@@ -430,6 +455,7 @@ class NavidromeCatalog(
                 totalItems = playlist.trackCount,
                 hasMore = offset + items.size < playlist.trackCount,
                 saveable = false,
+                playlistActions = playlist.actions,
                 service = ServiceId.Navidrome
             )
         }

@@ -80,6 +80,81 @@ class NativeSpotifyCatalogTest {
         assertTrue(native.playlistItemsRemoved)
     }
 
+    @Test fun `a refused playlist write is not reported as a network failure`() = runTest {
+        val native = FakeNative().apply {
+            playlistItemsAddResult = """{"error":"forbidden: this playlist is not yours to edit"}"""
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.addToPlaylist("playlist1", "spotify:track:abc") }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.NotAllowed, (error as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `removal reports a forbidden playlist instead of a transport error`() = runTest {
+        val native = FakeNative().apply {
+            playlistItemsRemoveResult = """{"error":"forbidden: this playlist is not yours to edit"}"""
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val error = runCatching { catalog.removeFromPlaylist("playlist1", "spotify:track:abc") }.exceptionOrNull()
+
+        assertTrue(error is SpotifyGatewayException)
+        assertEquals(SpotifyFailure.NotAllowed, (error as SpotifyGatewayException).failure)
+    }
+
+    @Test fun `library playlists keep the two edit directions apart`() = runTest {
+        val native = FakeNative().apply {
+            libraryResult = JSONObject().put(
+                "items",
+                JSONArray().put(
+                    JSONObject()
+                        .put("id", "playlist1")
+                        .put("name", "Mix")
+                        .put("editable", true)
+                        .put("actions", JSONObject().put("canAddItems", true).put("canRemoveItems", false))
+                )
+            ).toString()
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val playlist = catalog.library(LibraryFilter.Playlists, 0, 10).items.single() as Playlist
+
+        assertEquals(PlaylistActions(canAddItems = true, canRemoveItems = false), playlist.actions)
+        assertTrue(playlist.editable)
+    }
+
+    @Test fun `an old bridge without actions falls back to editable`() = runTest {
+        val native = FakeNative().apply {
+            libraryResult = JSONArray().put(
+                JSONObject().put("id", "playlist1").put("name", "Mix").put("editable", true)
+            ).toString()
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val playlist = catalog.library(LibraryFilter.Playlists, 0, 10).items.single() as Playlist
+
+        assertEquals(PlaylistActions.All, playlist.actions)
+    }
+
+    @Test fun `an opened playlist reports its actions for the page`() = runTest {
+        val native = FakeNative().apply {
+            collectionResult = JSONObject()
+                .put("type", "Playlist")
+                .put("id", "playlist1")
+                .put("title", "Mix")
+                .put("items", JSONArray())
+                .put("actions", JSONObject().put("canAddItems", false).put("canRemoveItems", false))
+                .toString()
+        }
+        val catalog = NativeSpotifyCatalog(native) {}
+
+        val collection = catalog.collection(CollectionType.Playlist, "playlist1", 0, 10)!!
+
+        assertEquals(PlaylistActions.None, collection.playlistActions)
+    }
+
     @Test fun `contains responses seed saved state`() = runTest {
         val native = FakeNative().apply {
             contains = "[true]"
@@ -301,6 +376,7 @@ class NativeSpotifyCatalogTest {
         var playlistItemsId: String? = null
         var playlistItemsUris: String? = null
         var playlistItemsAddResult: String? = "0"
+        var playlistItemsRemoveResult: String? = "ok"
         var playlistItemsRemoved = false
         var libraryResult: String? = "[]"
         var libraryOffset = -1L
@@ -382,11 +458,11 @@ class NativeSpotifyCatalogTest {
             playlistItemsUris = uris
             return playlistItemsAddResult
         }
-        override fun playlistItemsRemove(id: String, uris: String): Boolean {
+        override fun playlistItemsRemove(id: String, uris: String): String? {
             playlistItemsId = id
             playlistItemsUris = uris
             playlistItemsRemoved = true
-            return writeOk
+            return playlistItemsRemoveResult
         }
     }
 }

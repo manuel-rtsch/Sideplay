@@ -61,7 +61,18 @@ class SpotifySession(
     QualitySettingsRuntime,
     CacheRuntime {
     override val service: ServiceId = ServiceId.Spotify
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.All
+
+    /**
+     * Playlist editing needs the native transport. Reads may fall back to the read-only Web API
+     * when librespot's access point is unreachable; [writer] then returns null, and the UI must
+     * not offer add/remove actions that cannot be sent.
+     */
+    override val capabilities: ServiceCapabilities
+        get() = if (writer == null) {
+            ServiceCapabilities.All.copy(supportsPlaylistEdit = false)
+        } else {
+            ServiceCapabilities.All
+        }
 
     // The credential store is read while the UI composes. Anything it cannot answer counts as
     // signed out, so a device that lost its keystore key still opens and offers sign-in.
@@ -157,7 +168,7 @@ class SpotifySession(
         return catalog as? SpotifyLibraryWriter
     }
 
-    override val catalog: MediaCatalog by lazy { SpotifyMediaCatalog(spotifyCatalog) }
+    override val catalog: MediaCatalog by lazy { SpotifyMediaCatalog(spotifyCatalog) { capabilities } }
     override val writer: MediaLibraryWriter? get() = spotifyWriter?.let(::SpotifyMediaLibraryWriter)
 
     /** Process-wide queue and history so leaving Sidetrack does not forget what is playing. */

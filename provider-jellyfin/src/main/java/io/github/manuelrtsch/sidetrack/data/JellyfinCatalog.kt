@@ -12,6 +12,7 @@ import io.github.manuelrtsch.sidetrack.MediaKey
 import io.github.manuelrtsch.sidetrack.MediaType
 import io.github.manuelrtsch.sidetrack.Page
 import io.github.manuelrtsch.sidetrack.Playlist
+import io.github.manuelrtsch.sidetrack.PlaylistActions
 import io.github.manuelrtsch.sidetrack.SearchResults
 import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.ServiceCapabilities
@@ -94,6 +95,7 @@ class JellyfinCatalog(
                 totalItems = total,
                 hasMore = offset + page.items.size < total,
                 saveable = false,
+                playlistActions = playlist.actions,
                 service = ServiceId.Jellyfin
             )
         }
@@ -250,16 +252,17 @@ internal fun JellyfinItem.toArtist(client: JellyfinApi): Artist = Artist(
 )
 
 /**
- * Whether the UI offers editing on a Jellyfin playlist.
+ * What the UI may offer on a Jellyfin playlist.
  *
  * The server does not answer it: a playlist's own creator comes back with `OpenAccess:false` and
  * `Shares:[]` (measured on 12.4), and no field names the owner, so `openAccess`/`shares` can only
  * ever say "no". Every playlist is therefore offered as editable — the library list has always
  * done so — and the server still rejects a write the account may not make, which the UI reports.
+ * [PlaylistActions.unconfirmed] records that this is an assumption, not a server statement.
  */
-private const val PLAYLIST_EDITABLE = true
+private val PLAYLIST_ACTIONS = PlaylistActions.ServerDecides
 
-internal fun JellyfinItem.toPlaylist(client: JellyfinApi, editable: Boolean = PLAYLIST_EDITABLE): Playlist = Playlist(
+internal fun JellyfinItem.toPlaylist(client: JellyfinApi, actions: PlaylistActions = PLAYLIST_ACTIONS): Playlist = Playlist(
     id = id,
     name = name,
     owner = "Jellyfin",
@@ -268,7 +271,7 @@ internal fun JellyfinItem.toPlaylist(client: JellyfinApi, editable: Boolean = PL
     tracks = emptyList(),
     artUrl = artUrl(client),
     trackCount = childCount ?: recursiveItemCount ?: 0,
-    editable = editable,
+    actions = actions,
     service = ServiceId.Jellyfin
 )
 
@@ -307,7 +310,7 @@ internal fun JellyfinSearchHint.toArtist(client: JellyfinApi): Artist = Artist(
     service = ServiceId.Jellyfin
 )
 
-internal fun JellyfinSearchHint.toPlaylist(client: JellyfinApi, editable: Boolean = PLAYLIST_EDITABLE): Playlist = Playlist(
+internal fun JellyfinSearchHint.toPlaylist(client: JellyfinApi, actions: PlaylistActions = PLAYLIST_ACTIONS): Playlist = Playlist(
     id = itemId,
     name = name,
     owner = "Jellyfin",
@@ -316,6 +319,6 @@ internal fun JellyfinSearchHint.toPlaylist(client: JellyfinApi, editable: Boolea
     tracks = emptyList(),
     artUrl = artUrl(client),
     trackCount = songCount ?: 0,
-    editable = editable,
+    actions = actions,
     service = ServiceId.Jellyfin
 )

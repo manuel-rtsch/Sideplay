@@ -114,12 +114,15 @@ data class Playlist(
     val tracks: List<Track>,
     val artUrl: String? = null,
     val trackCount: Int = tracks.size,
-    /** Whether the signed-in user may add or remove items. The add-to-playlist picker filters on it. */
-    val editable: Boolean = false,
+    /** What the signed-in user may do to this playlist. The add-to-playlist picker filters on it. */
+    val actions: PlaylistActions = PlaylistActions.None,
     val folder: String? = null,
     val service: ServiceId = ServiceId.Local
 ) : LibraryEntry {
     override val key: MediaKey get() = MediaKey(service, MediaType.Playlist, id)
+
+    /** Compatibility view for callers that only need "can this playlist be edited at all". */
+    val editable: Boolean get() = actions.canEditItems
 }
 
 data class Show(
@@ -164,6 +167,8 @@ data class Collection(
     val saveable: Boolean = true,
     /** Show notes for a podcast collection; the other collection kinds do not have any. */
     val description: String = "",
+    /** Null for albums and shows; a playlist reports what the signed-in user may change. */
+    val playlistActions: PlaylistActions? = null,
     val service: ServiceId = ServiceId.Local
 ) {
     val key: MediaKey get() = MediaKey(service, type.mediaType, id)

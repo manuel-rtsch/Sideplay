@@ -179,6 +179,6 @@ class SpotifyAudioSinkTest {
         override fun playlistSaved(id: String): String? = null
         override fun playlistSave(id: String, save: Boolean) = true
         override fun playlistItemsAdd(id: String, uris: String): String? = "0"
-        override fun playlistItemsRemove(id: String, uris: String) = true
+        override fun playlistItemsRemove(id: String, uris: String): String? = "ok"
     }
 }

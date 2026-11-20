@@ -189,6 +189,13 @@ class SidetrackViewModel(
 
     /** The search categories this service can answer. The scope list mutes the rest. */
     val supportedScopes: Set<SearchScope> get() = capabilities.availableSearchScopes
+
+    /** What the signed-in account may change on one playlist, service limits included. */
+    fun playlistActions(playlist: Playlist): PlaylistActions = capabilities.playlistActions(playlist)
+
+    /** The same answer for an open playlist page. Other collection kinds report no actions. */
+    fun playlistActions(collection: Collection): PlaylistActions = capabilities.playlistActions(collection)
+
     private val _state = MutableStateFlow(
         SidetrackUiState(
             signedIn = session?.signedIn?.value ?: false,
@@ -1928,6 +1935,7 @@ class SidetrackViewModel(
             tracks = collection.items.filterIsInstance<Track>(),
             artUrl = collection.artUrl,
             trackCount = collection.totalItems,
+            actions = collection.playlistActions ?: PlaylistActions.None,
             service = collection.service
         )
 
@@ -2572,6 +2580,8 @@ class SidetrackViewModel(
         ServiceFailure.RateLimited -> "The service is rate-limiting — try again"
 
         ServiceFailure.TrackUnavailable -> "This track isn't available"
+
+        ServiceFailure.NotAllowed -> "The service won't allow that"
 
         // Keep the status subtitle to one line; the full exception is already logged by callers.
         ServiceFailure.Unknown, null -> "Something went wrong — try again"

@@ -57,6 +57,46 @@ sealed interface LibraryEntry {
 enum class LibrarySection { Liked, Playlists, Albums, Artists, Shows }
 
 /**
+ * What the signed-in user may do to one playlist.
+ *
+ * Add and remove are separate because a service can allow one and refuse the other. A followed
+ * Spotify playlist, for example, is read-only; a collaborative one accepts additions even though
+ * the account does not own it. [unconfirmed] marks a service that cannot state permissions up
+ * front (Jellyfin): the UI may offer the action, and the server's refusal is reported back.
+ *
+ * This is deliberately item-level. Whether the *service* can edit playlists at all is
+ * [ServiceCapabilities.supportsPlaylistEdit]; whether a *particular* playlist can be changed is
+ * this type. Deleting a playlist is not modelled: no provider has a delete transport yet, and
+ * Spotify only has "remove from library" (unfollow), which is the Save toggle.
+ */
+data class PlaylistActions(
+    val canAddItems: Boolean = false,
+    val canRemoveItems: Boolean = false,
+    val unconfirmed: Boolean = false
+) {
+    val canEditItems: Boolean get() = canAddItems || canRemoveItems
+
+    companion object {
+        /** The service says this playlist is read-only for the signed-in account. */
+        val None = PlaylistActions()
+
+        /** The service says the signed-in account may add and remove items. */
+        val All = PlaylistActions(canAddItems = true, canRemoveItems = true)
+
+        /** The service does not report permissions; offer editing and let the server decide. */
+        val ServerDecides = PlaylistActions(canAddItems = true, canRemoveItems = true, unconfirmed = true)
+    }
+}
+
+/**
+ * The actions a playlist page may offer. A service that cannot edit playlists at all overrides a
+ * playlist that reports itself editable, so the UI has one answer instead of two conditions.
+ */
+fun ServiceCapabilities.playlistActions(playlist: Playlist): PlaylistActions = if (supportsPlaylistEdit) playlist.actions else PlaylistActions.None
+
+fun ServiceCapabilities.playlistActions(collection: Collection): PlaylistActions = if (!supportsPlaylistEdit) PlaylistActions.None else collection.playlistActions ?: PlaylistActions.None
+
+/**
  * What a service can do. The UI asks these questions instead of asking which service is active.
  */
 data class ServiceCapabilities(

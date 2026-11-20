@@ -9,6 +9,7 @@ import io.github.manuelrtsch.sidetrack.LibraryEntry
 import io.github.manuelrtsch.sidetrack.LibraryFilter
 import io.github.manuelrtsch.sidetrack.Page
 import io.github.manuelrtsch.sidetrack.Playlist
+import io.github.manuelrtsch.sidetrack.PlaylistActions
 import io.github.manuelrtsch.sidetrack.SearchResults
 import io.github.manuelrtsch.sidetrack.SearchScope
 import io.github.manuelrtsch.sidetrack.ServiceId
@@ -125,9 +126,8 @@ class NativeSpotifyCatalog(
 
     override suspend fun addToPlaylist(playlistId: String, uri: String): Int? = withContext(Dispatchers.IO) {
         ensureSession()
-        val text = native.playlistItemsAdd(playlistId, JSONArray(listOf(uri)).toString())
-            ?: fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
-        runCatching { text.trim().toInt() }.getOrElse {
+        val text = playlistWrite(native.playlistItemsAdd(playlistId, JSONArray(listOf(uri)).toString()))
+        runCatching { text.toInt() }.getOrElse {
             fail(SpotifyFailure.Unknown, "Spotify returned an unreadable playlist response")
         }
     }
@@ -135,10 +135,34 @@ class NativeSpotifyCatalog(
     override suspend fun removeFromPlaylist(playlistId: String, uri: String) {
         withContext(Dispatchers.IO) {
             ensureSession()
-            if (!native.playlistItemsRemove(playlistId, JSONArray(listOf(uri)).toString())) {
-                fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
+            playlistWrite(native.playlistItemsRemove(playlistId, JSONArray(listOf(uri)).toString()))
+        }
+    }
+
+    /**
+     * Unwraps a native playlist write. The bridge reports a refusal as `{"error": "..."}`; a bare
+     * null means the transport never answered. Permission refusals become
+     * [SpotifyFailure.NotAllowed] so the UI can say the playlist is read-only instead of blaming
+     * the network.
+     */
+    private fun playlistWrite(text: String?): String {
+        val value = text?.trim()
+            ?: fail(SpotifyFailure.Network, "Spotify didn't accept the playlist change")
+        if (value.startsWith("{")) {
+            val error = runCatching { JSONObject(value).optString("error") }.getOrDefault(value)
+            if (error.isNotEmpty()) {
+                val failure = when {
+                    error.contains("forbidden", ignoreCase = true) ||
+                        error.contains("not yours", ignoreCase = true) -> SpotifyFailure.NotAllowed
+
+                    error.contains("SESSION", ignoreCase = true) -> SpotifyFailure.AuthenticationExpired
+
+                    else -> SpotifyFailure.Network
+                }
+                fail(failure, error)
             }
         }
+        return value
     }
 
     private suspend fun contains(set: String, uri: String): Boolean? {
@@ -185,10 +209,13 @@ class NativeSpotifyCatalog(
             val error = runCatching { JSONObject(text).optString("error") }.getOrDefault("")
             if (error.isNotEmpty()) {
                 android.util.Log.w("SidetrackCatalog", error)
-                val failure = if (error.contains("SESSION", ignoreCase = true)) {
-                    SpotifyFailure.AuthenticationExpired
-                } else {
-                    SpotifyFailure.Network
+                val failure = when {
+                    error.contains("SESSION", ignoreCase = true) -> SpotifyFailure.AuthenticationExpired
+
+                    error.contains("forbidden", ignoreCase = true) ||
+                        error.contains("not yours", ignoreCase = true) -> SpotifyFailure.NotAllowed
+
+                    else -> SpotifyFailure.Network
                 }
                 fail(failure, error)
             }
@@ -272,8 +299,18 @@ internal fun JSONObject.collection(type: CollectionType): Collection? {
         artUrl = optString("artUrl").mediaTextOrNull(),
         totalItems = optInt("totalItems", items.size),
         hasMore = optBoolean("hasMore", false),
+        playlistActions = if (type == CollectionType.Playlist) playlistActions() else null,
         description = optString("description"),
         service = ServiceId.Spotify
+    )
+}
+
+/** The native `actions` object, or null for a payload from a bridge that predates it. */
+private fun JSONObject.playlistActions(): PlaylistActions? {
+    val actions = optJSONObject("actions") ?: return null
+    return PlaylistActions(
+        canAddItems = actions.optBoolean("canAddItems"),
+        canRemoveItems = actions.optBoolean("canRemoveItems")
     )
 }
 
@@ -329,6 +366,11 @@ private fun artistFromNative(json: JSONObject): Artist? {
 
 private fun playlistFromNative(json: JSONObject): Playlist? {
     val id = json.optString("id").mediaIdOrNull() ?: return null
+    // A bridge from before `actions` only sent `editable`; treat it as "both" so the row behaves
+    // exactly as it did, while current bridges report the two directions separately.
+    val legacyEditable = json.optBoolean("editable", false)
+    val actions = json.playlistActions()
+        ?: PlaylistActions(canAddItems = legacyEditable, canRemoveItems = legacyEditable)
     return Playlist(
         id = id,
         name = json.optString("name", "Unknown playlist"),
@@ -338,7 +380,7 @@ private fun playlistFromNative(json: JSONObject): Playlist? {
         tracks = json.optJSONArray("tracks").tracks(),
         artUrl = json.optString("artUrl").mediaTextOrNull(),
         trackCount = json.optInt("trackCount", 0),
-        editable = json.optBoolean("editable", false),
+        actions = actions,
         folder = json.optString("folder").takeIf { it.isNotEmpty() },
         service = ServiceId.Spotify
     )

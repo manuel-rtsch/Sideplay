@@ -337,6 +337,6 @@ class NativeSpotifyGatewayTest {
         override fun playlistSaved(id: String): String? = null
         override fun playlistSave(id: String, save: Boolean): Boolean = true
         override fun playlistItemsAdd(id: String, uris: String): String? = "0"
-        override fun playlistItemsRemove(id: String, uris: String): Boolean = true
+        override fun playlistItemsRemove(id: String, uris: String): String? = "ok"
     }
 }

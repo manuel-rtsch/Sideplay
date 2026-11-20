@@ -13,6 +13,9 @@ Sources of truth:
   (`ServiceCapabilities.Navidrome`), and the Jellyfin set in `MediaModels.kt`.
 - Which categories the UI offers: `ServiceCapabilities.availableLibraryFilters` and
   `availableSearchScopes` in the same file, fed to the Library row and the search screens.
+- What the user may change on one playlist: `PlaylistActions` in the same file, carried by
+  `Playlist.actions` and `Collection.playlistActions`. `ServiceCapabilities.playlistActions(...)`
+  combines the service-level flag with the row's own answer.
 - Tests: each module's own `src/test` (`app`, `core`, `provider-spotify`,
   `provider-navidrome`, `provider-jellyfin`).
 - Jellyfin is implemented through the official Kotlin SDK (music libraries only, no pre-12.x
@@ -27,6 +30,35 @@ category row keep the button in place but mute it, drop its click and skip it un
 and screen readers get "not available" instead of "off". Keeping the slot means the row never
 reflows between services; muting it means no button leads to an empty page.
 
+## Playlist actions are per playlist, not just per service
+
+`ServiceCapabilities.supportsPlaylistEdit` says a service has an item-edit transport. It does not
+say whether the signed-in account may change a particular playlist. That answer is
+`PlaylistActions`:
+
+| Field | Meaning |
+| --- | --- |
+| `canAddItems` | Appending to this playlist is offered. |
+| `canRemoveItems` | Removing an entry from this playlist is offered. |
+| `unconfirmed` | The service did not state permissions; the action is offered and a server refusal is reported. |
+
+Add and remove stay separate because a service can grant one without the other. `Playlist.editable`
+remains as a compatibility view (`canAddItems || canRemoveItems`), but new UI reads the pair.
+`Collection.playlistActions` is the same answer once a playlist page is open, so the row list and
+the page cannot disagree.
+
+Deleting a playlist is **not** modelled. No provider has a delete transport; Spotify has no
+delete endpoint at all, only "remove from library" (unfollow), which is the existing Save toggle.
+
+| | Spotify | Navidrome | Jellyfin |
+| --- | --- | --- | --- |
+| Source of truth | playlist capabilities + owner | playlist `owner` vs signed-in username | no reliable server answer |
+| Owned playlist | add + remove | add + remove | offered unconfirmed |
+| Collaborative / foreign | `can_edit_items` grants add + remove | read-only | offered unconfirmed |
+| Followed, non-collaborative | read-only | read-only | offered unconfirmed |
+| Cannot report | read-only (`editable=false`) | offered unconfirmed | offered unconfirmed |
+| Read-only fallback | Web API transport → `supportsPlaylistEdit=false` | — | — |
+
 ---
 
 ## Overview
@@ -38,8 +70,9 @@ reflows between services; muting it means no button leads to an empty page.
 | Podcasts / shows | ✅ | ❌ | ❌ (music libraries carry none) |
 | Song radio | ✅ | ✅ | ✅ (InstantMix) |
 | Follow artist | ✅ | ❌ | ✅ (favorite artist) |
-| Playlist editing (add/remove items) | ✅ | ✅ | ✅ |
+| Playlist editing (add/remove items) | ✅ per playlist | ✅ owned playlists | ✅ offered unconfirmed |
 | Playlist creation | ❌ (pending transport) | ✅ | ✅ |
+| Playlist deletion | ❌ (unfollow only) | ❌ | ❌ |
 | Loudness normalization | ✅ | ✅ | ❌ (no ReplayGain parameter) |
 | Gapless playback | ✅ | ❌ | ❌ (engine-level) |
 | Quality selection | ✅ | ✅ | ✅ (`maxStreamingBitrate`) |
@@ -62,6 +95,9 @@ Implemented and tested:
   normalization, gapless, quality selection.
 - **Radio**: song radio / station from any seed.
 - **Saving**: like tracks, save albums and shows, follow artists, add/remove playlist items.
+  Item edits are offered only on a playlist the account owns or collaborates on. The native bridge
+  reports `canAddItems`/`canRemoveItems` from the playlist's capabilities, and a refused write is
+  surfaced as `ServiceFailure.NotAllowed`, not as a network error.
 - **Progress & scrobbling**: resume points and scrobble reporting.
 
 Coverage (unit + Robolectric, `app/src/test/...`) includes: auth/PKCE, session cache, web API
@@ -94,6 +130,11 @@ narrower capability set below.
   position, so with the same track twice the named row decides. Without one the last match goes,
   which is the copy an append leaves at the end. A row that no longer holds the item is ignored,
   not trusted.
+- **Playlist item permissions**: Subsonic has no per-playlist permission flag, so Navidrome
+  compares the playlist's `owner` with the signed-in username. A foreign playlist reports
+  `PlaylistActions.None` and the writer refuses before sending `updatePlaylist`. A playlist with
+  no owner is offered as unconfirmed, because the server did not describe it; a playlist the
+  account just created is always editable.
 - **Radio**: `similarSongs` with a `randomSongs` fallback for servers without Last.fm, surfaced
   because `supportsRadio` is now true.
 - **Create playlist**: a *New playlist* action in the Library → Playlists options menu opens a
@@ -192,6 +233,10 @@ adapter covers the music library only.
 - **Library editing** (`MediaLibraryWriter`): favourite/unfavourite tracks, albums and artists;
   add to / remove from playlist; create playlist. Jellyfin has no separate "saved" flag, so
   favourite is used for both like and save.
+- **Playlist item permissions**: Jellyfin does not report them reliably (12.4 answers a creator's
+  own fresh playlist with `OpenAccess:false, Shares:[]`), so every playlist reports
+  `PlaylistActions.ServerDecides` (`unconfirmed = true`). The action is offered, and the server
+  still rejects a write the account may not make.
 - **Radio**: `getInstantMixFromItem` from any seed.
 - **Progress reporting** (`JellyfinPlaybackReporter`): `reportPlaybackStart` / `Progress` /
   `Stopped`, throttled to 10 seconds, and `markPlayedItem` only when the engine emits its
