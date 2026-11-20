@@ -95,7 +95,6 @@ fun SidetrackOnboardingScreen(
     SidetrackOnboardingContent(
         module = module,
         customMapping = custom != null,
-        followsHardware = manual == null,
         canOpenKeyboard = !hostBacked,
         onOpenKeyboard = onKeyboard,
         onCycleKeyboard = {
@@ -109,7 +108,9 @@ fun SidetrackOnboardingScreen(
                 // the attached keys are read as, which is exactly what useCustomMapping does.
                 keypad.mapper.customModule != null -> keypad.useCustomMapping(next)
 
-                else -> keypad.useModule(next)
+                // A choice, not a detection: Sidekit keeps it while the same keypad reports itself,
+                // so the D-pad press that follows does not undo it.
+                else -> keypad.chooseModule(next)
             }
         },
         canManageKeypadAccess = !hostBacked,
@@ -131,8 +132,6 @@ fun SidetrackOnboardingScreen(
 internal fun SidetrackOnboardingContent(
     module: KeypadModule,
     customMapping: Boolean = false,
-    /** False once the user cycled by hand: their choice outlives the keys they press after it. */
-    followsHardware: Boolean = true,
     canOpenKeyboard: Boolean = true,
     onOpenKeyboard: () -> Unit = {},
     onCycleKeyboard: () -> Unit = {},
@@ -143,7 +142,7 @@ internal fun SidetrackOnboardingContent(
     onBack: (() -> Unit)? = null
 ) {
     val list = rememberLazyListState()
-    val keys = rememberWelcomeKeys(module, LocalKeypad.current, followsHardware)
+    val keys = rememberWelcomeKeys(module)
     val optionsOpen = LocalChrome.current?.optionsOpen == true
 
     SidekitScaffold(
@@ -187,11 +186,7 @@ internal fun SidetrackOnboardingContent(
 private class WelcomeKeys(val pressed: KeypadHabit?, val modifier: Modifier)
 
 @Composable
-private fun rememberWelcomeKeys(
-    module: KeypadModule,
-    keypad: Keypad?,
-    followsHardware: Boolean
-): WelcomeKeys {
+private fun rememberWelcomeKeys(module: KeypadModule): WelcomeKeys {
     val focus = remember { FocusRequester() }
     var pressed by remember { mutableStateOf<KeypadHabit?>(null) }
     // Compose only receives key events for a focused node, and this screen started with none: the
@@ -208,14 +203,6 @@ private fun rememberWelcomeKeys(
         .onPreviewKeyEvent { event ->
             val native = event.nativeKeyEvent
             if (native.action == KeyEvent.ACTION_DOWN) {
-                // Detection belongs to Sidekit, but asking again from the keys this screen sees is
-                // what makes a module swapped while the page is open teach its keys immediately.
-                keypad?.observe(native)
-                // Sidekit's detector cannot read a shared key such as the D-pad, so the keypad that
-                // sent this one is the better answer - unless the user has already overruled it.
-                if (followsHardware) {
-                    keypad?.followInputDevice(keypadModuleForDevice(native.device?.name))
-                }
                 keypadHabitForKey(module, native.keyCode)?.let { pressed = it }
             }
             false

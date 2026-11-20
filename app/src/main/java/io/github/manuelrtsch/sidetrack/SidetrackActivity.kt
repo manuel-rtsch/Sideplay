@@ -108,9 +108,9 @@ class SidetrackActivity : SidekitActivity() {
         val module = config?.keypadModuleOrDefault() ?: keypadPreferences.module()
         if (module != null) keypad.useModule(module)
         // The stored module is only a memory, and it is wrong whenever the keypad tile was swapped
-        // while Sidetrack was not looking. The attached hardware knows better, and it is read here
-        // so every screen starts on the module that is really there.
-        keypad.followInputDevice(attachedKeypadModule())
+        // while Sidetrack was not looking. Sidekit reads the module the attached device names, so
+        // every screen starts on the keypad that is really there.
+        keypad.observeAttached()
         keypad.useCustomMapping(config?.customModuleOrDefault() ?: keypadPreferences.customModule())
         KeypadSystemBack.delegate = systemBack
     }
@@ -130,9 +130,6 @@ class SidetrackActivity : SidekitActivity() {
      * never sees it; the player is driven from the same callback the notification uses.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        // Any key, the D-pad included, names the keypad that sent it. Sidekit's own detection only
-        // reads the keys a module does not share, so this is what catches the rest.
-        keypad.followInputDevice(keypadModuleForDevice(event.device?.name))
         // The keys Sidekit passes on, with the module it currently believes is attached. The
         // consumed ones (Options, the gamepad's X/Y/Start) never get here, so this is the other
         // half of the keypad picture, not the whole of it.

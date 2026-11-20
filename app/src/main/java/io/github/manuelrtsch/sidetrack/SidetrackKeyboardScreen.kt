@@ -71,7 +71,7 @@ fun SidetrackKeyboardScreen(
             onEnableKeypadBack = {
                 runCatching { accessSettings.launch(SidetrackKeypadAccess.settingsIntent()) }
             },
-            onModule = { next -> keypad?.useModule(next) ?: keypadPrefs.writeModule(next) },
+            onModule = { next -> keypad?.chooseModule(next) ?: keypadPrefs.writeModule(next) },
             onInputMode = { next ->
                 local.inputMode = next
                 inputMode = next
