@@ -109,17 +109,9 @@ fun SearchScreen(
     // Once there is a query the page is about browsing results: either the list or the reason there
     // is none. The "Search in" row belongs to the state where the query is still being typed.
     val showFilters = hasQuery && !loading && !failed
-    val populated = SearchScope.entries.firstOrNull { it in search.searchScopes && results.sizeFor(it) > 0 }
-    // A query may return nothing in the selected category, and toggling scopes can remove the
-    // selected category entirely. Move to an included category with results first, then to any
-    // included category, so the buttons and the list never disagree.
-    LaunchedEffect(search.query, search.searchScopes, populated) {
-        if (scope !in search.searchScopes) {
-            SearchScope.entries.firstOrNull { it in search.searchScopes }?.let { scope = it }
-        } else if (populated != null && results.sizeFor(scope) == 0) {
-            scope = populated
-        }
-    }
+    // The categories that are both in the queried set and answerable by the connected service.
+    // Moving the row (and the selection) only ever walks these.
+    val includedScopes = SearchScope.entries.filter { it in supportedScopes && it in search.searchScopes }.toSet()
     // A failed search replaces the list with the retry body. Drop a page that was in flight so a
     // later retry cannot mistake its larger result set for a page that just arrived.
     LaunchedEffect(failed) { if (failed) moreFocus.reset() }
@@ -140,14 +132,6 @@ fun SearchScreen(
     val filterRowModifier = Modifier.onPreviewKeyEvent { event ->
         if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
             searchFocus.requestFocus()
-            true
-        } else {
-            false
-        }
-    }
-    val firstResultModifier = Modifier.onPreviewKeyEvent { event ->
-        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
-            filterFocus.getValue(scope).requestFocus()
             true
         } else {
             false
@@ -188,9 +172,24 @@ fun SearchScreen(
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
-        // A new scope or query shows a different page from the top; keeping the old scroll offset
-        // would open it in the middle.
-        LaunchedEffect(search.query, scope) {
+        val viewport = rememberSearchViewport(
+            query = search.query,
+            scope = scope,
+            setScope = { scope = it },
+            supportedScopes = supportedScopes,
+            includedScopes = includedScopes,
+            showFilters = showFilters,
+            failed = failed,
+            results = results,
+            listState = listState,
+            rows = rows,
+            moreFocus = moreFocus,
+            scopeFocus = filterFocus
+        )
+        // A new query shows a different page from the top; keeping the old scroll offset would open
+        // it in the middle. A scope change is handled by the viewport, which also keeps the cursor
+        // on the category row.
+        LaunchedEffect(search.query) {
             moreFocus.reset()
             listState.scrollToItem(0)
         }
@@ -260,8 +259,12 @@ fun SearchScreen(
                         selected = scope,
                         icon = { it.icon },
                         label = { it.label },
-                        onSelect = { scope = it },
+                        onSelect = viewport.switchScope,
                         focusRequesters = filterFocus,
+                        // A row action bar owns the focus while it is open. Leaving the category
+                        // buttons focusable let Android's exit from touch mode land on the first
+                        // one, select it, and dispose the very row whose bar had just opened.
+                        acceptsFocus = rows.bar.selection == null,
                         // A category the service cannot answer stays in the row but takes no
                         // click and no focus: it would only ever show an empty list.
                         enabled = { it in supportedScopes && it in search.searchScopes },
@@ -286,7 +289,7 @@ fun SearchScreen(
                         contentType = { _, item -> searchItemKey(item).take(1) }
                     ) { index, item ->
                         val baseModifier = Modifier.listFade(listState, index + 1)
-                            .then(if (index == 0) firstResultModifier else Modifier)
+                            .then(if (index == 0) viewport.firstRowModifier else Modifier)
                         val modifier = baseModifier.then(moreFocus.rowModifier(index))
                         when (item) {
                             is Track -> TrackRow(
@@ -350,7 +353,7 @@ fun SearchScreen(
     }
 }
 
-private fun SearchResults.itemsFor(scope: SearchScope): List<Any> = when (scope) {
+internal fun SearchResults.itemsFor(scope: SearchScope): List<Any> = when (scope) {
     SearchScope.Tracks -> tracks
     SearchScope.Artists -> artists
     SearchScope.Albums -> albums
@@ -358,7 +361,7 @@ private fun SearchResults.itemsFor(scope: SearchScope): List<Any> = when (scope)
     SearchScope.Shows -> shows
 }
 
-private fun SearchResults.sizeFor(scope: SearchScope): Int = itemsFor(scope).size
+internal fun SearchResults.sizeFor(scope: SearchScope): Int = itemsFor(scope).size
 
 private fun searchItemKey(item: Any): String = when (item) {
     is Track -> "t${item.id}"
