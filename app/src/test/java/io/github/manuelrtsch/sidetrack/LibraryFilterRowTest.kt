@@ -44,7 +44,9 @@ class LibraryFilterRowTest {
         onFilter: (LibraryFilter) -> Unit = {}
     ) {
         val state = LibraryUiState(
-            libraryItems = runBlocking { MockSpotifyDataSource.library(filter).items },
+            libraryPages = mapOf(
+                filter to LibraryPage(runBlocking { MockSpotifyDataSource.library(filter).items })
+            ),
             filter = filter
         )
         compose.setContent {
@@ -116,7 +118,10 @@ class LibraryFilterRowTest {
             SidekitTheme(spacing = SidekitSpacing.Compact) {
                 SidekitCanvas {
                     LibraryScreen(
-                        LibraryUiState(libraryItems = libraries.getValue(filter), filter = filter),
+                        LibraryUiState(
+                            libraryPages = mapOf(filter to LibraryPage(libraries.getValue(filter))),
+                            filter = filter
+                        ),
                         SavedUiState(),
                         ChromeUiState(),
                         onBack = {},

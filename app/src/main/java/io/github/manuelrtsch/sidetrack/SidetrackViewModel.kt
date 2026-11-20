@@ -307,7 +307,9 @@ class SidetrackViewModel(
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return null
         val playlist = session?.writer?.createPlaylist(trimmed) ?: return null
-        refreshLibrary()
+        // The new playlist belongs to one category: refreshing only that one keeps the open list
+        // (and the pages loaded in it) untouched.
+        library.reload(LibraryFilter.Playlists)
         return playlist
     }
 
@@ -446,7 +448,8 @@ class SidetrackViewModel(
 
     fun loadMoreLibrary() = library.loadMoreLibrary()
 
-    fun refreshLibrary() = library.refresh()
+    /** Cache-first: opening the Library only refetches a category that is missing or ageing. */
+    fun ensureLibrary() = library.ensure()
 
     fun retryLibrary() = library.retry()
 

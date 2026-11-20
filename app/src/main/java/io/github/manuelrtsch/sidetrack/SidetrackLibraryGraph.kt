@@ -57,9 +57,10 @@ internal fun NavGraphBuilder.libraryGraph(nav: NavHostController) {
         val library by vm.libraryState.collectAsStateWithLifecycle()
         val saved by vm.savedState.collectAsStateWithLifecycle()
         val chrome by vm.chromeState.collectAsStateWithLifecycle()
-        // The startup pre-cache may have run offline. Opening the Library refreshes the
-        // selected category, and also recovers from a failed first load.
-        LaunchedEffect(Unit) { vm.refreshLibrary() }
+        // Opening the Library paints from the cached category and only refetches when that
+        // category is missing, failed, or older than the cache window. Coming back from a
+        // playlist is therefore a repaint, not a round trip.
+        LaunchedEffect(Unit) { vm.ensureLibrary() }
         LibraryScreen(
             library,
             saved,

@@ -38,7 +38,10 @@ class ArtistLibraryGutterTest {
             SidekitTheme(spacing = SidekitSpacing.Compact) {
                 SidekitCanvas {
                     LibraryScreen(
-                        LibraryUiState(libraryItems = libraries.getValue(filter), filter = filter),
+                        LibraryUiState(
+                            libraryPages = mapOf(filter to LibraryPage(libraries.getValue(filter))),
+                            filter = filter
+                        ),
                         SavedUiState(),
                         ChromeUiState(),
                         onBack = {},

@@ -24,16 +24,20 @@ data class PlaybackUiState(
     val repeat: RepeatMode = RepeatMode.Off
 )
 
+/**
+ * The library as the screen reads it. Every category the user has opened stays in [libraryPages],
+ * and the open one is a projection of that cache, so switching back to a category is a repaint
+ * rather than a refetch.
+ */
 data class LibraryUiState(
-    val libraryItems: List<Any> = emptyList(),
+    val libraryPages: Map<LibraryFilter, LibraryPage> = emptyMap(),
     val librarySections: Map<LibraryFilter, List<Any>> = emptyMap(),
     val librarySectionHasMore: Set<LibraryFilter> = emptySet(),
-    val libraryLoading: Boolean = false,
+    /** Categories fetching their first page with nothing cached to show meanwhile. */
+    val libraryPendingPages: Set<LibraryFilter> = emptySet(),
+    val libraryMorePendingPages: Set<LibraryFilter> = emptySet(),
     val librarySectionsLoading: Boolean = false,
     val librarySectionsError: String? = null,
-    val libraryError: String? = null,
-    val libraryHasMore: Boolean = false,
-    val libraryMorePending: Boolean = false,
     val filter: LibraryFilter = LibraryFilter.LikedSongs,
     val collections: Map<String, Collection> = emptyMap(),
     val artists: Map<String, Artist> = emptyMap(),
@@ -47,7 +51,13 @@ data class LibraryUiState(
     val artistAlbumHasMore: Map<String, Boolean> = emptyMap(),
     val artistTrackHasMore: Map<String, Boolean> = emptyMap(),
     val artistMorePending: Set<String> = emptySet()
-)
+) {
+    val libraryItems: List<Any> get() = libraryPages[filter]?.items.orEmpty()
+    val libraryHasMore: Boolean get() = libraryPages[filter]?.hasMore == true
+    val libraryError: String? get() = libraryPages[filter]?.error
+    val libraryLoading: Boolean get() = filter in libraryPendingPages
+    val libraryMorePending: Boolean get() = filter in libraryMorePendingPages
+}
 
 data class SearchUiState(
     val searchResults: SearchResults = SearchResults(),
@@ -104,15 +114,13 @@ val SidetrackUiState.playback: PlaybackUiState
 
 val SidetrackUiState.library: LibraryUiState
     get() = LibraryUiState(
-        libraryItems = libraryItems,
+        libraryPages = libraryPages,
         librarySections = librarySections,
         librarySectionHasMore = librarySectionHasMore,
-        libraryLoading = libraryLoading,
+        libraryPendingPages = libraryPendingPages,
+        libraryMorePendingPages = libraryMorePendingPages,
         librarySectionsLoading = librarySectionsLoading,
         librarySectionsError = librarySectionsError,
-        libraryError = libraryError,
-        libraryHasMore = libraryHasMore,
-        libraryMorePending = libraryMorePending,
         filter = filter,
         collections = collections,
         artists = artists,

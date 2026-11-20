@@ -8,26 +8,25 @@ data class SidetrackUiState(
     val upcoming: List<MediaItem> = emptyList(),
     val history: List<MediaItem> = emptyList(),
     val recent: List<MediaItem> = emptyList(),
-    val libraryItems: List<Any> = emptyList(),
+    /** Every category opened this session, so switching back paints without a fetch. */
+    val libraryPages: Map<LibraryFilter, LibraryPage> = emptyMap(),
     val librarySections: Map<LibraryFilter, List<Any>> = emptyMap(),
     val librarySectionHasMore: Set<LibraryFilter> = emptySet(),
     val searchResults: SearchResults = SearchResults(),
     val searchPending: Boolean = false,
     val authPending: Boolean = false,
-    val libraryLoading: Boolean = false,
+    /** Categories whose first page is in flight with nothing cached to show meanwhile. */
+    val libraryPendingPages: Set<LibraryFilter> = emptySet(),
     val librarySectionsLoading: Boolean = false,
     /** Set when the startup preload could not load any category. */
     val librarySectionsError: String? = null,
-    /** Set when the open category could not load and has no items to show. */
-    val libraryError: String? = null,
     /** Set when a search request failed and there are no results to keep on screen. */
     val searchError: String? = null,
     /** Failed collection loads, keyed by "type:id", so the screen can offer a retry. */
     val collectionErrors: Map<String, String> = emptyMap(),
     /** Failed artist loads, keyed by artist id, so the screen can offer a retry. */
     val artistErrors: Map<String, String> = emptyMap(),
-    val libraryHasMore: Boolean = false,
-    val libraryMorePending: Boolean = false,
+    val libraryMorePendingPages: Set<LibraryFilter> = emptySet(),
     val searchHasMore: Set<SearchScope> = emptySet(),
     val searchMorePending: Set<SearchScope> = emptySet(),
     val collectionMorePending: Set<String> = emptySet(),
@@ -74,6 +73,15 @@ data class SidetrackUiState(
     val artistRadioError: String? = null
 ) {
     val savedCurrent: Boolean get() = current?.let { it.key.encode() in savedTrackIds } ?: false
+
+    // The open category is a projection of [libraryPages]: the cache is the only copy of the rows,
+    // so a page that arrives for a category the user has left is still worth keeping.
+    val libraryItems: List<Any> get() = libraryPages[filter]?.items.orEmpty()
+    val libraryHasMore: Boolean get() = libraryPages[filter]?.hasMore == true
+    /** Set when the open category could not load and has no items to show. */
+    val libraryError: String? get() = libraryPages[filter]?.error
+    val libraryLoading: Boolean get() = filter in libraryPendingPages
+    val libraryMorePending: Boolean get() = filter in libraryMorePendingPages
 }
 
 /** Sets the transient bar message together with the kind the bar renders it with. */
