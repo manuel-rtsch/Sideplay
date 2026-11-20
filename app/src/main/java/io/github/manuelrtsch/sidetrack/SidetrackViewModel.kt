@@ -262,123 +262,19 @@ class SidetrackViewModel(
         coroutineScope = viewModelScope
     )
 
-    private val nextHandler = { driver.next() }
-    private val previousHandler = { driver.previous() }
-    private val seekHandler = { position: Long -> driver.seekTo(position) }
+    private val sessionWiring = session?.let {
+        SidetrackSessionWiring(viewModelScope, it, store, clock, driver, account, library) { text -> notice(text) }
+    }
 
     init {
-        session?.let {
-            viewModelScope.launch {
-                it.signedIn.collect { signed ->
-                    store.update { state -> state.copy(signedIn = signed) }
-                    if (signed) account.load() else account.clear()
-                }
-            }
-            viewModelScope.launch {
-                it.playback.buffering.collect { buffering ->
-                    if (!buffering) clock.anchorCurrent()
-                    store.update { state -> state.copy(isBuffering = buffering) }
-                }
-            }
-            viewModelScope.launch {
-                it.settings.collect { settings ->
-                    store.update { state ->
-                        state.copy(
-                            audioQuality = settings.audioQuality,
-                            normalization = settings.normalization,
-                            gapless = settings.gapless,
-                            autoplay = settings.autoplay
-                        )
-                    }
-                }
-            }
-            it.playback.onNext = nextHandler
-            it.playback.onPrevious = previousHandler
-            it.playback.onSeek = seekHandler
-            // A play command from a headset or the notification can arrive before anything is
-            // loaded: a cold process restores the queue but not the native player, so resuming
-            // would only deliver silence. Restore already anchored the saved offset here.
-            it.playback.onResumeWithoutSource = {
-                val item = store.value.current
-                if (item != null && session != null && item.service != ServiceId.Local) {
-                    val resume = clock.value
-                    store.update { state -> state.copy(isPlaying = true) }
-                    driver.startRemote(item, resume, resuming = resume > 0L)
-                }
-            }
-            // Playback upkeep (a stall that had to reconnect) has to reach the user: from the
-            // outside it looked like the player was running while nothing was audible.
-            viewModelScope.launch {
-                it.playback.notice.collect { text ->
-                    if (text != null) {
-                        notice(text)
-                        it.playback.emitNotice(null)
-                    }
-                }
-            }
-            // Starting offline leaves the library empty. Retry as soon as a network appears, so
-            // the user does not have to restart the app or hunt for a refresh action.
-            it.network?.let { network ->
-                viewModelScope.launch {
-                    var wasOnline = network.online.value
-                    network.online.collect { online ->
-                        if (online && !wasOnline && store.value.signedIn) {
-                            account.load()
-                            if (library.hasLoadedCategory()) library.load(store.value.filter)
-                        }
-                        wasOnline = online
-                    }
-                }
-            }
-        }
+        sessionWiring?.install()
         driver.restore()
         refreshCacheSize()
-        if (session == null || !session.nativeAvailable) {
-            if (simulatePlayback) {
-                // Local fixtures and builds without the native library still need a moving progress bar.
-                viewModelScope.launch {
-                    // Suspend on the playing flag instead of polling: a paused player costs no wakeups.
-                    while (true) {
-                        store.state.map { it.isPlaying }.first { it }
-                        while (store.value.isPlaying) {
-                            delay(1_000L)
-                            driver.tick()
-                        }
-                    }
-                }
-            }
-        } else {
-            viewModelScope.launch {
-                // Native events only matter while something is playing. Poll tight when active, back
-                // off to a slow heartbeat when idle so this does not run forever on the main path.
-                while (true) {
-                    delay(if (store.value.isPlaying) 300L else 3_000L)
-                    val event = withContext(Dispatchers.IO) { session.playback.pollEvent() } ?: continue
-                    driver.handlePlaybackEvent(event)
-                }
-            }
-            viewModelScope.launch {
-                // The seek bar only needs to advance while it is on screen and playing. When the
-                // app is backgrounded or paused this suspends on the flows instead of waking up.
-                while (true) {
-                    uiVisible.combine(store.state) { visible, s ->
-                        visible && s.isPlaying && !s.isBuffering
-                    }.first { it }
-                    while (uiVisible.value && store.value.isPlaying && !store.value.isBuffering) {
-                        delay(POSITION_TICK_MS)
-                        clock.advanceTick()
-                    }
-                }
-            }
-        }
+        PlaybackTicker(viewModelScope, session, store, clock, driver, uiVisible, simulatePlayback).start()
     }
 
     override fun onCleared() {
-        session?.playback?.let {
-            if (it.onNext === nextHandler) it.onNext = null
-            if (it.onPrevious === previousHandler) it.onPrevious = null
-            if (it.onSeek === seekHandler) it.onSeek = null
-        }
+        sessionWiring?.detach()
         super.onCleared()
     }
 
