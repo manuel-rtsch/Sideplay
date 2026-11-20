@@ -17,7 +17,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Playlists and shows use the same meatball gutter as tracks, albums and artists. */
+/** Playlists and shows use the same meatball gutter as tracks, albums and artists; it carries only the non-destructive queue action. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(shadows = [RecordingHapticShadow::class])
@@ -37,11 +37,7 @@ class PlaylistShowGutterTest {
         }
     }
 
-    private fun showPlaylist(
-        saved: Boolean = false,
-        onSave: () -> Unit = {},
-        onQueue: () -> Unit = {}
-    ): Pair<() -> RowGutterState, () -> RowActionBarState> {
+    private fun showPlaylist(onQueue: () -> Unit = {}): Pair<() -> RowGutterState, () -> RowActionBarState> {
         compose.mainClock.autoAdvance = false
         var gutter: RowGutterState? = null
         var bar: RowActionBarState? = null
@@ -58,8 +54,6 @@ class PlaylistShowGutterTest {
                             playlist,
                             gutterState,
                             barState,
-                            saved,
-                            onSave = onSave,
                             onAddToQueue = onQueue,
                             onClick = {}
                         )
@@ -71,11 +65,7 @@ class PlaylistShowGutterTest {
         return { requireNotNull(gutter) } to { requireNotNull(bar) }
     }
 
-    private fun showShow(
-        saved: Boolean = false,
-        onSave: () -> Unit = {},
-        onQueueLatest: () -> Unit = {}
-    ): Pair<() -> RowGutterState, () -> RowActionBarState> {
+    private fun showShow(onQueueLatest: () -> Unit = {}): Pair<() -> RowGutterState, () -> RowActionBarState> {
         compose.mainClock.autoAdvance = false
         var gutter: RowGutterState? = null
         var bar: RowActionBarState? = null
@@ -92,8 +82,6 @@ class PlaylistShowGutterTest {
                             show,
                             gutterState,
                             barState,
-                            saved,
-                            onSave = onSave,
                             onAddLatestToQueue = onQueueLatest,
                             onClick = {}
                         )
@@ -111,48 +99,26 @@ class PlaylistShowGutterTest {
     }
 
     @Test
-    fun playlistOffersSaveAndQueue() {
+    fun playlistOffersQueueOnly() {
         val (gutter, bar) = showPlaylist()
         openGutter(gutter, playlistKey)
         compose.onNodeWithContentDescription("Actions for ${playlist.name}").performClick()
         compose.runOnIdle {
             assertEquals(
-                listOf("Save ${playlist.name} to your library", "Add ${playlist.name} to queue"),
+                listOf("Add ${playlist.name} to queue"),
                 bar().selection?.actions?.map { it.contentDescription }
             )
         }
     }
 
     @Test
-    fun savedPlaylistOffersUndo() {
-        var saves = 0
-        val (gutter, bar) = showPlaylist(saved = true, onSave = { saves++ })
-        openGutter(gutter, playlistKey)
-        compose.onNodeWithContentDescription("Actions for ${playlist.name}").performClick()
-        compose.runOnIdle { bar().selection?.actions?.first()?.onClick?.invoke() }
-        compose.waitForIdle()
-        assertEquals(1, saves)
-        compose.runOnIdle {
-            assertEquals(
-                "Undo remove ${playlist.name} from your library",
-                bar().undo?.contentDescription
-            )
-            bar().undo?.onClick?.invoke()
-        }
-        assertEquals(2, saves)
-    }
-
-    @Test
-    fun showOffersSaveAndLatestEpisode() {
+    fun showOffersLatestEpisodeOnly() {
         val (gutter, bar) = showShow()
         openGutter(gutter, showKey)
         compose.onNodeWithContentDescription("Actions for ${show.name}").performClick()
         compose.runOnIdle {
             assertEquals(
-                listOf(
-                    "Save ${show.name} to your library",
-                    "Add latest episode of ${show.name} to queue"
-                ),
+                listOf("Add latest episode of ${show.name} to queue"),
                 bar().selection?.actions?.map { it.contentDescription }
             )
         }

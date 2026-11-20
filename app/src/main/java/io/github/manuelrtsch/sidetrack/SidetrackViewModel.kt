@@ -1232,25 +1232,11 @@ class SidetrackViewModel(
 
     fun toggleSaved(collection: Collection) = toggleSaved(collection.type, collection.id, collection)
 
-    /** A library row already represents the saved item; it has no collection page loaded. */
-    fun toggleSaved(album: Album) = toggleSaved(CollectionType.Album, album.id, libraryItem = album)
-
-    fun toggleSaved(playlist: Playlist) =
-        toggleSaved(CollectionType.Playlist, playlist.id, libraryItem = playlist)
-
-    fun toggleSaved(show: Show) = toggleSaved(CollectionType.Show, show.id, libraryItem = show)
-
-    private fun toggleSaved(
-        type: CollectionType,
-        id: String,
-        collection: Collection? = null,
-        /** The already-known library row, when the caller has it without a collection page. */
-        libraryItem: Any? = null
-    ) {
+    private fun toggleSaved(type: CollectionType, id: String, collection: Collection) {
         val key = collectionKey(type, id)
         val wasSaved = key in _state.value.savedCollectionKeys
         val saved = !wasSaved
-        val addedItem = libraryItem ?: collection?.let { libraryItemFor(it) }
+        val addedItem = libraryItemFor(collection)
         savedCollectionTouched += key
         _state.update {
             val keys = it.savedCollectionKeys.toMutableSet()

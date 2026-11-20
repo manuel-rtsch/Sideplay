@@ -3,7 +3,6 @@ package io.github.manuelrtsch.sidetrack
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -58,11 +57,10 @@ fun rememberTrackRows(
 }
 
 /**
- * A track row with one gutter trigger. The trigger opens the contextual bar with Save/Unsave and
- * Add to queue.
+ * A track row with one gutter trigger. The trigger opens the contextual bar with Add to queue.
  *
- * Those are the two verbs that belong to browsing a track list. Artist and album pages are not
- * row actions: they are destinations, reached from Now Playing when the track is started.
+ * Save/Unsave is deliberately page-only: it is a membership toggle with a destructive direction,
+ * and Now Playing already owns it. Artist and album pages are destinations for the same reason.
  */
 @Composable
 fun TrackRow(
@@ -76,7 +74,6 @@ fun TrackRow(
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
-    val saved = rows.saved(track)
     val selected = rows.bar.selection?.key == key
     val rowFocus = remember { FocusRequester() }
     CloseRowActionsWhenDisposed(selected, rows.bar)
@@ -108,10 +105,8 @@ fun TrackRow(
         )
     }) {
         // The trigger and its focus state only exist while the gutter is open. A long list
-        // otherwise pays for a focus modifier and a saved-state request on every row it composes.
+        // otherwise pays for a focus modifier on every row it composes.
         val squareFocus = rememberGutterSquareFocus(key, rows.focus)
-        // The saved state of a row that never played is unknown: the gutter is the moment to ask.
-        LaunchedEffect(Unit) { rows.onEnsureSaved(track) }
         RowActionSquare(
             color = SidekitTheme.colors.surfaceA4,
             label = "Actions for ${track.title}",
@@ -125,28 +120,6 @@ fun TrackRow(
                         title = track.title,
                         focusRequester = rowFocus,
                         actions = listOf(
-                            RowAction(
-                                key = "save",
-                                label = if (saved) "Unsave" else "Save",
-                                contentDescription = if (saved) {
-                                    "Remove ${track.title} from Liked Songs"
-                                } else {
-                                    "Save ${track.title} to Liked Songs"
-                                },
-                                icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-                                tone = if (saved) ActionTone.Destructive else ActionTone.Primary,
-                                onClick = {
-                                    rows.onSave(track)
-                                    if (saved) {
-                                        rows.bar.showUndo(
-                                            RowActionUndo(
-                                                contentDescription = "Undo remove ${track.title} from Liked Songs",
-                                                onClick = { rows.onSave(track) }
-                                            )
-                                        )
-                                    }
-                                }
-                            ),
                             RowAction(
                                 key = "addToQueue",
                                 label = "Add to queue",
@@ -213,9 +186,8 @@ fun GutterMediaRow(
 }
 
 /**
- * An artist row in a library list. Like every other row, its gutter is one grey meatball square;
- * pressing it publishes Follow/Unfollow and Artist radio to the screen's contextual action bar.
- * The artist page keeps its own tiles: this is the list's shortcut to the same two verbs.
+ * An artist row in a library list. Its gutter publishes Artist radio only. Follow/Unfollow is
+ * page-only: it has a destructive direction and the artist page already owns it.
  */
 @Composable
 fun ArtistGutterRow(
@@ -223,19 +195,16 @@ fun ArtistGutterRow(
     artist: Artist,
     focus: RowGutterState,
     bar: RowActionBarState,
-    followed: Boolean,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
-    canFollow: Boolean = true,
     canRadio: Boolean = true,
-    onFollow: () -> Unit,
     onRadio: () -> Unit,
     onClick: () -> Unit
 ) {
     val selected = bar.selection?.key == key
     val rowFocus = remember { FocusRequester() }
     CloseRowActionsWhenDisposed(selected, bar)
-    if (!canFollow && !canRadio) {
+    if (!canRadio) {
         val plainModifier = if (focusRequester != null) {
             modifier.focusRequester(focusRequester)
         } else {
@@ -251,32 +220,16 @@ fun ArtistGutterRow(
         )
         return
     }
-    val actions = buildList {
-        if (canFollow) {
-            add(
-                RowAction(
-                    key = "follow",
-                    label = if (followed) "Unfollow" else "Follow",
-                    contentDescription = if (followed) "Unfollow ${artist.name}" else "Follow ${artist.name}",
-                    icon = if (followed) SidekitIcon.Artist else SidekitIcon.ArtistBorder,
-                    tone = if (followed) ActionTone.Destructive else ActionTone.Primary,
-                    onClick = onFollow
-                )
-            )
-        }
-        if (canRadio) {
-            add(
-                RowAction(
-                    key = "artistRadio",
-                    label = "Artist radio",
-                    contentDescription = "Artist radio for ${artist.name}",
-                    icon = SidekitIcon.Explore,
-                    tone = ActionTone.Primary,
-                    onClick = onRadio
-                )
-            )
-        }
-    }
+    val actions = listOf(
+        RowAction(
+            key = "artistRadio",
+            label = "Artist radio",
+            contentDescription = "Artist radio for ${artist.name}",
+            icon = SidekitIcon.Explore,
+            tone = ActionTone.Primary,
+            onClick = onRadio
+        )
+    )
     GutterRow(
         key,
         focus,
@@ -324,9 +277,8 @@ fun ArtistGutterRow(
 }
 
 /**
- * An album row in a library list. Its single grey meatball gutter publishes Save/Unsave and Add to
- * queue to the contextual action bar. Unsaving offers Undo, since the album disappears from the
- * saved list the moment the action lands.
+ * An album row in a library list. Its gutter publishes Add to queue only. Save/Unsave is page-only:
+ * it has a destructive direction and the album page already owns it.
  */
 @Composable
 fun AlbumGutterRow(
@@ -334,10 +286,8 @@ fun AlbumGutterRow(
     album: Album,
     focus: RowGutterState,
     bar: RowActionBarState,
-    saved: Boolean,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
-    onSave: () -> Unit,
     onAddToQueue: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -350,7 +300,6 @@ fun AlbumGutterRow(
         secondary,
         focus,
         bar,
-        saved,
         RowAction(
             key = "addToQueue",
             label = "Add to queue",
@@ -361,14 +310,13 @@ fun AlbumGutterRow(
         ),
         modifier,
         focusRequester,
-        onSave,
         onClick
     )
 }
 
 /**
- * A playlist row in the library. Save/Unsave mirrors the playlist page's library tile; Add to
- * queue is the same list shortcut album rows have, so a playlist can be queued without opening it.
+ * A playlist row in the library. Its gutter publishes Add to queue only; Save/Unsave stays on the
+ * playlist page because it has a destructive direction.
  */
 @Composable
 fun PlaylistGutterRow(
@@ -376,10 +324,8 @@ fun PlaylistGutterRow(
     playlist: Playlist,
     focus: RowGutterState,
     bar: RowActionBarState,
-    saved: Boolean,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
-    onSave: () -> Unit,
     onAddToQueue: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -391,7 +337,6 @@ fun PlaylistGutterRow(
         playlistSubtitle(playlist),
         focus,
         bar,
-        saved,
         RowAction(
             key = "addToQueue",
             label = "Add to queue",
@@ -402,15 +347,13 @@ fun PlaylistGutterRow(
         ),
         modifier,
         focusRequester,
-        onSave,
         onClick
     )
 }
 
 /**
- * A podcast show row. Save/Unsave is the same state as the show page's library tile; Add latest to
- * queue is the one episode-level verb that makes sense before the show page is open. Show notes
- * stay on the page, where the notes row already reads them.
+ * A podcast show row. Its gutter publishes Add latest to queue only. Save/Unsave is page-only, and
+ * show notes stay on the page where the notes row already reads them.
  */
 @Composable
 fun ShowGutterRow(
@@ -418,10 +361,8 @@ fun ShowGutterRow(
     show: Show,
     focus: RowGutterState,
     bar: RowActionBarState,
-    saved: Boolean,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
-    onSave: () -> Unit,
     onAddLatestToQueue: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -433,7 +374,6 @@ fun ShowGutterRow(
         show.publisher,
         focus,
         bar,
-        saved,
         RowAction(
             key = "addLatestToQueue",
             label = "Add latest to queue",
@@ -444,7 +384,6 @@ fun ShowGutterRow(
         ),
         modifier,
         focusRequester,
-        onSave,
         onClick
     )
 }
@@ -459,41 +398,15 @@ private fun LibraryCollectionGutterRow(
     secondary: String,
     focus: RowGutterState,
     bar: RowActionBarState,
-    saved: Boolean,
-    extraAction: RowAction,
+    action: RowAction,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
-    onSave: () -> Unit,
     onClick: () -> Unit
 ) {
     val selected = bar.selection?.key == key
     val rowFocus = remember { FocusRequester() }
     CloseRowActionsWhenDisposed(selected, bar)
-    val actions = listOf(
-        RowAction(
-            key = "save",
-            label = if (saved) "Unsave" else "Save",
-            contentDescription = if (saved) {
-                "Remove $title from your library"
-            } else {
-                "Save $title to your library"
-            },
-            icon = if (saved) SidekitIcon.Bookmark else SidekitIcon.BookmarkBorder,
-            tone = if (saved) ActionTone.Destructive else ActionTone.Primary,
-            onClick = {
-                onSave()
-                if (saved) {
-                    bar.showUndo(
-                        RowActionUndo(
-                            contentDescription = "Undo remove $title from your library",
-                            onClick = onSave
-                        )
-                    )
-                }
-            }
-        ),
-        extraAction
-    )
+    val actions = listOf(action)
     GutterRow(
         key,
         focus,

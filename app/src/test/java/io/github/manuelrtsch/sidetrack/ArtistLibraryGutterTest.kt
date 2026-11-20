@@ -68,13 +68,13 @@ class ArtistLibraryGutterTest {
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Actions for ${artist.name}").performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Follow ${artist.name}").assertExists()
+        compose.onNodeWithContentDescription("Artist radio for ${artist.name}").assertExists()
         runCatching {
             compose.onNodeWithContentDescription("Liked Songs").requestFocus()
         }
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(1_000)
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Follow ${artist.name}").assertExists()
+        compose.onNodeWithContentDescription("Artist radio for ${artist.name}").assertExists()
     }
 }

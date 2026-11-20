@@ -18,8 +18,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Album rows share the artist rows' grey meatball gutter. The bar offers Save/Unsave and Add to
- * queue; unsaving has to offer Undo because the row leaves the saved list immediately.
+ * Album rows share the artist rows' grey meatball gutter. The bar offers Add to queue only;
+ * Save/Unsave stays on the album page.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -31,11 +31,7 @@ class AlbumGutterTest {
     private val key = album.key.encode()
     private val actions = "Actions for ${album.title}"
 
-    private fun showRow(
-        saved: Boolean = false,
-        onSave: () -> Unit = {},
-        onQueue: () -> Unit = {}
-    ): Pair<() -> RowGutterState, () -> RowActionBarState> {
+    private fun showRow(onQueue: () -> Unit = {}): Pair<() -> RowGutterState, () -> RowActionBarState> {
         compose.mainClock.autoAdvance = false
         var gutter: RowGutterState? = null
         var bar: RowActionBarState? = null
@@ -52,8 +48,6 @@ class AlbumGutterTest {
                             album,
                             gutterState,
                             barState,
-                            saved,
-                            onSave = onSave,
                             onAddToQueue = onQueue,
                             onClick = {}
                         )
@@ -79,50 +73,16 @@ class AlbumGutterTest {
     }
 
     @Test
-    fun optionsOfferSaveAndQueue() {
+    fun optionsOfferQueueOnly() {
         val (gutter, bar) = showRow()
         openGutter(gutter)
         compose.onNodeWithContentDescription(actions).performClick()
         compose.runOnIdle {
             assertEquals(
-                listOf("Save ${album.title} to your library", "Add ${album.title} to queue"),
+                listOf("Add ${album.title} to queue"),
                 bar().selection?.actions?.map { it.contentDescription }
             )
         }
-    }
-
-    @Test
-    fun savedAlbumOffersUnsave() {
-        val (gutter, bar) = showRow(saved = true)
-        openGutter(gutter)
-        compose.onNodeWithContentDescription(actions).performClick()
-        compose.runOnIdle {
-            assertEquals(
-                listOf("Remove ${album.title} from your library", "Add ${album.title} to queue"),
-                bar().selection?.actions?.map { it.contentDescription }
-            )
-        }
-    }
-
-    @Test
-    fun unsavingOffersUndoInTheBar() {
-        var saves = 0
-        val (gutter, bar) = showRow(saved = true, onSave = { saves++ })
-        openGutter(gutter)
-        compose.onNodeWithContentDescription(actions).performClick()
-        compose.runOnIdle {
-            bar().selection?.actions?.first()?.onClick?.invoke()
-        }
-        compose.waitForIdle()
-        assertEquals(1, saves)
-        compose.runOnIdle {
-            assertEquals(
-                "Undo remove ${album.title} from your library",
-                bar().undo?.contentDescription
-            )
-            bar().undo?.onClick?.invoke()
-        }
-        assertEquals(2, saves)
     }
 
     @Test

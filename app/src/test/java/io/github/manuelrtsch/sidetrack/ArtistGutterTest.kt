@@ -19,8 +19,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The library's artist rows carry the same grey meatball gutter as every other row. Pressing it
- * publishes Follow/Unfollow and Artist radio to the contextual bar instead of growing two squares
- * of its own.
+ * publishes Artist radio only; Follow/Unfollow stays on the artist page.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -33,10 +32,7 @@ class ArtistGutterTest {
     private val actions = "Actions for ${artist.name}"
 
     private fun showRow(
-        followed: Boolean = false,
-        canFollow: Boolean = true,
         canRadio: Boolean = true,
-        onFollow: () -> Unit = {},
         onRadio: () -> Unit = {},
         onOpen: () -> Unit = {}
     ): Pair<() -> RowGutterState, () -> RowActionBarState> {
@@ -56,10 +52,7 @@ class ArtistGutterTest {
                             artist,
                             gutterState,
                             barState,
-                            followed,
-                            canFollow = canFollow,
                             canRadio = canRadio,
-                            onFollow = onFollow,
                             onRadio = onRadio,
                             onClick = onOpen
                         )
@@ -94,63 +87,39 @@ class ArtistGutterTest {
     }
 
     @Test
-    fun optionsOfferFollowAndRadio() {
+    fun optionsOfferRadioOnly() {
         val (state, bar) = showRow()
         openGutter(state)
         compose.onNodeWithContentDescription(actions).performClick()
         compose.runOnIdle {
             assertEquals(
-                listOf("Follow ${artist.name}", "Artist radio for ${artist.name}"),
+                listOf("Artist radio for ${artist.name}"),
                 bar().selection?.actions?.map { it.contentDescription }
             )
         }
     }
 
     @Test
-    fun followedArtistOffersUnfollow() {
-        val (state, bar) = showRow(followed = true)
-        openGutter(state)
-        compose.onNodeWithContentDescription(actions).performClick()
-        compose.runOnIdle {
-            assertEquals(
-                listOf("Unfollow ${artist.name}", "Artist radio for ${artist.name}"),
-                bar().selection?.actions?.map { it.contentDescription }
-            )
-        }
-    }
-
-    @Test
-    fun actionsFollowAndStartRadioWithoutOpeningTheArtist() {
-        var follows = 0
+    fun radioStartsWithoutOpeningTheArtist() {
         var radios = 0
         var opens = 0
         val (state, bar) = showRow(
-            onFollow = { follows++ },
             onRadio = { radios++ },
             onOpen = { opens++ }
         )
         openGutter(state)
         compose.onNodeWithContentDescription(actions).performClick()
         compose.runOnIdle {
-            val actions = bar().selection?.actions.orEmpty()
-            actions.first { it.key == "follow" }.onClick()
-            actions.first { it.key == "artistRadio" }.onClick()
+            bar().selection?.actions?.first { it.key == "artistRadio" }?.onClick?.invoke()
         }
-        assertEquals(1, follows)
         assertEquals(1, radios)
         assertEquals(0, opens)
     }
 
     @Test
-    fun radioOptionIsHiddenWhenTheServiceHasNoRadio() {
-        val (state, bar) = showRow(canRadio = false)
+    fun noGutterWhenTheServiceHasNoRadio() {
+        val (state, _) = showRow(canRadio = false)
         openGutter(state)
-        compose.onNodeWithContentDescription(actions).performClick()
-        compose.runOnIdle {
-            assertEquals(
-                listOf("Follow ${artist.name}"),
-                bar().selection?.actions?.map { it.contentDescription }
-            )
-        }
+        compose.onNodeWithContentDescription(actions).assertDoesNotExist()
     }
 }

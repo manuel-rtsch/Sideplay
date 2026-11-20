@@ -11,7 +11,6 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import hrln.interactive.sidekit.design.action.ActionTone
 import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -24,9 +23,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * A row's gutter has to open once and then stay open, whichever hand opened it. It is the only
- * route to Save and Add to queue from a track list, and it is invisible to a screenshot test: the
- * row renders correctly whether the gutter is open, opening, or blinking shut again.
+ * A row's gutter has to open once and then stay open, whichever hand opened it. It carries Add to
+ * queue only; Save/Unsave is page-only. It is invisible to a screenshot test: the row renders
+ * correctly whether the gutter is open, opening, or blinking shut again.
  *
  * The keypad path drives [TrackRowFocusState] directly rather than through the Compose focus
  * system, because the failure it guards against is an event-ordering one: a control that appears
@@ -47,18 +46,14 @@ class TrackRowGutterTest {
     @Before
     fun resetHaptics() = RecordingHapticShadow.reset()
 
-    private fun showRow(
-        saved: Boolean = false,
-        onPlay: () -> Unit = {},
-        onSave: () -> Unit = {}
-    ): () -> TrackRows {
+    private fun showRow(onPlay: () -> Unit = {}): () -> TrackRows {
         compose.mainClock.autoAdvance = false
         var rows: TrackRows? = null
         compose.setContent {
             SidekitPreviewFrame {
                 val state = rememberTrackRows(
-                    SavedUiState(savedTrackIds = if (saved) setOf(track.key.encode()) else emptySet()),
-                    onSave = { onSave() },
+                    SavedUiState(),
+                    onSave = {},
                     onEnsureSaved = {},
                     onAddToQueue = {}
                 )
@@ -130,45 +125,6 @@ class TrackRowGutterTest {
     }
 
     @Test
-    fun gutterReflectsTheSavedState() {
-        val rows = showRow(saved = true)
-        compose.runOnIdle { rows().focus.rowFocused(key) }
-        settle()
-        compose.onNodeWithContentDescription(actions).performClick()
-        compose.runOnIdle {
-            assertEquals(
-                listOf("Remove ${track.title} from Liked Songs", "Add ${track.title} to queue"),
-                rows().bar.selection?.actions?.map { it.contentDescription }
-            )
-        }
-    }
-
-    @Test
-    fun unsavingOffersUndoInTheBar() {
-        var saves = 0
-        val rows = showRow(saved = true, onSave = { saves++ })
-        compose.runOnIdle { rows().focus.rowFocused(key) }
-        settle()
-        compose.onNodeWithContentDescription(actions).performClick()
-        compose.runOnIdle {
-            val unsave = rows().bar.selection?.actions?.first()
-            assertEquals(ActionTone.Destructive, unsave?.tone)
-            unsave?.onClick?.invoke()
-        }
-        compose.waitForIdle()
-
-        assertEquals(1, saves)
-        compose.runOnIdle {
-            assertEquals(
-                "Undo remove ${track.title} from Liked Songs",
-                rows().bar.undo?.contentDescription
-            )
-            rows().bar.undo?.onClick?.invoke()
-        }
-        assertEquals(2, saves)
-    }
-
-    @Test
     fun gutterCarriesOneTrigger() {
         val rows = showRow()
         compose.runOnIdle { rows().focus.rowFocused(key) }
@@ -207,7 +163,7 @@ class TrackRowGutterTest {
         compose.onNodeWithContentDescription(actions).performClick()
         compose.runOnIdle {
             assertEquals(
-                listOf("Save ${track.title} to Liked Songs", "Add ${track.title} to queue"),
+                listOf("Add ${track.title} to queue"),
                 rows().bar.selection?.actions?.map { it.contentDescription }
             )
         }
