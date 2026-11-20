@@ -46,7 +46,13 @@ internal fun SidetrackUiState.withLibrarySaved(
     keys: MediaKeys
 ): SidetrackUiState = withSectionSaved(filter, items, keys)
 
-/** Prepends a just-saved item to its library section and the open category, if any. */
+/**
+ * Prepends a just-saved item to its library section and to that category's cached page set.
+ *
+ * The cached page is patched rather than dropped so the save shows up the moment the user walks
+ * back to that category. A category that was never opened has no page to patch: its first fetch
+ * will bring the saved item anyway.
+ */
 internal fun SidetrackUiState.withLibraryItemAdded(
     filter: LibraryFilter,
     item: Any,
@@ -54,18 +60,18 @@ internal fun SidetrackUiState.withLibraryItemAdded(
 ): SidetrackUiState {
     val id = libraryItemId(item) ?: return this
     val section = listOf(item) + librarySections[filter].orEmpty().filterNot { libraryItemId(it) == id }
-    val items = if (this.filter == filter) {
-        listOf(item) + libraryItems.filterNot { libraryItemId(it) == id }
-    } else {
-        libraryItems
-    }
+    val page = libraryPages[filter]
     return copy(
         librarySections = librarySections + (filter to section.take(LIBRARY_SECTION_SIZE)),
-        libraryItems = items
+        libraryPages = if (page == null) {
+            libraryPages
+        } else {
+            libraryPages + (filter to page.copy(items = listOf(item) + page.items.filterNot { libraryItemId(it) == id }))
+        }
     )
 }
 
-/** Removes a just-unsaved item from its library section and the open category, if any. */
+/** Removes a just-unsaved item from its library section and from that category's cached page set. */
 internal fun SidetrackUiState.withLibraryItemRemoved(
     filter: LibraryFilter,
     id: String,
@@ -73,14 +79,21 @@ internal fun SidetrackUiState.withLibraryItemRemoved(
 ): SidetrackUiState {
     fun matches(item: Any) = libraryItemId(item) == id
 
-    val removedFromOpenCategory = this.filter == filter && libraryItems.any(::matches)
+    val page = libraryPages[filter]
+    val removedFromPage = page?.items?.any(::matches) == true
     return copy(
         librarySections = librarySections.mapValues { (section, items) ->
             if (section == filter) items.filterNot(::matches) else items
         },
-        libraryItems = if (removedFromOpenCategory) libraryItems.filterNot(::matches) else libraryItems,
-        // Removing a row makes space for the next server page, even when the list was full.
-        libraryHasMore = if (removedFromOpenCategory) true else libraryHasMore
+        libraryPages = if (page == null) {
+            libraryPages
+        } else {
+            libraryPages + (filter to page.copy(
+                items = if (removedFromPage) page.items.filterNot(::matches) else page.items,
+                // Removing a row makes space for the next server page, even when the list was full.
+                hasMore = if (removedFromPage) true else page.hasMore
+            ))
+        }
     )
 }
 

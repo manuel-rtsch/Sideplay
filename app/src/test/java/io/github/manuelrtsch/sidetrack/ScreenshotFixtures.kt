@@ -15,7 +15,11 @@ internal fun screenshotState(): SidetrackUiState {
         upcoming = recent.drop(1),
         history = recent.drop(3),
         recent = recent,
-        libraryItems = runBlocking { MockSpotifyDataSource.library(LibraryFilter.Albums).items },
+        libraryPages = mapOf(
+            LibraryFilter.Albums to LibraryPage(
+                runBlocking { MockSpotifyDataSource.library(LibraryFilter.Albums).items }
+            )
+        ),
         librarySections = runBlocking {
             LibraryFilter.entries.associateWith { MockSpotifyDataSource.library(it, 0, LIBRARY_SECTION_SIZE).items }
         },

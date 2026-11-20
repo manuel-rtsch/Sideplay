@@ -251,7 +251,7 @@ class SidetrackViewModel(
         catalog = catalog,
         writer = writer,
         capabilities = { capabilities },
-        onCreated = library::refresh,
+        onCreated = { library.reload(LibraryFilter.Playlists) },
         online = { session?.isOnline != false },
         scope = viewModelScope
     )
@@ -314,9 +314,9 @@ class SidetrackViewModel(
     fun dismissNowPlayingNotice() = effects.dismissNowPlayingNotice()
 
     /**
-     * Creates a new empty playlist named [name] on the active service and refreshes the Library so
-     * it is visible. Returns the created [Playlist] for the caller to open, or null when the
-     * service cannot create playlists.
+     * Creates a new empty playlist named [name] on the active service and reloads the Playlists
+     * category so it is visible. Returns the created [Playlist] for the caller to open, or null
+     * when the service cannot create playlists.
      */
     suspend fun createPlaylist(name: String): Playlist? = playlists.create(name)
 
@@ -471,7 +471,8 @@ class SidetrackViewModel(
 
     fun loadMoreLibrary() = library.loadMoreLibrary()
 
-    fun refreshLibrary() = library.refresh()
+    /** Cache-first: opening the Library only refetches a category that is missing or ageing. */
+    fun ensureLibrary() = library.ensure()
 
     fun retryLibrary() = library.retry()
 

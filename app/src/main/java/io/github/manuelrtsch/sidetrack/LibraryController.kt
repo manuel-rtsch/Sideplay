@@ -1,5 +1,6 @@
 package io.github.manuelrtsch.sidetrack
 
+import android.os.SystemClock
 import io.github.manuelrtsch.sidetrack.data.MediaCatalog
 import io.github.manuelrtsch.sidetrack.data.ServiceRuntime
 import kotlinx.coroutines.CancellationException
@@ -25,23 +26,23 @@ internal class LibraryController(
     private val online: () -> Boolean,
     private val hints: SavedHints,
     private val notify: (String) -> Unit,
+    private val now: () -> Long = { SystemClock.elapsedRealtime() },
     private val scope: CoroutineScope
 ) {
 
     private var librarySectionsJob: Job? = null
-    private var libraryJob: Job? = null
-    private var libraryCategoryLoaded = false
+    private val libraryJobs = mutableMapOf<LibraryFilter, Job>()
+    private val libraryMoreJobs = mutableMapOf<LibraryFilter, Job>()
 
     private fun playbackNotice(error: Exception): String = serviceMessage(error, online())
-
-    /** True once the open category has been fetched, so a reconnect knows to retry it. */
-    fun hasLoadedCategory(): Boolean = libraryCategoryLoaded
 
     /** Drops the account's pages. Called when the user signs out. */
     fun reset() {
         librarySectionsJob?.cancel()
-        libraryJob?.cancel()
-        libraryCategoryLoaded = false
+        libraryJobs.values.forEach { it.cancel() }
+        libraryJobs.clear()
+        libraryMoreJobs.values.forEach { it.cancel() }
+        libraryMoreJobs.clear()
     }
 
     fun collection(type: CollectionType, id: String): Collection? = collection(mediaKeys.media(type, id))
@@ -325,23 +326,101 @@ internal class LibraryController(
         return tracks
     }
 
+    /**
+     * Shows [filter]. Its rows come from the cache when the category has been opened before, so
+     * walking playlists → albums → playlists is a few keypresses and no request.
+     */
     fun setFilter(filter: LibraryFilter) {
         // A category the service cannot fill is not a choice: the row disables it, and this guard
         // keeps a programmatic or restored selection from landing on an empty page.
         val supported = filter.takeIf { it in supportedFilters() } ?: supportedFilters().firstOrNull() ?: LibraryFilter.LikedSongs
+        store.update { if (it.filter == supported) it else it.copy(filter = supported) }
+        ensure(supported)
+    }
+
+    /**
+     * Cache-first entry point for one category: fetches only an unknown, failed or ageing one, and
+     * only ever revalidates behind a list that is already on screen. This is what opening the
+     * Library calls, so coming back from a playlist paints instead of refetching.
+     */
+    fun ensure(filter: LibraryFilter = store.value.filter) {
+        if (!store.value.signedIn) return
+        if (filter in store.value.libraryPendingPages || libraryJobs[filter]?.isActive == true) return
+        val page = store.value.libraryPages[filter]
+        val fresh = page != null && page.error == null && now() - page.fetchedAt < LIBRARY_CACHE_FRESH_FOR_MS
+        // Background work leaves an expanded list alone: replacing it would renumber the rows the
+        // user is standing on. Only an explicit refresh may replace one.
+        if (fresh || page?.isExpanded == true) return
+        fetch(filter, silent = page != null)
+    }
+
+    /** Fetches [filter]'s first page regardless of its age, replacing whatever the cache held. */
+    fun refresh(filter: LibraryFilter = store.value.filter) {
+        if (!store.value.signedIn) return
+        if (filter in store.value.libraryPendingPages || libraryJobs[filter]?.isActive == true) return
+        fetch(filter, silent = false)
+    }
+
+    /** Forgets [filter] so the next [ensure] fetches it again. */
+    fun invalidate(filter: LibraryFilter) {
+        store.update { it.copy(libraryPages = it.libraryPages - filter) }
+    }
+
+    /** Forgets [filter] and fetches it again, for a change the app itself just made. */
+    fun reload(filter: LibraryFilter) {
+        invalidate(filter)
+        ensure(filter)
+    }
+
+    private fun fetch(filter: LibraryFilter, silent: Boolean) {
+        val existing = store.value.libraryPages[filter]
+        // A silent revalidate keeps the list and its place: no spinner, and an error left over from
+        // an earlier attempt is retired while the retry runs.
+        val spinner = !silent && existing?.isEmpty != false
         store.update {
-            if (it.filter == supported) {
-                it.copy(libraryLoading = true)
-            } else {
-                it.copy(
-                    filter = supported,
-                    libraryItems = emptyList(),
-                    libraryHasMore = false,
-                    libraryLoading = true
-                )
+            it.copy(
+                libraryPendingPages = if (spinner) it.libraryPendingPages + filter else it.libraryPendingPages,
+                libraryPages = if (existing?.error != null) {
+                    it.libraryPages + (filter to existing.copy(error = null))
+                } else {
+                    it.libraryPages
+                }
+            )
+        }
+        libraryJobs[filter] = scope.launch {
+            try {
+                val page = catalog.library(filter.section(), 0, CATALOG_PAGE_SIZE)
+                store.update {
+                    it.withLibrarySaved(filter, page.items, mediaKeys).copy(
+                        // Stored under its own category even when the user has moved on: that is
+                        // the point of the cache, and it makes a fast round trip free.
+                        libraryPages = it.libraryPages + (filter to LibraryPage(page.items, page.hasMore, now())),
+                        libraryPendingPages = it.libraryPendingPages - filter
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                SidetrackDebug.log("viewModel.loadLibrary filter=$filter failed", e)
+                val message = playbackNotice(e)
+                store.update {
+                    val cached = it.libraryPages[filter]?.items?.isNotEmpty() == true
+                    // A list the user can still read beats an error page: the failure becomes a
+                    // notice and the rows stay where they are.
+                    val next = it.copy(
+                        libraryPendingPages = it.libraryPendingPages - filter,
+                        libraryPages = if (cached) {
+                            it.libraryPages
+                        } else {
+                            it.libraryPages + (filter to LibraryPage(fetchedAt = now(), error = message))
+                        }
+                    )
+                    if (cached) next.say(message) else next
+                }
+            } finally {
+                libraryJobs.remove(filter)
             }
         }
-        load(supported)
     }
 
     /**
@@ -388,6 +467,15 @@ internal class LibraryController(
                     for ((filter, items) in sections) {
                         next = next.withSectionSaved(filter, items, mediaKeys)
                     }
+                    // A preview is a category's first page, so seeding the cache with it lets the
+                    // Library open straight onto rows after sign-in. A category the user has
+                    // already paged into keeps what it has: the preview is shorter.
+                    for ((filter, items) in sections) {
+                        if (next.libraryPages[filter]?.isEmpty != false) {
+                            val page = LibraryPage(items, hasMore = filter in hasMore, fetchedAt = now())
+                            next = next.copy(libraryPages = next.libraryPages + (filter to page))
+                        }
+                    }
                     next
                 }
             } catch (e: CancellationException) {
@@ -403,81 +491,49 @@ internal class LibraryController(
         }
     }
 
-    fun load(filter: LibraryFilter) {
-        if (!store.value.signedIn) return
-        libraryCategoryLoaded = true
-        libraryJob?.cancel()
-        store.update { it.copy(libraryLoading = true, libraryMorePending = false, libraryError = null) }
-        libraryJob = scope.launch {
-            try {
-                val page = catalog.library(filter.section(), 0, CATALOG_PAGE_SIZE)
-                store.update {
-                    if (it.filter == filter) {
-                        it.withLibrarySaved(filter, page.items, mediaKeys).copy(
-                            libraryItems = page.items,
-                            libraryHasMore = page.hasMore,
-                            libraryLoading = false,
-                            libraryError = null
-                        )
-                    } else {
-                        it
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                store.update {
-                    val message = playbackNotice(e)
-                    val empty = it.libraryItems.isEmpty()
-                    val next = it.copy(
-                        libraryLoading = false,
-                        libraryError = if (empty) message else null
-                    )
-                    if (empty) next else next.say(message)
-                }
-            }
-        }
-    }
-
+    /** Pages the open category further, merging into its cached page set. */
     fun loadMoreLibrary() {
-        val snapshot = store.value
-        if (!snapshot.libraryHasMore || snapshot.libraryMorePending || snapshot.libraryLoading) return
-        val filter = snapshot.filter
-        val offset = snapshot.libraryItems.size
-        store.update { it.copy(libraryMorePending = true) }
-        scope.launch {
+        val filter = store.value.filter
+        val page = store.value.libraryPages[filter] ?: return
+        if (!page.hasMore || filter in store.value.libraryMorePendingPages) return
+        if (filter in store.value.libraryPendingPages || libraryMoreJobs[filter]?.isActive == true) return
+        val offset = page.items.size
+        store.update { it.copy(libraryMorePendingPages = it.libraryMorePendingPages + filter) }
+        libraryMoreJobs[filter] = scope.launch {
             try {
-                val page = catalog.library(filter.section(), offset, CATALOG_PAGE_SIZE)
+                val next = catalog.library(filter.section(), offset, CATALOG_PAGE_SIZE)
                 store.update {
-                    if (it.filter != filter) {
-                        it.copy(libraryMorePending = false)
-                    } else {
-                        val merged = (it.libraryItems + page.items).distinctBy(::libraryItemKey)
-                        it.withLibrarySaved(filter, merged, mediaKeys).copy(
-                            libraryItems = merged,
-                            libraryHasMore = page.hasMore,
-                            libraryMorePending = false
-                        )
-                    }
+                    val current = it.libraryPages[filter]
+                        ?: return@update it.copy(libraryMorePendingPages = it.libraryMorePendingPages - filter)
+                    val merged = (current.items + next.items).distinctBy(::libraryItemKey)
+                    it.withLibrarySaved(filter, merged, mediaKeys).copy(
+                        libraryPages = it.libraryPages + (filter to current.copy(items = merged, hasMore = next.hasMore)),
+                        libraryMorePendingPages = it.libraryMorePendingPages - filter
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 store.update {
-                    it.copy(libraryMorePending = false, libraryHasMore = false).say(playbackNotice(e))
+                    val current = it.libraryPages[filter]
+                    it.copy(
+                        libraryPages = if (current == null) {
+                            it.libraryPages
+                        } else {
+                            it.libraryPages + (filter to current.copy(hasMore = false))
+                        },
+                        libraryMorePendingPages = it.libraryMorePendingPages - filter
+                    ).say(playbackNotice(e))
                 }
+            } finally {
+                libraryMoreJobs.remove(filter)
             }
         }
     }
 
-    fun refresh() {
-        if (!store.value.signedIn) return
-        load(store.value.filter)
-    }
-
+    /** Revalidates the open category, for the error page's retry action. */
     fun retry() {
-        if (!store.value.signedIn) return
-        load(store.value.filter)
+        refresh()
     }
 
     private fun Collection.append(next: Collection): Collection = copy(

@@ -84,7 +84,9 @@ internal class SidetrackSessionWiring(
                 network.online.collect { online ->
                     if (online && !wasOnline && store.value.signedIn) {
                         account.load()
-                        if (library.hasLoadedCategory()) library.load(store.value.filter)
+                        // Cache-first: this refetches the open category when the offline attempt
+                        // left it empty or failed, and leaves a list that loaded fine alone.
+                        library.ensure(store.value.filter)
                     }
                     wasOnline = online
                 }
