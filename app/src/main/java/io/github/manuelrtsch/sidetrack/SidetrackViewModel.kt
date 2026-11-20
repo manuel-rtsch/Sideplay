@@ -120,6 +120,11 @@ class SidetrackViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.radioSlice)
 
+    val playlistState: StateFlow<PlaylistUiState> = state
+        .map { it.playlistSlice }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value.playlistSlice)
+
     /**
      * The seek bar's clock. Kept out of [state] so the position tick does not mutate the screen
      * state (which would invalidate and recompose every screen that collects it); only the Now
@@ -241,6 +246,16 @@ class SidetrackViewModel(
         scope = viewModelScope
     )
 
+    private val playlists = PlaylistController(
+        store = store,
+        catalog = catalog,
+        writer = writer,
+        capabilities = { capabilities },
+        onCreated = library::refresh,
+        online = { session?.isOnline != false },
+        scope = viewModelScope
+    )
+
     private val account = AccountController(
         store = store,
         session = session,
@@ -303,12 +318,22 @@ class SidetrackViewModel(
      * it is visible. Returns the created [Playlist] for the caller to open, or null when the
      * service cannot create playlists.
      */
-    suspend fun createPlaylist(name: String): Playlist? {
-        val trimmed = name.trim()
-        if (trimmed.isEmpty()) return null
-        val playlist = session?.writer?.createPlaylist(trimmed) ?: return null
-        refreshLibrary()
-        return playlist
+    suspend fun createPlaylist(name: String): Playlist? = playlists.create(name)
+
+    fun ensurePlaylistChoices() = playlists.ensureChoices()
+
+    fun retryPlaylistChoices() = playlists.retryChoices()
+
+    fun loadMorePlaylistChoices() = playlists.loadMoreChoices()
+
+    suspend fun addToPlaylist(playlist: Playlist, item: MediaItem): Int? = playlists.add(playlist, item)
+
+    suspend fun undoAddToPlaylist(playlist: Playlist, item: MediaItem, index: Int) {
+        playlists.undoAdd(playlist, item, index)
+    }
+
+    fun removeFromPlaylist(collection: Collection, item: MediaItem, index: Int) {
+        playlists.remove(collection, item, index)
     }
 
     fun playNow(item: MediaItem) = driver.playNow(item)

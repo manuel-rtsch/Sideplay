@@ -32,13 +32,22 @@ import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 @Composable
 fun CreatePlaylistScreen(
+    chrome: ChromeUiState,
     onBack: () -> Unit,
-    onSubmit: (String) -> Unit
+    onSubmit: (String) -> Unit,
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     val createFocus = remember { FocusRequester() }
     val canCreate = name.trim().isNotEmpty()
-    val actions = remember { listOf(SideAction.back("back", "Library", onBack)) }
+    val actions = sidetrackActions(
+        chrome,
+        onDismissNotice,
+        onOpenNowPlaying = {},
+        onDismissNowPlaying = onDismissNowPlaying,
+        actions = remember { listOf(SideAction.back("back", "Library", onBack)) }
+    )
     SidekitScaffold(
         title = "New playlist",
         actions = actions

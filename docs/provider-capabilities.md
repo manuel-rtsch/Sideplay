@@ -59,6 +59,35 @@ delete endpoint at all, only "remove from library" (unfollow), which is the exis
 | Cannot report | read-only (`editable=false`) | offered unconfirmed | offered unconfirmed |
 | Read-only fallback | Web API transport → `supportsPlaylistEdit=false` | — | — |
 
+### Playlist item edits
+
+`PlaylistActions` is computed for every playlist row and page, and the writer is now reachable
+from the UI on every service that supports editing. The row bar stays inside the shared option
+budget: two labelled actions, never a third square.
+
+- **Create** — *New playlist* in the Library → Playlists options menu opens a name-only form.
+  On success the new, empty playlist opens. `supportsPlaylistCreate` gates the entry point. A
+  refused or failed create stays on the form and reports the service message in the bar; it never
+  fails silently.
+- **Add** — a track row outside a playlist (liked songs, search, artist, album, radio) offers
+  `Add to queue | Add to playlist`. The picker lists only playlists whose `canAddItems` is true,
+  so a read-only target never becomes a button that only ends in a server refusal. Adding appends;
+  the writer returns the index, and the bar offers Undo that removes exactly that copy. Episodes
+  are excluded because playlists are track-only.
+- **Remove** — a track row inside an open playlist offers `Add to queue | Remove from playlist`
+  when the collection's `canRemoveItems` is true. Removal is destructive and cannot restore the
+  original slot, so it uses a two-step bar confirmation (`Cancel | Remove`) rather than Undo.
+  The row page drops the confirmed occurrence and keeps the paging offset aligned with the rows
+  still loaded.
+- **Rejected** — Now Playing is already at its documented three-option cap; a permanent third
+  square on playlist pages would make one of the two above actions unreachable. Rename, delete
+  and reorder have no transport in any provider and therefore no UI.
+
+The remaining model gap: `MediaLibraryWriter.addToPlaylist` has no optional index
+(`MusicService.kt:128`), so a remove cannot be undone back into its original position. Spotify
+(playlist4 insert) and Navidrome (`songIndexToAdd`) could honour one later; Jellyfin can only
+append. That is why remove confirms instead of offering Undo.
+
 ---
 
 ## Overview
@@ -94,10 +123,11 @@ Implemented and tested:
 - **Playback**: play/pause/skip/seek/shuffle/repeat/volume, queue (reorder, history),
   normalization, gapless, quality selection.
 - **Radio**: song radio / station from any seed.
-- **Saving**: like tracks, save albums and shows, follow artists, add/remove playlist items.
-  Item edits are offered only on a playlist the account owns or collaborates on. The native bridge
-  reports `canAddItems`/`canRemoveItems` from the playlist's capabilities, and a refused write is
-  surfaced as `ServiceFailure.NotAllowed`, not as a network error.
+- **Saving**: like tracks, save albums and shows, follow artists, create playlists, and add or
+  remove playlist items. Item edits are offered only on a playlist the account owns or
+  collaborates on. The native bridge reports
+  `canAddItems`/`canRemoveItems` from the playlist's capabilities, and a refused write is surfaced
+  as `ServiceFailure.NotAllowed`, not as a network error.
 - **Progress & scrobbling**: resume points and scrobble reporting.
 
 Coverage (unit + Robolectric, `app/src/test/...`) includes: auth/PKCE, session cache, web API
@@ -125,8 +155,9 @@ narrower capability set below.
 - **Playback**: Subsonic `stream` URL with authenticated headers, played through the shared
   `PlaybackController` over Media3/ExoPlayer, so the media session, notification and audio focus
   behave exactly as for Spotify.
-- **Library editing** (`MediaLibraryWriter`): star/unstar (like/save), add to / remove from
-  playlist. Removal takes the row the caller acted on (`index: Int? = null`): Subsonic removes by
+- **Library editing** (`MediaLibraryWriter`): star/unstar (like/save), create a playlist, and add
+  to / remove from playlists from the row bar. Removal takes the row the caller acted on
+  (`index: Int? = null`): Subsonic removes by
   position, so with the same track twice the named row decides. Without one the last match goes,
   which is the copy an append leaves at the end. A row that no longer holds the item is ignored,
   not trusted.
@@ -231,8 +262,8 @@ adapter covers the music library only.
   over Media3/ExoPlayer. Quality maps to `maxStreamingBitrate` (D4), `High` leaving the ceiling to
   the server. Artwork and audio carry `Authorization` via `ArtworkAccess` / `PlaybackSource`.
 - **Library editing** (`MediaLibraryWriter`): favourite/unfavourite tracks, albums and artists;
-  add to / remove from playlist; create playlist. Jellyfin has no separate "saved" flag, so
-  favourite is used for both like and save.
+  create a playlist; add to and remove from playlists from the row bar. Jellyfin has no separate
+  "saved" flag, so favourite is used for both like and save.
 - **Playlist item permissions**: Jellyfin does not report them reliably (12.4 answers a creator's
   own fresh playlist with `OpenAccess:false, Shares:[]`), so every playlist reports
   `PlaylistActions.ServerDecides` (`unconfirmed = true`). The action is offered, and the server

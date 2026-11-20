@@ -36,7 +36,11 @@ class TrackRows(
     val savedIds: Set<String>,
     val onSave: (Track) -> Unit,
     val onEnsureSaved: (Track) -> Unit,
-    val onAddToQueue: (Track) -> Unit
+    val onAddToQueue: (Track) -> Unit,
+    /** Offered where the account may append to some playlist; null hides the row action. */
+    val onAddToPlaylist: ((Track) -> Unit)? = null,
+    /** Offered on a playlist page; the index is the entry the user acted on. */
+    val onRemoveFromPlaylist: ((Track, Int) -> Unit)? = null
 ) {
     fun saved(track: Track): Boolean = track.key.encode() in savedIds
 }
@@ -47,12 +51,23 @@ fun rememberTrackRows(
     saved: SavedUiState,
     onSave: (Track) -> Unit,
     onEnsureSaved: (Track) -> Unit,
-    onAddToQueue: (Track) -> Unit
+    onAddToQueue: (Track) -> Unit,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onRemoveFromPlaylist: ((Track, Int) -> Unit)? = null
 ): TrackRows {
     val focus = remember { TrackRowFocusState() }
     val bar = rememberRowActionBarState()
     focus.settle()
-    return TrackRows(focus, bar, saved.savedTrackIds, onSave, onEnsureSaved, onAddToQueue)
+    return TrackRows(
+        focus,
+        bar,
+        saved.savedTrackIds,
+        onSave,
+        onEnsureSaved,
+        onAddToQueue,
+        onAddToPlaylist,
+        onRemoveFromPlaylist
+    )
 }
 
 /**
@@ -69,6 +84,8 @@ fun TrackRow(
     modifier: Modifier = Modifier,
     bodyModifier: Modifier = Modifier,
     index: Int? = null,
+    /** The row's entry in a collection, when that index is not the display number. */
+    entryIndex: Int? = null,
     showArt: Boolean = true,
     secondary: String = track.artist,
     focusRequester: FocusRequester? = null,
@@ -115,21 +132,76 @@ fun TrackRow(
             modifier = squareFocus,
             onClick = {
                 rows.focus.touchDismissed(key)
+                val actions = buildList {
+                    add(
+                        RowAction(
+                            key = "addToQueue",
+                            label = "Add to queue",
+                            contentDescription = "Add ${track.title} to queue",
+                            icon = SidekitIcon.QueueMusic,
+                            tone = ActionTone.Primary,
+                            onClick = { rows.onAddToQueue(track) }
+                        )
+                    )
+                    val addToPlaylist = rows.onAddToPlaylist
+                    if (addToPlaylist != null) {
+                        add(
+                            RowAction(
+                                key = "addToPlaylist",
+                                label = "Add to playlist",
+                                contentDescription = "Add ${track.title} to a playlist",
+                                icon = SidekitIcon.PlaylistAdd,
+                                onClick = { addToPlaylist(track) }
+                            )
+                        )
+                    }
+                    val removeFromPlaylist = rows.onRemoveFromPlaylist
+                    if (removeFromPlaylist != null && entryIndex != null) {
+                        add(
+                            RowAction(
+                                key = "removeFromPlaylist",
+                                label = "Remove from playlist",
+                                contentDescription = "Remove ${track.title} from this playlist",
+                                icon = SidekitIcon.DeleteForever,
+                                tone = ActionTone.Destructive,
+                                onClick = {
+                                    // Removal is destructive and cannot be undone at its old
+                                    // position, so the bar asks once more before writing.
+                                    rows.bar.show(
+                                        RowActionSelection(
+                                            key = key,
+                                            title = "Remove ${track.title}?",
+                                            focusRequester = rowFocus,
+                                            actions = listOf(
+                                                RowAction(
+                                                    key = "cancelRemove",
+                                                    label = "Cancel",
+                                                    icon = SidekitIcon.Close,
+                                                    tone = ActionTone.Muted,
+                                                    onClick = {}
+                                                ),
+                                                RowAction(
+                                                    key = "confirmRemove",
+                                                    label = "Remove",
+                                                    contentDescription = "Remove ${track.title} from this playlist",
+                                                    icon = SidekitIcon.DeleteForever,
+                                                    tone = ActionTone.Destructive,
+                                                    onClick = { removeFromPlaylist(track, entryIndex) }
+                                                )
+                                            )
+                                        )
+                                    )
+                                }
+                            )
+                        )
+                    }
+                }
                 rows.bar.show(
                     RowActionSelection(
                         key = key,
                         title = track.title,
                         focusRequester = rowFocus,
-                        actions = listOf(
-                            RowAction(
-                                key = "addToQueue",
-                                label = "Add to queue",
-                                contentDescription = "Add ${track.title} to queue",
-                                icon = SidekitIcon.PlaylistAdd,
-                                tone = ActionTone.Primary,
-                                onClick = { rows.onAddToQueue(track) }
-                            )
-                        )
+                        actions = actions
                     )
                 )
             }

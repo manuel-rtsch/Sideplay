@@ -66,11 +66,10 @@ Everything else that leaves the device is either a read, a playback progress rep
   cleanup.
 - **Queue, history and resume state are local files** (`QueueRepository`, `HistoryRepository`,
   `positionStore`, written through `ConflatedSaver`); nothing mirrors them back into the library.
-- **Reachability is narrower than the interface.** In 0.4.0 the *only* writer calls the UI makes
-  are the two favourite/follow toggles (`SidetrackViewModel.kt:1212, 1259, 1300`) and
-  *New playlist* (`SidetrackViewModel.kt:491`). Add-to-playlist and remove-from-playlist have no
-  entry point yet (deferred to 0.4.1, see `provider-capabilities.md`), so the two index-based
-  playlist writes are dead code for a tester.
+- **Reachability.** The UI reaches every writer call: the favourite/follow toggles, *New
+  playlist* in Library → Playlists, *Add to playlist* on track rows outside a playlist, and
+  *Remove from playlist* on rows inside an open playlist. Playlist writes are gated per row by
+  `PlaylistActions`, so the index-based remove is only offered where the account may remove.
 
 ### 1.3 Guards already in place
 

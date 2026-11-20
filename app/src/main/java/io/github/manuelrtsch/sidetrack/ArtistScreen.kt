@@ -45,14 +45,16 @@ fun ArtistScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit,
     canFollow: Boolean = true,
-    canRadio: Boolean = true
+    canRadio: Boolean = true,
+    onAddToPlaylist: ((Track) -> Unit)? = null
 ) {
     val followed = artist.key.encode() in saved.followedArtistIds
     val rows = rememberTrackRows(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onAddToQueue
+        onAddToQueue,
+        onAddToPlaylist = onAddToPlaylist
     )
     val back = remember { sidetrackBack("Back", onBack).first() }
     val actions = rowActionBarActions(

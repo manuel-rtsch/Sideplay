@@ -129,7 +129,12 @@ internal fun NavGraphBuilder.playbackGraph(
                 loadingMore = false,
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice,
-                showSave = radio.saveable
+                showSave = radio.saveable,
+                onAddToPlaylist = if (vm.capabilities.supportsPlaylistEdit) {
+                    { track -> nav.openAddToPlaylist(track) }
+                } else {
+                    null
+                }
             )
         }
     }
@@ -194,7 +199,12 @@ internal fun NavGraphBuilder.playbackGraph(
                     loadingMore = false,
                     onDismissNotice = vm::dismissNotice,
                     onDismissNowPlaying = vm::dismissNowPlayingNotice,
-                    showSave = radio.saveable
+                    showSave = radio.saveable,
+                    onAddToPlaylist = if (vm.capabilities.supportsPlaylistEdit) {
+                        { track -> nav.openAddToPlaylist(track) }
+                    } else {
+                        null
+                    }
                 )
             }
         }

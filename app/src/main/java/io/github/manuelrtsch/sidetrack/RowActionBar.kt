@@ -82,6 +82,9 @@ class RowActionBarState {
     fun show(selection: RowActionSelection) {
         beforeShow?.invoke()
         undo = null
+        // A new selection owns the bar. A close that immediately opened it (the removal
+        // confirmation) must not restore focus to the row a frame later.
+        pendingFocus = null
         this.selection = selection
     }
 

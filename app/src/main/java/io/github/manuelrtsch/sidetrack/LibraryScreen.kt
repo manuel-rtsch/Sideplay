@@ -59,13 +59,15 @@ fun LibraryScreen(
     onQueuePlaylist: (Playlist) -> Unit = {},
     onAddLatestShowToQueue: (Show) -> Unit = {},
     onDismissNotice: () -> Unit,
-    onDismissNowPlaying: () -> Unit
+    onDismissNowPlaying: () -> Unit,
+    onAddToPlaylist: ((Track) -> Unit)? = null
 ) {
     val rows = rememberTrackRows(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onAddToQueue
+        onAddToQueue,
+        onAddToPlaylist = onAddToPlaylist
     )
     // Artist and album rows own a gutter of their own: follow/radio and save/queue are list
     // verbs here, not destinations. Track rows keep their contextual bar, so the states never mix.

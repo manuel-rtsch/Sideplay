@@ -88,6 +88,14 @@ data class ChromeUiState(
     val nowPlayingNotice: MediaItem? = null
 )
 
+data class PlaylistUiState(
+    val choices: List<Playlist> = emptyList(),
+    val loading: Boolean = false,
+    val loaded: Boolean = false,
+    val hasMore: Boolean = false,
+    val error: String? = null
+)
+
 data class RadioUiState(
     val radio: Collection? = null,
     val radioSeedId: String? = null,
@@ -155,6 +163,15 @@ val SidetrackUiState.saved: SavedUiState
 
 val SidetrackUiState.chrome: ChromeUiState
     get() = ChromeUiState(notice, noticeKind, nowPlayingNotice)
+
+val SidetrackUiState.playlistSlice: PlaylistUiState
+    get() = PlaylistUiState(
+        choices = playlistChoices,
+        loading = playlistChoicesLoading,
+        loaded = playlistChoicesLoaded,
+        hasMore = playlistChoicesHasMore,
+        error = playlistChoicesError
+    )
 
 val SidetrackUiState.radioSlice: RadioUiState
     get() = RadioUiState(

@@ -140,7 +140,12 @@ internal class AccountController(
                 radio = null,
                 radioSeedId = null,
                 radioPending = false,
-                radioError = null
+                radioError = null,
+                playlistChoices = emptyList(),
+                playlistChoicesLoading = false,
+                playlistChoicesLoaded = false,
+                playlistChoicesHasMore = false,
+                playlistChoicesError = null
             )
         }
     }

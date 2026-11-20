@@ -53,14 +53,22 @@ fun CollectionScreen(
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit,
     /** Generated pages such as Song radio re-use the collection body but cannot be saved. */
-    showSave: Boolean = true
+    showSave: Boolean = true,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onRemoveFromPlaylist: ((Track, Int) -> Unit)? = null
 ) {
     val colors = SidekitTheme.colors
+    // A playlist page replaces Add to playlist with Remove from playlist: the page is already
+    // the target, and the two-action row bar stays labelled instead of becoming icon-only.
+    val isPlaylist = collection.type == CollectionType.Playlist
+    val canRemoveItems = isPlaylist && collection.playlistActions?.canRemoveItems == true
     val rows = rememberTrackRows(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onAddItemToQueue
+        onAddItemToQueue,
+        onAddToPlaylist = if (isPlaylist) null else onAddToPlaylist,
+        onRemoveFromPlaylist = if (canRemoveItems) onRemoveFromPlaylist else null
     )
     val savedCollection = collection.key.encode() in saved.savedCollectionKeys
     val back = remember { sidetrackBack("Back", onBack).first() }
@@ -177,6 +185,7 @@ fun CollectionScreen(
                         rows,
                         modifier,
                         index = if (showTrackArt) null else index,
+                        entryIndex = index,
                         showArt = showTrackArt,
                         focusRequester = moreFocus.requesterFor(index)
                     ) { onItem(index) }

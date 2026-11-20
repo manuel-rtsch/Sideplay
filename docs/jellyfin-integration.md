@@ -2,11 +2,10 @@
 
 Status: **implemented; steps 1–9 and 11 of §9 landed.** Jellyfin is a selectable provider with
 password sign-in, catalog, writer, runtime and progress reporting over the shared Media3 player.
-Steps 10 (WebSocket invalidation, discovery UI, Quick Connect, 10.x) remain deferred. The
-playlist add/remove write paths are implemented but have no in-app entry point yet (create has
-one); the UI work is scheduled for 0.4.1 and tracked in
-[provider-capabilities.md](provider-capabilities.md#playlist-editing--deferred-to-041). The
-dev-container checks named in D14 have now been run against a real 12.4 server
+Steps 10 (WebSocket invalidation, discovery UI, Quick Connect, 10.x) remain deferred. Playlist
+create, add and remove now have row-bar and Library entry points, tracked in
+[provider-capabilities.md](provider-capabilities.md#playlist-item-edits). The dev-container
+checks named in D14 have now been run against a real 12.4 server
 (2026-11-19, see [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md)):
 empty-id `createPlaylist` works, direct FLAC streams as `206 audio/flac` with byte ranges, and
 `editable` does **not** follow from `openAccess`/`shares` for a playlist's own creator (a fresh

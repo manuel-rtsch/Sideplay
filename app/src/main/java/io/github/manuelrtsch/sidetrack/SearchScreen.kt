@@ -60,14 +60,16 @@ fun SearchScreen(
     onScopes: () -> Unit,
     onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit,
-    onDismissNowPlaying: () -> Unit
+    onDismissNowPlaying: () -> Unit,
+    onAddToPlaylist: ((Track) -> Unit)? = null
 ) {
     val results = search.searchResults
     val rows = rememberTrackRows(
         saved,
         onSaveTrack,
         onEnsureSavedTrack,
-        onAddToQueue
+        onAddToQueue,
+        onAddToPlaylist = onAddToPlaylist
     )
     val baseActions = remember(search.query) {
         buildList {

@@ -71,7 +71,13 @@ data class SidetrackUiState(
     /** Which artist seeded [artistRadio], so revisiting the same artist does not refetch it. */
     val artistRadioArtistId: String? = null,
     val artistRadioPending: Boolean = false,
-    val artistRadioError: String? = null
+    val artistRadioError: String? = null,
+    /** The playlists the Add-to-playlist picker may offer: only ones this account may add to. */
+    val playlistChoices: List<Playlist> = emptyList(),
+    val playlistChoicesLoading: Boolean = false,
+    val playlistChoicesLoaded: Boolean = false,
+    val playlistChoicesHasMore: Boolean = false,
+    val playlistChoicesError: String? = null
 ) {
     val savedCurrent: Boolean get() = current?.let { it.key.encode() in savedTrackIds } ?: false
 }

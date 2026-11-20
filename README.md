@@ -53,6 +53,7 @@ podcasts, artist following, gapless playback or playlist creation appear only wh
 | Podcasts | ✅ | ❌ | ❌ |
 | Follow artists | ✅ | ❌ | ✅ |
 | Create playlists | ❌ | ✅ | ✅ |
+| Edit playlists | ✅ | ✅ | ✅ |
 | Loudness normalization | ✅ | ✅ | ❌ |
 | Gapless playback | ✅ | ❌ | ❌ |
 | Quality selection | ✅ | ✅ | ✅ |
@@ -73,8 +74,9 @@ On Spotify, podcasts include show notes, episode numbers, dates, per-episode res
   join without a gap.
 - **Keep a queue** — add tracks or whole collections, reorder, and see what played before.
 - **Start a song radio** — build a station from whatever is playing.
-- **Save what you like** — like tracks, save albums, follow artists on Spotify and Jellyfin, and
-  create playlists on Navidrome and Jellyfin.
+- **Save what you like** — like tracks, save albums, follow artists on Spotify and Jellyfin.
+  Create playlists on Navidrome and Jellyfin, and add or remove tracks on every service where
+  the account may edit the playlist.
 - **See what is playing** — a full Now Playing screen, lock-screen controls, and a notification
   with artwork and transport buttons.
 
