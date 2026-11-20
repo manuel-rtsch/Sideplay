@@ -81,6 +81,7 @@ class SpotifySession(
 
     private val appContext = context?.applicationContext
     private val audioCacheDir = appContext?.let { File(it.cacheDir, "spotify-audio") }
+    private val cache = SpotifyCacheFiles(appContext, audioCacheDir)
     private val settingsStore = appContext?.let { PlaybackSettingsStore(it) }
 
     /** Null in tests and other context-free sessions; those are treated as online. */
@@ -219,77 +220,26 @@ class SpotifySession(
         ).also { player ->
             // A drain that stopped producing audio cannot repair itself: restarting the native
             // player needs the gateway and a fresh token, and those live here.
-            player.onStalled = ::recoverPlayback
+            player.onStalled = { recovery.recover(it) }
             // Adopt transport actions when no ViewModel is attached. The ViewModel installs its
             // own callbacks while it exists and clears them in onCleared().
-            player.fallbackNext = { skipNext() }
-            player.fallbackPrevious = { skipPrevious() }
-            player.fallbackResume = { startRestoredItem() }
+            player.fallbackNext = { transport.skipNext() }
+            player.fallbackPrevious = { transport.skipPrevious() }
+            player.fallbackResume = { recovery.startRestoredItem() }
             player.onStopped = { queue.stop() }
         }
     }
 
-    /** Stall recoveries started inside [STALL_RECOVERY_WINDOW_MS]; main thread only. */
-    private val stallRecoveries = ArrayDeque<Long>()
-
-    /**
-     * Starts the queue's current item when a play command arrives with nothing loaded.
-     *
-     * The queue survives process death but the native player does not, so after a restart there is
-     * no source to resume. Used when no ViewModel is attached; a ViewModel installs the accurate
-     * path via [PlaybackController.onResumeWithoutSource], because only it knows the saved offsets.
-     */
-    private fun startRestoredItem() {
-        val item = queue.snapshot.current ?: return
-        val uri = item.uri ?: return
-        val positionMs = playback.position
-        SidetrackDebug.log("startRestoredItem uri=$uri positionMs=$positionMs")
-        playbackScope.launch {
-            // Nothing is loaded, so this is a cold start or a recovery: a fresh connection is
-            // cheaper than discovering a dead one after the first load fails.
-            runCatching { play(item.key, uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
-                .onFailure {
-                    SidetrackDebug.log("startRestoredItem failed", it)
-                    playback.pause()
-                }
+    private val recovery by lazy {
+        SpotifyStallRecovery(playback, playbackScope, queue) { key, uri, position, reconnect ->
+            play(key, uri, position, forceReconnect = reconnect)
         }
     }
 
-    /**
-     * Rebuilds playback after the audio pipeline went silent.
-     *
-     * When the access-point connection dies, librespot stops producing PCM and nothing in the
-     * player notices: the app kept reporting a playing track while delivering silence, and only
-     * a manual press of play recovered it. This reloads the item where the user left it, and
-     * gives up (visibly) after a few attempts instead of looping through reconnects.
-     */
-    private fun recoverPlayback(positionMs: Long) {
-        val item = playback.current ?: return
-        val uri = item.uri ?: return
-        val now = SystemClock.elapsedRealtime()
-        while (stallRecoveries.isNotEmpty() && now - stallRecoveries.first() > STALL_RECOVERY_WINDOW_MS) {
-            stallRecoveries.removeFirst()
-        }
-        if (stallRecoveries.size >= STALL_RECOVERY_LIMIT) {
-            SidetrackDebug.log("recoverPlayback giving up after ${stallRecoveries.size} attempts")
-            playback.pause()
-            playback.emitNotice("Playback stopped — check the connection")
-            return
-        }
-        stallRecoveries.addLast(now)
-        SidetrackDebug.log("recoverPlayback uri=$uri positionMs=$positionMs attempt=${stallRecoveries.size}")
-        playbackScope.launch {
-            // A stall usually means the access-point connection is dead even when librespot has
-            // not marked the session invalid yet, so rebuild it instead of reloading on the same
-            // connection and stalling again.
-            runCatching { play(item.key, uri, positionMs.coerceAtLeast(0L), forceReconnect = true) }
-                .onSuccess { playback.emitNotice(null) }
-                .onFailure {
-                    SidetrackDebug.log("recoverPlayback failed", it)
-                    playback.pause()
-                    playback.emitNotice("Playback stopped — check the connection")
-                }
-        }
+    private val transport by lazy {
+        SpotifyTransportCommands(playback, playbackScope, queue, history, { key, uri, position ->
+            play(key, uri, position)
+        }) { halting = false }
     }
 
     init {
@@ -513,62 +463,20 @@ class SpotifySession(
      */
     override fun consumeHaltStop(uri: String?, playRequestId: Long): Boolean = haltStop.consume(uri, playRequestId, SystemClock.elapsedRealtime())
 
-    /**
-     * Advances the queue when the notification/lock screen has no ViewModel to call back into.
-     * The ViewModel follows the same queue semantics, so the UI adopts this state on return.
-     */
-    fun skipNext() {
-        val before = queue.snapshot.current ?: return
-        val snapshot = queue.next(auto = false)
-        if (snapshot.current !== before) snapshot.current?.let(::startFromTransport)
-    }
+    /** Advances the queue from the notification or lock screen when no ViewModel is attached. */
+    fun skipNext() = transport.skipNext()
 
     /** Restarts the current item past the 3 s threshold, otherwise returns to queue history. */
-    fun skipPrevious() {
-        val current = queue.snapshot.current ?: return
-        if (playback.position > 3_000L) {
-            playbackScope.launch { runCatching { seek(0L) } }
-            return
-        }
-        val snapshot = queue.previous(playback.position)
-        if (snapshot.current !== current) {
-            snapshot.current?.let(::startFromTransport)
-        } else {
-            playbackScope.launch { runCatching { seek(0L) } }
-        }
-    }
-
-    private fun startFromTransport(item: MediaItem) {
-        halting = false
-        history.record(item, System.currentTimeMillis())
-        playback.setNowPlaying(item, 0L)
-        val uri = item.uri ?: return
-        playbackScope.launch {
-            runCatching { play(item.key, uri, 0L) }.onFailure {
-                playback.pause()
-                playback.updateState(false, 0L)
-            }
-        }
-    }
+    fun skipPrevious() = transport.skipPrevious()
 
     /** Drops the on-disk audio cache. librespot re-fetches anything it still needs. */
-    override fun clearAudioCache() {
-        audioCacheDir?.deleteRecursively()
-    }
+    override fun clearAudioCache() = cache.clearAudioCache()
 
     /** Artwork and audio bytes currently held on disk. */
-    override fun cacheSizeBytes(): Long {
-        val artwork = appContext?.let { File(it.cacheDir, "artwork") }
-        return listOfNotNull(artwork, audioCacheDir).sumOf { it.sizeBytes() }
-    }
+    override fun cacheSizeBytes(): Long = cache.sizeBytes()
 
     /** Sign-out and the Settings action both drop artwork and audio; credentials are separate. */
-    override fun clearCaches() {
-        appContext?.let(RemoteArtwork::clear)
-        clearAudioCache()
-    }
-
-    private fun File.sizeBytes(): Long = walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    override fun clearCaches() = cache.clear()
 
     private companion object {
         /** Slightly longer than the native connect timeout, so its specific error wins. */
@@ -579,12 +487,6 @@ class SpotifySession(
 
         /** How long a close-path "stopped" event may still be waiting in the player queue. */
         const val HALT_STOP_GRACE_MS = 15_000L
-
-        /** Stall recoveries allowed inside the window before playback gives up and says so. */
-        const val STALL_RECOVERY_LIMIT = 3
-
-        /** Window for [STALL_RECOVERY_LIMIT]; a one-off hiccup must not lock the user out. */
-        const val STALL_RECOVERY_WINDOW_MS = 5 * 60_000L
     }
 
     private object NoopCredentialStore : io.github.manuelrtsch.sidetrack.auth.SpotifyCredentialStore {
