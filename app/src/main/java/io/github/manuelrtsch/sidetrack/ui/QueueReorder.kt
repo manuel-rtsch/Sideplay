@@ -32,7 +32,7 @@ import kotlin.math.roundToInt
  * screen scroll the moved row into view in the same measure pass (see Sidekit's Arrange apps). The
  * original index is kept in [origin] so Back can put the track back.
  *
- * Every queue row is exactly one `itemHeight + itemOuterGap` tall, so the drop slot is derived from
+ * Every queue row is exactly one media-row pitch (`row height + itemOuterGap`) tall, so the drop slot is derived from
  * how many rows the picked-up row has travelled rather than from layout hit-testing. That distance
  * is the finger's own travel plus the pixels the auto-scroll loop scrolled: on screen the row stays
  * under the finger while the rows behind it flow past.
