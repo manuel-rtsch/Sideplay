@@ -212,6 +212,117 @@ fun GutterMediaRow(
 }
 
 /**
+ * An artist row in a library list. Like every other row, its gutter is one grey meatball square;
+ * pressing it publishes Follow/Unfollow and Artist radio to the screen's contextual action bar.
+ * The artist page keeps its own tiles: this is the list's shortcut to the same two verbs.
+ */
+@Composable
+fun ArtistGutterRow(
+    key: Any,
+    artist: Artist,
+    focus: RowGutterState,
+    bar: RowActionBarState,
+    followed: Boolean,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    canFollow: Boolean = true,
+    canRadio: Boolean = true,
+    onFollow: () -> Unit,
+    onRadio: () -> Unit,
+    onClick: () -> Unit
+) {
+    val selected = bar.selection?.key == key
+    val rowFocus = remember { FocusRequester() }
+    CloseRowActionsWhenDisposed(selected, bar)
+    if (!canFollow && !canRadio) {
+        val plainModifier = if (focusRequester != null) {
+            modifier.focusRequester(focusRequester)
+        } else {
+            modifier
+        }
+        LibraryRow(
+            artist.artRes,
+            artist.name,
+            "Artist",
+            plainModifier,
+            artUrl = artist.artUrl,
+            onClick = onClick
+        )
+        return
+    }
+    val actions = buildList {
+        if (canFollow) {
+            add(
+                RowAction(
+                    key = "follow",
+                    label = if (followed) "Unfollow" else "Follow",
+                    contentDescription = if (followed) "Unfollow ${artist.name}" else "Follow ${artist.name}",
+                    icon = if (followed) SidekitIcon.Artist else SidekitIcon.ArtistBorder,
+                    tone = if (followed) ActionTone.Destructive else ActionTone.Primary,
+                    onClick = onFollow
+                )
+            )
+        }
+        if (canRadio) {
+            add(
+                RowAction(
+                    key = "artistRadio",
+                    label = "Artist radio",
+                    contentDescription = "Artist radio for ${artist.name}",
+                    icon = SidekitIcon.Explore,
+                    tone = ActionTone.Primary,
+                    onClick = onRadio
+                )
+            )
+        }
+    }
+    GutterRow(
+        key,
+        focus,
+        squares = 1,
+        modifier = modifier,
+        content = { gutterVisible ->
+            LibraryRow(
+                artist.artRes,
+                artist.name,
+                "Artist",
+                Modifier
+                    .focusRequester(rowFocus)
+                    .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) focus.rowFocused(key) else focus.rowUnfocused(key)
+                    }
+                    .then(
+                        if (selected) {
+                            Modifier.border(2.dp, SidekitTheme.colors.light, SidekitTheme.shapes.item)
+                        } else {
+                            Modifier
+                        }
+                    ),
+                artUrl = artist.artUrl,
+                showArrow = !gutterVisible,
+                onClick = {
+                    focus.touchDismissed(key)
+                    onClick()
+                }
+            )
+        }
+    ) {
+        val squareFocus = rememberGutterSquareFocus(key, focus)
+        RowActionSquare(
+            color = SidekitTheme.colors.surfaceA4,
+            label = "Actions for ${artist.name}",
+            content = { MeatballIcon() },
+            modifier = squareFocus,
+            onClick = {
+                focus.touchDismissed(key)
+                bar.show(RowActionSelection(key, artist.name, actions, rowFocus))
+            }
+        )
+    }
+}
+
+/**
  * A Recently played/History row. Saving does not belong to history: that is what the saved lists
  * are for. Its contextual bar offers the two actions the context implies — replay it later, or
  * forget it.

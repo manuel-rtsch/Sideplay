@@ -1245,6 +1245,8 @@ fun LibraryRow(
     secondary: String,
     modifier: Modifier = Modifier,
     artUrl: String? = null,
+    /** False while a row gutter is open: the squares take the right edge from the arrow. */
+    showArrow: Boolean = true,
     onClick: () -> Unit
 ) {
     val colors = SidekitTheme.colors
@@ -1259,7 +1261,7 @@ fun LibraryRow(
                 SidekitText(title, style = SidekitTheme.typography.bodySmall, maxLines = 1)
                 SidekitText(secondary, style = SidekitTheme.typography.caption, color = colors.surfaceA6, maxLines = 1)
             }
-            LinkArrow()
+            if (showArrow) LinkArrow()
         }
     }
 }

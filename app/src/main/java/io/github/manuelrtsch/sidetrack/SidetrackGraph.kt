@@ -278,6 +278,10 @@ fun NavGraphBuilder.sidetrackGraph(
                 onCreatePlaylist = { nav.navigate(CREATE_PLAYLIST) },
                 canCreatePlaylist = vm.capabilities.supportsPlaylistCreate,
                 supportedFilters = vm.supportedFilters,
+                onFollowArtist = { vm.toggleFollow(it) },
+                onArtistRadio = { nav.navigate(artistRadioRoute(it.key)) },
+                canFollowArtist = vm.capabilities.supportsFollowArtist,
+                canRadio = vm.capabilities.supportsRadio,
                 onDismissNotice = vm::dismissNotice,
                 onDismissNowPlaying = vm::dismissNowPlayingNotice
             )

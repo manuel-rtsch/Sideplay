@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -53,6 +54,7 @@ import hrln.interactive.sidekit.design.theme.SidekitTheme
 import io.github.manuelrtsch.sidetrack.playback.SleepTimerState
 import io.github.manuelrtsch.sidetrack.ui.InlineLinkArrowSize
 import io.github.manuelrtsch.sidetrack.ui.LinkArrow
+import io.github.manuelrtsch.sidetrack.ui.RowGutterState
 import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 import kotlinx.coroutines.flow.StateFlow
 
@@ -176,6 +178,10 @@ fun LibraryScreen(
     onCreatePlaylist: () -> Unit,
     canCreatePlaylist: Boolean,
     supportedFilters: Set<LibraryFilter> = LibraryFilter.entries.toSet(),
+    onFollowArtist: (Artist) -> Unit = {},
+    onArtistRadio: (Artist) -> Unit = {},
+    canFollowArtist: Boolean = true,
+    canRadio: Boolean = true,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit
 ) {
@@ -185,6 +191,9 @@ fun LibraryScreen(
         onEnsureSavedTrack,
         onAddToQueue
     )
+    // Artist rows own a gutter of their own: follow/unfollow and radio are list verbs here, not
+    // destinations. Track rows keep their contextual bar, so the two states never mix.
+    val artistGutters = rememberRowGutterState()
     val baseActions = remember {
         listOf(sidetrackBack("Home", onBack).first(), SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward, onClick = onSearch))
     }
@@ -247,7 +256,13 @@ fun LibraryScreen(
             // of the page. It shrinks its record to fit; a full-size one would push the text off
             // the bottom under the five square filters.
             Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                LibraryFilterRow(filter, onFilter, filterFocus, supportedFilters = supportedFilters)
+                LibraryFilterRow(
+                    filter,
+                    onFilter,
+                    filterFocus,
+                    supportedFilters = supportedFilters,
+                    acceptsFocus = rows.bar.selection == null
+                )
                 Spacer(Modifier.height(SidekitTheme.spacing.pageGap))
                 Box(
                     Modifier.weight(1f).fillMaxWidth(),
@@ -291,7 +306,8 @@ fun LibraryScreen(
                         filterFocus,
                         Modifier.listFade(listState, 0)
                             .padding(bottom = SidekitTheme.spacing.pageGap),
-                        supportedFilters
+                        supportedFilters,
+                        acceptsFocus = rows.bar.selection == null
                     )
                 }
                 var rowIndex = 1
@@ -310,7 +326,13 @@ fun LibraryScreen(
                         item,
                         modifier,
                         rows,
+                        saved,
+                        artistGutters,
                         focusRequester = moreFocus.requesterFor(index),
+                        canFollowArtist = canFollowArtist,
+                        canRadio = canRadio,
+                        onFollowArtist = onFollowArtist,
+                        onArtistRadio = onArtistRadio,
                         onTrack = onTrack,
                         onPlaylist = onPlaylist,
                         onAlbum = onAlbum,
@@ -350,7 +372,8 @@ private fun LibraryFilterRow(
     onFilter: (LibraryFilter) -> Unit,
     focusRequesters: Map<LibraryFilter, FocusRequester>,
     modifier: Modifier = Modifier,
-    supportedFilters: Set<LibraryFilter> = LibraryFilter.entries.toSet()
+    supportedFilters: Set<LibraryFilter> = LibraryFilter.entries.toSet(),
+    acceptsFocus: Boolean = true
 ) {
     ContentFilterRow(
         filters = LibraryFilter.entries,
@@ -361,6 +384,10 @@ private fun LibraryFilterRow(
         focusRequesters = focusRequesters,
         modifier = modifier,
         enabled = { it in supportedFilters },
+        // A row action bar owns the focus while it is open. Leaving the category buttons
+        // focusable let Android's exit from touch mode land on the first one, select it, and
+        // dispose the very row whose contextual bar had just opened.
+        acceptsFocus = acceptsFocus,
         // Unlike a search category that is merely switched off, this one cannot be switched on
         // anywhere: it is a fact about the service, not a setting.
         disabledLabel = { "not available" }
@@ -382,6 +409,8 @@ internal fun <T> ContentFilterRow(
     focusRequesters: Map<T, FocusRequester>,
     modifier: Modifier = Modifier,
     enabled: (T) -> Boolean = { true },
+    /** False while another surface (a row action bar) owns the focus. */
+    acceptsFocus: Boolean = true,
     /** How a disabled button is announced: "off" when it could be switched on, otherwise why not. */
     disabledLabel: (T) -> String = { "off" }
 ) {
@@ -401,8 +430,15 @@ internal fun <T> ContentFilterRow(
                         .weight(1f)
                         .height(cell)
                         .focusRequester(focusRequesters.getValue(filter))
+                        .then(
+                            if (acceptsFocus) {
+                                Modifier
+                            } else {
+                                Modifier.focusProperties { canFocus = false }
+                            }
+                        )
                         .onFocusChanged { state ->
-                            if (isEnabled && state.isFocused && !isSelected) onSelect(filter)
+                            if (isEnabled && acceptsFocus && state.isFocused && !isSelected) onSelect(filter)
                         }
                         // Left/Right move to the adjacent enabled category by request. Geometric
                         // focus search picked the action bar (below and to the right) instead of
@@ -478,7 +514,13 @@ private fun LibraryRow(
     item: Any,
     modifier: Modifier,
     rows: TrackRows,
+    saved: SavedUiState,
+    artistGutters: RowGutterState,
     focusRequester: FocusRequester? = null,
+    canFollowArtist: Boolean,
+    canRadio: Boolean,
+    onFollowArtist: (Artist) -> Unit,
+    onArtistRadio: (Artist) -> Unit,
     onTrack: (Track) -> Unit,
     onPlaylist: (Playlist) -> Unit,
     onAlbum: (Album) -> Unit,
@@ -486,8 +528,8 @@ private fun LibraryRow(
     onShow: (Show) -> Unit
 ) {
     // LibraryRow applies its modifier to the focusable tile, so the requester can ride on
-    // the modifier there. TrackRow wraps the focusable row in a gutter, so it takes the requester
-    // directly.
+    // the modifier there. TrackRow and ArtistGutterRow wrap the focusable row in a gutter, so
+    // they take the requester directly.
     val rowModifier = if (focusRequester != null) modifier.focusRequester(focusRequester) else modifier
     when (item) {
         // Library rows carry no list index: a track can appear once per category, so its id is
@@ -504,7 +546,20 @@ private fun LibraryRow(
             artUrl = item.artUrl
         ) { onAlbum(item) }
 
-        is Artist -> LibraryRow(item.artRes, item.name, "Artist", rowModifier, artUrl = item.artUrl) { onArtist(item) }
+        is Artist -> ArtistGutterRow(
+            item.key.encode(),
+            item,
+            artistGutters,
+            rows.bar,
+            item.key.encode() in saved.followedArtistIds,
+            modifier,
+            focusRequester = focusRequester,
+            canFollow = canFollowArtist,
+            canRadio = canRadio,
+            onFollow = { onFollowArtist(item) },
+            onRadio = { onArtistRadio(item) },
+            onClick = { onArtist(item) }
+        )
 
         is Show -> LibraryRow(item.artRes, item.name, item.publisher, rowModifier, artUrl = item.artUrl) { onShow(item) }
 
