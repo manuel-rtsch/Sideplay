@@ -204,6 +204,10 @@ android {
                 it.systemProperty("roborazzi.test.record", recordScreenshots.toString())
                 it.systemProperty("roborazzi.test.verify", (!recordScreenshots).toString())
                 if (!runScreenshotTests) it.filter.excludeTestsMatching("*ScreenshotTest")
+                // The store catalogue is a release artefact, not a baseline: its shots are
+                // rendered on demand (`-PsidetrackScreenshotsRecord`) and never committed, so
+                // there is nothing to verify against in the confirm run.
+                if (!recordScreenshots) it.filter.excludeTestsMatching("*StoreScreenshotTest")
                 if (!runIntegrationTests) it.filter.excludeTestsMatching("*IntegrationTest")
             }
         }
