@@ -359,27 +359,33 @@ fun NowPlayingTile(
             overlineIcon = null
             overlineLabel = "NOTHING PLAYING"
         }
+
         timer == SleepTimerState.Finished && timerLabel != null -> {
             overlineIcon = SidekitIcon.Bedtime
             overlineLabel = timerLabel
         }
+
         paused && countdown != null -> {
             overlineIcon = SidekitIcon.Pause
             // Compact remainder: the full "23 min left" would ellipsize beside PAUSED.
             overlineLabel = "PAUSED · ${countdown.remainingMinutes}m"
         }
+
         paused && timerLabel != null -> {
             overlineIcon = SidekitIcon.Pause
             overlineLabel = "PAUSED · track end"
         }
+
         paused -> {
             overlineIcon = SidekitIcon.Pause
             overlineLabel = "PAUSED"
         }
+
         timerLabel != null -> {
             overlineIcon = SidekitIcon.Bedtime
             overlineLabel = timerLabel
         }
+
         else -> {
             overlineIcon = null
             overlineLabel = "NOW PLAYING"

@@ -38,8 +38,7 @@ sealed interface SleepTimerState {
 }
 
 /** Whole minutes left, rounded up so the first minute still reads as the chosen duration. */
-fun sleepTimerRemainingMinutes(deadlineElapsedMs: Long, nowElapsedMs: Long): Int =
-    sleepTimerRemainingMinutes(deadlineElapsedMs - nowElapsedMs)
+fun sleepTimerRemainingMinutes(deadlineElapsedMs: Long, nowElapsedMs: Long): Int = sleepTimerRemainingMinutes(deadlineElapsedMs - nowElapsedMs)
 
 /** Whole minutes left in an already-computed remainder, rounded up. */
 fun sleepTimerRemainingMinutes(remainingMs: Long): Int {
@@ -68,8 +67,11 @@ fun SleepTimerState.statusDescription(): String? = when (this) {
 /** Overline indicator on Home's now-playing tile, replacing the NOW PLAYING label. */
 fun SleepTimerState.tileText(): String? = when (this) {
     SleepTimerState.Off -> null
+
     SleepTimerState.EndOfTrack -> "end of track"
+
     is SleepTimerState.Countdown -> "$remainingMinutes min left"
+
     // Shorter than the Now Playing line: the home overline must not ellipsize.
     SleepTimerState.Finished -> "paused by timer"
 }
@@ -77,8 +79,11 @@ fun SleepTimerState.tileText(): String? = when (this) {
 /** Secondary notification line, appended to the artist. Null when no timer is active. */
 fun SleepTimerState.notificationSuffix(): String? = when (this) {
     SleepTimerState.Off -> null
+
     SleepTimerState.EndOfTrack -> "ends with this track"
+
     is SleepTimerState.Countdown -> "sleep ${remainingMinutes}m"
+
     // The timer already did its job; a suffix would claim one is still running.
     SleepTimerState.Finished -> null
 }
