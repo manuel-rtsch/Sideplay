@@ -74,9 +74,6 @@ class SpotifyAudioSink(
     @Volatile
     private var trackStale = false
 
-    /** Size of the current AudioTrack's buffer in bytes. `AudioTrack` does not expose it publicly. */
-    private var trackBufferBytes = 0
-
     /**
      * Serializes track lifecycle operations. The drain job writes to the AudioTrack on its own
      * coroutine; releasing or flushing the track while that write is in flight crashes inside
@@ -84,11 +81,10 @@ class SpotifyAudioSink(
      */
     private val lock = Mutex()
 
+    private val audioTrack = AudioTrackBuilder(native) { onFailure(it) }
+
     /** PCM read from the native channel after the AudioTrack was paused. */
     private val pendingPcm = ArrayDeque<ByteArray>()
-
-    /** Bytes of PCM the current track consumes per second, for the prefill targets. */
-    private var trackBytesPerSecond = 0
 
     /** Position of the first frame written to the current AudioTrack. */
     private var startPositionMs = 0L
@@ -110,7 +106,7 @@ class SpotifyAudioSink(
         // track. The load command cannot be processed until that thread is free.
         native.drainAudio()
 
-        val format = readFormat()
+        val format = audioTrack.readFormat()
         SidetrackDebug.log("audio.start format=${format.sampleRate}Hz channels=${format.channels}")
         val reused = track?.takeIf { canReuse(it, format) }
         val output = if (reused != null) {
@@ -121,7 +117,7 @@ class SpotifyAudioSink(
             reused
         } else {
             releaseTrack()
-            createTrack(format) ?: return
+            audioTrack.build(format) ?: return
         }
         track = output
         trackStale = false
@@ -130,7 +126,7 @@ class SpotifyAudioSink(
         lastHeadFrames = 0L
         headWrapOffset = 0L
         SidetrackDebug.log(
-            "audio.start reused=${reused != null} bufferFrames=${trackBufferBytes / BYTES_PER_FRAME} positionMs=$positionMs"
+            "audio.start reused=${reused != null} bufferFrames=${audioTrack.bufferBytes / BYTES_PER_FRAME} positionMs=$positionMs"
         )
         // Playback starts inside the drain, once the track actually holds audio.
         startDrain(output, startWhenPrefilled = true)
@@ -232,10 +228,10 @@ class SpotifyAudioSink(
         stopDrain()
         // A fresh item and a seek both wait for their first new PCM before they are audible.
         if (startWhenPrefilled) onBuffering(true)
-        val prefill = prefillBytes()
+        val prefill = audioTrack.prefillBytes()
         val policy = DrainPolicy(
             prefillBytes = prefill,
-            minStartBytes = minStartBytes(prefill),
+            minStartBytes = audioTrack.minStartBytes(prefill),
             prefillTimeoutMs = PREPLAY_TIMEOUT_MS,
             starveTimeoutMs = STARVE_TIMEOUT_MS
         ).apply { begin(SystemClock.elapsedRealtime(), playing = !startWhenPrefilled) }
@@ -281,7 +277,7 @@ class SpotifyAudioSink(
                         playing = true
                         runCatching { output.play() }
                         SidetrackDebug.log(
-                            "audio.play bufferedBytes=$buffered bufferFrames=${trackBufferBytes / BYTES_PER_FRAME}"
+                            "audio.play bufferedBytes=$buffered bufferFrames=${audioTrack.bufferBytes / BYTES_PER_FRAME}"
                         )
                     }
                     if (playing && !buffering && policy.idleFor(now) >= BUFFERING_TIMEOUT_MS) {
@@ -369,7 +365,7 @@ class SpotifyAudioSink(
         }
         track = null
         trackStale = false
-        trackBufferBytes = 0
+        audioTrack.reset()
     }
 
     /** A track may only be reused for the format it was built for, and only if it still works. */
@@ -377,81 +373,7 @@ class SpotifyAudioSink(
         runCatching { output.sampleRate == format.sampleRate && output.channelCount == format.channels }
             .getOrDefault(false)
 
-    private fun prefillBytes(): Int = (trackBufferBytes / PREFILL_FRACTION).coerceAtLeast(MIN_PREFILL_BYTES)
-
-    /**
-     * The least a track may be started with when the prefill deadline expires first. Enough to
-     * keep AudioFlinger fed for a moment, so the timeout relaxes the target instead of making the
-     * track underrun the instant it plays. Never above the prefill target itself.
-     */
-    private fun minStartBytes(prefill: Int): Int = (trackBytesPerSecond * MIN_START_MS / 1_000L).toInt()
-        .coerceAtLeast(MIN_PREFILL_BYTES)
-        .coerceAtMost(prefill)
-
     private fun underrunCount(output: AudioTrack): Int = runCatching { output.underrunCount }.getOrDefault(0)
-
-    private fun readFormat(): Format {
-        val raw = native.audioFormat() ?: return Format()
-        return runCatching {
-            val json = JSONObject(raw)
-            Format(
-                sampleRate = json.optInt("sampleRate", 44_100),
-                channels = json.optInt("channels", 2)
-            )
-        }.getOrDefault(Format())
-    }
-
-    private fun createTrack(format: Format): AudioTrack? {
-        val channelMask = if (format.channels == 1) {
-            AudioFormat.CHANNEL_OUT_MONO
-        } else {
-            AudioFormat.CHANNEL_OUT_STEREO
-        }
-        val minBuffer = AudioTrack.getMinBufferSize(
-            format.sampleRate,
-            channelMask,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-        if (minBuffer <= 0) {
-            onFailure(IllegalStateException("AudioTrack rejected the PCM format"))
-            return null
-        }
-        // The platform minimum is a latency figure, not a jitter budget: it holds a few tens of
-        // milliseconds, so any pause in decoding (a track's first fetch, a route change, a GC on
-        // the UI process) drains it and AudioFlinger marks the track as underrun. A few hundred
-        // milliseconds comfortably covers those stalls; seeking flushes it, so nothing waits
-        // behind it.
-        val frameBytes = BYTES_PER_SAMPLE * format.channels
-        val targetBuffer = format.sampleRate * frameBytes * TARGET_BUFFER_MS / 1_000
-        val bufferBytes = maxOf(minBuffer * 2, targetBuffer)
-        return runCatching {
-            AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(format.sampleRate)
-                        .setChannelMask(channelMask)
-                        .build()
-                )
-                .setBufferSizeInBytes(bufferBytes)
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
-        }.onFailure(onFailure).getOrNull()?.also {
-            trackBufferBytes = bufferBytes
-            trackBytesPerSecond = format.sampleRate * BYTES_PER_SAMPLE * format.channels
-            SidetrackDebug.log(
-                "audio.track bufferMs=${bufferBytes * 1_000L / trackBytesPerSecond} minBuffer=$minBuffer"
-            )
-        }
-    }
-
-    private data class Format(val sampleRate: Int = 44_100, val channels: Int = 2)
 
     private companion object {
         /** How long a read may wait for PCM before the loop re-checks its own state. */
@@ -462,24 +384,6 @@ class SpotifyAudioSink(
 
         /** S16LE stereo: 4 bytes per frame. */
         const val BYTES_PER_FRAME = 4
-
-        /** S16LE: two bytes per sample per channel. */
-        const val BYTES_PER_SAMPLE = 2
-
-        /**
-         * How much PCM the AudioTrack holds. Bigger than the platform minimum on purpose: it is
-         * the cushion that turns a stall in decoding into a late buffer instead of an underrun.
-         */
-        const val TARGET_BUFFER_MS = 400
-
-        /** The floor a track may start with once the prefill deadline expired. */
-        const val MIN_START_MS = 100L
-
-        /** Start playing once half the track buffer holds audio. */
-        const val PREFILL_FRACTION = 2
-
-        /** Floor for the prefill target, so a small track still starts with something queued. */
-        const val MIN_PREFILL_BYTES = 8 * 1024
 
         /** Never keep a track silently unplayed for longer than this waiting for the first PCM. */
         const val PREPLAY_TIMEOUT_MS = 1_500L
