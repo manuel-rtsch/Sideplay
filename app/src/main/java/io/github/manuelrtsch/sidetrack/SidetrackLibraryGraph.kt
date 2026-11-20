@@ -359,7 +359,12 @@ internal fun NavGraphBuilder.libraryGraph(nav: NavHostController) {
                 { track -> nav.openAddToPlaylist(track) }
             } else {
                 null
-            }
+            },
+            canRadio = vm.capabilities.supportsRadio,
+            onArtistRadio = { nav.navigate(artistRadioRoute(it.key)) },
+            onQueueAlbum = { vm.queueAlbum(it) },
+            onQueuePlaylist = { vm.queuePlaylist(it) },
+            onAddLatestShowToQueue = { vm.queueLatestEpisode(it) }
         )
     }
     composable(SEARCH_SCOPES) { entry ->

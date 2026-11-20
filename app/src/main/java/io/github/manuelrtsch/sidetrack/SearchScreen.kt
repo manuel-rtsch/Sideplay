@@ -36,6 +36,7 @@ import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
 
 @Composable
 fun SearchScreen(
@@ -61,7 +62,13 @@ fun SearchScreen(
     onNowPlaying: () -> Unit,
     onDismissNotice: () -> Unit,
     onDismissNowPlaying: () -> Unit,
-    onAddToPlaylist: ((Track) -> Unit)? = null
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    /** Offered where the service can build a station from an artist; null hides the row gutter. */
+    canRadio: Boolean = true,
+    onArtistRadio: (Artist) -> Unit = {},
+    onQueueAlbum: (Album) -> Unit = {},
+    onQueuePlaylist: (Playlist) -> Unit = {},
+    onAddLatestShowToQueue: (Show) -> Unit = {}
 ) {
     val results = search.searchResults
     val rows = rememberTrackRows(
@@ -99,6 +106,9 @@ fun SearchScreen(
     val scopesFocus = remember { FocusRequester() }
     val filterFocus = remember { SearchScope.entries.associateWith { FocusRequester() } }
     val moreFocus = rememberLoadMoreFocus()
+    // Artist/album/playlist/show rows share one gutter state so their action squares behave like
+    // the library's, and the list settles under the cursor into a reading position.
+    val searchGutters = rememberRowGutterState()
     // The category buttons only choose which result list is shown. Which categories get queried is
     // still decided on the "Search in" page, and that page is reached from the idle/typing state.
     // The selection survives a trip into a result and back.
@@ -288,49 +298,67 @@ fun SearchScreen(
                         key = { _, item -> searchItemKey(item) },
                         contentType = { _, item -> searchItemKey(item).take(1) }
                     ) { index, item ->
-                        val baseModifier = Modifier.listFade(listState, index + 1)
-                            .then(if (index == 0) viewport.firstRowModifier else Modifier)
-                        val modifier = baseModifier.then(moreFocus.rowModifier(index))
+                        // Every result row carries its own focus target, so the load-more requester
+                        // travels with the row instead of riding a wrapper that has no focusable.
+                        val focusRequester = moreFocus.requesterFor(index)
                         when (item) {
                             is Track -> TrackRow(
                                 searchItemKey(item),
                                 item,
                                 rows,
-                                baseModifier,
-                                focusRequester = moreFocus.requesterFor(index)
+                                Modifier.listFade(listState, index + 1)
+                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                focusRequester = focusRequester
                             ) { onTrack(item) }
 
-                            is Artist -> LibraryRow(
-                                item.artRes,
-                                item.name,
-                                "Artist",
-                                modifier,
-                                artUrl = item.artUrl
-                            ) { onArtist(item) }
+                            is Artist -> ArtistGutterRow(
+                                searchItemKey(item),
+                                item,
+                                searchGutters,
+                                rows.bar,
+                                Modifier.listFade(listState, index + 1)
+                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                focusRequester = focusRequester,
+                                canRadio = canRadio,
+                                onRadio = { onArtistRadio(item) },
+                                onClick = { onArtist(item) }
+                            )
 
-                            is Album -> LibraryRow(
-                                item.artRes,
-                                item.title,
-                                if (item.year > 0) "${item.artist} · ${item.year}" else item.artist,
-                                modifier,
-                                artUrl = item.artUrl
-                            ) { onAlbum(item) }
+                            is Album -> AlbumGutterRow(
+                                searchItemKey(item),
+                                item,
+                                searchGutters,
+                                rows.bar,
+                                Modifier.listFade(listState, index + 1)
+                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                focusRequester = focusRequester,
+                                onAddToQueue = { onQueueAlbum(item) },
+                                onClick = { onAlbum(item) }
+                            )
 
-                            is Playlist -> LibraryRow(
-                                item.artRes,
-                                item.name,
-                                playlistSubtitle(item),
-                                modifier,
-                                artUrl = item.artUrl
-                            ) { onPlaylist(item) }
+                            is Playlist -> PlaylistGutterRow(
+                                searchItemKey(item),
+                                item,
+                                searchGutters,
+                                rows.bar,
+                                Modifier.listFade(listState, index + 1)
+                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                focusRequester = focusRequester,
+                                onAddToQueue = { onQueuePlaylist(item) },
+                                onClick = { onPlaylist(item) }
+                            )
 
-                            is Show -> LibraryRow(
-                                item.artRes,
-                                item.name,
-                                item.publisher,
-                                modifier,
-                                artUrl = item.artUrl
-                            ) { onShow(item) }
+                            is Show -> ShowGutterRow(
+                                searchItemKey(item),
+                                item,
+                                searchGutters,
+                                rows.bar,
+                                Modifier.listFade(listState, index + 1)
+                                    .then(if (index == 0) viewport.firstRowModifier else Modifier),
+                                focusRequester = focusRequester,
+                                onAddLatestToQueue = { onAddLatestShowToQueue(item) },
+                                onClick = { onShow(item) }
+                            )
                         }
                     }
                     if (hasMore) {
