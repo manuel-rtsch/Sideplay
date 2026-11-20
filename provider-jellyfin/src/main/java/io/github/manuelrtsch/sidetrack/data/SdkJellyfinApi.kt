@@ -73,10 +73,10 @@ class SdkJellyfinApi(
     )
 
     private val userId: UUID? = credentials.userId.takeIf { it.isNotBlank() }
-        ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        ?.let { parseJellyfinId(it) }
 
-    private fun uuid(id: String): UUID = runCatching { UUID.fromString(id) }
-        .getOrElse { throw ServiceException(ServiceFailure.TrackUnavailable, "Jellyfin returned an id Sidetrack cannot read") }
+    private fun uuid(id: String): UUID = parseJellyfinId(id)
+        ?: throw ServiceException(ServiceFailure.TrackUnavailable, "Jellyfin returned an id Sidetrack cannot read")
 
     override suspend fun likedSongs(offset: Int, limit: Int): JellyfinPage = call {
         api.libraryApi.getItems(
@@ -489,6 +489,23 @@ internal suspend fun resolvePlaylistEntry(
         start += page.size
     }
 }
+
+/**
+ * Reads a Jellyfin GUID in either form the server writes. Generated models carry dashed UUIDs,
+ * but plain string ids come back bare from some endpoints: Jellyfin 12 answers `POST /Playlists`
+ * with `{"Id":"8aeabe4a8c99b7b52f0389af0c91dd55"}`, which [UUID.fromString] rejects. Parsing both
+ * keeps a created playlist from being reported as an id Sidetrack cannot read.
+ */
+internal fun parseJellyfinId(id: String): UUID? = runCatching {
+    UUID.fromString(id)
+}.getOrNull() ?: runCatching {
+    val hex = id.replace("-", "")
+    require(hex.length == 32)
+    UUID.fromString(
+        hex.substring(0, 8) + "-" + hex.substring(8, 12) + "-" + hex.substring(12, 16) +
+            "-" + hex.substring(16, 20) + "-" + hex.substring(20)
+    )
+}.getOrNull()
 
 internal const val ARTWORK_MAX_HEIGHT = 600
 
