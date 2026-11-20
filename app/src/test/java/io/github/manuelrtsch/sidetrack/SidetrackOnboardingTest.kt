@@ -27,6 +27,17 @@ class SidetrackOnboardingTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
 
+    /**
+     * The selector prints only the module's own name, so it is found by its title and the name is
+     * checked on the page - which also catches the "· Sidekit" and "· tap to switch" suffixes
+     * that used to explain the row.
+     */
+    private fun assertSelectedKeyboard(label: String) {
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Select keyboard"))
+        compose.onNodeWithText("Select keyboard").assertExists()
+        compose.onNodeWithText(label).assertExists()
+    }
+
     @Before fun clearLocalSettings() {
         context.getSharedPreferences(SidetrackLocalSettings.FILE, Context.MODE_PRIVATE)
             .edit().clear().commit()
@@ -115,13 +126,13 @@ class SidetrackOnboardingTest {
             }
         }
 
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Keyboard"))
         // T9 is the standalone default, so the first step is the mini QWERTY.
-        compose.onNodeWithText("T9 · tap to switch").performClick()
-        compose.onNodeWithText("Mini QWERTY · tap to switch").assertExists()
+        assertSelectedKeyboard("T9")
+        compose.onNodeWithText("Select keyboard").performClick()
+        assertSelectedKeyboard("Mini QWERTY")
         // And on to the Sundial, whose rows are the ones a new listener has to read.
-        compose.onNodeWithText("Mini QWERTY · tap to switch").performClick()
-        compose.onNodeWithText("Sundial · tap to switch").assertExists()
+        compose.onNodeWithText("Select keyboard").performClick()
+        assertSelectedKeyboard("Sundial")
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Centre"))
         compose.onNodeWithText("Tap to play or pause. Hold to confirm.").assertExists()
     }
@@ -139,11 +150,10 @@ class SidetrackOnboardingTest {
             }
         }
 
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Keyboard"))
-        compose.onNodeWithText("T9 · Sidekit · tap to switch").performClick()
+        compose.onNodeWithText("Select keyboard").performClick()
 
         // A host owns the choice, but the page it owns the instructions on can still correct it.
-        compose.onNodeWithText("Mini QWERTY · Sidekit · tap to switch").assertExists()
+        assertSelectedKeyboard("Mini QWERTY")
         // There is no Keyboard screen to open on a host-backed install.
         compose.onNodeWithText("Keyboard settings").assertDoesNotExist()
     }
@@ -171,18 +181,16 @@ class SidetrackOnboardingTest {
         // What Sidekit's detection does when the game controller's buttons arrive.
         compose.runOnIdle { keypad.useModule(KeypadModule.GamePad) }
 
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Keyboard"))
-        compose.onNodeWithText("Game controller · Sidekit · tap to switch").assertExists()
+        assertSelectedKeyboard("Game controller")
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("X"))
         compose.onNodeWithText("Go back a screen.").assertExists()
 
         // A manual cycle is a preview; the attached module wins as soon as it changes.
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Keyboard"))
-        compose.onNodeWithText("Game controller · Sidekit · tap to switch").performClick()
-        compose.onNodeWithText("T9 · Sidekit · tap to switch").assertExists()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Select keyboard"))
+        compose.onNodeWithText("Select keyboard").performClick()
+        assertSelectedKeyboard("T9")
         compose.runOnIdle { keypad.useModule(KeypadModule.Sundial) }
-        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Keyboard"))
-        compose.onNodeWithText("Sundial · Sidekit · tap to switch").assertExists()
+        assertSelectedKeyboard("Sundial")
     }
 
     @Test
@@ -214,9 +222,7 @@ class SidetrackOnboardingTest {
             }
         }
 
-        compose.onNode(hasScrollToIndexAction())
-            .performScrollToNode(hasText("T9 · Sidekit · tap to switch"))
-        compose.onNodeWithText("T9 · Sidekit · tap to switch").assertExists()
+        assertSelectedKeyboard("T9")
         compose.onNodeWithText("Keypad Back key").assertDoesNotExist()
         assertFalse(SidetrackLocalSettings(context).hasSeenOnboarding())
     }

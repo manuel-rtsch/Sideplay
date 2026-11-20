@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.input.KeypadModule
@@ -109,7 +112,7 @@ internal fun keypadEssentials(module: KeypadModule): List<KeypadEssential> {
 }
 
 /**
- * The compact key cheat sheet shared by Welcome and Keyboard. It is deliberately not a diagram:
+ * The compact key cheat sheet on Welcome. It is deliberately not a diagram:
  * the full [hrln.interactive.sidekit.sdk.settings.KeypadGuide] is a reference and lives behind
  * "Keypad guide", while these rows are the actions a new listener has to know immediately.
  */
@@ -126,6 +129,17 @@ internal fun KeypadEssentials(
     val essentials = remember(module) { keypadEssentials(module) }
     val surface = SidekitTheme.colors.surfaceA3
     val contentColor = SidekitTheme.colors.contentColorFor(surface)
+    // The symbols share one column, measured from the widest of them, so every sentence to their
+    // right starts on the same axis instead of stepping in and out with the width of its key.
+    val measurer = rememberTextMeasurer()
+    val keyStyle = SidekitTheme.typography.small
+    val density = LocalDensity.current
+    val keycapWidth = remember(essentials, keyStyle, density) {
+        val widest = (essentials.map { it.key } + TOUCH_KEY)
+            .maxOf { measurer.measure(it, keyStyle).size.width }
+        // Never narrower than a keycap reads as a key, and never narrow enough to clip a label.
+        (with(density) { widest.toDp() } + KEYCAP_PADDING * 2).coerceAtLeast(76.dp)
+    }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(SidekitTheme.spacing.pageGap)) {
         Column(
             Modifier
@@ -143,7 +157,7 @@ internal fun KeypadEssentials(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Keycap(essential.key, highlighted = highlighted)
+                    Keycap(essential.key, keycapWidth, highlighted = highlighted)
                     SidekitText(
                         essential.detail,
                         Modifier.weight(1f),
@@ -159,7 +173,7 @@ internal fun KeypadEssentials(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Keycap("← Drag")
+                Keycap(TOUCH_KEY, keycapWidth)
                 SidekitText(
                     "On touch, drag a row left to reveal its menu.",
                     Modifier.weight(1f),
@@ -181,17 +195,23 @@ internal fun KeypadEssentials(
     }
 }
 
+/** The label of the touch gesture, which is a keycap like the rest so the column stays one width. */
+private const val TOUCH_KEY = "← Drag"
+
+/** The space either side of a keycap's label. */
+private val KEYCAP_PADDING = 10.dp
+
 @Composable
-private fun Keycap(label: String, highlighted: Boolean = false) {
+private fun Keycap(label: String, width: Dp, highlighted: Boolean = false) {
     // The accent is the case colour every live action wears, so the answer reads as "that key, now".
     val color = if (highlighted) SidekitTheme.colors.primaryA2 else SidekitTheme.colors.surfaceA4
     Box(
         Modifier
             .height(38.dp)
-            .widthIn(min = 76.dp)
+            .width(width)
             .clip(SidekitTheme.shapes.control)
             .background(color)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = KEYCAP_PADDING),
         contentAlignment = Alignment.Center
     ) {
         SidekitText(

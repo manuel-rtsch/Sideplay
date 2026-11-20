@@ -437,7 +437,6 @@ class SidetrackScreenshotTest {
     @Test fun onboarding() = shoot("sidetrack_welcome") {
         SidetrackOnboardingContent(
             module = KeypadModule.T9,
-            keyboardLabel = KeypadModule.T9.label,
             canOpenKeyboard = true,
             onOpenKeyboard = {},
             canManageKeypadAccess = true,

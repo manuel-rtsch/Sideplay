@@ -92,15 +92,8 @@ fun SidetrackOnboardingScreen(
                 SidetrackDebug.log("welcome module=$shown custom=$customModule")
             }
     }
-    val keyboardLabel = when {
-        custom != null -> "${module.label} · custom"
-        hostBacked -> "${module.label} · Sidekit"
-        else -> module.label
-    }
-
     SidetrackOnboardingContent(
         module = module,
-        keyboardLabel = keyboardLabel,
         customMapping = custom != null,
         followsHardware = manual == null,
         canOpenKeyboard = !hostBacked,
@@ -137,7 +130,6 @@ fun SidetrackOnboardingScreen(
 @Composable
 internal fun SidetrackOnboardingContent(
     module: KeypadModule,
-    keyboardLabel: String,
     customMapping: Boolean = false,
     /** False once the user cycled by hand: their choice outlives the keys they press after it. */
     followsHardware: Boolean = true,
@@ -172,7 +164,6 @@ internal fun SidetrackOnboardingContent(
             list = list,
             modifier = keys.modifier,
             module = module,
-            keyboardLabel = keyboardLabel,
             customMapping = customMapping,
             canOpenKeyboard = canOpenKeyboard,
             onOpenKeyboard = onOpenKeyboard,
@@ -238,7 +229,6 @@ private fun SidetrackKeypadWelcomeList(
     list: LazyListState,
     modifier: Modifier,
     module: KeypadModule,
-    keyboardLabel: String,
     customMapping: Boolean,
     canOpenKeyboard: Boolean,
     onOpenKeyboard: () -> Unit,
@@ -248,11 +238,19 @@ private fun SidetrackKeypadWelcomeList(
     pressed: KeypadHabit?,
     optionsOpen: Boolean
 ) {
+    // A list only pads its rows a few pixels apart, which reads as one column. The page's groups
+    // get a wider break so the selector, the card and the guide each read as their own block.
+    val section = Modifier.padding(top = SidekitTheme.spacing.pageGap)
     SidekitList(padding, modifier = modifier, state = list) {
+        // The selector opens the page: on a first run the module in front of the user is the first
+        // thing to agree on, and on a host-backed install this is the only place to change it.
+        item(key = "keyboard") {
+            SidekitCompactItem("Select keyboard", secondary = module.label, onClick = onCycleKeyboard)
+        }
         item(key = "intro") {
             SidekitText(
                 "Learn your keypad.",
-                Modifier.padding(horizontal = 18.dp),
+                section.padding(horizontal = 18.dp),
                 style = SidekitTheme.typography.caption,
                 maxLines = 1
             )
@@ -260,6 +258,7 @@ private fun SidetrackKeypadWelcomeList(
         item(key = "essentials") {
             KeypadEssentials(
                 module,
+                modifier = section,
                 customMapping = customMapping,
                 pressed = pressed,
                 optionsOpen = optionsOpen
@@ -277,7 +276,7 @@ private fun SidetrackKeypadWelcomeList(
         item(key = "guideTitle") {
             SidekitText(
                 "Where those keys are",
-                Modifier.padding(horizontal = 18.dp),
+                section.padding(horizontal = 18.dp),
                 style = SidekitTheme.typography.caption,
                 maxLines = 1
             )
@@ -294,15 +293,6 @@ private fun SidetrackKeypadWelcomeList(
                 )
             }
         }
-        // The rows above teach the attached module, and a host owns the choice, so this row is
-        // where it can be corrected: tapping steps to the next module and the rows follow.
-        item(key = "keyboard") {
-            SidekitCompactItem(
-                "Keyboard",
-                secondary = "$keyboardLabel · tap to switch",
-                onClick = onCycleKeyboard
-            )
-        }
         if (canOpenKeyboard) {
             item(key = "keyboardSettings") {
                 val backStatus = when {
@@ -312,6 +302,7 @@ private fun SidetrackKeypadWelcomeList(
                 }
                 SidekitCompactItem(
                     "Keyboard settings",
+                    modifier = section,
                     secondary = listOfNotNull("Input, mapping, guide", backStatus).joinToString(" · ") + " ›",
                     onClick = onOpenKeyboard
                 )
