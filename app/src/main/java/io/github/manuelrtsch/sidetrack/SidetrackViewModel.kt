@@ -45,8 +45,6 @@ class SidetrackViewModel(
     private val writer: MediaLibraryWriter? = null,
     private val queue: QueueRepository = QueueRepository(),
     private val history: HistoryRepository = HistoryRepository(),
-    /** The entries the last Clear history removed, kept only while Undo is offered. */
-    private var clearedHistory: List<HistoryEntry> = emptyList(),
     private val episodeProgressRepository: EpisodeProgressRepository = EpisodeProgressRepository(),
     private val episodeMetaRepository: EpisodeMetaRepository = EpisodeMetaRepository(),
     private val session: ServiceRuntime? = null,
@@ -146,6 +144,15 @@ class SidetrackViewModel(
         playback = { session?.playback },
         resumePoint = { session?.resumePoint },
         scope = viewModelScope
+    )
+
+    private val settings = SettingsController(
+        store = store,
+        session = session,
+        history = history,
+        queue = queue,
+        effects = effects,
+        clearArtworkCache = clearArtworkCache
     )
 
     private val driver = PlaybackDriver(
@@ -557,60 +564,21 @@ class SidetrackViewModel(
 
     fun loadMoreSearch(scope: SearchScope) = search.loadMoreSearch(scope)
 
-    fun setAudioQuality(quality: AudioQuality) {
-        if (quality == store.value.audioQuality) return
-        store.update { it.copy(audioQuality = quality) }
-        session?.setAudioQuality(quality)
-    }
+    fun setAudioQuality(quality: AudioQuality) = settings.setAudioQuality(quality)
 
-    fun toggleNormalization() {
-        val enabled = !store.value.normalization
-        store.update { it.copy(normalization = enabled) }
-        session?.setNormalization(enabled)
-    }
+    fun toggleNormalization() = settings.toggleNormalization()
 
-    fun toggleGapless() {
-        val enabled = !store.value.gapless
-        store.update { it.copy(gapless = enabled) }
-        session?.setGapless(enabled)
-    }
+    fun toggleGapless() = settings.toggleGapless()
 
-    fun toggleAutoplay() {
-        val enabled = !store.value.autoplay
-        store.update { it.copy(autoplay = enabled) }
-        session?.setAutoplay(enabled)
-    }
+    fun toggleAutoplay() = settings.toggleAutoplay()
 
-    fun clearHistory(): Boolean {
-        clearedHistory = history.clear()
-        val snapshot = queue.clearHistory()
-        effects.applyQueue(snapshot, syncNowPlaying = false)
-        val cleared = clearedHistory.isNotEmpty()
-        // A real clear is confirmed by the Undo offer and the dropping count; an empty list would
-        // otherwise look like a dead key.
-        store.update {
-            if (cleared) it.copy(recent = emptyList()) else it.say("Nothing to clear")
-        }
-        return cleared
-    }
+    fun clearHistory(): Boolean = settings.clearHistory()
 
-    /** Puts the last cleared history back, timestamps included, so Undo restores the real order. */
-    fun undoClearHistory() {
-        if (clearedHistory.isEmpty()) return
-        history.restoreAll(clearedHistory)
-        clearedHistory = emptyList()
-        store.update { it.copy(recent = history.items(), notice = null) }
-    }
+    fun undoClearHistory() = settings.undoClearHistory()
 
-    fun clearCache() {
-        clearArtworkCache()
-        session?.clearAudioCache()
-        refreshCacheSize()
-    }
+    fun clearCache() = settings.clearCache()
 
-    fun refreshCacheSize() {
-        store.update { it.copy(cacheSizeBytes = session?.cacheSizeBytes() ?: 0L) }
-    }
+    fun refreshCacheSize() = settings.refreshCacheSize()
 
     /** Drag-and-drop reorder of the upcoming tail; the current item and history never move. */
 
