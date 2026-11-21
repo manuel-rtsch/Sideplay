@@ -1,0 +1,39 @@
+name: Native bridge setup
+description: Install the Rust toolchain, cargo-ndk and the NDK version app/build.gradle.kts pins, with the Cargo cache the librespot build needs to stay cheap.
+
+# Everything the `buildSpotifyNative` Gradle task needs. Kept in one place so the CI gate and the
+# release workflow build the bridge the same way; the NDK version is read from the Gradle script,
+# so pinning it here by hand is the one thing that can drift.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Cargo registry and target directory
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: native/sidetrack-spotify
+        # The vendored crates under native/vendor change rarely, so key on the lockfile alone.
+        key: librespot
+
+    - name: Install cargo-ndk
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-ndk
+
+    - name: Read the pinned NDK version
+      id: ndk
+      shell: bash
+      run: |
+        version=$(sed -n 's/^ *ndkVersion *= *"\(.*\)"/\1/p' app/build.gradle.kts | head -1)
+        [ -n "$version" ] || { echo "no ndkVersion found in app/build.gradle.kts" >&2; exit 1; }
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "Android NDK $version"
+
+    - name: Install the NDK
+      shell: bash
+      env:
+        NDK_VERSION: ${{ steps.ndk.outputs.version }}
+      run: sdkmanager --install "ndk;$NDK_VERSION"

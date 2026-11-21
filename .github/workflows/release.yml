@@ -1,0 +1,133 @@
+name: Release
+
+# Cutting a release means pushing a tag. Everything after that — the native bridge, both signed
+# APKs, the checksum file, the notes and the GitHub release — is this workflow, so a release
+# cannot be produced by hand with a stale or native-less build.
+#
+# Requires repository secrets:
+#   SIDETRACK_KEYSTORE_BASE64   the release .jks, base64-encoded
+#   SIDETRACK_STORE_PASSWORD    storePassword
+#   SIDETRACK_KEY_ALIAS         keyAlias
+#   SIDETRACK_KEY_PASSWORD      keyPassword
+#
+# Requires docs/releases/<version>.md: the published notes. The workflow refuses to publish
+# without them rather than shipping an empty release page.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, e.g. v0.4.1 (must already exist)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, verify and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: ./.github/actions/android-setup
+      - uses: ./.github/actions/rust-native-setup
+
+      - name: Resolve the version
+        id: version
+        shell: bash
+        run: |
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "not a release tag: $tag" >&2; exit 1; }
+          version="${tag#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version ($tag)"
+
+      # The version-name comes from `git describe`, so the release has to be the tag itself and
+      # the tag has to be a commit main already carries. Releasing an unmerged commit is the one
+      # mistake that cannot be undone afterwards.
+      - name: Check the tag is on main
+        shell: bash
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "HEAD (${GITHUB_SHA:0:7}) is not on main; merge the release commit first." >&2
+            exit 1
+          }
+
+      - name: Check the release notes exist
+        shell: bash
+        run: |
+          notes="docs/releases/${{ steps.version.outputs.version }}.md"
+          [ -s "$notes" ] || { echo "missing or empty $notes" >&2; exit 1; }
+          echo "notes=$notes" >> "$GITHUB_ENV"
+
+      - name: Write the signing configuration
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIDETRACK_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIDETRACK_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIDETRACK_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIDETRACK_KEY_PASSWORD }}
+        run: |
+          [ -n "$KEYSTORE_BASE64" ] || { echo "SIDETRACK_KEYSTORE_BASE64 is not set" >&2; exit 1; }
+          keystore="$RUNNER_TEMP/sidetrack-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          cat > keystore.properties <<EOF
+          storeFile=$keystore
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      # Builds the universal and the arm64-only APK, asserts the ABI set, the package, the
+      # version and the release certificate of each, and writes SHA256SUMS.txt.
+      - name: Build and verify the artefacts
+        shell: bash
+        run: scripts/release.sh "${{ steps.version.outputs.version }}"
+
+      - name: Publish the release
+        shell: bash
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          out=build/release
+          assets=(
+            "$out/Sidetrack-$version.apk"
+            "$out/Sidetrack-$version-arm64-v8a.apk"
+            "$out/SHA256SUMS.txt"
+          )
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists; replacing its assets and notes."
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --title "Sidetrack $version" \
+              --notes-file "$notes"
+          fi
+          gh release edit "$tag" --notes-file "$notes"
+          gh release view "$tag" --json url,assets \
+            --template '{{.url}}{{"\n"}}{{range .assets}}  {{.name}} {{.size}} bytes{{"\n"}}{{end}}'
+
+      - name: Keep the artefacts as a workflow artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.version.outputs.version }}
+          path: build/release/
+          retention-days: 30
+          if-no-files-found: ignore

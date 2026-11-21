@@ -124,7 +124,8 @@ through librespot also needs the Android NDK and a Rust toolchain.
 
 The native bridge is required for Spotify library and search; without it Spotify falls back to
 the public Spotify Web API, which currently rate-limits the desktop client ID. Builds without
-`-PsidetrackNative=true` still support Navidrome and Jellyfin.
+`-PsidetrackNative=true` still support Navidrome and Jellyfin, but a release build refuses to
+package without the bridge — see [docs/releasing.md](docs/releasing.md).
 
 ## License
 
