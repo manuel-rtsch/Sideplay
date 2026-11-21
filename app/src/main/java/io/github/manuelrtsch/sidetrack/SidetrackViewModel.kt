@@ -356,14 +356,6 @@ class SidetrackViewModel(
 
     fun playArtistRadio(index: Int) = radio.playArtistRadio(index)
 
-    /**
-     * Plays the artist's whole top-tracks list. Pages still behind "See more tracks" are fetched
-     * first so the queue always matches the list the page shows, instead of whichever page the
-     * user happened to have expanded when they pressed play.
-     */
-
-    fun playRecent(item: MediaItem) = driver.playRecent(item)
-
     fun skipBack(milliseconds: Long = PODCAST_SKIP_MS) = driver.skipBack(milliseconds)
 
     fun skipForward(milliseconds: Long = PODCAST_SKIP_MS) = driver.skipForward(milliseconds)

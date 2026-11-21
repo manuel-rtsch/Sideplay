@@ -259,20 +259,31 @@ internal class LibraryController(
         ensureArtist(id)
     }
 
+    /**
+     * Plays [collection] from [index] in collection context. The page already on screen starts at
+     * once and the pages behind "See more" grow the tail in the background, so a long playlist
+     * opens on its first note instead of a spinner, and a page that cannot be loaded leaves the
+     * tap playing rather than doing nothing.
+     */
     fun playCollection(collection: Collection, index: Int) {
-        if (!collection.hasMore) {
-            driver.play(collection.items, index)
-            return
-        }
+        driver.play(collection.items, index)
+        if (!collection.hasMore) return
+        // An unplayable row never became the context, so there is no queue to extend.
+        if (store.value.current?.id != collection.items.getOrNull(index)?.id) return
         val key = mediaKeys.collection(collection.type, collection.id)
+        // A second tap while the first load runs is already playing, and its completion extends
+        // the same queue, so there is nothing to start.
+        if (key in store.value.collectionMorePending) return
         store.update { it.copy(collectionMorePending = it.collectionMorePending + key) }
+        val page = collection.items
         scope.launch {
             try {
-                driver.play(loadAll(collection).items, index)
+                driver.extendCollection(page, loadAll(collection).items)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                store.update { it.say(playbackNotice(e)) }
+                SidetrackDebug.log("viewModel.playCollection key=$key failed", e)
+                store.update { it.say("Playing what's loaded — ${playbackNotice(e)}") }
             } finally {
                 store.update { it.copy(collectionMorePending = it.collectionMorePending - key) }
             }
@@ -280,26 +291,29 @@ internal class LibraryController(
     }
 
     /**
-     * Plays the artist's whole top-tracks list. Pages still behind "See more tracks" are fetched
-     * first so the queue always matches the list the page shows, instead of whichever page the
-     * user happened to have expanded when they pressed play.
+     * Plays the artist's whole top-tracks list, from the page that is already loaded. Pages still
+     * behind "See more tracks" grow the tail once they arrive, so the queue still matches the
+     * list the page shows instead of whichever page the user happened to have expanded.
      */
     fun playArtist(artist: Artist) {
         val id = artist.id
-        if (id in store.value.artistMorePending) return
+        val page = topTracks(artist)
+        val hasMore = store.value.artistTrackHasMore[id] == true
+        if (page.isEmpty()) {
+            notify("No top tracks for this artist")
+            return
+        }
+        driver.play(page, 0)
+        if (!hasMore || id in store.value.artistMorePending) return
         store.update { it.copy(artistMorePending = it.artistMorePending + id) }
         scope.launch {
             try {
-                val tracks = loadAllArtistTracks(artist)
-                if (tracks.isEmpty()) {
-                    notify("No top tracks for this artist")
-                    return@launch
-                }
-                driver.play(tracks, 0)
+                driver.extendCollection(page, loadAllArtistTracks(artist))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                store.update { it.say(playbackNotice(e)) }
+                SidetrackDebug.log("viewModel.playArtist id=$id failed", e)
+                store.update { it.say("Playing what's loaded — ${playbackNotice(e)}") }
             } finally {
                 store.update { it.copy(artistMorePending = it.artistMorePending - id) }
             }

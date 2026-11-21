@@ -38,7 +38,9 @@ class QueueRepository(
 
     /**
      * Starts playback from [index] within [items], replacing the queue. The rows after the
-     * chosen item become upcoming; the item that was playing moves into history.
+     * chosen item become upcoming; the item that was playing moves into history. [items] is also
+     * the playback context, so repeat-context replays the whole list — a page of it until
+     * [extendContext] adds the pages behind "See more".
      */
     fun play(items: List<MediaItem>, index: Int): Snapshot {
         if (index !in items.indices) return snapshot
@@ -63,6 +65,32 @@ class QueueRepository(
     }
 
     fun playItem(item: MediaItem): Snapshot = play(listOf(item), 0)
+
+    /**
+     * Grows the tail of a collection whose later pages are still loading, starting from the page
+     * that is already playing as [page]. Only the end of the queue moves, so Up next can be read
+     * while the request runs.
+     *
+     * The page itself is the guard: the call does nothing once the queue's context is no longer
+     * exactly that page, which drops a load that lands after the user started something else, and
+     * also keeps two loads from queueing the same page twice. A shuffled queue grows both the
+     * shuffled tail and its pre-shuffle backup, so shuffle still describes the whole collection.
+     */
+    fun extendContext(page: List<MediaItem>, items: List<MediaItem>): Snapshot {
+        if (items.size <= page.size) return snapshot
+        val context = snapshot.context
+        if (context.size != page.size) return snapshot
+        if (context.map { it.key } != page.map { it.key }) return snapshot
+        val delta = items.drop(page.size)
+        val backup = snapshot.shuffleBackup
+        return commit(
+            snapshot.copy(
+                context = context + delta,
+                upcoming = snapshot.upcoming + if (snapshot.shuffle) delta.shuffled(random) else delta,
+                shuffleBackup = if (snapshot.shuffle) (backup ?: snapshot.upcoming) + delta else backup
+            )
+        )
+    }
 
     /**
      * Starts [item] now without touching the tail. A track picked from a list row is a request

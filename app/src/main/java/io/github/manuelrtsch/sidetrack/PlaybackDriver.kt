@@ -362,11 +362,16 @@ internal class PlaybackDriver(
 
     fun playEpisode(episode: Episode) = playItem(episode)
 
-    /** Play a recent item in context, so the rest of the history follows it in the queue. */
-    fun playRecent(item: MediaItem) {
-        val recent = store.value.recent
-        val at = recent.indexOfFirst { it.id == item.id }
-        if (at >= 0) play(recent, at) else playItem(item)
+    /**
+     * Adds the pages behind a collection that is already playing. The page on screen starts the
+     * queue immediately and this only grows its tail, so a long playlist no longer spins before
+     * its first note and one failing page cannot stop playback. A load that lands after the user
+     * started something else is dropped by [QueueRepository.extendContext].
+     */
+    fun extendCollection(page: List<MediaItem>, complete: List<MediaItem>) {
+        val before = queue.snapshot
+        val after = queue.extendContext(page, complete)
+        if (after != before) effects.applyQueue(after, syncNowPlaying = false)
     }
 
     /** Podcast rewind. [seekTo] clamps to the item's duration and never goes below zero. */

@@ -195,7 +195,7 @@ class SpotifyViewModelEventTest {
         vm.next()
         assertEquals(listOf(items[0].id), vm.state.value.recent.map { it.id })
 
-        vm.playRecent(items[0])
+        vm.playNow(items[0])
 
         // The item is playing now, so it belongs to Now Playing until the user switches away.
         assertEquals(items[0].id, vm.state.value.current?.id)

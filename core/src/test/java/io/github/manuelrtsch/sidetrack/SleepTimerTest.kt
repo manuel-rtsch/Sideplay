@@ -25,22 +25,22 @@ class SleepTimerTest {
     @Test fun `status text reports the live remainder`() {
         val timer = SleepTimerState.Countdown(30, 1_800_000L, 23)
 
-        assertEquals("23 min left", timer.statusText())
-        assertEquals("Sleep timer, 23 minutes left", timer.statusDescription())
-        assertEquals("23 min left", timer.tileText())
-        assertEquals("sleep 23m", timer.notificationSuffix())
+        assertEquals("Pauses in 23 min", timer.statusText())
+        assertEquals("Sleep timer, pauses in 23 minutes", timer.statusDescription())
+        assertEquals("23 MIN LEFT", timer.tileText())
+        assertEquals("pauses in 23 min", timer.notificationSuffix())
         assertEquals(
-            "Sleep timer, 1 minute left",
+            "Sleep timer, pauses in 1 minute",
             timer.copy(remainingMinutes = 1).statusDescription()
         )
         assertTrue(timer.active)
     }
 
     @Test fun `end of track is a mode, not a countdown`() {
-        assertEquals("ends with this track", SleepTimerState.EndOfTrack.statusText())
-        assertEquals("Sleep timer, ends with this track", SleepTimerState.EndOfTrack.statusDescription())
-        assertEquals("end of track", SleepTimerState.EndOfTrack.tileText())
-        assertEquals("ends with this track", SleepTimerState.EndOfTrack.notificationSuffix())
+        assertEquals("Pauses after this track", SleepTimerState.EndOfTrack.statusText())
+        assertEquals("Sleep timer, pauses after this track", SleepTimerState.EndOfTrack.statusDescription())
+        assertEquals("END OF TRACK", SleepTimerState.EndOfTrack.tileText())
+        assertEquals("pauses after this track", SleepTimerState.EndOfTrack.notificationSuffix())
         assertTrue(SleepTimerState.EndOfTrack.active)
     }
 
@@ -53,9 +53,9 @@ class SleepTimerTest {
     }
 
     @Test fun `finished explains the pause but is no longer armed`() {
-        assertEquals("paused by sleep timer", SleepTimerState.Finished.statusText())
+        assertEquals("Paused by sleep timer", SleepTimerState.Finished.statusText())
         assertEquals("Sleep timer finished, playback paused", SleepTimerState.Finished.statusDescription())
-        assertEquals("paused by timer", SleepTimerState.Finished.tileText())
+        assertEquals("PAUSED BY TIMER", SleepTimerState.Finished.tileText())
         assertNull(SleepTimerState.Finished.notificationSuffix())
         assertFalse(SleepTimerState.Finished.active)
     }

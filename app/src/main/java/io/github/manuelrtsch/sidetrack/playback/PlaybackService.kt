@@ -144,8 +144,14 @@ class PlaybackService : Service() {
         val contentText = buildString {
             append(creator)
             if (timerSuffix != null) {
-                if (isNotEmpty()) append(" · ")
-                append(timerSuffix)
+                // After the creator the suffix is a continuation and stays lowercase; on its own
+                // (no creator) it opens the line, so it takes a capital.
+                if (isNotEmpty()) {
+                    append(" · ")
+                    append(timerSuffix)
+                } else {
+                    append(timerSuffix.replaceFirstChar { it.uppercaseChar() })
+                }
             }
         }
         return Notification.Builder(this, playback.notificationChannelId)

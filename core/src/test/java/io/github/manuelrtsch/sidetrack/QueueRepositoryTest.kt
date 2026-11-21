@@ -390,6 +390,56 @@ class QueueRepositoryTest {
         assertEquals(listOf("b", "c", "d"), queue.snapshot.upcoming.map { it.id })
     }
 
+    @Test fun `extending a collection queues the pages behind the loaded one`() {
+        val queue = QueueRepository(Random(1))
+        val page = tracks.take(2)
+        queue.play(page, 0)
+
+        queue.extendContext(page, tracks)
+
+        assertEquals(listOf("b", "c", "d"), queue.snapshot.upcoming.map { it.id })
+        // Repeat-context loops the whole collection, not the page it started from.
+        assertEquals(listOf("a", "b", "c", "d"), queue.snapshot.context.map { it.id })
+    }
+
+    @Test fun `extending a collection twice does not queue the page twice`() {
+        val queue = QueueRepository(Random(1))
+        val page = tracks.take(2)
+        queue.play(page, 0)
+
+        queue.extendContext(page, tracks)
+        val once = queue.snapshot
+        queue.extendContext(page, tracks)
+
+        assertEquals(once, queue.snapshot)
+    }
+
+    @Test fun `a page that lands after the user moved on is dropped`() {
+        val queue = QueueRepository(Random(1))
+        val page = tracks.take(2)
+        queue.play(page, 0)
+        queue.playNow(track("z"))
+
+        queue.extendContext(page, tracks)
+
+        assertEquals("z", queue.snapshot.current?.id)
+        // The tail the user already had survives, and the stale page never joins it.
+        assertEquals(listOf("b"), queue.snapshot.upcoming.map { it.id })
+        assertEquals(listOf("z"), queue.snapshot.context.map { it.id })
+    }
+
+    @Test fun `a shuffled collection grows both the tail and its unshuffled backup`() {
+        val queue = QueueRepository(Random(1))
+        val page = tracks.take(2)
+        queue.toggleShuffle()
+        queue.play(page, 0)
+
+        queue.extendContext(page, tracks)
+        queue.toggleShuffle()
+
+        assertEquals(listOf("b", "c", "d"), queue.snapshot.upcoming.map { it.id })
+    }
+
     private fun track(id: String) = Track(
         id = id,
         title = "Track $id",
