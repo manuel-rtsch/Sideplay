@@ -66,7 +66,9 @@ fun SidetrackAppearanceScreen(hostBacked: Boolean, onBack: () -> Unit) {
             }
             item {
                 SidetrackItem(
-                    "Now Playing backdrop",
+                    // Short on purpose: the Sidephone's row has room for a label and its On/Off,
+                    // and "Now Playing backdrop" pushed the value off the edge.
+                    "Backdrop",
                     secondary = if (backdrop.enabled) "On" else "Off",
                     secondaryToEnd = true,
                     toggleable = backdrop.enabled,

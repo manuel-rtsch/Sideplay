@@ -47,7 +47,7 @@ class SidetrackAppearanceScreenTest {
 
         compose.onNodeWithText("Compact layout").assertExists()
         compose.onNodeWithText("Compact rows").assertExists()
-        compose.onNodeWithText("Now Playing backdrop").assertExists()
+        compose.onNodeWithText("Backdrop").assertExists()
         compose.onNodeWithText("Match your Sidephone case").assertExists()
     }
 
@@ -64,7 +64,7 @@ class SidetrackAppearanceScreenTest {
         show(hostBacked = true)
 
         compose.onNodeWithText("Compact rows").assertExists()
-        compose.onNodeWithText("Now Playing backdrop").assertExists()
+        compose.onNodeWithText("Backdrop").assertExists()
 
         compose.onNodeWithText("Compact rows").performClick()
         compose.waitForIdle()
@@ -76,12 +76,12 @@ class SidetrackAppearanceScreenTest {
     fun `the backdrop row toggles the now playing setting`() {
         show(hostBacked = true)
 
-        compose.onNodeWithText("Now Playing backdrop").performClick()
+        compose.onNodeWithText("Backdrop").performClick()
         compose.waitForIdle()
 
         assertTrue(settings.nowPlayingBackdrop)
 
-        compose.onNodeWithText("Now Playing backdrop").performClick()
+        compose.onNodeWithText("Backdrop").performClick()
         compose.waitForIdle()
 
         assertFalse(settings.nowPlayingBackdrop)

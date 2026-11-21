@@ -76,7 +76,7 @@ class ArtworkBackdropTest {
         compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
         // The backdrop toggle lives in Settings; a third square would crowd the bar.
-        compose.onNodeWithContentDescription("Now Playing backdrop off").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Backdrop off").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
     }
 
@@ -95,6 +95,6 @@ class ArtworkBackdropTest {
         compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
         compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Now Playing backdrop on").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Backdrop on").assertDoesNotExist()
     }
 }
