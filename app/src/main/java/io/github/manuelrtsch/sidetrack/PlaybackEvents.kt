@@ -6,6 +6,7 @@ import io.github.manuelrtsch.sidetrack.data.consumeHaltStop
 import io.github.manuelrtsch.sidetrack.data.halting
 import io.github.manuelrtsch.sidetrack.data.notePlayRequest
 import io.github.manuelrtsch.sidetrack.playback.PlaybackEvent
+import io.github.manuelrtsch.sidetrack.playback.debugName
 import kotlin.math.abs
 
 /**
@@ -33,7 +34,7 @@ internal class PlaybackEvents(
         } ?: clock.value
         session?.notePlayRequest(event.playRequestId, event.uri)
         SidetrackDebug.log(
-            "event type=${event::class.simpleName} uri=${event.uri.orEmpty()} positionMs=$position"
+            "event type=${event.debugName} uri=${event.uri.orEmpty()} positionMs=$position"
         )
         when (event) {
             is PlaybackEvent.Loading -> if (matchesCurrent(event.uri) && !clock.staleResumeEvent(position)) {

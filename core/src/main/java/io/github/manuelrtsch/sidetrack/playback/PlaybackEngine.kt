@@ -196,3 +196,26 @@ sealed interface PlaybackEvent {
         private fun JSONObject.optLongOrNull(key: String): Long? = if (has(key) && !isNull(key)) optLong(key) else null
     }
 }
+
+/**
+ * Stable name for diagnostics.
+ *
+ * R8 renames these nested classes in minified builds, so `event::class.simpleName` turns a useful
+ * log line into `ed2`/`ad2` exactly when a field capture is being read. Keep the mapping here
+ * instead of relying on an obfuscation rule; the sealed hierarchy makes this `when` exhaustive.
+ */
+val PlaybackEvent.debugName: String
+    get() = when (this) {
+        is PlaybackEvent.Loading -> "Loading"
+        is PlaybackEvent.Playing -> "Playing"
+        is PlaybackEvent.Paused -> "Paused"
+        is PlaybackEvent.Position -> "Position"
+        is PlaybackEvent.Seeked -> "Seeked"
+        is PlaybackEvent.PositionCorrection -> "PositionCorrection"
+        is PlaybackEvent.Shuffle -> "Shuffle"
+        is PlaybackEvent.Repeat -> "Repeat"
+        is PlaybackEvent.Ended -> "Ended"
+        is PlaybackEvent.Stopped -> "Stopped"
+        is PlaybackEvent.Unavailable -> "Unavailable"
+        is PlaybackEvent.Unknown -> "Unknown(${type})"
+    }
