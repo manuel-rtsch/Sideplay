@@ -222,21 +222,37 @@ class NativeSpotifyGatewayTest {
         assertEquals(2, native.connects)
     }
 
-    @Test fun `catalog session rebuild leaves playback without a player until the next play`() = runTest {
+    @Test fun `catalog session never rebuilds while a player is attached`() = runTest {
         val native = FakeNative()
         val gateway = NativeSpotifyGateway(native) { "token" }
         gateway.connect("token")
         assertTrue(native.playerCreated)
-        // The session went invalid while the app sat idle, so a catalog read rebuilds it. The
-        // engine drops the player with the old session and the catalog path does not create one.
+        // The session went invalid while the app sat idle. Rebuilding it from a catalog read used
+        // to drop the player and leave playback reporting a playing track with no audio; the read
+        // now fails instead and leaves the rebuild to the playback path.
         native.setTokenOk = false
 
-        gateway.ensureSession()
+        val failure = runCatching { gateway.ensureSession() }.exceptionOrNull()
 
-        assertEquals(false, native.playerCreated)
-        // The next play has to notice and create a player, otherwise every load fails with
-        // PLAYER_NOT_CREATED ("Track unavailable") until the app is restarted.
+        assertEquals(SpotifyFailure.NotConnected, (failure as SpotifyGatewayException).failure)
+        assertEquals(1, native.connects)
+        assertTrue(native.playerCreated)
+        // The playback path is allowed to rebuild: it recreates the player afterwards.
         assertTrue(gateway.ensureConnected())
+        assertTrue(native.playerCreated)
+        assertEquals(2, native.connects)
+    }
+
+    @Test fun `ensureConnected adopts a player left by another gateway instance`() = runTest {
+        val native = FakeNative()
+        NativeSpotifyGateway(native) { "token" }.connect("token")
+        val fresh = NativeSpotifyGateway(native) { "token" }
+
+        // The new instance's Kotlin flag starts false, but the native session still owns the
+        // player. Reconnecting here would drop the live track for no reason.
+        assertEquals(false, fresh.ensureConnected())
+
+        assertEquals(1, native.connects)
         assertTrue(native.playerCreated)
     }
 

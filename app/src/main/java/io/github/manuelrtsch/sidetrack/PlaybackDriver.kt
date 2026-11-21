@@ -207,7 +207,9 @@ internal class PlaybackDriver(
         effects.markEpisodeFinished(current)
         // The sleep timer wins over repeat and autoplay: this is where the queue must stop.
         if (session?.playback?.consumeEndOfTrackTimer() == true) {
-            store.update { it.copy(isPlaying = false) }
+            // Same stop as the queue end: the native player is already at the end, so leaving it
+            // there makes the drain mistake the finished track for a stalled connection.
+            effects.stopAtQueueEnd()
             return
         }
         if (endOfEpisode(current)) return
