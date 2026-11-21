@@ -25,6 +25,12 @@ import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 
 /**
+ * The cap on a playlist name: long enough for a record title, short enough that a pasted paragraph
+ * does not become the name of a menu row.
+ */
+internal const val PLAYLIST_NAME_MAX = 100
+
+/**
  * Names a new playlist for the active service. [onSubmit] receives the trimmed name; the caller
  * creates it on the service and opens the result. The create row is only reachable once a name is
  * typed, so an empty or whitespace-only name cannot create an untitled playlist.
@@ -57,7 +63,7 @@ fun CreatePlaylistScreen(
             item(key = "name") {
                 SidekitTextField(
                     name,
-                    { name = it },
+                    { typed -> name = typed.take(PLAYLIST_NAME_MAX) },
                     Modifier.fillMaxWidth().padding(horizontal = SidekitTheme.spacing.itemPadding)
                         .semantics { contentDescription = "Playlist name" },
                     textStyle = SidekitTheme.typography.title,

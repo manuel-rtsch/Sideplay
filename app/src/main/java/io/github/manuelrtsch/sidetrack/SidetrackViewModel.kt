@@ -472,6 +472,13 @@ class SidetrackViewModel(
 
     fun retryLibrary() = library.retry()
 
+    /** Session-only: whether the search field was put away, so the history stays readable. */
+    val searchFocusDismissed = search.searchFocusDismissed
+
+    fun dismissSearchFocus() = search.dismissSearchFocus()
+
+    fun restoreSearchFocus() = search.restoreSearchFocus()
+
     fun setSearchDraft(query: String) = search.setDraftQuery(query)
 
     fun submitSearch(query: String) = search.submitSearch(query)

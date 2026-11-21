@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -41,6 +42,7 @@ import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
+import hrln.interactive.sidekit.design.components.rememberT9Active
 import hrln.interactive.sidekit.design.icons.SidekitIcon
 import hrln.interactive.sidekit.design.input.KeypadModule
 import hrln.interactive.sidekit.design.input.LocalKeypad
@@ -76,7 +78,10 @@ fun SearchScreen(
     onDismissNowPlaying: () -> Unit,
     onDraftQuery: (String) -> Unit = {},
     onClearHistory: () -> Unit = {},
-    onRestoreHistory: (List<String>) -> Unit = {}
+    onRestoreHistory: (List<String>) -> Unit = {},
+    focusDismissed: Boolean = false,
+    onDismissFocus: () -> Unit = {},
+    onRestoreFocus: () -> Unit = {}
 ) {
     val field = rememberTextFieldState(search.query)
     val typed = field.text.toString()
@@ -98,9 +103,12 @@ fun SearchScreen(
     // Home and returning) must show the text that was typed, not the last submitted term.
     LaunchedEffect(typed) { onDraftQuery(typed) }
     val searchFocus = remember { FocusRequester() }
-    // Decided once on entry. Clearing the history must not turn this true: focusing the field would
-    // open the keyboard over the Undo that was just offered.
-    val focusFieldOnEntry = remember { search.searchHistory.isEmpty() || search.query.isNotEmpty() }
+    // The field takes the keyboard when there is a term to refine, or when the keypad itself types
+    // (there the keypad is the input, not a hint). An empty field on a screen with history leaves
+    // the keyboard down, and a field the user put away stays away for this visit. Clearing the
+    // history therefore never opens the keyboard over the Undo that was just offered.
+    val keypadTypes = rememberT9Active()
+    val autoFocus = searchFieldAutoFocus(search.query, keypadTypes, focusDismissed)
     // Clearing every term is one press and one Undo, like the other list-wide deletions in the app.
     var clearedHistory by remember { mutableStateOf<List<String>?>(null) }
     val undoWindow = rememberUndoWindow { clearedHistory = null }
@@ -199,6 +207,15 @@ fun SearchScreen(
                 SidekitTextField(
                     field,
                     Modifier.fillMaxWidth().semantics { contentDescription = "Search" }
+                        // Coming back to the field is the user asking for the keyboard; leaving it
+                        // after typing is the user putting it away.
+                        .onFocusChanged { focus ->
+                            if (focus.hasFocus) {
+                                onRestoreFocus()
+                            } else if (typed.isNotEmpty()) {
+                                onDismissFocus()
+                            }
+                        }
                         .onPreviewKeyEvent { event ->
                             // Let the typing keypads keep Enter for their own completion engine: their
                             // OK both takes a suggestion and submits the field.
@@ -216,10 +233,9 @@ fun SearchScreen(
                     focusRequester = searchFocus,
                     focusOnKeypad = true,
                     singleLine = true,
-                    // Open on the history when there is one to read: the keyboard would hide it.
-                    // Coming back from results (a query is already set) focuses the field again
-                    // so the term can be refined without another tap.
-                    autoFocus = focusFieldOnEntry,
+                    // The rule above decides; see searchFieldAutoFocus for why history wins on an
+                    // empty field.
+                    autoFocus = autoFocus,
                     onDone = submit
                 )
             }
@@ -251,6 +267,9 @@ fun SearchScreen(
                             Modifier.listFade(listState, index + 2),
                             onOpen = {
                                 field.setTextAndPlaceCursorAtEnd(term)
+                                // Picking a remembered term is not typing: the results page is the
+                                // next thing to read, not the keyboard.
+                                onDismissFocus()
                                 onSearch(term)
                             },
                             onRemove = {
@@ -275,6 +294,13 @@ fun SearchScreen(
         }
     }
 }
+
+/**
+ * Whether the landing field takes the keyboard when the screen opens. A term already there is
+ * worth refining; a keypad that types letters is the input itself. Everything else leaves the
+ * history readable, and a dismissal lasts the visit.
+ */
+internal fun searchFieldAutoFocus(query: String, keypadTypes: Boolean, dismissed: Boolean): Boolean = !dismissed && (query.isNotEmpty() || keypadTypes)
 
 /**
  * Keys that submit the field on the attached keypad. T9 and QWERTY own Enter while they type

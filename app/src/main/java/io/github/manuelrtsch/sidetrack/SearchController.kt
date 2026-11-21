@@ -5,6 +5,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -25,6 +28,13 @@ internal class SearchController(
 ) {
 
     private var searchJob: Job? = null
+
+    /**
+     * Whether the user put the landing field away during this visit. Session-only on purpose: it is
+     * not a preference, so it is not persisted, and it resets when the app starts again.
+     */
+    private val focusDismissed = MutableStateFlow(false)
+    val searchFocusDismissed: StateFlow<Boolean> = focusDismissed.asStateFlow()
 
     private fun playbackNotice(error: Exception): String = serviceMessage(error, online())
 
@@ -122,6 +132,16 @@ internal class SearchController(
                 }
             }
         }
+    }
+
+    /** The user left the landing field: do not open the keyboard over the history on return. */
+    fun dismissSearchFocus() {
+        focusDismissed.value = true
+    }
+
+    /** The user came back to the field: the next visit may open the keyboard again. */
+    fun restoreSearchFocus() {
+        focusDismissed.value = false
     }
 
     /**

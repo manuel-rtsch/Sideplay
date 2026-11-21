@@ -331,11 +331,15 @@ internal fun NavGraphBuilder.libraryGraph(nav: NavHostController) {
         val vm = entry.sidetrackViewModel(nav)
         val search by vm.searchState.collectAsStateWithLifecycle()
         val chrome by vm.chromeState.collectAsStateWithLifecycle()
+        val focusDismissed by vm.searchFocusDismissed.collectAsStateWithLifecycle()
         SearchScreen(
             search,
             chrome,
             supportedScopes = vm.supportedScopes,
             onBack = { nav.popBackStack() },
+            focusDismissed = focusDismissed,
+            onDismissFocus = vm::dismissSearchFocus,
+            onRestoreFocus = vm::restoreSearchFocus,
             onDraftQuery = vm::setSearchDraft,
             onSearch = { query ->
                 vm.submitSearch(query)

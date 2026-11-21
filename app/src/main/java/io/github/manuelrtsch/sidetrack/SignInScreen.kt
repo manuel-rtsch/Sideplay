@@ -3,14 +3,11 @@ package io.github.manuelrtsch.sidetrack
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,10 +15,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -30,7 +27,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.action.SideAction
 import hrln.interactive.sidekit.design.action.withNotice
@@ -83,9 +79,19 @@ fun SignInScreen(
     onPasswordSignIn: (serverUrl: String, username: String, password: String) -> Unit = { _, _, _ -> }
 ) {
     val colors = SidekitTheme.colors
+    val focusManager = LocalFocusManager.current
     var serverUrl by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    // Typing on the keypad with nothing focused starts in the first blank field, so the form is
+    // filled in order. Every field is blank before the demo values count, and then the server
+    // takes the typing; a user who later clears the username moves the fallback there.
+    val keypadTarget = when {
+        serverUrl.isBlank() -> 0
+        username.isBlank() -> 1
+        password.isBlank() -> 2
+        else -> -1
+    }
     val submit = if (passwordAuth) {
         {
             val (server, user, secret) = passwordSignInValues(serverUrl, username, password, defaults)
@@ -146,7 +152,11 @@ fun SignInScreen(
                         label = "Server",
                         placeholder = defaults?.serverUrl ?: "host:port",
                         modifier = modifier,
-                        focusOnKeypad = true
+                        focusOnKeypad = keypadTarget == 0,
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Next,
+                        onNext = { focusManager.moveFocus(FocusDirection.Next) },
+                        maxLength = SERVER_MAX
                     )
                 }
                 row("username") { modifier ->
@@ -155,16 +165,28 @@ fun SignInScreen(
                         { username = it },
                         label = "Username",
                         placeholder = defaults?.username,
-                        modifier = modifier
+                        modifier = modifier,
+                        focusOnKeypad = keypadTarget == 1,
+                        contentType = ContentType.Username,
+                        imeAction = ImeAction.Next,
+                        onNext = { focusManager.moveFocus(FocusDirection.Next) },
+                        maxLength = USERNAME_MAX
                     )
                 }
                 row("password") { modifier ->
-                    PasswordField(
+                    FormField(
                         password,
                         { password = it },
                         label = "Password",
                         placeholder = defaults?.password,
-                        modifier = modifier
+                        modifier = modifier,
+                        focusOnKeypad = keypadTarget == 2,
+                        keyboardType = KeyboardType.Password,
+                        autoCorrectEnabled = false,
+                        masked = true,
+                        contentType = ContentType.Password,
+                        imeAction = ImeAction.Done,
+                        onDone = submit
                     )
                 }
             }
@@ -220,7 +242,15 @@ private fun FormField(
     label: String,
     placeholder: String?,
     modifier: Modifier = Modifier,
-    focusOnKeypad: Boolean = false
+    focusOnKeypad: Boolean = false,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    autoCorrectEnabled: Boolean? = null,
+    masked: Boolean = false,
+    imeAction: ImeAction = ImeAction.Done,
+    onNext: (() -> Unit)? = null,
+    onDone: (() -> Unit)? = null,
+    contentType: ContentType? = null,
+    maxLength: Int? = null
 ) {
     SidekitCard(
         modifier.fillMaxWidth()
@@ -236,63 +266,23 @@ private fun FormField(
             )
             SidekitTextField(
                 value,
-                onValueChange,
+                { typed -> onValueChange(if (maxLength != null) typed.take(maxLength) else typed) },
                 Modifier.fillMaxWidth(),
                 placeholder = placeholder,
                 focusOnKeypad = focusOnKeypad,
-                singleLine = true
+                singleLine = true,
+                keyboardType = keyboardType,
+                autoCorrectEnabled = autoCorrectEnabled,
+                masked = masked,
+                imeAction = imeAction,
+                onNext = onNext,
+                onDone = onDone,
+                contentType = contentType
             )
         }
     }
 }
 
-/**
- * A masked password field in the same card as [FormField]. SidekitTextField has no visual
- * transformation, and the keypad's T9 bar is for search, not secrets.
- */
-@Composable
-private fun PasswordField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    placeholder: String?,
-    modifier: Modifier = Modifier
-) {
-    val colors = SidekitTheme.colors
-    SidekitCard(
-        modifier.fillMaxWidth()
-            .heightIn(min = SidekitTheme.spacing.itemHeight)
-            .fieldFocus()
-    ) {
-        Column(Modifier.fillMaxWidth().align(Alignment.CenterStart)) {
-            SidekitText(
-                label,
-                style = SidekitTheme.typography.caption,
-                color = colors.surfaceA6,
-                maxLines = 1
-            )
-            Box(Modifier.fillMaxWidth()) {
-                if (value.isEmpty() && placeholder != null) {
-                    SidekitText(
-                        placeholder,
-                        style = SidekitTheme.typography.body,
-                        color = colors.surfaceA6
-                    )
-                }
-                BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = SidekitTheme.typography.body.copy(color = colors.light),
-                    singleLine = true,
-                    cursorBrush = SolidColor(colors.light),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done
-                    )
-                )
-            }
-        }
-    }
-}
+/** The caps that keep a pasted blob from filling the field: a URL and a user name have limits. */
+internal const val SERVER_MAX = 255
+internal const val USERNAME_MAX = 64
