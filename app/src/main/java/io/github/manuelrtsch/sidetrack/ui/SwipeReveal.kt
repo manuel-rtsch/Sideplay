@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import hrln.interactive.sidekit.design.icons.SidekitIcon
@@ -123,6 +124,8 @@ fun SidekitSwipeRow(
     action: SwipeAction? = null,
     revealOnFocus: Boolean = true,
     onLongPress: (() -> Unit)? = null,
+    /** Height of the action square, so it matches the row that reveals it. */
+    rowHeight: Dp = rememberMediaRowMetrics().height,
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
@@ -139,7 +142,6 @@ fun SidekitSwipeRow(
         destructive = true,
         onClick = onDelete
     )
-    val rowHeight = rememberMediaRowMetrics().height
     val buttonPx = with(density) { rowHeight.toPx() }
     val gapPx = with(density) { spacing.itemOuterGap.toPx() }
     val radiusPx = with(density) { 36.dp.toPx() }

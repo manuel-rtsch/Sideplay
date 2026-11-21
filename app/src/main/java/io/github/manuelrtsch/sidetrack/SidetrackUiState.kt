@@ -49,6 +49,8 @@ data class SidetrackUiState(
     val pendingArtists: Set<String> = emptySet(),
     val filter: LibraryFilter = LibraryFilter.LikedSongs,
     val searchScopes: Set<SearchScope> = SearchScope.entries.toSet(),
+    /** Recent search terms, newest first; the landing screen offers them under "Search in". */
+    val searchHistory: List<String> = emptyList(),
     val query: String = "",
     val audioQuality: AudioQuality = AudioQuality.High,
     val normalization: Boolean = false,

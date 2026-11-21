@@ -40,15 +40,12 @@ class SearchCategorySwitchFocusTest {
         compose.setContent {
             SidekitTheme(spacing = SidekitSpacing.Compact) {
                 SidekitCanvas {
-                    SearchScreen(
+                    SearchResultsScreen(
                         SearchUiState(query = query, searchResults = results, searchScopes = scopes),
                         SavedUiState(),
                         ChromeUiState(),
                         supportedScopes = supportedScopes,
                         onBack = {},
-                        onQuery = {},
-                        onClear = {},
-                        onToggleScope = {},
                         onTrack = {},
                         onAddToQueue = {},
                         onArtist = {},

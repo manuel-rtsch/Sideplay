@@ -66,6 +66,7 @@ data class SearchUiState(
     val searchHasMore: Set<SearchScope> = emptySet(),
     val searchMorePending: Set<SearchScope> = emptySet(),
     val searchScopes: Set<SearchScope> = SearchScope.entries.toSet(),
+    val searchHistory: List<String> = emptyList(),
     val query: String = ""
 )
 
@@ -152,6 +153,7 @@ val SidetrackUiState.search: SearchUiState
         searchHasMore = searchHasMore,
         searchMorePending = searchMorePending,
         searchScopes = searchScopes,
+        searchHistory = searchHistory,
         query = query
     )
 

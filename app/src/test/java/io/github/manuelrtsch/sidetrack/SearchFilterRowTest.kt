@@ -1,9 +1,16 @@
 package io.github.manuelrtsch.sidetrack
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -14,6 +21,9 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import hrln.interactive.sidekit.design.canvas.SidekitCanvas
+import hrln.interactive.sidekit.design.input.Keypad
+import hrln.interactive.sidekit.design.input.KeypadModule
+import hrln.interactive.sidekit.design.input.T9Words
 import hrln.interactive.sidekit.design.theme.SidekitSpacing
 import hrln.interactive.sidekit.design.theme.SidekitTheme
 import kotlinx.coroutines.runBlocking
@@ -42,15 +52,12 @@ class SearchFilterRowTest {
         compose.setContent {
             SidekitTheme(spacing = SidekitSpacing.Compact) {
                 SidekitCanvas {
-                    SearchScreen(
+                    SearchResultsScreen(
                         state,
                         SavedUiState(),
                         ChromeUiState(),
                         supportedScopes = supportedScopes,
                         onBack = {},
-                        onQuery = {},
-                        onClear = {},
-                        onToggleScope = {},
                         onTrack = {},
                         onAddToQueue = {},
                         onArtist = {},
@@ -172,10 +179,127 @@ class SearchFilterRowTest {
     }
 
     @Test
-    fun typingStateKeepsTheSearchInRow() {
-        show(query = "n")
+    fun theSearchActionSubmitsTheTypedTerm() {
+        var submitted: String? = null
+        compose.setContent {
+            SidekitTheme(spacing = SidekitSpacing.Compact) {
+                SidekitCanvas {
+                    SearchScreen(
+                        SearchUiState(query = "night"),
+                        ChromeUiState(),
+                        onBack = {},
+                        onSearch = { submitted = it },
+                        onClear = {},
+                        onRemoveHistory = {},
+                        onScopes = {},
+                        onNowPlaying = {},
+                        onDismissNotice = {},
+                        onDismissNowPlaying = {}
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Clear search history").assertDoesNotExist()
+        compose.onNodeWithText("Search").performClick()
+        assertEquals("night", submitted)
+    }
+
+    @Test
+    fun theGamepadsASubmitsFromTheField() {
+        var submitted: String? = null
+        compose.setContent {
+            val scope = rememberCoroutineScope()
+            val keypad = remember { Keypad.forTesting(scope, T9Words.Empty, KeypadModule.GamePad) }
+            SidekitTheme(spacing = SidekitSpacing.Compact) {
+                SidekitCanvas(keypad = keypad) {
+                    SearchScreen(
+                        SearchUiState(query = "night"),
+                        ChromeUiState(),
+                        onBack = {},
+                        onSearch = { submitted = it },
+                        onClear = {},
+                        onRemoveHistory = {},
+                        onScopes = {},
+                        onNowPlaying = {},
+                        onDismissNotice = {},
+                        onDismissNowPlaying = {}
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).requestFocus()
+        compose.waitForIdle()
+        compose.onNode(hasSetTextAction()).performKeyInput { pressKey(Key.ButtonA) }
+        assertEquals("night", submitted)
+    }
+
+    @Test
+    fun clearingTheHistoryOffersUndoWithoutOpeningTheKeyboard() {
+        var search by mutableStateOf(SearchUiState(searchHistory = listOf("night", "aurora")))
+        var cleared = 0
+        var restored: List<String>? = null
+        compose.setContent {
+            SidekitTheme(spacing = SidekitSpacing.Compact) {
+                SidekitCanvas {
+                    SearchScreen(
+                        search,
+                        ChromeUiState(),
+                        onBack = {},
+                        onSearch = {},
+                        onClear = {},
+                        onRemoveHistory = {},
+                        onScopes = {},
+                        onNowPlaying = {},
+                        onDismissNotice = {},
+                        onDismissNowPlaying = {},
+                        onClearHistory = {
+                            cleared += 1
+                            search = search.copy(searchHistory = emptyList())
+                        },
+                        onRestoreHistory = {
+                            restored = it
+                            search = search.copy(searchHistory = it)
+                        }
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Clear search history").performClick()
+        compose.waitForIdle()
+        assertEquals(1, cleared)
+        // Clearing must leave focus on the bar: focusing the field would raise the keyboard over Undo.
+        compose.onNode(hasSetTextAction()).assertIsNotFocused()
+        compose.onNodeWithText("Undo").performClick()
+        assertEquals(listOf("night", "aurora"), restored)
+    }
+
+    @Test
+    fun landingKeepsTheSearchInRowAndOffersHistory() {
+        compose.setContent {
+            SidekitTheme(spacing = SidekitSpacing.Compact) {
+                SidekitCanvas {
+                    SearchScreen(
+                        SearchUiState(searchHistory = listOf("night", "aurora")),
+                        ChromeUiState(),
+                        onBack = {},
+                        onSearch = {},
+                        onClear = {},
+                        onRemoveHistory = {},
+                        onScopes = {},
+                        onNowPlaying = {},
+                        onDismissNotice = {},
+                        onDismissNowPlaying = {}
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
         compose.onNodeWithText("Search in").assertExists()
-        compose.onNodeWithText("Keep typing").assertExists()
+        compose.onNodeWithText("RECENT SEARCHES").assertExists()
+        compose.onNodeWithText("night").assertExists()
         compose.onNodeWithContentDescription("Tracks").assertDoesNotExist()
     }
 }

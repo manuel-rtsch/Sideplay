@@ -36,17 +36,18 @@ screen's normal actions, and a three-button menu is three narrow squares.
 | --- | --- | --- | --- | --- |
 | 1 | Home "Sidetrack" (`HomeScreen.kt:61`) | Settings (⚙ Settings) | wide, text + icon | Primary (accent) |
 | 2 | History (`HistoryScreen.kt:42`) | Now playing (♪) | wide, text + icon | Primary |
-| 3 | Search (`SearchScreen.kt:187`) | Now playing (♪) | wide, text + icon | Primary |
-| 4 | Search in — scope list (`SearchScreen.kt:448`) | Now playing (♪) | wide, text + icon | Primary |
-| 5 | Library (`LibraryScreen.kt:92`) | New playlist (only on the Playlists category, and only where the service can create playlists) → Now playing | wide ×1–2, text + icon | Primary, Primary |
-| 6 | Album / Playlist (`CollectionScreen.kt:88`) | Add to queue (when the collection has items) → Now playing | wide ×1–2, text + icon | Primary, Primary |
-| 7 | Artist (`ArtistScreen.kt:74`) | Artist radio (when the service supports radio) → Now playing | wide ×1–2, text + icon | Primary, Primary |
-| 8 | Podcast show (`PodcastScreens.kt:91`) | Add latest to queue (when the show has episodes) → Now playing | wide ×1–2, text + icon | Primary, Primary |
-| 9 | **Now Playing** (`NowPlayingScreen.kt:114`) | Open queue → Song radio **or** Episode notes → Sleep timer / "Sleep timer on" | **icon-only squares ×3** | **all Primary (accent), Secondary while the timer is armed** |
-| 10 | **Queue** (`QueueScreen.kt:323`) | Sleep timer → Clear upcoming (when there is an upcoming track) | wide, text + icon ×1–2 | Primary; **Destructive** |
-| 11 | Welcome — keyboard onboarding (`SidetrackOnboardingScreen.kt:116`) | About Sidetrack (ⓘ) | wide, text + icon | Primary |
+| 3 | Search (`SearchScreen.kt:56`) | Now playing (♪) | wide, text + icon | Primary |
+| 4 | Search results (`SearchScreen.kt:217`) | Search in → Now playing (♪) | wide ×1–2, text + icon | Primary, Primary |
+| 5 | Search in — scope list (`SearchScreen.kt:516`) | Now playing (♪) | wide, text + icon | Primary |
+| 6 | Library (`LibraryScreen.kt:92`) | New playlist (only on the Playlists category, and only where the service can create playlists) → Now playing | wide ×1–2, text + icon | Primary, Primary |
+| 7 | Album / Playlist (`CollectionScreen.kt:88`) | Add to queue (when the collection has items) → Now playing | wide ×1–2, text + icon | Primary, Primary |
+| 8 | Artist (`ArtistScreen.kt:74`) | Artist radio (when the service supports radio) → Now playing | wide ×1–2, text + icon | Primary, Primary |
+| 9 | Podcast show (`PodcastScreens.kt:91`) | Add latest to queue (when the show has episodes) → Now playing | wide ×1–2, text + icon | Primary, Primary |
+| 10 | **Now Playing** (`NowPlayingScreen.kt:114`) | Open queue → Song radio **or** Episode notes → Sleep timer / "Sleep timer on" | **icon-only squares ×3** | **all Primary (accent), Secondary while the timer is armed** |
+| 11 | **Queue** (`QueueScreen.kt:323`) | Sleep timer → Clear upcoming (when there is an upcoming track) | wide, text + icon ×1–2 | Primary; **Destructive** |
+| 12 | Welcome — keyboard onboarding (`SidetrackOnboardingScreen.kt:116`) | About Sidetrack (ⓘ) | wide, text + icon | Primary |
 
-Eleven menus, twenty-odd buttons, and only #9 and #10 ever use an icon-only button.
+Twelve menus, twenty-odd buttons, and only #10 and #11 ever use an icon-only button.
 
 ## Screens where the Options key does nothing
 

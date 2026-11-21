@@ -67,6 +67,9 @@ internal fun rememberSearchViewport(
     var restoreListFocus by remember { mutableStateOf(true) }
     var restoreFocusIndex by remember { mutableStateOf<Int?>(null) }
     var focusFilterRow by remember { mutableStateOf(false) }
+    // The results page has no search field to hand the cursor down from. When the first page
+    // arrives (or the page opens with results already cached), the category row takes it instead.
+    var entryFocusPending by remember { mutableStateOf(true) }
     val restoreFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -104,6 +107,12 @@ internal fun rememberSearchViewport(
                 it in supportedScopes && it in includedScopes && results.sizeFor(it) > 0
             }?.let { if (it != scope) setScope(it) }
         }
+    }
+
+    LaunchedEffect(showFilters, failed) {
+        if (!showFilters || failed || !entryFocusPending) return@LaunchedEffect
+        entryFocusPending = false
+        focusFilterRow = true
     }
 
     val switchScope: (SearchScope, Boolean) -> Unit = { next, fromRow ->

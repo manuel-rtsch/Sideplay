@@ -22,6 +22,7 @@ internal val ARTIST = "$ROOT/artist/{key}"
 internal val CREATE_PLAYLIST = "$ROOT/playlist/create"
 internal val ADD_TO_PLAYLIST = "$ROOT/playlist/add/{key}"
 internal val SEARCH = SIDE_PLAY_SEARCH
+internal val SEARCH_RESULTS = "$ROOT/search/results"
 internal val SEARCH_SCOPES = "$ROOT/search/scopes"
 internal val NOW_PLAYING = "$ROOT/now-playing"
 internal val QUEUE = "$ROOT/queue"
@@ -63,6 +64,7 @@ private val KEYPAD_BACK_ROUTES = setOf(
     ADD_TO_PLAYLIST,
     ARTIST,
     SEARCH,
+    SEARCH_RESULTS,
     SEARCH_SCOPES,
     NOW_PLAYING,
     QUEUE,

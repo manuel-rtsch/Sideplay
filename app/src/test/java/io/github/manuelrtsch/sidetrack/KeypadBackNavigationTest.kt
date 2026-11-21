@@ -13,6 +13,7 @@ class KeypadBackNavigationTest {
             "sidetrack/collection/{key}",
             "sidetrack/artist/{key}",
             "sidetrack/search",
+            "sidetrack/search/results",
             "sidetrack/search/scopes",
             "sidetrack/now-playing",
             "sidetrack/queue",

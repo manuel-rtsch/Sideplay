@@ -309,15 +309,30 @@ class SidetrackScreenshotTest {
         )
     }
 
-    @Test fun search() = shoot("sidetrack_search") {
+    @Test fun searchLanding() = shoot("sidetrack_search_landing") {
         SearchScreen(
+            SearchUiState(
+                query = "night",
+                searchHistory = listOf("night", "aurora", "midnight radio")
+            ),
+            state.chrome,
+            onBack = {},
+            onSearch = {},
+            onClear = {},
+            onRemoveHistory = {},
+            onScopes = {},
+            onNowPlaying = {},
+            onDismissNotice = {},
+            onDismissNowPlaying = {}
+        )
+    }
+
+    @Test fun search() = shoot("sidetrack_search") {
+        SearchResultsScreen(
             state.copy(query = "night").search,
             state.copy(query = "night").saved,
             state.copy(query = "night").chrome,
             onBack = {},
-            onQuery = {},
-            onClear = {},
-            onToggleScope = {},
             onTrack = {},
             onAddToQueue = {},
             onArtist = {},

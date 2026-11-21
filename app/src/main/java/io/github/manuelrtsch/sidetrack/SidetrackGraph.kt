@@ -82,6 +82,7 @@ internal fun MissingCollectionScreen(
 internal fun NavBackStackEntry.sidetrackViewModel(nav: NavHostController): SidetrackViewModel {
     val parent = remember(this) { nav.getBackStackEntry(ROOT) }
     val context = LocalContext.current.applicationContext
+    val localSettings = remember(context) { SidetrackLocalSettings(context) }
     val appSession = remember(context) { AppSessions.get(context) }
     // Observe the selected service so provisioning it recreates the ViewModel for its runtime.
     appSession.active.collectAsStateWithLifecycle()
@@ -114,7 +115,9 @@ internal fun NavBackStackEntry.sidetrackViewModel(nav: NavHostController): Sidet
                         episodeMetaRepository = runtime.episodeMeta,
                         session = runtime,
                         openBrowser = openBrowser,
-                        clearArtworkCache = { RemoteArtwork.clear(context) }
+                        clearArtworkCache = { RemoteArtwork.clear(context) },
+                        loadSearchHistory = { localSettings.searchHistory },
+                        saveSearchHistory = { localSettings.searchHistory = it }
                     )
                 }
             }

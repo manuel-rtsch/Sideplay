@@ -46,6 +46,21 @@ internal class SidetrackLocalSettings(context: Context) {
 
     fun observeCompactRows(onChange: () -> Unit): () -> Unit = observe(KEY_COMPACT_ROWS, onChange)
 
+    /**
+     * Recent search terms, newest first. Stored as one string because SharedPreferences' string
+     * set has no order, and a search history is only useful in the order it was searched.
+     */
+    var searchHistory: List<String>
+        get() = prefs.getString(KEY_SEARCH_HISTORY, null)
+            ?.split(SEARCH_HISTORY_SEPARATOR)
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        set(value) {
+            prefs.edit()
+                .putString(KEY_SEARCH_HISTORY, value.joinToString(SEARCH_HISTORY_SEPARATOR))
+                .apply()
+        }
+
     private fun observe(key: String, onChange: () -> Unit): () -> Unit {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changed ->
             if (changed == null || changed == key) onChange()
@@ -88,6 +103,11 @@ internal class SidetrackLocalSettings(context: Context) {
         private const val KEY_NOW_PLAYING_BACKDROP = "artwork_backdrop"
         private const val KEY_COMPACT_ROWS = "compact_rows"
         private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
+        private const val KEY_SEARCH_HISTORY = "search_history"
+
+        // A query cannot contain a unit separator: the field is single-line and this is not a
+        // character the keypad can type.
+        private const val SEARCH_HISTORY_SEPARATOR = "\u001F"
 
         // Must match the key SharedPreferencesSidekitThemeStore reads and writes.
         private const val KEY_COMPACT_LAYOUT = "compact_layout"

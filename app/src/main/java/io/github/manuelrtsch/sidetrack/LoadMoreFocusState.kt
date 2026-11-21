@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import hrln.interactive.sidekit.design.components.ItemColour
 import hrln.interactive.sidekit.design.components.SidekitText
@@ -45,6 +46,8 @@ fun TerminalRow(
     label: String,
     modifier: Modifier = Modifier,
     secondary: String? = null,
+    /** Overrides the muted trailing value, e.g. on a coloured surface where it would disappear. */
+    secondaryColor: Color? = null,
     linkArrow: Boolean = secondary == null,
     onClick: (() -> Unit)? = null
 ) {
@@ -69,7 +72,9 @@ fun TerminalRow(
                     secondary,
                     Modifier.weight(1f),
                     style = SidekitTheme.typography.small,
-                    color = SidekitTheme.colors.surfaceA6,
+                    // Compact rows sit on the success fill, where the muted surface tone has
+                    // almost no contrast. The value is as bright as the label beside it.
+                    color = secondaryColor ?: SidekitTheme.colors.light,
                     maxLines = 1,
                     textAlign = TextAlign.End
                 )

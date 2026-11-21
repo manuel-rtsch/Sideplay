@@ -44,8 +44,9 @@ class SidetrackGraphTest {
         assertTrue(keypadBackIsLeftAction("sidetrack/artist-radio/{key}", canPop = true))
     }
 
-    @Test fun `search and its scope sheet take Back`() {
+    @Test fun `search, its results and its scope sheet take Back`() {
         assertTrue(keypadBackIsLeftAction(SIDE_PLAY_SEARCH, canPop = true))
+        assertTrue(keypadBackIsLeftAction("sidetrack/search/results", canPop = true))
         assertTrue(keypadBackIsLeftAction("sidetrack/search/scopes", canPop = true))
     }
 

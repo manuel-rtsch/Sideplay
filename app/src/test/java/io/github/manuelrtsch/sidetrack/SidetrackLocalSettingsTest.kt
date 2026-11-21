@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import hrln.interactive.sidekit.sdk.theme.SharedPreferencesSidekitThemeStore
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -43,6 +44,21 @@ class SidetrackLocalSettingsTest {
         SidetrackLocalSettings(context).compactRows = true
 
         assertTrue(SidetrackLocalSettings(context).compactRows)
+    }
+
+    @Test fun `search history keeps its order across instances`() {
+        SidetrackLocalSettings(context).searchHistory = listOf("night", "aurora", "midnight")
+
+        assertEquals(
+            listOf("night", "aurora", "midnight"),
+            SidetrackLocalSettings(context).searchHistory
+        )
+    }
+
+    @Test fun `an empty search history is not a row of blanks`() {
+        SidetrackLocalSettings(context).searchHistory = emptyList()
+
+        assertTrue(SidetrackLocalSettings(context).searchHistory.isEmpty())
     }
 
     @Test fun `an existing install has not seen the welcome yet`() {

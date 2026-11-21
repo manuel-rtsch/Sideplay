@@ -330,17 +330,38 @@ internal fun NavGraphBuilder.libraryGraph(nav: NavHostController) {
     composable(SEARCH) { entry ->
         val vm = entry.sidetrackViewModel(nav)
         val search by vm.searchState.collectAsStateWithLifecycle()
-        val saved by vm.savedState.collectAsStateWithLifecycle()
         val chrome by vm.chromeState.collectAsStateWithLifecycle()
         SearchScreen(
+            search,
+            chrome,
+            supportedScopes = vm.supportedScopes,
+            onBack = { nav.popBackStack() },
+            onDraftQuery = vm::setSearchDraft,
+            onSearch = { query ->
+                vm.submitSearch(query)
+                nav.navigate(SEARCH_RESULTS) { launchSingleTop = true }
+            },
+            onClear = vm::clearQuery,
+            onRemoveHistory = vm::removeSearchHistory,
+            onClearHistory = vm::clearSearchHistory,
+            onRestoreHistory = vm::restoreSearchHistory,
+            onScopes = { nav.navigate(SEARCH_SCOPES) },
+            onNowPlaying = { nav.openNowPlaying(vm) },
+            onDismissNotice = vm::dismissNotice,
+            onDismissNowPlaying = vm::dismissNowPlayingNotice
+        )
+    }
+    composable(SEARCH_RESULTS) { entry ->
+        val vm = entry.sidetrackViewModel(nav)
+        val search by vm.searchState.collectAsStateWithLifecycle()
+        val saved by vm.savedState.collectAsStateWithLifecycle()
+        val chrome by vm.chromeState.collectAsStateWithLifecycle()
+        SearchResultsScreen(
             search,
             saved,
             chrome,
             supportedScopes = vm.supportedScopes,
             onBack = { nav.popBackStack() },
-            onQuery = vm::setQuery,
-            onClear = vm::clearQuery,
-            onToggleScope = vm::toggleScope,
             onTrack = { track -> nav.openTrack(vm, track) { vm.playNow(track) } },
             onAddToQueue = vm::addToQueue,
             onArtist = { nav.navigate(artistRoute(it.key)) },

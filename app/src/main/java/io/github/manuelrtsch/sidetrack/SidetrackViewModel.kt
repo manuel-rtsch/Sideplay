@@ -50,7 +50,9 @@ class SidetrackViewModel(
     private val session: ServiceRuntime? = null,
     private val openBrowser: (suspend (String) -> Unit)? = null,
     private val clearArtworkCache: () -> Unit = {},
-    private val simulatePlayback: Boolean = true
+    private val simulatePlayback: Boolean = true,
+    private val loadSearchHistory: () -> List<String> = { emptyList() },
+    private val saveSearchHistory: (List<String>) -> Unit = {}
 ) : ViewModel() {
     /** The active service's identity; fixtures without a runtime use the local service. */
     private val service: ServiceId get() = session?.service ?: ServiceId.Local
@@ -75,7 +77,8 @@ class SidetrackViewModel(
     private val store = UiStateStore(
         SidetrackUiState(
             signedIn = session?.signedIn?.value ?: false,
-            searchScopes = supportedScopes
+            searchScopes = supportedScopes,
+            searchHistory = loadSearchHistory()
         )
     )
     val state: StateFlow<SidetrackUiState> = store.state
@@ -274,6 +277,7 @@ class SidetrackViewModel(
         catalog = catalog,
         supportedScopes = { supportedScopes },
         online = { session?.isOnline != false },
+        saveSearchHistory = saveSearchHistory,
         coroutineScope = viewModelScope
     )
 
@@ -468,7 +472,15 @@ class SidetrackViewModel(
 
     fun retryLibrary() = library.retry()
 
-    fun setQuery(query: String) = search.setQuery(query)
+    fun setSearchDraft(query: String) = search.setDraftQuery(query)
+
+    fun submitSearch(query: String) = search.submitSearch(query)
+
+    fun removeSearchHistory(query: String) = search.removeSearchHistory(query)
+
+    fun clearSearchHistory() = search.clearSearchHistory()
+
+    fun restoreSearchHistory(history: List<String>) = search.restoreSearchHistory(history)
 
     fun clearQuery() = search.clearQuery()
 

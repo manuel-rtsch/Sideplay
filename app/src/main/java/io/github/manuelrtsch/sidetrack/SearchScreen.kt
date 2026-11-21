@@ -1,12 +1,17 @@
 package io.github.manuelrtsch.sidetrack
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,26 +33,300 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import hrln.interactive.sidekit.design.action.ActionMotion
 import hrln.interactive.sidekit.design.action.ActionTone
 import hrln.interactive.sidekit.design.action.SideAction
+import hrln.interactive.sidekit.design.components.SidekitCompactItem
 import hrln.interactive.sidekit.design.components.SidekitList
 import hrln.interactive.sidekit.design.components.SidekitScaffold
 import hrln.interactive.sidekit.design.components.SidekitTextField
 import hrln.interactive.sidekit.design.components.listFade
 import hrln.interactive.sidekit.design.icons.SidekitIcon
+import hrln.interactive.sidekit.design.input.KeypadModule
+import hrln.interactive.sidekit.design.input.LocalKeypad
 import hrln.interactive.sidekit.design.theme.SidekitTheme
+import hrln.interactive.sidekit.sdk.ui.UndoWindowLifecycle
+import hrln.interactive.sidekit.sdk.ui.rememberUndoWindow
+import io.github.manuelrtsch.sidetrack.ui.SidekitSwipeRow
+import io.github.manuelrtsch.sidetrack.ui.SwipeRevealGroup
 import io.github.manuelrtsch.sidetrack.ui.rememberRowGutterState
+import io.github.manuelrtsch.sidetrack.ui.rememberSwipeRevealGroup
 
+/**
+ * The search landing screen: type a term, choose where to look, or pick a recent search.
+ *
+ * This screen is deliberately about making a search, not about browsing one. Submitting hands the
+ * query to [SearchResultsScreen]; Back from there returns here with the term still in the field,
+ * so the term and the categories can be changed without losing the results page to a half-typed
+ * query. The history lives below "Search in" and scrolls with the page.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
+    search: SearchUiState,
+    chrome: ChromeUiState,
+    supportedScopes: Set<SearchScope> = SearchScope.entries.toSet(),
+    onBack: () -> Unit,
+    onSearch: (String) -> Unit,
+    onClear: () -> Unit,
+    onRemoveHistory: (String) -> Unit,
+    onScopes: () -> Unit,
+    onNowPlaying: () -> Unit,
+    onDismissNotice: () -> Unit,
+    onDismissNowPlaying: () -> Unit,
+    onDraftQuery: (String) -> Unit = {},
+    onClearHistory: () -> Unit = {},
+    onRestoreHistory: (List<String>) -> Unit = {}
+) {
+    val field = rememberTextFieldState(search.query)
+    val typed = field.text.toString()
+    val keypad = LocalKeypad.current
+    val term = typed.trim()
+    val canSearch = term.length >= 2
+    // One way to submit, shared by the Search action, the IME's Done and the keypads that have no
+    // letters of their own (A on the game controller, centre on the Sundial).
+    val submit = {
+        if (canSearch) {
+            field.setTextAndPlaceCursorAtEnd(term)
+            onSearch(term)
+        }
+    }
+    // The soft keyboard is an overlay, and this screen is small: with it up, the only things worth
+    // the remaining height are the field and the category row. The bar returns when it is down.
+    val keyboardVisible = WindowInsets.isImeVisible
+    // Keep an abandoned draft in the shared state: leaving to change categories (or going back to
+    // Home and returning) must show the text that was typed, not the last submitted term.
+    LaunchedEffect(typed) { onDraftQuery(typed) }
+    val searchFocus = remember { FocusRequester() }
+    // Decided once on entry. Clearing the history must not turn this true: focusing the field would
+    // open the keyboard over the Undo that was just offered.
+    val focusFieldOnEntry = remember { search.searchHistory.isEmpty() || search.query.isNotEmpty() }
+    // Clearing every term is one press and one Undo, like the other list-wide deletions in the app.
+    var clearedHistory by remember { mutableStateOf<List<String>?>(null) }
+    val undoWindow = rememberUndoWindow { clearedHistory = null }
+    UndoWindowLifecycle(undoWindow) { clearedHistory = null }
+    // The summary describes what the next search will actually look at: a category the service
+    // cannot answer is never part of the choice, so all of the answerable ones in means
+    // "Everything". The right side must stay on one line, so when one category is left out it is
+    // named instead of listing the rest.
+    val pickedScopes = SearchScope.entries.filter { it in supportedScopes && it in search.searchScopes }
+    val leftOutScopes = SearchScope.entries.filter { it in supportedScopes && it !in search.searchScopes }
+    val scopeSummary = when {
+        supportedScopes.isEmpty() -> "Nothing"
+        pickedScopes.size == supportedScopes.size -> "Everything"
+        pickedScopes.isEmpty() -> "Nothing"
+        pickedScopes.size == 1 -> pickedScopes.single().label
+        leftOutScopes.size == 1 -> "All but " + leftOutScopes.single().label
+        else -> pickedScopes.joinToString(", ") { it.label }
+    }
+    // A notice owns the bar; Clear is part of the screen's own bar and steps aside with it.
+    val notice = chrome.notice != null || chrome.nowPlayingNotice != null
+    val clearHistory = if (typed.isEmpty() && !keyboardVisible && !notice && search.searchHistory.isNotEmpty()) {
+        SideAction(
+            "clearHistory",
+            "Clear",
+            SidekitIcon.DeleteForever,
+            tone = ActionTone.Destructive,
+            contentDescription = "Clear search history",
+            onClick = {
+                clearedHistory = search.searchHistory
+                undoWindow.start()
+                onClearHistory()
+            }
+        )
+    } else {
+        null
+    }
+    val undo = clearedHistory?.let { previous ->
+        SideAction.undo("undoClearHistory", "Undo", "Undo clear search history") {
+            undoWindow.cancel()
+            clearedHistory = null
+            onRestoreHistory(previous)
+        }
+    }
+    val clear = if (typed.isNotEmpty() && !keyboardVisible && !notice) {
+        SideAction.square(
+            "clear",
+            SidekitIcon.Close,
+            "Clear search",
+            tone = ActionTone.Muted,
+            onClick = {
+                field.setTextAndPlaceCursorAtEnd("")
+                onClear()
+            }
+        )
+    } else {
+        null
+    }
+    val back = sidetrackBack("Back", onBack).first()
+    val actions = when {
+        keyboardVisible -> emptyList()
+
+        undo != null -> undoBar(back, undo)
+
+        else -> sidetrackActions(
+            chrome,
+            onDismissNotice,
+            onNowPlaying,
+            onDismissNowPlaying,
+            buildList {
+                add(back)
+                when {
+                    canSearch -> add(
+                        SideAction("search", "Search", SidekitIcon.Search, motion = ActionMotion.Forward) {
+                            submit()
+                        }
+                    )
+
+                    clearHistory != null -> add(clearHistory)
+                }
+            }
+        )
+    }
+    // One row may be swiped open at a time, like the queue: opening a history row's Remove closes
+    // the one before it.
+    val swipes = rememberSwipeRevealGroup()
+    SidekitScaffold(
+        title = null,
+        actions = actions,
+        trailingActions = listOfNotNull(clear),
+        options = if (keyboardVisible) emptyList() else sidetrackOptions(onNowPlaying = onNowPlaying),
+        header = {
+            Box(
+                Modifier.fillMaxWidth().height(SidekitTheme.spacing.headerHeight)
+                    .padding(horizontal = SidekitTheme.spacing.itemPadding).padding(top = SidekitTheme.spacing.headerPaddingTop)
+            ) {
+                SidekitTextField(
+                    field,
+                    Modifier.fillMaxWidth().semantics { contentDescription = "Search" }
+                        .onPreviewKeyEvent { event ->
+                            // Let the typing keypads keep Enter for their own completion engine: their
+                            // OK both takes a suggestion and submits the field.
+                            if (event.type != KeyEventType.KeyDown || event.nativeKeyEvent.repeatCount != 0) {
+                                false
+                            } else if (isSearchSubmitKey(event.key, keypad?.module)) {
+                                submit()
+                                true
+                            } else {
+                                false
+                            }
+                        },
+                    textStyle = SidekitTheme.typography.title,
+                    placeholder = "Search",
+                    focusRequester = searchFocus,
+                    focusOnKeypad = true,
+                    singleLine = true,
+                    // Open on the history when there is one to read: the keyboard would hide it.
+                    // Coming back from results (a query is already set) focuses the field again
+                    // so the term can be refined without another tap.
+                    autoFocus = focusFieldOnEntry,
+                    onDone = submit
+                )
+            }
+        }
+    ) { padding ->
+        val listState = rememberLazyListState()
+        val history = search.searchHistory
+        SidekitList(padding, state = listState) {
+            item(key = "scopes") {
+                TerminalRow(
+                    "Search in",
+                    modifier = Modifier.listFade(listState, 0),
+                    secondary = scopeSummary,
+                    // The badge is a green success surface. The muted surface tone disappears on
+                    // it; the value has to read as bright as the label beside it.
+                    secondaryColor = SidekitTheme.colors.light,
+                    onClick = onScopes
+                )
+            }
+            if (history.isNotEmpty()) {
+                if (!keyboardVisible) {
+                    item(key = "historyLabel") {
+                        SectionLabel("Recent searches", Modifier.listFade(listState, 1))
+                    }
+                    itemsIndexed(history, key = { _, term -> "history:$term" }) { index, term ->
+                        SearchHistoryRow(
+                            term,
+                            swipes,
+                            Modifier.listFade(listState, index + 2),
+                            onOpen = {
+                                field.setTextAndPlaceCursorAtEnd(term)
+                                onSearch(term)
+                            },
+                            onRemove = {
+                                swipes.closeAll()
+                                onRemoveHistory(term)
+                            }
+                        )
+                    }
+                }
+            } else {
+                item(key = "hint") {
+                    EmptyMessage(
+                        when {
+                            typed.isBlank() -> "Type at least two letters"
+                            typed.trim().length < 2 -> "Keep typing"
+                            else -> "Press Done to search"
+                        },
+                        Modifier.listFade(listState, 1)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Keys that submit the field on the attached keypad. T9 and QWERTY own Enter while they type
+ * (Sidekit's completion bar takes it first), so only the letterless keypads are handled here.
+ */
+internal fun isSearchSubmitKey(key: Key, module: KeypadModule?): Boolean {
+    if (module?.typesOnKeypad == true) return false
+    return when (key) {
+        Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> true
+        Key.ButtonA -> module == KeypadModule.GamePad
+        Key.MediaPlayPause -> module == KeypadModule.Sundial
+        else -> false
+    }
+}
+
+/**
+ * One remembered term. Swipe left (or focus it with the keypad) to reveal Remove; tapping the row
+ * searches for it again. This is the SDK's compact item on the SDK's swipe row, so it behaves like
+ * every other removable row in the app.
+ */
+@Composable
+private fun SearchHistoryRow(
+    term: String,
+    group: SwipeRevealGroup,
+    modifier: Modifier = Modifier,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit
+) {
+    SidekitSwipeRow(
+        key = "history:$term",
+        group = group,
+        modifier = modifier,
+        onDelete = onRemove,
+        deleteLabel = "Remove",
+        rowHeight = SidekitTheme.spacing.compactRowHeight
+    ) {
+        SidekitCompactItem(term, icon = SidekitIcon.Search, onClick = onOpen)
+    }
+}
+
+/**
+ * The results page for the submitted query. The term is the page's title and cannot be edited
+ * here: changing it means going back one step, where the field still holds it. Categories can be
+ * changed from Options without losing the term, and toggling one searches again in place.
+ */
+@Composable
+fun SearchResultsScreen(
     search: SearchUiState,
     saved: SavedUiState,
     chrome: ChromeUiState,
     supportedScopes: Set<SearchScope> = SearchScope.entries.toSet(),
     onBack: () -> Unit,
-    onQuery: (String) -> Unit,
-    onClear: () -> Unit,
-    onToggleScope: (SearchScope) -> Unit,
     onTrack: (Track) -> Unit,
     onAddToQueue: (Track) -> Unit,
     onArtist: (Artist) -> Unit,
@@ -78,32 +357,11 @@ fun SearchScreen(
         onAddToQueue,
         onAddToPlaylist = onAddToPlaylist
     )
-    val baseActions = remember(search.query) {
-        buildList {
-            add(sidetrackBack("Back", onBack).first())
-            if (search.query.isNotEmpty()) add(SideAction("clear", "Clear", SidekitIcon.Close, tone = ActionTone.Muted, onClick = onClear))
-        }
-    }
+    val baseActions = listOf(sidetrackBack("Back", onBack).first())
     val actions = rowActionBarActions(
         rows.bar,
         sidetrackActions(chrome, onDismissNotice, onNowPlaying, onDismissNowPlaying, baseActions)
     )
-    // The summary describes what the next search will actually look at: a category the service
-    // cannot answer is never part of the choice, so all of the answerable ones in means
-    // "Everything". The right side must stay on one line, so when one category is left out it is
-    // named instead of listing the rest.
-    val pickedScopes = SearchScope.entries.filter { it in supportedScopes && it in search.searchScopes }
-    val leftOutScopes = SearchScope.entries.filter { it in supportedScopes && it !in search.searchScopes }
-    val scopeSummary = when {
-        supportedScopes.isEmpty() -> "Nothing"
-        pickedScopes.size == supportedScopes.size -> "Everything"
-        pickedScopes.isEmpty() -> "Nothing"
-        pickedScopes.size == 1 -> pickedScopes.single().label
-        leftOutScopes.size == 1 -> "All but " + leftOutScopes.single().label
-        else -> pickedScopes.joinToString(", ") { it.label }
-    }
-    val searchFocus = remember { FocusRequester() }
-    val scopesFocus = remember { FocusRequester() }
     val filterFocus = remember { SearchScope.entries.associateWith { FocusRequester() } }
     val moreFocus = rememberLoadMoreFocus()
     // Artist/album/playlist/show rows share one gutter state so their action squares behave like
@@ -113,15 +371,11 @@ fun SearchScreen(
     // move focus before the physical key comes up. The screen root uses the same gate to swallow
     // the repeats and the release so the switch cannot walk sideways through every scope.
     val holdGate = remember { CategoryHoldGate() }
-    // The category buttons only choose which result list is shown. Which categories get queried is
-    // still decided on the "Search in" page, and that page is reached from the idle/typing state.
-    // The selection survives a trip into a result and back.
     var scope by rememberSaveable { mutableStateOf(SearchScope.Tracks) }
-    val hasQuery = search.query.trim().length >= 2
+    val query = search.query.trim()
+    val hasQuery = query.length >= 2
     val loading = hasQuery && search.searchPending && results.isEmpty
     val failed = hasQuery && !search.searchPending && search.searchError != null && results.isEmpty
-    // Once there is a query the page is about browsing results: either the list or the reason there
-    // is none. The "Search in" row belongs to the state where the query is still being typed.
     val showFilters = hasQuery && !loading && !failed
     // The categories that are both in the queried set and answerable by the connected service.
     // Moving the row (and the selection) only ever walks these.
@@ -129,62 +383,13 @@ fun SearchScreen(
     // A failed search replaces the list with the retry body. Drop a page that was in flight so a
     // later retry cannot mistake its larger result set for a page that just arrived.
     LaunchedEffect(failed) { if (failed) moreFocus.reset() }
-    // Enter in the search field hands the keypad to the result categories. Up walks back out: first
-    // result to the category buttons, category buttons to the field, so typing and browsing never
-    // fight over keys. Preview handlers run before the focused row's own D-pad handling, which
-    // would otherwise consume Up and let focus search fall back to the search field.
-    val scopesModifier = Modifier
-        .focusRequester(scopesFocus)
-        .onPreviewKeyEvent { event ->
-            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
-                searchFocus.requestFocus()
-                true
-            } else {
-                false
-            }
-        }
-    val filterRowModifier = Modifier.onPreviewKeyEvent { event ->
-        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
-            searchFocus.requestFocus()
-            true
-        } else {
-            false
-        }
-    }
-    // The category row sits above the list, so Up from the first result returns to it. Down from
-    // the last row is left to focus search, which finds the action bar below the list.
     SidekitScaffold(
-        title = null,
+        title = query.ifBlank { "Search" },
         modifier = Modifier
             .dismissRowActionsOnVerticalKey(rows.bar)
             .consumeCategoryHoldRepeats(holdGate),
-        header = {
-            Box(
-                Modifier.fillMaxWidth().height(SidekitTheme.spacing.headerHeight)
-                    .padding(horizontal = SidekitTheme.spacing.itemPadding).padding(top = SidekitTheme.spacing.headerPaddingTop)
-            ) {
-                SidekitTextField(
-                    search.query,
-                    onQuery,
-                    Modifier.fillMaxWidth().semantics { contentDescription = "Search" },
-                    textStyle = SidekitTheme.typography.title,
-                    placeholder = "Search",
-                    focusRequester = searchFocus,
-                    focusOnKeypad = true,
-                    singleLine = true,
-                    autoFocus = true,
-                    onDone = {
-                        when {
-                            showFilters -> filterFocus.getValue(scope).requestFocus()
-                            !hasQuery -> scopesFocus.requestFocus()
-                            else -> Unit
-                        }
-                    }
-                )
-            }
-        },
         actions = actions,
-        options = sidetrackOptions(onNowPlaying = onNowPlaying)
+        options = sidetrackOptions(searchInOption(onScopes), onNowPlaying = onNowPlaying)
     ) { padding ->
         val listState = rememberLazyListState()
         rows.bar.dismissOnScroll(listState)
@@ -214,6 +419,15 @@ fun SearchScreen(
             moreFocus.reset()
             listState.scrollToItem(0)
         }
+        if (!hasQuery) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                EmptyMessage(
+                    "Type at least two letters",
+                    hint = "Go back to the search field"
+                )
+            }
+            return@SidekitScaffold
+        }
         if (failed) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 StatusScreen(
@@ -225,174 +439,142 @@ fun SearchScreen(
             }
             return@SidekitScaffold
         }
+        if (loading) {
+            SidekitList(padding, state = listState) {
+                item(key = "loading") {
+                    EmptyMessage(
+                        "Searching for \"$query\"",
+                        Modifier.listFade(listState, 0),
+                        hint = "Searching"
+                    )
+                }
+            }
+            return@SidekitScaffold
+        }
         val items = results.itemsFor(scope)
         val hasMore = scope in search.searchHasMore
         val morePending = scope in search.searchMorePending
         LoadMoreFocus(moreFocus, listState, items.size, morePending, firstItemListIndex = 1)
         SidekitList(padding, state = listState) {
-            if (!showFilters) {
-                // Idle and short-query states keep the "Search in" row: this is where the user
-                // decides what the next search will look at.
-                item(key = "scopes") {
-                    TerminalRow(
-                        "Search in",
-                        modifier = Modifier.listFade(listState, 0)
-                            .then(scopesModifier),
-                        secondary = scopeSummary,
-                        onClick = onScopes
+            // Like the library, the category row is the first list item: it scrolls away with
+            // the content and one category's list is shown at a time.
+            item(key = "filters") {
+                ContentFilterRow(
+                    filters = SearchScope.entries,
+                    selected = scope,
+                    icon = { it.icon },
+                    label = { it.label },
+                    onSelect = viewport.switchScope,
+                    focusRequesters = filterFocus,
+                    // A row action bar owns the focus while it is open. Leaving the category
+                    // buttons focusable let Android's exit from touch mode land on the first
+                    // one, select it, and dispose the very row whose bar had just opened.
+                    acceptsFocus = rows.bar.selection == null,
+                    // A category the service cannot answer stays in the row but takes no
+                    // click and no focus: it would only ever show an empty list.
+                    enabled = { it in supportedScopes && it in search.searchScopes },
+                    disabledLabel = { if (it in supportedScopes) "off" else "not available" },
+                    modifier = Modifier.listFade(listState, 0)
+                        .padding(bottom = SidekitTheme.spacing.pageGap)
+                )
+            }
+            if (items.isEmpty()) {
+                item(key = "empty") {
+                    EmptyMessage(
+                        "No ${scope.label.lowercase()} for \"$query\"",
+                        Modifier.listFade(listState, 1),
+                        hint = "Try another spelling or keyword"
                     )
-                }
-                when {
-                    search.query.isBlank() -> {
-                        item(key = "idle") {
-                            EmptyMessage(
-                                "Type at least two letters",
-                                Modifier.listFade(listState, 1)
-                            )
-                        }
-                    }
-
-                    search.query.trim().length < 2 -> {
-                        item(key = "short") {
-                            EmptyMessage(
-                                "Keep typing",
-                                Modifier.listFade(listState, 1)
-                            )
-                        }
-                    }
-
-                    else -> {
-                        item(key = "loading") {
-                            EmptyMessage(
-                                "Searching…",
-                                Modifier.listFade(listState, 1),
-                                hint = "Searching"
-                            )
-                        }
-                    }
                 }
             } else {
-                // Like the library, the category row is the first list item: it scrolls away with
-                // the content and one category's list is shown at a time.
-                item(key = "filters") {
-                    ContentFilterRow(
-                        filters = SearchScope.entries,
-                        selected = scope,
-                        icon = { it.icon },
-                        label = { it.label },
-                        onSelect = viewport.switchScope,
-                        focusRequesters = filterFocus,
-                        // A row action bar owns the focus while it is open. Leaving the category
-                        // buttons focusable let Android's exit from touch mode land on the first
-                        // one, select it, and dispose the very row whose bar had just opened.
-                        acceptsFocus = rows.bar.selection == null,
-                        // A category the service cannot answer stays in the row but takes no
-                        // click and no focus: it would only ever show an empty list.
-                        enabled = { it in supportedScopes && it in search.searchScopes },
-                        disabledLabel = { if (it in supportedScopes) "off" else "not available" },
-                        modifier = Modifier.listFade(listState, 0)
-                            .padding(bottom = SidekitTheme.spacing.pageGap)
-                            .then(filterRowModifier)
-                    )
-                }
-                if (items.isEmpty()) {
-                    item(key = "empty") {
-                        EmptyMessage(
-                            "No ${scope.label.lowercase()} for \"${search.query.trim()}\"",
-                            Modifier.listFade(listState, 1),
-                            hint = "Try another spelling or keyword"
+                itemsIndexed(
+                    items,
+                    key = { _, item -> searchItemKey(item) },
+                    contentType = { _, item -> searchItemKey(item).take(1) }
+                ) { index, item ->
+                    // Every result row carries its own focus target, so the load-more requester
+                    // travels with a row requester instead of riding a wrapper that has no
+                    // focusable. A held-arrow switch may restore exactly one row, which takes
+                    // the shared restore requester for its one index.
+                    val focusRequester = if (index == restoreFocusIndex) {
+                        restoreFocus
+                    } else {
+                        moreFocus.requesterFor(index)
+                    }
+                    val modifier = Modifier.listFade(listState, index + 1)
+                        .then(if (index == 0) viewport.firstRowModifier else Modifier)
+                    when (item) {
+                        is Track -> TrackRow(
+                            searchItemKey(item),
+                            item,
+                            rows,
+                            modifier,
+                            bodyModifier = holdSwitch,
+                            focusRequester = focusRequester
+                        ) { onTrack(item) }
+
+                        is Artist -> ArtistGutterRow(
+                            searchItemKey(item),
+                            item,
+                            searchGutters,
+                            rows.bar,
+                            modifier,
+                            bodyModifier = holdSwitch,
+                            focusRequester = focusRequester,
+                            canRadio = canRadio,
+                            onRadio = { onArtistRadio(item) },
+                            onClick = { onArtist(item) }
+                        )
+
+                        is Album -> AlbumGutterRow(
+                            searchItemKey(item),
+                            item,
+                            searchGutters,
+                            rows.bar,
+                            modifier,
+                            bodyModifier = holdSwitch,
+                            focusRequester = focusRequester,
+                            onAddToQueue = { onQueueAlbum(item) },
+                            onClick = { onAlbum(item) }
+                        )
+
+                        is Playlist -> PlaylistGutterRow(
+                            searchItemKey(item),
+                            item,
+                            searchGutters,
+                            rows.bar,
+                            modifier,
+                            bodyModifier = holdSwitch,
+                            focusRequester = focusRequester,
+                            onAddToQueue = { onQueuePlaylist(item) },
+                            onClick = { onPlaylist(item) }
+                        )
+
+                        is Show -> ShowGutterRow(
+                            searchItemKey(item),
+                            item,
+                            searchGutters,
+                            rows.bar,
+                            modifier,
+                            bodyModifier = holdSwitch,
+                            focusRequester = focusRequester,
+                            onAddLatestToQueue = { onAddLatestShowToQueue(item) },
+                            onClick = { onShow(item) }
                         )
                     }
-                } else {
-                    itemsIndexed(
-                        items,
-                        key = { _, item -> searchItemKey(item) },
-                        contentType = { _, item -> searchItemKey(item).take(1) }
-                    ) { index, item ->
-                        // Every result row carries its own focus target, so the load-more requester
-                        // travels with a row requester instead of riding a wrapper that has no
-                        // focusable. A held-arrow switch may restore exactly one row, which takes
-                        // the shared restore requester for its one index.
-                        val focusRequester = if (index == restoreFocusIndex) {
-                            restoreFocus
-                        } else {
-                            moreFocus.requesterFor(index)
-                        }
-                        val modifier = Modifier.listFade(listState, index + 1)
-                            .then(if (index == 0) viewport.firstRowModifier else Modifier)
-                        when (item) {
-                            is Track -> TrackRow(
-                                searchItemKey(item),
-                                item,
-                                rows,
-                                modifier,
-                                bodyModifier = holdSwitch,
-                                focusRequester = focusRequester
-                            ) { onTrack(item) }
-
-                            is Artist -> ArtistGutterRow(
-                                searchItemKey(item),
-                                item,
-                                searchGutters,
-                                rows.bar,
-                                modifier,
-                                bodyModifier = holdSwitch,
-                                focusRequester = focusRequester,
-                                canRadio = canRadio,
-                                onRadio = { onArtistRadio(item) },
-                                onClick = { onArtist(item) }
-                            )
-
-                            is Album -> AlbumGutterRow(
-                                searchItemKey(item),
-                                item,
-                                searchGutters,
-                                rows.bar,
-                                modifier,
-                                bodyModifier = holdSwitch,
-                                focusRequester = focusRequester,
-                                onAddToQueue = { onQueueAlbum(item) },
-                                onClick = { onAlbum(item) }
-                            )
-
-                            is Playlist -> PlaylistGutterRow(
-                                searchItemKey(item),
-                                item,
-                                searchGutters,
-                                rows.bar,
-                                modifier,
-                                bodyModifier = holdSwitch,
-                                focusRequester = focusRequester,
-                                onAddToQueue = { onQueuePlaylist(item) },
-                                onClick = { onPlaylist(item) }
-                            )
-
-                            is Show -> ShowGutterRow(
-                                searchItemKey(item),
-                                item,
-                                searchGutters,
-                                rows.bar,
-                                modifier,
-                                bodyModifier = holdSwitch,
-                                focusRequester = focusRequester,
-                                onAddLatestToQueue = { onAddLatestShowToQueue(item) },
-                                onClick = { onShow(item) }
-                            )
-                        }
-                    }
-                    if (hasMore) {
-                        item(key = "more") {
-                            LoadMoreRow(
-                                "Load more ${scope.label.lowercase()}",
-                                morePending,
-                                onLoadMore = {
-                                    moreFocus.onLoadMore(items.size)
-                                    onLoadMore(scope)
-                                },
-                                modifier = Modifier.listFade(listState, items.size + 1),
-                                focusState = moreFocus
-                            )
-                        }
+                }
+                if (hasMore) {
+                    item(key = "more") {
+                        LoadMoreRow(
+                            "Load more ${scope.label.lowercase()}",
+                            morePending,
+                            onLoadMore = {
+                                moreFocus.onLoadMore(items.size)
+                                onLoadMore(scope)
+                            },
+                            modifier = Modifier.listFade(listState, items.size + 1),
+                            focusState = moreFocus
+                        )
                     }
                 }
             }
@@ -427,6 +609,14 @@ private val SearchScope.icon: SidekitIcon
         SearchScope.Playlists -> SidekitIcon.QueueMusic
         SearchScope.Shows -> SidekitIcon.SmartDisplay
     }
+
+/** Opens the category chooser from the results page without giving up the term being read. */
+private fun searchInOption(onClick: () -> Unit) = SideAction(
+    key = "searchIn",
+    label = "Search in",
+    icon = SidekitIcon.Search,
+    onClick = onClick
+)
 
 /** Lets the user choose which search categories are queried without hiding them in Options. */
 @Composable

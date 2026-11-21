@@ -20,6 +20,7 @@ internal class SearchController(
     private val catalog: MediaCatalog,
     private val supportedScopes: () -> Set<SearchScope>,
     private val online: () -> Boolean,
+    private val saveSearchHistory: (List<String>) -> Unit,
     private val coroutineScope: CoroutineScope
 ) {
 
@@ -123,16 +124,64 @@ internal class SearchController(
         }
     }
 
-    fun setQuery(query: String) {
+    /**
+     * Keeps the screen's draft term in the shared state without searching it.
+     *
+     * The landing field may be left before it is submitted (to change categories, or to step back
+     * to Home). Storing the draft means returning to the screen shows the text that was there,
+     * instead of resurrecting the last submitted term.
+     */
+    fun setDraftQuery(query: String) {
+        if (store.value.query == query) return
+        store.update { it.copy(query = query) }
+    }
+
+    /**
+     * Starts a search for [rawQuery] and records it as the newest history entry.
+     *
+     * A search is a decision, not a keystroke: the landing screen submits once, so the pages of
+     * the previous query are dropped here and the term is written to history at the same moment.
+     */
+    fun submitSearch(rawQuery: String) {
+        val query = rawQuery.trim()
+        if (query.length < 2) return
+        val history = updatedSearchHistory(store.value.searchHistory, query)
         // A new query is a fresh browse: the pages of the previous query have no worth under it.
         store.update {
             it.copy(
                 query = query,
+                searchHistory = history,
                 searchPages = emptyMap(),
+                searchPending = false,
+                searchError = null,
                 searchMorePending = emptySet()
             )
         }
-        search(debounceMs = 250L)
+        saveSearchHistory(history)
+        search(debounceMs = 0L)
+    }
+
+    /** Forgets every remembered term. */
+    fun clearSearchHistory() {
+        if (store.value.searchHistory.isEmpty()) return
+        store.update { it.copy(searchHistory = emptyList()) }
+        saveSearchHistory(emptyList())
+    }
+
+    /** Puts a cleared history back, order included, when its Undo is taken. */
+    fun restoreSearchHistory(history: List<String>) {
+        if (history.isEmpty() || store.value.searchHistory == history) return
+        store.update { it.copy(searchHistory = history) }
+        saveSearchHistory(history)
+    }
+
+    /** Removes one remembered term. The term itself stays in the field if it is the active one. */
+    fun removeSearchHistory(query: String) {
+        val current = store.value.searchHistory
+        val next = removedSearchHistory(current, query)
+        if (next == current) return
+        store.update { it.copy(searchHistory = next) }
+        saveSearchHistory(next)
     }
 
     fun clearQuery() {
