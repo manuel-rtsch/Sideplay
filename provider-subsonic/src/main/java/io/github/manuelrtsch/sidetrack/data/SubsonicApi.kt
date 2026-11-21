@@ -31,8 +31,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** What the user typed on the Navidrome sign-in form. */
-data class NavidromeCredentials(
+/** What the user typed on a Subsonic-family sign-in form. */
+data class SubsonicCredentials(
     val serverUrl: String,
     val username: String,
     val password: String
@@ -41,29 +41,30 @@ data class NavidromeCredentials(
 /**
  * Normalises a server address into the Subsonic base URL.
  *
- * Navidrome is commonly reached as `host:4533` on a LAN, so a missing scheme becomes `http://`.
- * The trailing slash is dropped so endpoint paths join predictably.
+ * These servers are commonly reached as `host:4533` on a LAN, so a missing scheme becomes
+ * `http://`. The trailing slash is dropped so endpoint paths join predictably.
  */
-fun NavidromeCredentials.normalized(): NavidromeCredentials {
+fun SubsonicCredentials.normalized(): SubsonicCredentials {
     val trimmed = serverUrl.trim().trimEnd('/')
     val withScheme = if ("://" in trimmed) trimmed else "http://$trimmed"
     val parsed = runCatching { URL(withScheme) }.getOrNull()
     if (parsed == null || parsed.host.isNullOrEmpty() || (parsed.protocol != "http" && parsed.protocol != "https")) {
-        throw ServiceException(ServiceFailure.NotConnected, "Enter the Navidrome server address")
+        throw ServiceException(ServiceFailure.NotConnected, "Enter the server address")
     }
     return copy(serverUrl = withScheme, username = username.trim())
 }
 
 /**
- * The Subsonic/OpenSubsonic client Navidrome exposes at `/rest`.
+ * The Subsonic/OpenSubsonic client every family member exposes at `/rest`.
  *
  * Authentication follows the Subsonic 1.13 token rule: every request gets a fresh random salt and
  * sends `t = md5(password + salt)`, so the password itself never travels over the wire. The
  * password stays in the encrypted credential store because the token cannot be reused without it.
  */
-class NavidromeApi(
-    credentials: NavidromeCredentials,
-    private val transport: NavidromeTransport = HttpNavidromeTransport(),
+class SubsonicApi(
+    credentials: SubsonicCredentials,
+    private val family: SubsonicFamily = SubsonicFamily.Navidrome,
+    private val transport: SubsonicTransport = HttpSubsonicTransport(),
     private val salt: () -> String = defaultSalt()
 ) {
     private val credentials = credentials.normalized()
@@ -73,11 +74,11 @@ class NavidromeApi(
     suspend fun artists(): List<Artist> = call("getArtists").optJSONObject("artists")
         .objects("index")
         .flatMap { it.objects("artist") }
-        .map { it.toArtist { id -> coverUrl(id) } }
+        .map { it.toArtist(family.id) { id -> coverUrl(id) } }
 
-    suspend fun artist(id: String): Artist? = call("getArtist", "id" to id).optJSONObject("artist")?.toArtist { id -> coverUrl(id) }
+    suspend fun artist(id: String): Artist? = call("getArtist", "id" to id).optJSONObject("artist")?.toArtist(family.id) { id -> coverUrl(id) }
 
-    suspend fun album(id: String): Album? = call("getAlbum", "id" to id).optJSONObject("album")?.toAlbum { id -> coverUrl(id) }
+    suspend fun album(id: String): Album? = call("getAlbum", "id" to id).optJSONObject("album")?.toAlbum(family.id) { id -> coverUrl(id) }
 
     suspend fun albumList(offset: Int, limit: Int): Page<Album> = pageOf(
         call(
@@ -85,23 +86,23 @@ class NavidromeApi(
             "type" to "alphabeticalByName",
             "offset" to offset.toString(),
             "size" to limit.toString()
-        ).optJSONObject("albumList2").objects("album").map { it.toAlbum { id -> coverUrl(id) } },
+        ).optJSONObject("albumList2").objects("album").map { it.toAlbum(family.id) { id -> coverUrl(id) } },
         offset,
         limit
     )
 
     suspend fun starred(): List<LibraryEntry> {
         val starred = call("getStarred2").optJSONObject("starred2") ?: return emptyList()
-        return starred.objects("song").map { it.toTrack { id -> coverUrl(id) } } +
-            starred.objects("album").map { it.toAlbum { id -> coverUrl(id) } } +
-            starred.objects("artist").map { it.toArtist { id -> coverUrl(id) } }
+        return starred.objects("song").map { it.toTrack(family.id) { id -> coverUrl(id) } } +
+            starred.objects("album").map { it.toAlbum(family.id) { id -> coverUrl(id) } } +
+            starred.objects("artist").map { it.toArtist(family.id) { id -> coverUrl(id) } }
     }
 
     suspend fun playlists(): List<Playlist> = call("getPlaylists").optJSONObject("playlists").objects("playlist")
-        .map { it.toPlaylist({ id -> coverUrl(id) }, credentials.username) }
+        .map { it.toPlaylist(family.id, { id -> coverUrl(id) }, credentials.username) }
 
     suspend fun playlist(id: String): Playlist? = call("getPlaylist", "id" to id).optJSONObject("playlist")
-        ?.toPlaylist({ id -> coverUrl(id) }, credentials.username)
+        ?.toPlaylist(family.id, { id -> coverUrl(id) }, credentials.username)
 
     suspend fun search(query: String, scopes: Set<SearchScope>, offset: Int, limit: Int): SearchResults {
         val result = call(
@@ -115,9 +116,9 @@ class NavidromeApi(
             "songOffset" to offset.toString()
         ).optJSONObject("searchResult3") ?: return SearchResults()
         return SearchResults(
-            tracks = if (SearchScope.Tracks in scopes) result.objects("song").map { it.toTrack { id -> coverUrl(id) } } else emptyList(),
-            artists = if (SearchScope.Artists in scopes) result.objects("artist").map { it.toArtist { id -> coverUrl(id) } } else emptyList(),
-            albums = if (SearchScope.Albums in scopes) result.objects("album").map { it.toAlbum { id -> coverUrl(id) } } else emptyList(),
+            tracks = if (SearchScope.Tracks in scopes) result.objects("song").map { it.toTrack(family.id) { id -> coverUrl(id) } } else emptyList(),
+            artists = if (SearchScope.Artists in scopes) result.objects("artist").map { it.toArtist(family.id) { id -> coverUrl(id) } } else emptyList(),
+            albums = if (SearchScope.Albums in scopes) result.objects("album").map { it.toAlbum(family.id) { id -> coverUrl(id) } } else emptyList(),
             playlists = if (SearchScope.Playlists in scopes) {
                 // Subsonic search has no playlist scope, so filter the user's playlists locally.
                 playlists().filter { it.name.contains(query, ignoreCase = true) }.drop(offset).take(limit)
@@ -135,11 +136,11 @@ class NavidromeApi(
             call("getSimilarSongs", "id" to seed.id, "count" to limit.toString())
                 .optJSONObject("similarSongs")
         }
-        return response.objects("song").map { it.toTrack { id -> coverUrl(id) } }
+        return response.objects("song").map { it.toTrack(family.id) { id -> coverUrl(id) } }
     }
 
     suspend fun randomSongs(limit: Int): Page<Track> = pageOf(
-        call("getRandomSongs", "size" to limit.toString()).optJSONObject("randomSongs").objects("song").map { it.toTrack { id -> coverUrl(id) } },
+        call("getRandomSongs", "size" to limit.toString()).optJSONObject("randomSongs").objects("song").map { it.toTrack(family.id) { id -> coverUrl(id) } },
         0,
         limit
     )
@@ -157,8 +158,8 @@ class NavidromeApi(
 
     suspend fun createPlaylist(name: String): Playlist {
         val playlist = call("createPlaylist", "name" to name).optJSONObject("playlist")
-            ?.toPlaylist({ coverUrl(it) }, credentials.username)
-            ?: throw ServiceException(ServiceFailure.Unknown, "Navidrome did not return the new playlist")
+            ?.toPlaylist(family.id, { coverUrl(it) }, credentials.username)
+            ?: throw ServiceException(ServiceFailure.Unknown, "The server did not return the new playlist")
         // A playlist the account just created is always its own to edit.
         return playlist.copy(actions = PlaylistActions.All)
     }
@@ -169,7 +170,7 @@ class NavidromeApi(
         // send a write the owner rule already rules out: Subsonic has no permission flag, and a
         // foreign playlist only publishes its owner.
         if (current != null && !current.actions.canAddItems) {
-            throw ServiceException(ServiceFailure.NotAllowed, "This Navidrome playlist belongs to another account")
+            throw ServiceException(ServiceFailure.NotAllowed, "This playlist belongs to another account")
         }
         val before = current?.tracks?.size ?: 0
         call("updatePlaylist", "playlistId" to playlistId, "songIdToAdd" to songId)
@@ -187,7 +188,7 @@ class NavidromeApi(
     suspend fun removeFromPlaylist(playlistId: String, songId: String, index: Int? = null) {
         val current = playlist(playlistId)
         if (current != null && !current.actions.canRemoveItems) {
-            throw ServiceException(ServiceFailure.NotAllowed, "This Navidrome playlist belongs to another account")
+            throw ServiceException(ServiceFailure.NotAllowed, "This playlist belongs to another account")
         }
         val tracks = current?.tracks.orEmpty()
         val target = index?.takeIf { tracks.getOrNull(it)?.id == songId }
@@ -220,7 +221,7 @@ class NavidromeApi(
         if (envelope.optString("status", "ok") == "ok") return envelope
         val error = envelope.optJSONObject("error")
         val code = error?.optInt("code") ?: 0
-        val message = error?.optString("message").orEmpty().ifEmpty { "Navidrome rejected the request" }
+        val message = error?.optString("message").orEmpty().ifEmpty { "${family.displayName} rejected the request" }
         throw ServiceException(code.toFailure(), message)
     }
 
@@ -269,19 +270,20 @@ class NavidromeApi(
 }
 
 /**
- * The read side of Navidrome behind the neutral [MediaCatalog] contract.
+ * The read side of one Subsonic-family server behind the neutral [MediaCatalog] contract.
  *
  * Artwork and stream URLs are minted per call with a fresh token; the persisted identity is always
  * the Subsonic id inside [MediaKey], never the URL.
  */
-class NavidromeCatalog(
-    private val api: () -> NavidromeApi?,
+class SubsonicCatalog(
+    private val family: SubsonicFamily = SubsonicFamily.Navidrome,
+    private val api: () -> SubsonicApi?,
     private val settings: () -> PlaybackSettings = { PlaybackSettings() }
 ) : MediaCatalog,
     MediaLibraryWriter {
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
+    override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic
 
-    private fun client(): NavidromeApi = api() ?: throw ServiceException(ServiceFailure.NotConnected, "Connect Navidrome in Settings")
+    private fun client(): SubsonicApi = api() ?: throw ServiceException(ServiceFailure.NotConnected, "Connect your Subsonic server in Settings")
 
     override suspend fun library(section: LibrarySection, offset: Int, limit: Int): Page<LibraryEntry> = when (section) {
         LibrarySection.Liked -> {
@@ -313,7 +315,7 @@ class NavidromeCatalog(
                 artUrl = album.artUrl,
                 totalItems = album.trackCount,
                 saveable = true,
-                service = ServiceId.Navidrome
+                service = family.id
             )
         }
 
@@ -331,7 +333,7 @@ class NavidromeCatalog(
                 hasMore = offset + items.size < playlist.trackCount,
                 saveable = false,
                 playlistActions = playlist.actions,
-                service = ServiceId.Navidrome
+                service = family.id
             )
         }
 
@@ -361,7 +363,7 @@ class NavidromeCatalog(
     override suspend fun search(query: String, scopes: Set<SearchScope>, offset: Int, limit: Int): SearchResults = client().search(query, scopes, offset, limit)
 
     override suspend fun resolvePlaybackSource(item: MediaItem): PlaybackSource {
-        if (item.service != ServiceId.Navidrome) {
+        if (item.service != family.id) {
             throw ServiceException(ServiceFailure.TrackUnavailable, "This item belongs to another service")
         }
         val current = settings()

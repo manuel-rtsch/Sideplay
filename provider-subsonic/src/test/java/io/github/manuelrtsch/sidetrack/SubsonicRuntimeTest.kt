@@ -2,15 +2,16 @@ package io.github.manuelrtsch.sidetrack
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import io.github.manuelrtsch.sidetrack.auth.NavidromeAuth
-import io.github.manuelrtsch.sidetrack.auth.NavidromeCredentialStore
+import io.github.manuelrtsch.sidetrack.auth.SubsonicAuth
+import io.github.manuelrtsch.sidetrack.auth.SubsonicCredentialStore
 import io.github.manuelrtsch.sidetrack.data.FilePositionStore
-import io.github.manuelrtsch.sidetrack.data.NavidromeCredentials
-import io.github.manuelrtsch.sidetrack.data.NavidromeProvider
-import io.github.manuelrtsch.sidetrack.data.NavidromeRuntime
-import io.github.manuelrtsch.sidetrack.data.NavidromeService
 import io.github.manuelrtsch.sidetrack.data.PlaybackSettings
 import io.github.manuelrtsch.sidetrack.data.ResumePoint
+import io.github.manuelrtsch.sidetrack.data.SignInKind
+import io.github.manuelrtsch.sidetrack.data.SubsonicCredentials
+import io.github.manuelrtsch.sidetrack.data.SubsonicFamily
+import io.github.manuelrtsch.sidetrack.data.SubsonicProvider
+import io.github.manuelrtsch.sidetrack.data.SubsonicRuntime
 import io.github.manuelrtsch.sidetrack.storage.JsonStore
 import java.io.File
 import org.json.JSONObject
@@ -23,20 +24,20 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * The Navidrome runtime is the object the app actually talks to once a server is configured. The
- * network-facing parts (catalog, API client) are covered by [NavidromeApiTest]; these tests pin the
+ * The Subsonic-family runtime is the object the app actually talks to once a server is configured. The
+ * network-facing parts (catalog, API client) are covered by [SubsonicApiTest]; these tests pin the
  * account-scoped state that must survive process death and must never leak into another service:
  * sign-in state, settings, queue, history and the resume point.
  */
 @RunWith(RobolectricTestRunner::class)
-class NavidromeRuntimeTest {
+class SubsonicRuntimeTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
-    private fun credentials() = NavidromeCredentials("http://nas.local:4533", "joe", "sesame")
+    private fun credentials() = SubsonicCredentials("http://nas.local:4533", "joe", "sesame")
 
-    private fun auth(store: JsonStore) = NavidromeAuth(NavidromeCredentialStore(context, "navidrome-runtime-test", store))
+    private fun auth(store: JsonStore) = SubsonicAuth(SubsonicCredentialStore(context, "navidrome-runtime-test", store))
 
-    private fun runtime(store: JsonStore = MemoryStore()) = NavidromeRuntime(context, auth(store))
+    private fun runtime(store: JsonStore = MemoryStore()) = SubsonicRuntime(context, auth = auth(store))
 
     private fun track(id: String) = Track(
         id = id,
@@ -67,7 +68,7 @@ class NavidromeRuntimeTest {
         assertNull(runtime.queue.snapshot.current)
         assertTrue(runtime.history.snapshot().isEmpty())
         assertEquals(ServiceId.Navidrome, runtime.service)
-        assertEquals(ServiceCapabilities.Navidrome, runtime.capabilities)
+        assertEquals(ServiceCapabilities.Subsonic, runtime.capabilities)
         assertEquals(PlaybackSettings(), runtime.settings.value)
     }
 
@@ -153,18 +154,36 @@ class NavidromeRuntimeTest {
         assertNull(runtime.resumePoint)
         assertNull(runtime.queue.snapshot.current)
         assertTrue(runtime.history.snapshot().isEmpty())
-        assertNull(NavidromeCredentialStore(context, "navidrome-runtime-test", store).read())
+        assertNull(SubsonicCredentialStore(context, "navidrome-runtime-test", store).read())
     }
 
     @Test fun `the provider identity and password defaults come from the runtime`() {
         val runtime = runtime()
-        val provider = NavidromeProvider(runtime)
+        val provider = SubsonicProvider(runtime)
 
         assertEquals(ServiceId.Navidrome, provider.id)
         assertEquals("Navidrome", provider.displayName)
-        assertEquals(ServiceCapabilities.Navidrome, provider.capabilities)
-        assertEquals(NavidromeService.DISPLAY_NAME, provider.displayName)
+        assertEquals(ServiceCapabilities.Subsonic, provider.capabilities)
+        assertEquals(SubsonicFamily.Navidrome.displayName, provider.displayName)
         assertTrue(provider.createAuth() === runtime.auth)
+    }
+
+    @Test fun `a second family entry keeps its own identity, label and stores`() {
+        val generic = SubsonicRuntime(context, SubsonicFamily.Subsonic, auth(MemoryStore()))
+        val provider = SubsonicProvider(generic)
+
+        assertEquals(ServiceId.Subsonic, generic.service)
+        assertEquals(ServiceId.Subsonic, provider.id)
+        assertEquals("Subsonic", provider.displayName)
+        assertEquals(SubsonicFamily.Subsonic, generic.family)
+        assertEquals("sidetracks_subsonic", generic.family.credentialStoreName)
+        assertEquals("sidetracks-subsonic-queue.bin", generic.family.localStoreName("queue"))
+        // Only the Navidrome entry offers the public demo; the others leave the form literal.
+        assertNull((provider.signInKind as SignInKind.Password).defaults)
+        assertEquals(
+            SubsonicFamily.Navidrome.passwordDefaults,
+            (SubsonicProvider(runtime()).signInKind as SignInKind.Password).defaults
+        )
     }
 
     @Test fun `clearing the audio cache removes cached artwork`() {

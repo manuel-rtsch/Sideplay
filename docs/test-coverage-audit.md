@@ -94,7 +94,7 @@ The suite is broad enough; the next gain is removing work that does not buy risk
 * `SpotifySession` is still below the provider average. Add only native-lifecycle cases
   that the engine tests cannot express.
 
-### 1.5 `provider-jellyfin` / `provider-navidrome`
+### 1.5 `provider-jellyfin` / `provider-subsonic`
 
 Both are at or near the module target (91.18% and 68.36% line). No planned work beyond
 ratcheting the floors if a future change moves them.
@@ -118,7 +118,7 @@ Module coverage (own tests, unless noted):
 | `:core` | 64.02% | 50.69% |
 | `:provider-spotify` | 77.74% | 61.24% |
 | `:provider-jellyfin` | 91.18% | 60.55% |
-| `:provider-navidrome` | 68.36% | 41.61% |
+| `:provider-subsonic` | 68.36% | 41.61% |
 | `:app` / product merged, default | 59.85% | 40.47% |
 | `:app` / product merged, full | 72.20% | 46.62% |
 
@@ -131,7 +131,7 @@ Floors are a ratchet and track the suite that ran:
 | `:core` | 63 | 49 |
 | `:provider-spotify` | 76 | 60 |
 | `:provider-jellyfin` | 91 | 60 |
-| `:provider-navidrome` | 68 | 41 |
+| `:provider-subsonic` | 68 | 41 |
 
 The full suite's extra coverage comes almost entirely from the screenshot tests; that is
 why the default and full product floors differ. The floor is the gate, not the target.
@@ -155,7 +155,7 @@ Phase 2 (coverage, slices 1–6):
   session contract (new `PlaybackControllerSessionTest`, 32 tests, fake engine).
 * `:app`: `PlaybackService`, `AppSession`, the reachable `SidetrackGraph` route table and
   notification intent, `QueueReorder`.
-* Providers: `JellyfinRuntime`, `NavidromeRuntime`, token client, audio sink, `NativeBridge`,
+* Providers: `JellyfinRuntime`, `SubsonicRuntime`, token client, audio sink, `NativeBridge`,
   `SpotifyWebApi`, `SpotifySession`, the Jellyfin SDK seam, and the native playback paths.
 * Slice 6 added six `LibrespotPlaybackEngine` tests for deferred player rebuilds, moved
   `PlaybackControllerTest` and `LibrespotPlaybackEngineTest` to `:provider-spotify`, and

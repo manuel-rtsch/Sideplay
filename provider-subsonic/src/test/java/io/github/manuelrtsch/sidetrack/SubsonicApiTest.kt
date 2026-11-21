@@ -1,16 +1,17 @@
 package io.github.manuelrtsch.sidetrack
 
 import androidx.test.core.app.ApplicationProvider
-import io.github.manuelrtsch.sidetrack.auth.NavidromeAuth
-import io.github.manuelrtsch.sidetrack.auth.NavidromeCredentialStore
+import io.github.manuelrtsch.sidetrack.auth.SubsonicAuth
+import io.github.manuelrtsch.sidetrack.auth.SubsonicCredentialStore
 import io.github.manuelrtsch.sidetrack.data.AuthInput
-import io.github.manuelrtsch.sidetrack.data.NavidromeApi
-import io.github.manuelrtsch.sidetrack.data.NavidromeCatalog
-import io.github.manuelrtsch.sidetrack.data.NavidromeCredentials
-import io.github.manuelrtsch.sidetrack.data.NavidromeTransport
 import io.github.manuelrtsch.sidetrack.data.PlaybackSettings
 import io.github.manuelrtsch.sidetrack.data.ServiceException
 import io.github.manuelrtsch.sidetrack.data.ServiceFailure
+import io.github.manuelrtsch.sidetrack.data.SubsonicApi
+import io.github.manuelrtsch.sidetrack.data.SubsonicCatalog
+import io.github.manuelrtsch.sidetrack.data.SubsonicCredentials
+import io.github.manuelrtsch.sidetrack.data.SubsonicFamily
+import io.github.manuelrtsch.sidetrack.data.SubsonicTransport
 import io.github.manuelrtsch.sidetrack.data.normalized
 import io.github.manuelrtsch.sidetrack.storage.JsonStore
 import java.net.URLDecoder
@@ -26,9 +27,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class NavidromeApiTest {
+class SubsonicApiTest {
     @Test fun `normalises a bare host to http and trims slashes`() {
-        val credentials = NavidromeCredentials(" nas.local:4533/ ", " joe ", "sesame").normalized()
+        val credentials = SubsonicCredentials(" nas.local:4533/ ", " joe ", "sesame").normalized()
         assertEquals("http://nas.local:4533", credentials.serverUrl)
         assertEquals("joe", credentials.username)
     }
@@ -37,9 +38,9 @@ class NavidromeApiTest {
         val transport = FakeTransport {
             ok("""{"status":"ok"}""")
         }
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local:4533", "joe", "sesame"),
-            transport,
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local:4533", "joe", "sesame"),
+            transport = transport,
             salt = { "c19b2d" }
         )
 
@@ -56,9 +57,9 @@ class NavidromeApiTest {
     }
 
     @Test fun `a failed envelope maps the subsonic error code`() = runTest {
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local", "joe", "wrong"),
-            FakeTransport { ok("""{"status":"failed","error":{"code":40,"message":"Wrong username or password"}}""") },
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local", "joe", "wrong"),
+            transport = FakeTransport { ok("""{"status":"failed","error":{"code":40,"message":"Wrong username or password"}}""") },
             salt = { "salt" }
         )
 
@@ -70,9 +71,9 @@ class NavidromeApiTest {
     }
 
     @Test fun `artists carry stable ids and authenticated cover urls`() = runTest {
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local", "joe", "sesame"),
-            FakeTransport {
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local", "joe", "sesame"),
+            transport = FakeTransport {
                 ok(
                     """{"status":"ok","artists":{"index":[{"name":"A","artist":[
                         {"id":"ar1","name":"Aurora","albumCount":2,"coverArt":"ar1"}
@@ -92,9 +93,9 @@ class NavidromeApiTest {
     }
 
     @Test fun `a json null cover id means the playlist has no artwork`() = runTest {
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local", "joe", "sesame"),
-            FakeTransport {
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local", "joe", "sesame"),
+            transport = FakeTransport {
                 ok(
                     """{"status":"ok","playlists":{"playlist":[
                         {"id":"p1","name":"Night Drive","coverArt":null}
@@ -111,9 +112,9 @@ class NavidromeApiTest {
     }
 
     @Test fun `search3 maps each requested scope`() = runTest {
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local", "joe", "sesame"),
-            FakeTransport {
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local", "joe", "sesame"),
+            transport = FakeTransport {
                 ok(
                     """{"status":"ok","searchResult3":{
                         "song":[{"id":"s1","title":"Night","artist":"Aurora","artistId":"ar1","albumId":"al1","duration":180}],
@@ -137,7 +138,7 @@ class NavidromeApiTest {
         val transport = FakeTransport {
             ok("""{"status":"ok","albumList2":{"album":[{"id":"al1","name":"One","artist":"A","songCount":1}]}}""")
         }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
 
         val page = api.albumList(offset = 40, limit = 20)
 
@@ -149,7 +150,7 @@ class NavidromeApiTest {
 
     @Test fun `stream and cover urls carry auth but no password`() = runTest {
         val transport = FakeTransport { ok("""{"status":"ok"}""") }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
 
         val stream = api.streamUrl("song 1")
         val cover = api.coverUrl("cover 1")!!
@@ -163,7 +164,7 @@ class NavidromeApiTest {
 
     @Test fun `stream url honors maxBitRate and replay gain`() = runTest {
         val transport = FakeTransport { ok("""{"status":"ok"}""") }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
 
         val capped = api.streamUrl("s1", maxBitRateKbps = 96, replayGain = true)
         assertTrue(capped.contains("/rest/stream"))
@@ -178,10 +179,10 @@ class NavidromeApiTest {
 
     @Test fun `catalog applies quality and normalization from settings to the stream`() = runTest {
         val transport = FakeTransport { ok("""{"status":"ok"}""") }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
-        val catalog = NavidromeCatalog(
-            { api },
-            { PlaybackSettings(audioQuality = AudioQuality.Normal, normalization = true) }
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
+        val catalog = SubsonicCatalog(
+            api = { api },
+            settings = { PlaybackSettings(audioQuality = AudioQuality.Normal, normalization = true) }
         )
 
         val track = Track(
@@ -202,7 +203,7 @@ class NavidromeApiTest {
 
     @Test fun `createPlaylist maps the new playlist`() = runTest {
         val transport = FakeTransport { ok("""{"status":"ok","playlist":{"id":"p-new","name":"Road Trip"}}""") }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
 
         val playlist = api.createPlaylist("Road Trip")
 
@@ -224,9 +225,9 @@ class NavidromeApiTest {
                 else -> ok("""{"status":"ok"}""")
             }
         }
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local", "joe", "sesame"),
-            transport,
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local", "joe", "sesame"),
+            transport = transport,
             salt = { "salt" }
         )
 
@@ -245,9 +246,9 @@ class NavidromeApiTest {
     }
 
     @Test fun `a playlist without an owner is offered for editing and the server decides`() = runTest {
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local", "joe", "sesame"),
-            FakeTransport { ok("""{"status":"ok","playlist":{"id":"p1","name":"Mix"}}""") },
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local", "joe", "sesame"),
+            transport = FakeTransport { ok("""{"status":"ok","playlist":{"id":"p1","name":"Mix"}}""") },
             salt = { "salt" }
         )
 
@@ -255,9 +256,9 @@ class NavidromeApiTest {
     }
 
     @Test fun `saved state reads the starred marker`() = runTest {
-        val api = NavidromeApi(
-            NavidromeCredentials("http://nas.local", "joe", "sesame"),
-            FakeTransport { ok("""{"status":"ok","song":{"id":"s1","starred":"2024-01-01"}}""") },
+        val api = SubsonicApi(
+            SubsonicCredentials("http://nas.local", "joe", "sesame"),
+            transport = FakeTransport { ok("""{"status":"ok","song":{"id":"s1","starred":"2024-01-01"}}""") },
             salt = { "salt" }
         )
 
@@ -267,9 +268,9 @@ class NavidromeApiTest {
     @Test fun `auth signs in against a ping and stores the credentials`() = runTest {
         val store = InMemoryStore()
         val transport = FakeTransport { ok("""{"status":"ok"}""") }
-        val auth = NavidromeAuth(
-            NavidromeCredentialStore(ApplicationProvider.getApplicationContext(), "nav-test", store),
-            transport
+        val auth = SubsonicAuth(
+            SubsonicCredentialStore(ApplicationProvider.getApplicationContext(), "nav-test", store),
+            transport = transport
         )
 
         val account = auth.signIn(AuthInput.Password(" http://nas.local:4533/ ", "joe", "sesame"))
@@ -282,6 +283,23 @@ class NavidromeApiTest {
 
         auth.clear()
         assertFalse(auth.hasCredentials())
+    }
+
+    @Test fun `a family entry labels the account without restricting which server it reaches`() = runTest {
+        val store = InMemoryStore()
+        val auth = SubsonicAuth(
+            SubsonicCredentialStore(ApplicationProvider.getApplicationContext(), "nextcloud-test", store),
+            SubsonicFamily.NextcloudMusic,
+            transport = FakeTransport { ok("""{"status":"ok"}""") }
+        )
+
+        // Any entry answers any Subsonic server: the picker name is a label, not a filter.
+        val account = auth.signIn(AuthInput.Password("http://nas.local:4747", "joe", "sesame"))
+
+        assertEquals(ServiceId.NextcloudMusic, account.service)
+        assertEquals("Nextcloud Music", account.displayName)
+        assertEquals("http://nas.local:4747", account.serverUrl)
+        assertEquals(ServiceId.NextcloudMusic, auth.restore()?.service)
     }
 
     @Test fun `catalog resolves a stream and paginates a playlist`() = runTest {
@@ -300,8 +318,8 @@ class NavidromeApiTest {
                 else -> ok("""{"status":"ok"}""")
             }
         }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
-        val catalog = NavidromeCatalog(api = { api })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
+        val catalog = SubsonicCatalog(api = { api })
 
         val playlist = catalog.collection(MediaKey(ServiceId.Navidrome, MediaType.Playlist, "p1"), 1, 1)!!
         assertEquals(listOf("s2"), playlist.items.map { it.id })
@@ -332,7 +350,7 @@ class NavidromeApiTest {
                 ok("""{"status":"ok"}""")
             }
         }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
         val playlist = MediaKey(ServiceId.Navidrome, MediaType.Playlist, "p1")
         val song = Track(id = "s1", title = "One", artist = "A", artistId = "ar", albumId = "al", artRes = 0, durationMs = 0)
 
@@ -355,7 +373,7 @@ class NavidromeApiTest {
                 ok("""{"status":"ok"}""")
             }
         }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
 
         api.removeFromPlaylist("p1", "s9")
 
@@ -374,8 +392,8 @@ class NavidromeApiTest {
                 else -> ok("""{"status":"ok"}""")
             }
         }
-        val api = NavidromeApi(NavidromeCredentials("http://nas.local", "joe", "sesame"), transport, salt = { "salt" })
-        val catalog = NavidromeCatalog(api = { api })
+        val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
+        val catalog = SubsonicCatalog(api = { api })
         val key = MediaKey(ServiceId.Navidrome, MediaType.Track, "s2")
 
         catalog.setSaved(key, true)
@@ -418,7 +436,7 @@ class NavidromeApiTest {
         }
     }
 
-    private class FakeTransport(private val handler: (String) -> JSONObject) : NavidromeTransport {
+    private class FakeTransport(private val handler: (String) -> JSONObject) : SubsonicTransport {
         val urls = mutableListOf<String>()
 
         override suspend fun get(url: String): JSONObject {

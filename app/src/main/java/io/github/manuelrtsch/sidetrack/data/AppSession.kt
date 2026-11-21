@@ -13,12 +13,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Every service this build can provision, in the order the picker offers them. */
-val KnownServices: List<ServiceChoice> = listOf(
-    ServiceChoice(SpotifyService.id, SpotifyService.DISPLAY_NAME),
-    ServiceChoice(NavidromeService.id, NavidromeService.DISPLAY_NAME),
-    ServiceChoice(JellyfinService.id, JellyfinService.DISPLAY_NAME)
-)
+/**
+ * Every service this build can provision, in the order the picker offers them.
+ *
+ * The Subsonic family is listed once per server product even though one adapter serves them all,
+ * because the entry a user picks is what they recognise; the id keeps their credentials, library
+ * and local stores apart from the other entries. The picker sorts alphabetically by what the row
+ * says, so a new entry lands where a user would look for it instead of at the end of a list.
+ */
+val KnownServices: List<ServiceChoice> = buildList {
+    add(ServiceChoice(SpotifyService.id, SpotifyService.DISPLAY_NAME))
+    SubsonicFamily.entries.forEach { add(ServiceChoice(it.id, it.displayName)) }
+    add(ServiceChoice(JellyfinService.id, JellyfinService.DISPLAY_NAME))
+}.sortedBy { it.displayName.lowercase() }
 
 /** The picker's view of [id], or null when this build does not know the service. */
 fun serviceChoice(id: ServiceId): ServiceChoice? = KnownServices.firstOrNull { it.id == id }
@@ -191,16 +198,18 @@ object AppSessions {
             Selection(SpotifyProvider(session), session)
         }
 
-        ServiceId.Navidrome -> runCatching { NavidromeRuntime(context) }
-            .onFailure { Log.w("SidetrackSession", "Could not build the Navidrome session", it) }
-            .getOrNull()
-            ?.let { Selection(NavidromeProvider(it), it) }
-
         ServiceId.Jellyfin -> runCatching { JellyfinRuntime(context) }
             .onFailure { Log.w("SidetrackSession", "Could not build the Jellyfin session", it) }
             .getOrNull()
             ?.let { Selection(JellyfinProvider(it), it) }
 
-        else -> null
+        // Every remaining service is a member of the Subsonic family: one adapter, one runtime
+        // class, and only the entry's identity, label and store names differ.
+        else -> SubsonicFamily.of(choice.id)?.let { family ->
+            runCatching { SubsonicRuntime(context, family) }
+                .onFailure { Log.w("SidetrackSession", "Could not build the ${family.displayName} session", it) }
+                .getOrNull()
+                ?.let { Selection(SubsonicProvider(it, family), it) }
+        }
     }
 }

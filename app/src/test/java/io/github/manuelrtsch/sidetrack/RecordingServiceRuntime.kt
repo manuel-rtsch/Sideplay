@@ -41,7 +41,7 @@ class RecordingServiceRuntime(
     /** Pass a context when the test exercises the notification, which needs a media session. */
     playbackContext: Context? = null
 ) : ServiceRuntime {
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
+    override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic
     override val catalog: MediaCatalog = SilentCatalog(capabilities)
     override val writer: MediaLibraryWriter? = null
     override val queue = QueueRepository()
@@ -94,7 +94,7 @@ class RecordingServiceRuntime(
 class RecordingProvider(private val choice: ServiceChoice) : MusicServiceProvider {
     override val id: ServiceId = choice.id
     override val displayName: String = choice.displayName
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
+    override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic
     override val signInKind: SignInKind = SignInKind.Browser
 
     override fun createAuth(): ServiceAuth = object : ServiceAuth {
@@ -105,7 +105,7 @@ class RecordingProvider(private val choice: ServiceChoice) : MusicServiceProvide
 }
 
 /** A catalog with no content. Every page is empty and no call fails. */
-class SilentCatalog(override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome) : MediaCatalog {
+class SilentCatalog(override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic) : MediaCatalog {
     override suspend fun library(section: LibrarySection, offset: Int, limit: Int): Page<LibraryEntry> = Page()
 
     override suspend fun collection(key: MediaKey, offset: Int, limit: Int): Collection? = null

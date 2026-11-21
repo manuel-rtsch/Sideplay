@@ -9,12 +9,12 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /** One HTTP call, kept as a seam so the catalog and auth tests need no real server. */
-fun interface NavidromeTransport {
+fun interface SubsonicTransport {
     suspend fun get(url: String): JSONObject
 }
 
-/** The real transport; all parsing stays in [NavidromeApi]. */
-class HttpNavidromeTransport : NavidromeTransport {
+/** The real transport; all parsing stays in [SubsonicApi]. */
+class HttpSubsonicTransport : SubsonicTransport {
     override suspend fun get(url: String): JSONObject = withContext(Dispatchers.IO) {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -27,15 +27,15 @@ class HttpNavidromeTransport : NavidromeTransport {
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (status !in 200..299) {
-                Log.w("SidetrackNavidrome", "HTTP $status ${url.substringBefore('?')}")
-                throw ServiceException(ServiceFailure.Network, "Navidrome returned HTTP $status")
+                Log.w("SidetrackSubsonic", "HTTP $status ${url.substringBefore('?')}")
+                throw ServiceException(ServiceFailure.Network, "The server returned HTTP $status")
             }
             runCatching { JSONObject(text) }
-                .getOrElse { throw ServiceException(ServiceFailure.Unknown, "Navidrome returned an unreadable response", it) }
+                .getOrElse { throw ServiceException(ServiceFailure.Unknown, "The server returned an unreadable response", it) }
         } catch (e: ServiceException) {
             throw e
         } catch (e: IOException) {
-            throw ServiceException(ServiceFailure.Network, "Couldn't reach Navidrome", e)
+            throw ServiceException(ServiceFailure.Network, "Couldn't reach the server", e)
         } finally {
             connection.disconnect()
         }

@@ -1,5 +1,9 @@
 # Release readiness — Jellyfin and Navidrome for private testers
 
+> Historical record, written for 0.4.0. File paths and class names use the `provider-navidrome` /
+> `NavidromeApi` naming of that release; the adapter now lives in `provider-subsonic` and serves the
+> whole Subsonic family. The behaviour this report audits is unchanged.
+
 Question asked: can 0.4.0 go to private testers with the new Jellyfin and Navidrome integrations,
 where (1) there must be **no chance of a bulk overwrite or deletion of server data** — testers
 will not have backups — and (2) sign-in, library discovery, search and playback must be

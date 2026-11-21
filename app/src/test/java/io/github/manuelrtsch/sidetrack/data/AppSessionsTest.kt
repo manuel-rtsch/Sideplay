@@ -42,7 +42,13 @@ class AppSessionsTest {
 
     @Test fun `the picker lists every known service in order and rejects the rest`() {
         assertEquals(
-            listOf(ServiceId.Spotify, ServiceId.Navidrome, ServiceId.Jellyfin),
+            listOf(
+                ServiceId.Jellyfin,
+                ServiceId.Navidrome,
+                ServiceId.NextcloudMusic,
+                ServiceId.Spotify,
+                ServiceId.Subsonic
+            ),
             KnownServices.map { it.id }
         )
         assertEquals("Spotify", serviceChoice(ServiceId.Spotify)?.displayName)
@@ -74,6 +80,18 @@ class AppSessionsTest {
         assertTrue(AppSessions.select(context, ServiceId.Navidrome))
 
         assertSame(runtime, app.runtimeOrNull)
+    }
+
+    @Test fun `each Subsonic family entry provisions its own family runtime`() {
+        val app = AppSessions.get(context)
+
+        assertTrue(AppSessions.select(context, ServiceId.NextcloudMusic))
+
+        assertEquals(ServiceId.NextcloudMusic, app.active.value)
+        val runtime = app.runtimeOrNull as? SubsonicRuntime
+        assertEquals(SubsonicFamily.NextcloudMusic, runtime?.family)
+        assertEquals(ServiceId.NextcloudMusic, runtime?.service)
+        assertEquals("sidetracks_nextcloud-music", runtime?.family?.credentialStoreName)
     }
 
     @Test fun `selecting another service replaces the one that held the media session`() {

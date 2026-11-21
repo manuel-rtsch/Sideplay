@@ -6,8 +6,8 @@ import io.github.manuelrtsch.sidetrack.AudioQuality
 import io.github.manuelrtsch.sidetrack.MediaItem
 import io.github.manuelrtsch.sidetrack.ServiceCapabilities
 import io.github.manuelrtsch.sidetrack.ServiceId
-import io.github.manuelrtsch.sidetrack.auth.NavidromeAuth
-import io.github.manuelrtsch.sidetrack.auth.NavidromeCredentialStore
+import io.github.manuelrtsch.sidetrack.auth.SubsonicAuth
+import io.github.manuelrtsch.sidetrack.auth.SubsonicCredentialStore
 import io.github.manuelrtsch.sidetrack.playback.ExoPlayerMedia3Player
 import io.github.manuelrtsch.sidetrack.playback.Media3PlaybackEngine
 import io.github.manuelrtsch.sidetrack.playback.PlaybackController
@@ -22,28 +22,33 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * A signed-in Navidrome account.
+ * A signed-in account on one member of the Subsonic family.
  *
- * Catalog, auth and writer are the Subsonic adapter; playback is the shared [PlaybackController]
- * over Media3/ExoPlayer, so the media session, notification and audio focus behave exactly as they
- * do for Spotify. Queue, history and resume files are Navidrome-specific, so switching services
- * never mixes two accounts.
+ * Catalog, auth and writer are the shared Subsonic adapter; [family] only supplies the identity,
+ * label and store names, so Navidrome, Nextcloud Music and Subsonic itself all run the same code. Playback is the shared [PlaybackController] over Media3/ExoPlayer, so the media
+ * session, notification and audio focus behave exactly as they do for Spotify. Queue, history and
+ * resume files are per family entry, so switching services never mixes two accounts.
  */
-class NavidromeRuntime(
+class SubsonicRuntime(
     context: Context,
-    val auth: NavidromeAuth = NavidromeAuth(NavidromeCredentialStore(context))
+    val family: SubsonicFamily = SubsonicFamily.Navidrome,
+    val auth: SubsonicAuth = SubsonicAuth(
+        SubsonicCredentialStore(context, family.credentialStoreName),
+        family
+    )
 ) : ServiceRuntime,
     CacheRuntime,
     QualitySettingsRuntime {
     private val appContext = context.applicationContext
 
-    override val service: ServiceId = ServiceId.Navidrome
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
+    override val service: ServiceId = family.id
+    override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic
 
     private val _signedIn = MutableStateFlow(runCatching { auth.hasCredentials() }.getOrDefault(false))
     override val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
 
-    override val catalog: MediaCatalog = NavidromeCatalog(
+    override val catalog: MediaCatalog = SubsonicCatalog(
+        family = family,
         api = { auth.api() },
         settings = { _settings.value }
     )
@@ -52,15 +57,15 @@ class NavidromeRuntime(
     override val network: NetworkMonitor = NetworkMonitor(appContext)
     override val isOnline: Boolean get() = network.isOnline
 
-    private val settingsStore = PlaybackSettingsStore(appContext, "sidetracks_settings_navidrome")
+    private val settingsStore = PlaybackSettingsStore(appContext, family.settingsStoreName)
     private val _settings = MutableStateFlow(
         runCatching { settingsStore.read() }.getOrDefault(PlaybackSettings())
     )
     override val settings: StateFlow<PlaybackSettings> = _settings.asStateFlow()
 
-    private val queueStore = FileQueueStore(File(appContext.filesDir, "sidetracks-navidrome-queue.bin"))
-    private val historyStore = FileHistoryStore(File(appContext.filesDir, "sidetracks-navidrome-history.bin"))
-    private val positionStore = FilePositionStore(File(appContext.filesDir, "sidetracks-navidrome-resume.bin"))
+    private val queueStore = FileQueueStore(File(appContext.filesDir, family.localStoreName("queue")))
+    private val historyStore = FileHistoryStore(File(appContext.filesDir, family.localStoreName("history")))
+    private val positionStore = FilePositionStore(File(appContext.filesDir, family.localStoreName("resume")))
 
     override val queue = QueueRepository(
         load = { queueStore.read() },
@@ -191,22 +196,19 @@ class NavidromeRuntime(
     }
 }
 
-/** Navidrome's identity and label, available without building a session or a runtime. */
-object NavidromeService {
-    val id: ServiceId get() = ServiceId.Navidrome
-    const val DISPLAY_NAME: String = "Navidrome"
-}
-
-/** Navidrome as a registered service, including the auth object [AppSession] asks for after sign-in. */
-class NavidromeProvider(
-    private val session: NavidromeRuntime
+/**
+ * One family member as a registered service, including the auth object [AppSession] asks for after
+ * sign-in. Identity and label come from [family], so the picker and the running session cannot
+ * disagree about what the user selected.
+ */
+class SubsonicProvider(
+    private val session: SubsonicRuntime,
+    private val family: SubsonicFamily = session.family
 ) : MusicServiceProvider {
-    override val id: ServiceId = NavidromeService.id
-    override val displayName: String = NavidromeService.DISPLAY_NAME
-    override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
-    override val signInKind: SignInKind = SignInKind.Password(
-        PasswordDefaults(NavidromeDemo.SERVER_URL, NavidromeDemo.USERNAME, NavidromeDemo.PASSWORD)
-    )
+    override val id: ServiceId = family.id
+    override val displayName: String = family.displayName
+    override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic
+    override val signInKind: SignInKind = SignInKind.Password(family.passwordDefaults)
 
     override fun createAuth(): ServiceAuth = session.auth
 }

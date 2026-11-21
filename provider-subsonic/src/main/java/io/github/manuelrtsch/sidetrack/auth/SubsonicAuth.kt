@@ -1,16 +1,16 @@
 package io.github.manuelrtsch.sidetrack.auth
 
 import android.content.Context
-import io.github.manuelrtsch.sidetrack.ServiceId
 import io.github.manuelrtsch.sidetrack.data.AuthInput
-import io.github.manuelrtsch.sidetrack.data.HttpNavidromeTransport
-import io.github.manuelrtsch.sidetrack.data.NavidromeApi
-import io.github.manuelrtsch.sidetrack.data.NavidromeCredentials
-import io.github.manuelrtsch.sidetrack.data.NavidromeTransport
+import io.github.manuelrtsch.sidetrack.data.HttpSubsonicTransport
 import io.github.manuelrtsch.sidetrack.data.ServiceAccount
 import io.github.manuelrtsch.sidetrack.data.ServiceAuth
 import io.github.manuelrtsch.sidetrack.data.ServiceException
 import io.github.manuelrtsch.sidetrack.data.ServiceFailure
+import io.github.manuelrtsch.sidetrack.data.SubsonicApi
+import io.github.manuelrtsch.sidetrack.data.SubsonicCredentials
+import io.github.manuelrtsch.sidetrack.data.SubsonicFamily
+import io.github.manuelrtsch.sidetrack.data.SubsonicTransport
 import io.github.manuelrtsch.sidetrack.data.normalized
 import io.github.manuelrtsch.sidetrack.storage.EncryptedStoreException
 import io.github.manuelrtsch.sidetrack.storage.GuardedEncryptedStore
@@ -18,23 +18,24 @@ import io.github.manuelrtsch.sidetrack.storage.JsonStore
 import org.json.JSONObject
 
 /**
- * Navidrome needs the password to mint a fresh Subsonic token for every request, so it is kept in
- * the same encrypted, atomic store as the Spotify session. It never enters logs or the UI state.
+ * Every Subsonic-family server needs the password to mint a fresh token for each request, so it is
+ * kept in the same encrypted, atomic store as the Spotify session. It never enters logs or the UI
+ * state. The store name comes from the family entry, so two servers keep two sessions.
  */
-class NavidromeCredentialStore(
+class SubsonicCredentialStore(
     context: Context,
-    name: String = "sidetracks_navidrome",
+    name: String = SubsonicFamily.Navidrome.credentialStoreName,
     private val store: JsonStore = GuardedEncryptedStore(context, name)
 ) {
-    fun read(): NavidromeCredentials? {
+    fun read(): SubsonicCredentials? {
         val value = runCatching { store.read() }.getOrDefault(JSONObject())
         val server = value.optString(KEY_SERVER).takeIf { it.isNotEmpty() } ?: return null
         val username = value.optString(KEY_USERNAME).takeIf { it.isNotEmpty() } ?: return null
         val password = value.optString(KEY_PASSWORD).takeIf { it.isNotEmpty() } ?: return null
-        return NavidromeCredentials(server, username, password)
+        return SubsonicCredentials(server, username, password)
     }
 
-    fun save(credentials: NavidromeCredentials) {
+    fun save(credentials: SubsonicCredentials) {
         val value = JSONObject()
             .put(KEY_SERVER, credentials.serverUrl)
             .put(KEY_USERNAME, credentials.username)
@@ -64,34 +65,39 @@ class NavidromeCredentialStore(
 }
 
 /**
- * Server URL + username/password sign-in. The password is verified with a real `ping` before it is
- * persisted, so a typo lands on the form instead of becoming a stored session that cannot load.
+ * Server URL + username/password sign-in for one family member. The password is verified with a
+ * real `ping` before it is persisted, so a typo lands on the form instead of becoming a stored
+ * session that cannot load. Any family entry answers any Subsonic server: the entry names the
+ * product on the picker, it does not restrict what the credentials may connect to.
  */
-class NavidromeAuth(
-    private val store: NavidromeCredentialStore,
-    private val transport: NavidromeTransport? = null
+class SubsonicAuth(
+    private val store: SubsonicCredentialStore,
+    private val family: SubsonicFamily = SubsonicFamily.Navidrome,
+    private val transport: SubsonicTransport? = null
 ) : ServiceAuth {
     /**
      * The credentials for this process. A device that cannot persist the store still keeps the
      * signed-in session until the app closes, matching the Spotify keystore-failure behaviour.
      */
     @Volatile
-    private var current: NavidromeCredentials? = null
+    private var current: SubsonicCredentials? = null
 
     fun hasCredentials(): Boolean = credentials() != null
 
-    fun credentials(): NavidromeCredentials? = current ?: runCatching { store.read() }.getOrNull()?.also { current = it }
+    fun credentials(): SubsonicCredentials? = current ?: runCatching { store.read() }.getOrNull()?.also { current = it }
 
-    fun api(): NavidromeApi? = credentials()?.let { NavidromeApi(it, transport ?: HttpNavidromeTransport()) }
+    fun api(): SubsonicApi? = credentials()?.let {
+        SubsonicApi(it, family, transport ?: HttpSubsonicTransport())
+    }
 
     override suspend fun signIn(input: AuthInput): ServiceAccount {
         val password = input as? AuthInput.Password
-            ?: throw ServiceException(ServiceFailure.NotConnected, "Navidrome needs a server, username and password")
-        val credentials = NavidromeCredentials(password.serverUrl, password.username, password.password).normalized()
+            ?: throw ServiceException(ServiceFailure.NotConnected, "${family.displayName} needs a server, username and password")
+        val credentials = SubsonicCredentials(password.serverUrl, password.username, password.password).normalized()
         if (credentials.username.isEmpty() || credentials.password.isEmpty()) {
-            throw ServiceException(ServiceFailure.NotConnected, "Enter your Navidrome username and password")
+            throw ServiceException(ServiceFailure.NotConnected, "Enter your ${family.displayName} username and password")
         }
-        NavidromeApi(credentials, transport ?: HttpNavidromeTransport()).ping()
+        SubsonicApi(credentials, family, transport ?: HttpSubsonicTransport()).ping()
         current = credentials
         store.save(credentials)
         return account(credentials)
@@ -107,10 +113,10 @@ class NavidromeAuth(
         store.clear()
     }
 
-    private fun account(credentials: NavidromeCredentials) = ServiceAccount(
-        service = ServiceId.Navidrome,
+    private fun account(credentials: SubsonicCredentials) = ServiceAccount(
+        service = family.id,
         userId = credentials.username,
-        displayName = "Navidrome",
+        displayName = family.displayName,
         serverUrl = credentials.serverUrl
     )
 }

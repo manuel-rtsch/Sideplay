@@ -43,7 +43,7 @@ dependencyResolutionManagement {
 rootProject.name = "Sidetrack"
 include(":app")
 include(":core")
-include(":provider-navidrome")
+include(":provider-subsonic")
 include(":provider-jellyfin")
 include(":provider-spotify")
 // The Spotify provider module is added in its own stage.
