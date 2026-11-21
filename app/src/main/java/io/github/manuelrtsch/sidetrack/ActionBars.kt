@@ -114,9 +114,24 @@ fun songRadioOption(onClick: () -> Unit) = SideAction.square("songRadio", Sideki
 fun episodeNotesOption(onClick: () -> Unit) = SideAction.square("notes", SidekitIcon.Docs, "Episode notes", onClick)
 
 /**
- * The sleep timer is a destination with a state, so it keeps its label: the armed state is written
- * into the words as well as the colour, and both screens that offer it show it the same way. Idle it
- * is an ordinary option; armed it commits to stopping playback, so it turns green.
+ * The sleep timer on Now Playing: the same destination as [sleepTimerOption], as an icon-only
+ * square like the queue and radio/episode-notes shortcuts beside it. The bar there is transport —
+ * three playback squares and Sidekit's close square already claim 430 of its 460 dp — so a label
+ * has no width left to live in and would truncate to "Sle…". The words are not lost: the screen's
+ * own "Sleep timer · 23:00" row spells the state out, and the glyph turns green while armed.
+ */
+fun sleepTimerShortcutOption(active: Boolean, onClick: () -> Unit) = SideAction.square(
+    key = "sleepTimer",
+    icon = SidekitIcon.Bedtime,
+    contentDescription = if (active) "Sleep timer on" else "Sleep timer",
+    onClick = onClick,
+    tone = if (active) ActionTone.Secondary else ActionTone.Primary
+)
+
+/**
+ * The sleep timer is a destination with a state, so it keeps its label on the screens with room for
+ * one: the armed state is written into the words as well as the colour. Idle it is an ordinary
+ * option; armed it commits to stopping playback, so it turns green.
  */
 fun sleepTimerOption(active: Boolean, onClick: () -> Unit) = SideAction(
     key = "sleepTimer",

@@ -64,20 +64,34 @@ class OptionsBuilderTest {
     fun sleepTimerSaysItsStateInWordsAndColorOnEveryScreen() {
         val idle = sleepTimerOption(active = false, onClick = {})
         val armed = sleepTimerOption(active = true, onClick = {})
-        val nowPlaying = sidetrackOptions(
+        val queue = sidetrackOptions(
             openQueueOption({}),
-            songRadioOption({}),
             sleepTimerOption(active = true, onClick = {})
-        ).last()
+        )
 
         assertEquals("Sleep timer", idle.label)
         assertEquals("Sleep timer on", armed.label)
         assertEquals(ActionTone.Primary, idle.tone)
         assertEquals(ActionTone.Secondary, armed.tone)
-        // The queue and Now Playing build the same entry, so it cannot differ in shape or tone.
-        assertEquals(armed.label, nowPlaying.label)
-        assertEquals(armed.square, nowPlaying.square)
-        assertEquals(armed.tone, nowPlaying.tone)
+        assertTrue("The queue's bar has room for the words", queue.last().label != null)
+        assertEquals(armed.tone, queue.last().tone)
+    }
+
+    @Test
+    fun nowPlayingSleepTimerIsASquareBecauseTheWordsAreOnTheScreen() {
+        // Three playback squares plus Sidekit's close square already claim 430 of the bar's
+        // 460 dp, so a labelled sleep timer there truncated to "Sle…". It is a square like the
+        // shortcuts beside it; the countdown row in the body carries the words.
+        val idle = sleepTimerShortcutOption(active = false, onClick = {})
+        val armed = sleepTimerShortcutOption(active = true, onClick = {})
+        val nowPlaying = sidetrackOptions(openQueueOption({}), songRadioOption({}), armed)
+
+        assertTrue("Now Playing has no room for a label", nowPlaying.all { it.square })
+        assertEquals("Sleep timer", idle.contentDescription)
+        assertEquals("Sleep timer on", armed.contentDescription)
+        assertEquals(ActionTone.Primary, idle.tone)
+        assertEquals(ActionTone.Secondary, armed.tone)
+        assertEquals("sleepTimer", armed.key)
     }
 
     @Test
@@ -128,11 +142,11 @@ class OptionsBuilderTest {
         val nowPlaying = sidetrackOptions(
             openQueueOption({}),
             songRadioOption({}),
-            sleepTimerOption(active = false, onClick = {})
+            sleepTimerShortcutOption(active = false, onClick = {})
         )
         val contentScreen = sidetrackOptions(artistRadioOption({}), onNowPlaying = {})
 
-        assertEquals(listOf(true, true, false), nowPlaying.map { it.square })
+        assertEquals(listOf(true, true, true), nowPlaying.map { it.square })
         assertEquals(listOf(false, false), contentScreen.map { it.square })
     }
 
@@ -151,7 +165,8 @@ class OptionsBuilderTest {
             openQueueOption {},
             songRadioOption {},
             episodeNotesOption {},
-            sleepTimerOption(active = false) {}
+            sleepTimerOption(active = false) {},
+            sleepTimerShortcutOption(active = false) {}
         )
 
         live.forEach { assertEquals("${it.key} is a live option", ActionTone.Primary, it.tone) }

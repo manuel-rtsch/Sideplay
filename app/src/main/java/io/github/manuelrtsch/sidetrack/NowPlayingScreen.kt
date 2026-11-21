@@ -125,10 +125,10 @@ fun NowPlayingScreen(
                 is Track -> songRadioOption(onRadio)
                 is Episode -> episodeNotesOption(onEpisodeNotes)
             },
-            // The sleep timer keeps its label here as everywhere else, and absorbs the width the
-            // two squares leave, so an armed timer is readable instead of a differently coloured
-            // square.
-            sleepTimerOption(timer.active, onSleepTimer)
+            // The timer is a square like the two shortcuts above it. A label cannot fit beside
+            // them (the three squares and the close square leave nothing), so the state is carried
+            // by the glyph's colour and by the screen's own countdown row, which says it in words.
+            sleepTimerShortcutOption(timer.active, onSleepTimer)
         )
     }
     Box(Modifier.fillMaxSize()) {
@@ -174,148 +174,176 @@ fun NowPlayingScreen(
                         hint = "Pick something from your library"
                     )
                 }
-            } else if (backdropped && current is Track) {
-                BackdroppedNowPlayingBody(
-                    playback,
-                    current,
-                    playbackPositionMs,
-                    sleepTimer,
-                    padding,
-                    onPlayPause = onPlayPause,
-                    onPrevious = onPrevious,
-                    onNext = onNext,
-                    onSeek = onSeek,
-                    onShuffle = onShuffle,
-                    onRepeat = onRepeat,
-                    onArtist = onArtist
-                )
             } else {
-                Column(
-                    Modifier.fillMaxSize().padding(padding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        val art = minOf(maxWidth, maxHeight)
-                        Cover(
-                            current.artRes,
-                            Modifier.size(art),
-                            shape = SidekitTheme.shapes.item,
-                            bordered = true,
-                            contentDescription = "${current.title} artwork",
-                            artUrl = current.artUrl,
-                            onClick = when (current) {
-                                is Track -> onAlbum
-                                is Episode -> onShow
-                            },
-                            onClickLabel = when (current) {
-                                is Track -> "Open album"
-                                is Episode -> "Open show"
-                            }
+                when (val item = current) {
+                    is Track -> if (backdropped) {
+                        BackdroppedNowPlayingBody(
+                            playback,
+                            item,
+                            playbackPositionMs,
+                            sleepTimer,
+                            padding,
+                            onPlayPause = onPlayPause,
+                            onPrevious = onPrevious,
+                            onNext = onNext,
+                            onSeek = onSeek,
+                            onShuffle = onShuffle,
+                            onRepeat = onRepeat,
+                            onArtist = onArtist
                         )
-                    }
-                    val episode = current as? Episode
-                    // The creator line is a destination: an artist for a track, the show for an
-                    // episode. Episodes also carry their publishing identity below it.
-                    val creatorAction = when (current) {
-                        is Track -> onArtist.takeIf { current.artistId.mediaIdOrNull() != null }
-                        is Episode -> onShow
-                    }
-                    val creatorLabel = if (current is Episode) "Open show" else "Open artist"
-                    val notes = remember(episode?.description) { plainPodcastText(episode?.description.orEmpty()) }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        SidekitText(
-                            current.title,
-                            Modifier.fillMaxWidth(),
-                            style = SidekitTheme.typography.headline,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2
-                        )
-                        if (current.creator.isNotBlank()) {
-                            SidekitText(
-                                current.creator,
-                                Modifier.fillMaxWidth().clickable(
-                                    enabled = creatorAction != null,
-                                    onClickLabel = creatorLabel,
-                                    role = Role.Button,
-                                    onClick = { creatorAction?.invoke() }
-                                ),
-                                style = SidekitTheme.typography.label,
-                                color = SidekitTheme.colors.surfaceA6,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                        if (episode != null) {
-                            if (notes.isNotBlank()) {
-                                SidekitText(
-                                    notes,
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 2.dp)
-                                        .clickable(
-                                            onClickLabel = "Read full episode notes",
-                                            role = Role.Button,
-                                            onClick = onEpisodeNotes
-                                        ),
-                                    style = SidekitTheme.typography.caption,
-                                    color = SidekitTheme.colors.surfaceA6,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2
-                                )
-                            }
-                        }
-                    }
-                    NowPlayingSleepTimer(sleepTimer)
-                    // Only the seek bar subscribes to the playback position flow, so the 10x/s
-                    // position ticks recompose just this small composable, not the whole screen.
-                    // The seek block owns its own height, so the labels can sit close to the artist
-                    // line while the bar keeps a little air above the transport row.
-                    NowPlayingSeek(
-                        playbackPositionMs,
-                        current.durationMs,
-                        onSeek,
-                        buffering = playback.isBuffering
-                    )
-                    if (current is Episode) {
-                        // Podcasts do not repeat or shuffle. The two outer tiles are the podcast
-                        // controls a song player does not need: rewind and fast-forward by 30 s.
-                        SidekitItemRow {
-                            SkipTile("−30", "Back 30 seconds", onSkipBack)
-                            IconTile(SidekitIcon.SkipPrevious, "Previous episode", onPrevious, weight = 0.85f)
-                            IconTile(
-                                if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                                if (playback.isPlaying) "Pause" else "Play",
-                                onPlayPause,
-                                tone = TileTone.Play,
-                                weight = 1.2f
-                            )
-                            IconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                            SkipTile("+30", "Forward 30 seconds", onSkipForward)
-                        }
                     } else {
-                        SidekitItemRow {
-                            IconTile(
-                                SidekitIcon.Shuffle,
-                                if (playback.shuffle) "Shuffle on" else "Shuffle off",
-                                onShuffle,
-                                tone = if (playback.shuffle) TileTone.On else TileTone.Neutral,
-                                weight = 0.85f
-                            )
-                            IconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
-                            IconTile(
-                                if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                                if (playback.isPlaying) "Pause" else "Play",
-                                onPlayPause,
-                                tone = TileTone.Play,
-                                weight = 1.2f
-                            )
-                            IconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-                            RepeatTile(playback.repeat, onRepeat)
-                        }
+                        SongNowPlayingBody(
+                            playback,
+                            item,
+                            playbackPositionMs,
+                            sleepTimer,
+                            Modifier.fillMaxSize().padding(padding),
+                            onPlayPause = onPlayPause,
+                            onPrevious = onPrevious,
+                            onNext = onNext,
+                            onSeek = onSeek,
+                            onShuffle = onShuffle,
+                            onRepeat = onRepeat,
+                            onAlbum = onAlbum,
+                            onArtist = onArtist
+                        )
                     }
+
+                    is Episode -> EpisodeNowPlayingBody(
+                        playback,
+                        item,
+                        playbackPositionMs,
+                        sleepTimer,
+                        Modifier.fillMaxSize().padding(padding),
+                        onPlayPause = onPlayPause,
+                        onPrevious = onPrevious,
+                        onNext = onNext,
+                        onSeek = onSeek,
+                        onSkipBack = onSkipBack,
+                        onSkipForward = onSkipForward,
+                        onOpenShow = onShow,
+                        onOpenEpisodeNotes = onEpisodeNotes
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * A song on Now Playing: the cover as a tile, then title and artist, then the sleep-timer record,
+ * the seek bar and the song transport. This is the screen's base layout; [NowPlayingBackdrop] is
+ * the alternative that spends the cover on the background instead.
+ */
+@Composable
+private fun SongNowPlayingBody(
+    playback: PlaybackUiState,
+    track: Track,
+    playbackPositionMs: StateFlow<Long>,
+    sleepTimer: StateFlow<SleepTimerState>,
+    modifier: Modifier = Modifier,
+    onPlayPause: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onShuffle: () -> Unit,
+    onRepeat: () -> Unit,
+    onAlbum: () -> Unit,
+    onArtist: () -> Unit
+) {
+    Column(
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val art = minOf(maxWidth, maxHeight)
+            Cover(
+                track.artRes,
+                Modifier.size(art),
+                shape = SidekitTheme.shapes.item,
+                bordered = true,
+                contentDescription = "${track.title} artwork",
+                artUrl = track.artUrl,
+                onClick = onAlbum,
+                onClickLabel = "Open album"
+            )
+        }
+        // The artist line is a destination only when the service gave us an artist page to open.
+        val artistAction = onArtist.takeIf { track.artistId.mediaIdOrNull() != null }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            SidekitText(
+                track.title,
+                Modifier.fillMaxWidth(),
+                style = SidekitTheme.typography.headline,
+                textAlign = TextAlign.Center,
+                maxLines = 2
+            )
+            if (track.creator.isNotBlank()) {
+                SidekitText(
+                    track.creator,
+                    Modifier.fillMaxWidth().clickable(
+                        enabled = artistAction != null,
+                        onClickLabel = "Open artist",
+                        role = Role.Button,
+                        onClick = { artistAction?.invoke() }
+                    ),
+                    style = SidekitTheme.typography.label,
+                    color = SidekitTheme.colors.surfaceA6,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        NowPlayingSleepTimer(sleepTimer)
+        // Only the seek bar subscribes to the playback position flow, so the 10x/s position ticks
+        // recompose just this small composable, not the whole screen. The seek block owns its own
+        // height, so the labels can sit close to the artist line while the bar keeps a little air
+        // above the transport row.
+        NowPlayingSeek(
+            playbackPositionMs,
+            track.durationMs,
+            onSeek,
+            buffering = playback.isBuffering
+        )
+        SongTransportRow(
+            playback,
+            onPlayPause = onPlayPause,
+            onPrevious = onPrevious,
+            onNext = onNext,
+            onShuffle = onShuffle,
+            onRepeat = onRepeat
+        )
+    }
+}
+
+/** The five song tiles, shared by the base layout and [BackdroppedNowPlayingBody]. */
+@Composable
+internal fun SongTransportRow(
+    playback: PlaybackUiState,
+    onPlayPause: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onShuffle: () -> Unit,
+    onRepeat: () -> Unit
+) {
+    SidekitItemRow {
+        IconTile(
+            SidekitIcon.Shuffle,
+            if (playback.shuffle) "Shuffle on" else "Shuffle off",
+            onShuffle,
+            tone = if (playback.shuffle) TileTone.On else TileTone.Neutral,
+            weight = 0.85f
+        )
+        IconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
+        IconTile(
+            if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
+            if (playback.isPlaying) "Pause" else "Play",
+            onPlayPause,
+            tone = TileTone.Play,
+            weight = 1.2f
+        )
+        IconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
+        RepeatTile(playback.repeat, onRepeat)
     }
 }
 

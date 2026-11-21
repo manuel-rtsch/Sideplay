@@ -42,7 +42,7 @@ screen's normal actions, and a three-button menu is three narrow squares.
 | 6 | Album / Playlist (`CollectionScreen.kt:88`) | Add to queue (when the collection has items) → Now playing | wide ×1–2, text + icon | Primary, Primary |
 | 7 | Artist (`ArtistScreen.kt:74`) | Artist radio (when the service supports radio) → Now playing | wide ×1–2, text + icon | Primary, Primary |
 | 8 | Podcast show (`PodcastScreens.kt:91`) | Add latest to queue (when the show has episodes) → Now playing | wide ×1–2, text + icon | Primary, Primary |
-| 9 | **Now Playing** (`NowPlayingScreen.kt:114`) | Open queue → Song radio **or** Episode notes → Sleep timer / "Sleep timer on" | **icon-only squares ×2–3** | **all Primary (accent)** |
+| 9 | **Now Playing** (`NowPlayingScreen.kt:114`) | Open queue → Song radio **or** Episode notes → Sleep timer / "Sleep timer on" | **icon-only squares ×3** | **all Primary (accent), Secondary while the timer is armed** |
 | 10 | **Queue** (`QueueScreen.kt:323`) | Sleep timer → Clear upcoming (when there is an upcoming track) | wide, text + icon ×1–2 | Primary; **Destructive** |
 | 11 | Welcome — keyboard onboarding (`SidetrackOnboardingScreen.kt:116`) | About Sidetrack (ⓘ) | wide, text + icon | Primary |
 
@@ -101,9 +101,13 @@ space from the gesture that opened it.
    entry (`square`), row actions per menu (count ≥ 3). The same conceptual action can therefore
    still change shape depending on where it is offered. Deliberate for now, documented in
    `RowActionBar.kt`.
-2. **Fixed — "Sleep timer" had two shapes and two states.** Icon-only accent square on Now Playing
-   (`NowPlayingScreen.kt:130-136`), wide accent text button on Queue (`QueueScreen.kt:345`). Same
-   destination, same tone, different affordance.
+2. **Partly fixed — "Sleep timer" has two shapes, on purpose.** It is a wide accent text button on
+   Queue (`QueueScreen.kt:345`) and an icon-only square on Now Playing
+   (`NowPlayingScreen.kt:130-136`), because Now Playing's bar is three playback squares beside
+   Sidekit's close square: on 460 dp that leaves nothing for a label, and the label truncated to
+   "Sle…". The words are not lost — the body's countdown row says "Sleep timer · 23:00", and the
+   glyph turns green while armed. The state is no longer a colour-only signal, which is what this
+   anti-pattern was really about.
 3. **Fixed — options mixed three tones for one job.** Now Playing painted every entry `Primary`,
    every other screen painted navigation `Primary` and toggles `Muted`/`Secondary`, so the same
    entry changed colour between screens. The bar now uses one scheme everywhere: accent for every
@@ -135,7 +139,7 @@ space from the gesture that opened it.
 
 | Rule | Target |
 | --- | --- |
-| Shape | A destination is a **wide button with its label and glyph**. An icon-only square is either a list-wide toggle (`shuffleOption`) or one of Now Playing's playback shortcuts, where the bar is already read as transport beside the five tiles. |
+| Shape | A destination is a **wide button with its label and glyph**. An icon-only square is either a list-wide toggle (`shuffleOption`) or one of Now Playing's playback shortcuts, where the bar is already read as transport beside the five tiles. Sleep timer is a shortcut there and a labelled destination on Queue, where the bar has room for the words. |
 | Coverage | Every screen with a destination list or a list-wide control publishes options. The "No options here" path only remains reachable for transient states (nothing playing, reordering queue). |
 | Tone | `Primary` for **every** option, the way Sidekit's own apps paint their Options bars: an option is live wherever it leads, so tone says what it does, never how far it travels. `Secondary` for a toggle that is on, `Destructive` for destroy. Grey is left to the close square, notices and undo, which are not options. |
 | Toggle state | Shuffle and Sleep timer express state the same way: tone change **and** label/content description. Shuffle keeps the menu open; the sleep timer is a destination, so it closes. |
@@ -152,10 +156,11 @@ space from the gesture that opened it.
 
 What changed in behaviour, and nothing else:
 
-- **Sleep timer has one shape and one label everywhere.** It is the wide, labelled button on both
-  Now Playing and Queue, and its label says "Sleep timer on" while armed (anti-patterns 2 and 4).
-  On Now Playing it absorbs the width the two squares leave, so the bar is two squares and one
-  labelled button instead of three squares.
+- **Sleep timer says its state in words, and its shape follows the room it has.** On Queue it is
+  the wide, labelled button that reads "Sleep timer on" while armed. On Now Playing it is a square
+  like the shortcuts beside it (`sleepTimerShortcutOption`), because three squares and the close
+  square leave no width for a label; the armed state is the green glyph plus the body's own
+  "Sleep timer · 23:00" row, so it is never colour-only (anti-patterns 2 and 4).
 - **Tones follow the role, and there is only one role for a live option.** Every entry is
   `Primary` — navigation and actions alike — matching Sidekit's own apps
   (`calculator/CalculatorScreen.kt:116`, `calendar/CalendarScreen.kt:50`,

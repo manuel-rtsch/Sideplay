@@ -283,24 +283,13 @@ internal fun BackdroppedNowPlayingBody(
             buffering = playback.isBuffering
         )
         Spacer(Modifier.height(6.dp))
-        SidekitItemRow {
-            IconTile(
-                SidekitIcon.Shuffle,
-                if (playback.shuffle) "Shuffle on" else "Shuffle off",
-                onShuffle,
-                tone = if (playback.shuffle) TileTone.On else TileTone.Neutral,
-                weight = 0.85f
-            )
-            IconTile(SidekitIcon.SkipPrevious, "Previous", onPrevious, weight = 0.85f)
-            IconTile(
-                if (playback.isPlaying) SidekitIcon.Pause else SidekitIcon.PlayArrow,
-                if (playback.isPlaying) "Pause" else "Play",
-                onPlayPause,
-                tone = TileTone.Play,
-                weight = 1.2f
-            )
-            IconTile(SidekitIcon.SkipNext, "Next", onNext, weight = 0.85f)
-            RepeatTile(playback.repeat, onRepeat)
-        }
+        SongTransportRow(
+            playback,
+            onPlayPause = onPlayPause,
+            onPrevious = onPrevious,
+            onNext = onNext,
+            onShuffle = onShuffle,
+            onRepeat = onRepeat
+        )
     }
 }
