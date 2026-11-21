@@ -357,11 +357,11 @@ class SidetrackScreenshotTest {
     @Test
     fun nowPlayingBackdrop() {
         val settings = SidetrackLocalSettings(RuntimeEnvironment.getApplication())
-        settings.artworkBackdrop = true
+        settings.nowPlayingBackdrop = true
         try {
             shoot("sidetrack_now_playing_backdrop") { NowPlayingShot() }
         } finally {
-            settings.artworkBackdrop = false
+            settings.nowPlayingBackdrop = false
         }
     }
 

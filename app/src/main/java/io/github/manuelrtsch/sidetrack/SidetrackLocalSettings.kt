@@ -23,16 +23,16 @@ internal class SidetrackLocalSettings(context: Context) {
     fun observeInputMode(onChange: () -> Unit): () -> Unit = observe(KEY_INPUT_MODE, onChange)
 
     /**
-     * Experimental: the song Now Playing screen draws its artwork behind the controls. Off by
-     * default, because it changes how one screen reads rather than how the app looks overall.
+     * The song Now Playing screen draws its artwork behind the controls. Off by default, because it
+     * changes how one screen reads rather than how the app looks overall.
      */
-    var artworkBackdrop: Boolean
-        get() = prefs.getBoolean(KEY_ARTWORK_BACKDROP, false)
+    var nowPlayingBackdrop: Boolean
+        get() = prefs.getBoolean(KEY_NOW_PLAYING_BACKDROP, false)
         set(value) {
-            prefs.edit().putBoolean(KEY_ARTWORK_BACKDROP, value).apply()
+            prefs.edit().putBoolean(KEY_NOW_PLAYING_BACKDROP, value).apply()
         }
 
-    fun observeArtworkBackdrop(onChange: () -> Unit): () -> Unit = observe(KEY_ARTWORK_BACKDROP, onChange)
+    fun observeNowPlayingBackdrop(onChange: () -> Unit): () -> Unit = observe(KEY_NOW_PLAYING_BACKDROP, onChange)
 
     /**
      * Shrinks the media rows by about a fifth so five fit where four used to. Off by default: the
@@ -82,7 +82,10 @@ internal class SidetrackLocalSettings(context: Context) {
         const val FILE = "sidetrack_settings"
         const val KEYPAD_FILE = "sidetrack_keypad"
         private const val KEY_INPUT_MODE = "input_mode"
-        private const val KEY_ARTWORK_BACKDROP = "artwork_backdrop"
+
+        // Spelled for the artwork it paints, and kept from before the setting was named after the
+        // screen, so an install that already turned it on still finds its choice.
+        private const val KEY_NOW_PLAYING_BACKDROP = "artwork_backdrop"
         private const val KEY_COMPACT_ROWS = "compact_rows"
         private const val KEY_ONBOARDING_SEEN = "onboarding_seen"
 
