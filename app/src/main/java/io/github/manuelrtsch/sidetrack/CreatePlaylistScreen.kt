@@ -86,7 +86,9 @@ fun CreatePlaylistScreen(
                     placeholder = "e.g. Sunday morning",
                     modifier = Modifier.listFade(listState, 0),
                     fieldDescription = "Playlist name",
-                    focusOnKeypad = true,
+                    // autoFocus gives the field the keypad on entry; after Up / Down the keypad
+                    // navigates the form and a letter must not pull focus back into the name.
+                    focusOnKeypad = false,
                     autoFocus = true,
                     imeAction = ImeAction.Done,
                     // Done finishes the name, it does not create: creating is the bar's button,

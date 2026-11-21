@@ -231,7 +231,10 @@ fun SearchScreen(
                     textStyle = SidekitTheme.typography.title,
                     placeholder = "Search",
                     focusRequester = searchFocus,
-                    focusOnKeypad = true,
+                    // The field is the keypad's input only while it has focus. autoFocus gives it
+                    // that on entry, but typing after Up / Down must not take focus back: the
+                    // keypad is then navigating the page, not entering a term.
+                    focusOnKeypad = false,
                     singleLine = true,
                     // The rule above decides; see searchFieldAutoFocus for why history wins on an
                     // empty field.
