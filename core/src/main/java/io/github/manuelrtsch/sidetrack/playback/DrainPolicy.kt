@@ -25,8 +25,16 @@ class DrainPolicy(
     private val minStartBytes: Int,
     /** How long to wait for that prefill before starting anyway. */
     private val prefillTimeoutMs: Long,
-    /** How long a playing drain may go without any PCM before it counts as starved. */
-    private val starveTimeoutMs: Long
+    /** How long a drain that never produced PCM may wait before it counts as starved. */
+    private val starveTimeoutMs: Long,
+    /**
+     * How long a drain that was already playing may go silent before it counts as starved.
+     *
+     * Much shorter than [starveTimeoutMs]: once audio has flowed, a multi-second hole is a dead
+     * access point, not a slow first fetch. The old single 15 s budget turned a dropped
+     * connection into 16 s of silence before recovery even started.
+     */
+    private val playingStarveTimeoutMs: Long = starveTimeoutMs
 ) {
     private var startedAtMs = 0L
     private var bufferedBytes = 0L
@@ -77,5 +85,8 @@ class DrainPolicy(
      * track that never gets enough to start is the same silence from the listener's side, and
      * waiting for it forever is what put the app into half an hour of silence.
      */
-    fun starved(nowMs: Long): Boolean = nowMs - lastDataAtMs >= starveTimeoutMs
+    fun starved(nowMs: Long): Boolean {
+        val budget = if (playing) playingStarveTimeoutMs else starveTimeoutMs
+        return nowMs - lastDataAtMs >= budget
+    }
 }

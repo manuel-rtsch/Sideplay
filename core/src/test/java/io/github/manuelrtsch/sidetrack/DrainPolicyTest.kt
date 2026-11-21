@@ -15,8 +15,10 @@ class DrainPolicyTest {
     private val minStart = 4_096
     private val prefillTimeout = 1_500L
     private val starveTimeout = 15_000L
+    private val playingStarveTimeout = 3_000L
 
-    private fun policy() = DrainPolicy(prefill, minStart, prefillTimeout, starveTimeout)
+    private fun policy() =
+        DrainPolicy(prefill, minStart, prefillTimeout, starveTimeout, playingStarveTimeout)
 
     @Test fun `does not play before the track is primed`() {
         val policy = policy()
@@ -68,10 +70,29 @@ class DrainPolicyTest {
         assertFalse(policy.mayPlay(nowMs = 10L))
     }
 
-    @Test fun `a running track starves only after the whole budget`() {
+    @Test fun `a running track starves after the short playing budget`() {
         val policy = policy()
         policy.begin(nowMs = 0L, playing = true)
 
+        assertFalse(policy.starved(nowMs = playingStarveTimeout - 1))
+        assertTrue(policy.starved(nowMs = playingStarveTimeout))
+    }
+
+    @Test fun `a track that starts playing switches to the short budget`() {
+        val policy = policy()
+        policy.begin(nowMs = 0L, playing = false)
+        policy.onData(prefill, nowMs = 100L)
+
+        assertTrue(policy.mayPlay(nowMs = 100L))
+        assertFalse(policy.starved(nowMs = 100L + playingStarveTimeout - 1))
+        assertTrue(policy.starved(nowMs = 100L + playingStarveTimeout))
+    }
+
+    @Test fun `a slow first fetch still gets the long pre-play budget`() {
+        val policy = policy()
+        policy.begin(nowMs = 0L, playing = false)
+
+        assertFalse(policy.starved(nowMs = playingStarveTimeout))
         assertFalse(policy.starved(nowMs = starveTimeout - 1))
         assertTrue(policy.starved(nowMs = starveTimeout))
     }
@@ -91,10 +112,10 @@ class DrainPolicyTest {
         val policy = policy()
         policy.begin(nowMs = 0L, playing = true)
 
-        policy.onData(4_096, nowMs = starveTimeout - 1_000L)
+        policy.onData(4_096, nowMs = playingStarveTimeout - 1_000L)
 
-        assertFalse(policy.starved(nowMs = starveTimeout))
-        assertTrue(policy.starved(nowMs = starveTimeout * 2 - 1_000L))
+        assertFalse(policy.starved(nowMs = playingStarveTimeout))
+        assertTrue(policy.starved(nowMs = playingStarveTimeout * 2 - 1_000L))
     }
 
     @Test fun `a track that never gets PCM stalls instead of starting empty`() {

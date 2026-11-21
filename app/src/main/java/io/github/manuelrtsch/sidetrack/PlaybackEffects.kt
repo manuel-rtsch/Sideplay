@@ -135,6 +135,14 @@ internal class PlaybackEffects(
     }
 
     fun stopAtQueueEnd(notice: String? = null) {
+        // The native player is parked at the end of the item. Left playing, the drain keeps
+        // polling an empty source until the stall watchdog fires and reloads the finished track;
+        // left at its duration, the next play ends again immediately. Pause it and rewind.
+        playback()?.let { controller ->
+            controller.updatePosition(0L)
+            controller.pause()
+            controller.requestSeek(0L)
+        }
         clock.set(0L)
         store.update {
             val next = it.copy(isPlaying = false)

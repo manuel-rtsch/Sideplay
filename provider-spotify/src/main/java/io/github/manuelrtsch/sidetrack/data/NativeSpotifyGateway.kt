@@ -162,8 +162,21 @@ class NativeSpotifyGateway(
             connect(token)
             return true
         }
-        if (!connected || !playerAttached()) {
-            SidetrackDebug.log("ensureConnected: no player, connecting")
+        if (!connected) {
+            // A player is process-wide while `connected` is this gateway's memory. After a
+            // runtime/gateway rebuild the flag says "nothing here" even though the native
+            // session still owns a player; adopting it avoids rebuilding the session (and
+            // dropping the current track) for nothing.
+            if (playerAttached()) {
+                SidetrackDebug.log("ensureConnected: adopting the attached player")
+                connected = true
+            } else {
+                SidetrackDebug.log("ensureConnected: no player, connecting")
+                connect(token)
+                return true
+            }
+        } else if (!playerAttached()) {
+            SidetrackDebug.log("ensureConnected: player lost, connecting")
             connect(token)
             return true
         }
@@ -193,22 +206,42 @@ class NativeSpotifyGateway(
         }
         synchronized(sessionLock) {
             if (!sessionConnected) {
+                refuseToDropPlayer("the session is missing")
                 connectSessionLocked(token)
-            } else if (!native.setAccessToken(token)) {
-                // The first call stores the new token. A second call therefore only reports a dead
-                // session, not a token change: a refreshed token must not tear down a live player
-                // from a catalog read, but an invalid session still has to be rebuilt.
-                if (!native.setAccessToken(token)) {
-                    sessionConnected = false
-                    sessionToken = null
-                    connectSessionLocked(token)
-                } else {
-                    sessionToken = token
-                }
-            } else {
-                sessionToken = token
+                return@synchronized
             }
+            // The first call stores the new token. A second call therefore only reports a dead
+            // session, not a token change: a refreshed token must not tear down a live player
+            // from a catalog read, but an invalid session still has to be rebuilt.
+            if (native.setAccessToken(token)) {
+                sessionToken = token
+                return@synchronized
+            }
+            if (native.setAccessToken(token)) {
+                sessionToken = token
+                return@synchronized
+            }
+            refuseToDropPlayer("the session is invalid")
+            sessionConnected = false
+            sessionToken = null
+            connectSessionLocked(token)
         }
+    }
+
+    /**
+     * A catalog read must never tear down a session that is playing.
+     *
+     * Rebuilding the session always drops the player, and the catalog path does not create a new
+     * one. When that happens while audio is running, the app keeps reporting a playing track while
+     * delivering silence (the 20:45:47 stall). Fail this read instead; the playback path owns the
+     * rebuild, recreates the player and reloads the item.
+     *
+     * [sessionLock] must be held.
+     */
+    private fun refuseToDropPlayer(reason: String) {
+        if (!native.hasPlayer()) return
+        SidetrackDebug.log("ensureSession: $reason while a player is attached; not rebuilding")
+        fail(SpotifyFailure.NotConnected, "Spotify session lost; playback will reconnect")
     }
 
     /** [sessionLock] must be held, so two catalog reads cannot rebuild the session at once. */

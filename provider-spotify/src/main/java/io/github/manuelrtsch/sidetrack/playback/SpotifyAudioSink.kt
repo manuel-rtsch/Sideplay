@@ -233,7 +233,8 @@ class SpotifyAudioSink(
             prefillBytes = prefill,
             minStartBytes = audioTrack.minStartBytes(prefill),
             prefillTimeoutMs = PREPLAY_TIMEOUT_MS,
-            starveTimeoutMs = STARVE_TIMEOUT_MS
+            starveTimeoutMs = STARVE_TIMEOUT_MS,
+            playingStarveTimeoutMs = PLAYING_STARVE_TIMEOUT_MS
         ).apply { begin(SystemClock.elapsedRealtime(), playing = !startWhenPrefilled) }
         drain = scope.launch(Dispatchers.IO) {
             var reads = 0
@@ -287,7 +288,8 @@ class SpotifyAudioSink(
                     }
                     if (policy.starved(now)) {
                         throw AudioStalledException(
-                            "no PCM for ${STARVE_TIMEOUT_MS}ms after $reads reads/$bytes bytes"
+                            "no PCM for ${policy.idleFor(now)}ms (playing=$playing) " +
+                                "after $reads reads/$bytes bytes"
                         )
                     }
                     if (now - lastUnderrunCheck >= UNDERRUN_CHECK_MS) {
@@ -393,6 +395,12 @@ class SpotifyAudioSink(
 
         /** No PCM at all for this long means the pipeline is dead, not merely buffering. */
         const val STARVE_TIMEOUT_MS = 15_000L
+
+        /**
+         * Once audio is flowing, silence for this long is a dead connection. Recovering here
+         * costs a short reload; waiting for 15 s costs the listener the whole gap.
+         */
+        const val PLAYING_STARVE_TIMEOUT_MS = 3_000L
 
         /** How often the AudioTrack underrun counter is compared (cheap, but a binder call). */
         const val UNDERRUN_CHECK_MS = 1_000L
