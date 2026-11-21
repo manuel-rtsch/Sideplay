@@ -46,12 +46,18 @@ fun sleepTimerRemainingMinutes(remainingMs: Long): Int {
     return ((remainingMs + MINUTE_MS - 1) / MINUTE_MS).toInt()
 }
 
-/** Slim status line on Now Playing. Null when no timer is active. */
+/**
+ * Slim status line on Now Playing. Every state describes what the timer does rather than naming a
+ * bare remainder, and all three share the verb: "Pauses in 23 min", "Pauses after this track",
+ * "Paused by sleep timer". The line reads on its own, with or without the bedtime icon, and the
+ * wording holds for music and podcasts where "sleep" would be a metaphor too many. Null when no
+ * timer is active.
+ */
 fun SleepTimerState.statusText(): String? = when (this) {
     SleepTimerState.Off -> null
-    SleepTimerState.EndOfTrack -> "ends with this track"
-    is SleepTimerState.Countdown -> "$remainingMinutes min left"
-    SleepTimerState.Finished -> "paused by sleep timer"
+    SleepTimerState.EndOfTrack -> "Pauses after this track"
+    is SleepTimerState.Countdown -> "Pauses in $remainingMinutes min"
+    SleepTimerState.Finished -> "Paused by sleep timer"
 }
 
 private fun SleepTimerState.Countdown.minuteWord(): String = if (remainingMinutes == 1) "minute" else "minutes"
@@ -59,30 +65,35 @@ private fun SleepTimerState.Countdown.minuteWord(): String = if (remainingMinute
 /** TalkBack description for the non-interactive status line. */
 fun SleepTimerState.statusDescription(): String? = when (this) {
     SleepTimerState.Off -> null
-    SleepTimerState.EndOfTrack -> "Sleep timer, ends with this track"
-    is SleepTimerState.Countdown -> "Sleep timer, $remainingMinutes ${minuteWord()} left"
+    SleepTimerState.EndOfTrack -> "Sleep timer, pauses after this track"
+    is SleepTimerState.Countdown -> "Sleep timer, pauses in $remainingMinutes ${minuteWord()}"
     SleepTimerState.Finished -> "Sleep timer finished, playback paused"
 }
 
-/** Overline indicator on Home's now-playing tile, replacing the NOW PLAYING label. */
+/**
+ * Overline indicator on Home's now-playing tile, replacing the NOW PLAYING label. Uppercase, like
+ * every label in that eyebrow slot, and short: the tile shows one line, so the widest entry here
+ * sets the budget. Nothing exceeds "NOTHING PLAYING" (15 characters); the tile's icon carries the
+ * playback state, so the timer wording does not repeat "PAUSED".
+ */
 fun SleepTimerState.tileText(): String? = when (this) {
     SleepTimerState.Off -> null
 
-    SleepTimerState.EndOfTrack -> "end of track"
+    SleepTimerState.EndOfTrack -> "END OF TRACK"
 
-    is SleepTimerState.Countdown -> "$remainingMinutes min left"
+    is SleepTimerState.Countdown -> "$remainingMinutes MIN LEFT"
 
     // Shorter than the Now Playing line: the home overline must not ellipsize.
-    SleepTimerState.Finished -> "paused by timer"
+    SleepTimerState.Finished -> "PAUSED BY TIMER"
 }
 
 /** Secondary notification line, appended to the artist. Null when no timer is active. */
 fun SleepTimerState.notificationSuffix(): String? = when (this) {
     SleepTimerState.Off -> null
 
-    SleepTimerState.EndOfTrack -> "ends with this track"
+    SleepTimerState.EndOfTrack -> "pauses after this track"
 
-    is SleepTimerState.Countdown -> "sleep ${remainingMinutes}m"
+    is SleepTimerState.Countdown -> "pauses in ${remainingMinutes} min"
 
     // The timer already did its job; a suffix would claim one is still running.
     SleepTimerState.Finished -> null

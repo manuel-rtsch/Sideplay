@@ -57,7 +57,8 @@ fun NowPlayingTile(
     val timerLabel = timer.tileText()
     val countdown = timer as? SleepTimerState.Countdown
     // One overline slot, ranked: the sleep timer's outcome explains the pause, a frozen or live
-    // timer rides next to a plain pause, and the playing label is the fallback.
+    // timer replaces the playing label, and the icon beside the text carries playback state so the
+    // text itself can stay inside the tile's one-line budget.
     val paused = current != null && !isPlaying
     val overlineIcon: SidekitIcon?
     val overlineLabel: String
@@ -73,14 +74,16 @@ fun NowPlayingTile(
         }
 
         paused && countdown != null -> {
+            // The pause icon already says "PAUSED", so the text is the timer itself: at 11
+            // characters it sits well inside the slot that "NOTHING PLAYING" sets.
             overlineIcon = SidekitIcon.Pause
-            // Compact remainder: the full "23 min left" would ellipsize beside PAUSED.
-            overlineLabel = "PAUSED · ${countdown.remainingMinutes}m"
+            overlineLabel = "${countdown.remainingMinutes} MIN LEFT"
         }
 
         paused && timerLabel != null -> {
+            // Same label as a playing end-of-track timer; only the icon differs.
             overlineIcon = SidekitIcon.Pause
-            overlineLabel = "PAUSED · track end"
+            overlineLabel = timerLabel
         }
 
         paused -> {
