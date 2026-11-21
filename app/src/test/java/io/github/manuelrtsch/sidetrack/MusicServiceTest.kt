@@ -17,24 +17,25 @@ class MusicServiceTest {
     @Test fun `the picker offers every service this build can provision`() {
         assertEquals(
             listOf(
-                ServiceId.Spotify,
+                ServiceId.Jellyfin,
                 ServiceId.Navidrome,
-                ServiceId.Airsonic,
-                ServiceId.Gonic,
                 ServiceId.NextcloudMusic,
-                ServiceId.Subsonic,
-                ServiceId.Jellyfin
+                ServiceId.Spotify,
+                ServiceId.Subsonic
             ),
             KnownServices.map { it.id }
         )
         // The label comes from the provider's own constant, so the picker cannot drift from it.
         assertEquals("Spotify", KnownServices.first { it.id == ServiceId.Spotify }.displayName)
         assertEquals("Navidrome", KnownServices.first { it.id == ServiceId.Navidrome }.displayName)
-        assertEquals("Airsonic", KnownServices.first { it.id == ServiceId.Airsonic }.displayName)
-        assertEquals("Gonic", KnownServices.first { it.id == ServiceId.Gonic }.displayName)
         assertEquals("Nextcloud Music", KnownServices.first { it.id == ServiceId.NextcloudMusic }.displayName)
         assertEquals("Subsonic", KnownServices.first { it.id == ServiceId.Subsonic }.displayName)
         assertEquals("Jellyfin", KnownServices.first { it.id == ServiceId.Jellyfin }.displayName)
+        // The picker sorts by the label it renders, so the welcome list reads A–Z.
+        assertEquals(
+            KnownServices.map { it.displayName }.sortedBy { it.lowercase() },
+            KnownServices.map { it.displayName }
+        )
         assertNull(serviceChoice(ServiceId("unknown")))
     }
 

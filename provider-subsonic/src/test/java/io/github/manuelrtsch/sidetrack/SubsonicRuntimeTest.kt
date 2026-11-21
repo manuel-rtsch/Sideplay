@@ -169,15 +169,15 @@ class SubsonicRuntimeTest {
     }
 
     @Test fun `a second family entry keeps its own identity, label and stores`() {
-        val airsonic = SubsonicRuntime(context, SubsonicFamily.Airsonic, auth(MemoryStore()))
-        val provider = SubsonicProvider(airsonic)
+        val generic = SubsonicRuntime(context, SubsonicFamily.Subsonic, auth(MemoryStore()))
+        val provider = SubsonicProvider(generic)
 
-        assertEquals(ServiceId.Airsonic, airsonic.service)
-        assertEquals(ServiceId.Airsonic, provider.id)
-        assertEquals("Airsonic", provider.displayName)
-        assertEquals(SubsonicFamily.Airsonic, airsonic.family)
-        assertEquals("sidetracks_airsonic", airsonic.family.credentialStoreName)
-        assertEquals("sidetracks-airsonic-queue.bin", airsonic.family.localStoreName("queue"))
+        assertEquals(ServiceId.Subsonic, generic.service)
+        assertEquals(ServiceId.Subsonic, provider.id)
+        assertEquals("Subsonic", provider.displayName)
+        assertEquals(SubsonicFamily.Subsonic, generic.family)
+        assertEquals("sidetracks_subsonic", generic.family.credentialStoreName)
+        assertEquals("sidetracks-subsonic-queue.bin", generic.family.localStoreName("queue"))
         // Only the Navidrome entry offers the public demo; the others leave the form literal.
         assertNull((provider.signInKind as SignInKind.Password).defaults)
         assertEquals(

@@ -6,10 +6,11 @@ import io.github.manuelrtsch.sidetrack.ServiceId
  * The server products Sidetrack lists separately but serves with one Subsonic adapter.
  *
  * Every entry speaks the same Subsonic/OpenSubsonic API at `/rest`, so the app can name the product
- * a user actually runs — Navidrome, Airsonic, Gonic, Nextcloud's Music app, or Subsonic itself —
- * without a per-product client. Listing them apart matters because the id decides which
- * credentials and local queue/history stores a session uses: signing into two servers keeps two
- * libraries, and picking the wrong label still connects, because the wire protocol is the same.
+ * a user actually runs — Navidrome, Nextcloud's Music app, or Subsonic itself — without a
+ * per-product client. [Subsonic] is also the answer for every other server in this family: the
+ * entry is a label, not a filter, so picking it connects all the same. Listing entries apart
+ * matters because the id decides which credentials and local queue/history stores a session uses:
+ * signing into two servers keeps two libraries.
  *
  * [passwordDefaults] is the public demo an entry offers, if any. The demo is a Navidrome server,
  * so only that entry pre-fills it; the other entries leave the form literal.
@@ -28,8 +29,6 @@ enum class SubsonicFamily(
             password = NavidromeDemo.PASSWORD
         )
     ),
-    Airsonic(ServiceId.Airsonic, "Airsonic"),
-    Gonic(ServiceId.Gonic, "Gonic"),
     NextcloudMusic(ServiceId.NextcloudMusic, "Nextcloud Music"),
     Subsonic(ServiceId.Subsonic, "Subsonic");
 

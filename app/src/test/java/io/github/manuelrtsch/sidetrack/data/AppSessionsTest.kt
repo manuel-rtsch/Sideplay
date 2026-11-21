@@ -43,13 +43,11 @@ class AppSessionsTest {
     @Test fun `the picker lists every known service in order and rejects the rest`() {
         assertEquals(
             listOf(
-                ServiceId.Spotify,
+                ServiceId.Jellyfin,
                 ServiceId.Navidrome,
-                ServiceId.Airsonic,
-                ServiceId.Gonic,
                 ServiceId.NextcloudMusic,
-                ServiceId.Subsonic,
-                ServiceId.Jellyfin
+                ServiceId.Spotify,
+                ServiceId.Subsonic
             ),
             KnownServices.map { it.id }
         )

@@ -41,10 +41,11 @@ Sidetrack connects to one service at a time. The choice is remembered until you 
 Capabilities vary by service: the interface shows only what the selected service supports, so
 podcasts, artist following, gapless playback or playlist creation appear only where they work.
 
-The self-hosted side is one adapter for the whole Subsonic family. **Navidrome**, **Airsonic**,
-**Gonic**, **Nextcloud Music** and **Subsonic** itself are listed separately on the welcome screen
-because that is the product you run, but they all speak the same Subsonic/OpenSubsonic API and run
-the same code. Picking one keeps its own credentials, queue and history, so two servers never mix.
+The self-hosted side is one adapter for the whole Subsonic family. **Navidrome**, **Nextcloud
+Music** and **Subsonic** itself are listed separately on the welcome screen because that is the
+product you run, but they all speak the same Subsonic/OpenSubsonic API and run the same code —
+any other Subsonic-compatible server works through the **Subsonic** entry. Picking one keeps its
+own credentials, queue and history, so two servers never mix.
 
 | | Spotify | Subsonic family | Jellyfin |
 | --- | --- | --- | --- |
@@ -109,10 +110,9 @@ On Spotify, podcasts include show notes, episode numbers, dates, per-episode res
    Sidetrack alongside the launcher and pick up its theme, accent and key mappings. Sidetrack
    runs without it.
 2. Install the Sidetrack APK.
-3. Open Sidetrack and choose a service. Spotify opens a browser sign-in; Navidrome, Airsonic,
-   Gonic, Nextcloud Music, Subsonic and Jellyfin ask for a server address, username and password.
-   Any Subsonic entry connects to any Subsonic server; Jellyfin needs a 12.x server with a music
-   library.
+3. Open Sidetrack and choose a service. Spotify opens a browser sign-in; Navidrome, Nextcloud
+   Music, Subsonic and Jellyfin ask for a server address, username and password. Any Subsonic
+   entry connects to any Subsonic server; Jellyfin needs a 12.x server with a music library.
 4. To try the app without an account or a server, choose **Navidrome** and submit the blank
    sign-in form: it signs into the shared demo at
    [demo.navidrome.org](https://demo.navidrome.org) (`demo` / `demo`).

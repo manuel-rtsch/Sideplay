@@ -288,18 +288,18 @@ class SubsonicApiTest {
     @Test fun `a family entry labels the account without restricting which server it reaches`() = runTest {
         val store = InMemoryStore()
         val auth = SubsonicAuth(
-            SubsonicCredentialStore(ApplicationProvider.getApplicationContext(), "gonic-test", store),
-            SubsonicFamily.Gonic,
+            SubsonicCredentialStore(ApplicationProvider.getApplicationContext(), "nextcloud-test", store),
+            SubsonicFamily.NextcloudMusic,
             transport = FakeTransport { ok("""{"status":"ok"}""") }
         )
 
         // Any entry answers any Subsonic server: the picker name is a label, not a filter.
         val account = auth.signIn(AuthInput.Password("http://nas.local:4747", "joe", "sesame"))
 
-        assertEquals(ServiceId.Gonic, account.service)
-        assertEquals("Gonic", account.displayName)
+        assertEquals(ServiceId.NextcloudMusic, account.service)
+        assertEquals("Nextcloud Music", account.displayName)
         assertEquals("http://nas.local:4747", account.serverUrl)
-        assertEquals(ServiceId.Gonic, auth.restore()?.service)
+        assertEquals(ServiceId.NextcloudMusic, auth.restore()?.service)
     }
 
     @Test fun `catalog resolves a stream and paginates a playlist`() = runTest {

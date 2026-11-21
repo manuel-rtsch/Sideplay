@@ -18,13 +18,14 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * The Subsonic family is listed once per server product even though one adapter serves them all,
  * because the entry a user picks is what they recognise; the id keeps their credentials, library
- * and local stores apart from the other entries.
+ * and local stores apart from the other entries. The picker sorts alphabetically by what the row
+ * says, so a new entry lands where a user would look for it instead of at the end of a list.
  */
 val KnownServices: List<ServiceChoice> = buildList {
     add(ServiceChoice(SpotifyService.id, SpotifyService.DISPLAY_NAME))
     SubsonicFamily.entries.forEach { add(ServiceChoice(it.id, it.displayName)) }
     add(ServiceChoice(JellyfinService.id, JellyfinService.DISPLAY_NAME))
-}
+}.sortedBy { it.displayName.lowercase() }
 
 /** The picker's view of [id], or null when this build does not know the service. */
 fun serviceChoice(id: ServiceId): ServiceChoice? = KnownServices.firstOrNull { it.id == id }

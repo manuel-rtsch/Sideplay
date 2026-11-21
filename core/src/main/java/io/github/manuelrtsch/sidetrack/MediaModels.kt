@@ -10,12 +10,11 @@ value class ServiceId(val value: String) {
         val Jellyfin = ServiceId("jellyfin")
 
         /**
-         * The Subsonic family: one wire protocol, several server products. Each product keeps its
-         * own id so its credentials, library identity and local queue/history stores stay apart.
+         * The Subsonic family: one wire protocol, several server products. Each listed product
+         * keeps its own id so its credentials, library identity and local queue/history stores
+         * stay apart. [Subsonic] is the generic entry for any other Subsonic-compatible server.
          */
         val Navidrome = ServiceId("navidrome")
-        val Airsonic = ServiceId("airsonic")
-        val Gonic = ServiceId("gonic")
         val NextcloudMusic = ServiceId("nextcloud-music")
         val Subsonic = ServiceId("subsonic")
 
@@ -139,7 +138,7 @@ data class ServiceCapabilities(
         )
 
         /**
-         * The Subsonic family — Navidrome, Airsonic, Gonic, Nextcloud Music and Subsonic itself —
+         * The Subsonic family — Navidrome, Nextcloud Music and Subsonic itself —
          * has albums, playlists, artists and similar-song radio. Podcast endpoints are 501 stubs
          * on Navidrome and absent elsewhere, loudness maps onto ReplayGain, and gapless is
          * engine-level, so no member of the family turns it on.

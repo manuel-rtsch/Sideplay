@@ -137,20 +137,21 @@ instrumentation lands under `app/src/androidTest` (`SpotifyPlaybackServiceInstru
 
 ---
 
-## Subsonic family (Navidrome, Airsonic, Gonic, Nextcloud Music, Subsonic)
+## Subsonic family (Navidrome, Nextcloud Music, Subsonic)
 
 The family is implemented through the Subsonic/OpenSubsonic API. It is **not** feature-complete;
 it covers music library, search, library editing, quality/DSP settings and Media3 playback, with
 the narrower capability set below.
 
 `provider-subsonic` holds one adapter. `SubsonicFamily` (in `data/SubsonicFamily.kt`) is the only
-thing that varies between the five picker entries: the `ServiceId`, the display name, the optional
+thing that varies between the three picker entries: the `ServiceId`, the display name, the optional
 public demo, and the derived credential/settings/queue/history store names. `AppSession.build`
 routes every unknown-to-`when` service id through `SubsonicFamily.of(id)`, so adding another
 Subsonic-compatible server is one enum entry, not a new client. Any entry connects to any
-Subsonic server: the picker names the product, it does not constrain the credentials. The id still
-matters, because it is what keeps a Navidrome account and an Airsonic account on the same device
-apart in `MediaKey`, the encrypted credential store and the local queue/history files.
+Subsonic server: the picker names the product, it does not constrain the credentials, and servers
+without their own row use the generic **Subsonic** entry. The id still matters, because it is what
+keeps two servers on the same device apart in `MediaKey`, the encrypted credential store and the
+local queue/history files.
 
 Only the Navidrome entry offers the public demo (`demo.navidrome.org`); the other entries leave the
 password form literal.
@@ -315,8 +316,8 @@ adapter covers the music library only.
   last match, and a stale row or a missing item sends nothing.
 - `JellyfinPlaybackReporterTest.kt` — start/progress/stopped ordering, 10-second throttling, a
   single pause report, end-of-track marking played, and a skip stopping without a play.
-- `MusicServiceTest.kt` — updated picker list (`Spotify`, `Navidrome`, `Airsonic`, `Gonic`,
-  `Nextcloud Music`, `Subsonic`, `Jellyfin`) and the existing Jellyfin capability/category pins.
+- `MusicServiceTest.kt` — the alphabetical picker list (`Jellyfin`, `Navidrome`, `Nextcloud
+  Music`, `Spotify`, `Subsonic`) and the existing Jellyfin capability/category pins.
 - `JellyfinPlaybackUrlTest.kt` / `JellyfinPlaybackChoiceTest.kt` — offline, no server and (for
   the choice test) no SDK: the direct play is `/Audio/{id}/stream?static=true` and never
   `/universal`; no or blank `transcodingUrl` keeps that URL, an absolute one is used as is, a

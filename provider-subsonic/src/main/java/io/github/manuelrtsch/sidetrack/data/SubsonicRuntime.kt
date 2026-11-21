@@ -25,8 +25,7 @@ import kotlinx.coroutines.launch
  * A signed-in account on one member of the Subsonic family.
  *
  * Catalog, auth and writer are the shared Subsonic adapter; [family] only supplies the identity,
- * label and store names, so Navidrome, Airsonic, Gonic, Nextcloud Music and Subsonic itself all run
- * the same code. Playback is the shared [PlaybackController] over Media3/ExoPlayer, so the media
+ * label and store names, so Navidrome, Nextcloud Music and Subsonic itself all run the same code. Playback is the shared [PlaybackController] over Media3/ExoPlayer, so the media
  * session, notification and audio focus behave exactly as they do for Spotify. Queue, history and
  * resume files are per family entry, so switching services never mixes two accounts.
  */
