@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import hrln.interactive.sidekit.design.action.LocalHeaderOptionsInset
 import hrln.interactive.sidekit.design.components.SidekitItemRow
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.icons.SidekitIcon
@@ -37,22 +38,6 @@ import kotlinx.coroutines.flow.StateFlow
  * what the panel is about.
  */
 private val EpisodeCoverSize = 100.dp
-
-/**
- * The top-right corner the shared header's touch-only Options button lives in, reserved so the
- * header's text does not run under it.
- *
- * Sidekit draws that button in the header overlay, not in the body, and reserves its width inside a
- * screen's *title* (`HeaderHost`: `padding(end = OPTIONS_HIT_SIZE)`). Now Playing publishes no
- * title, so nothing reserved it: the episode's first line and the three dots shared the same few
- * square centimetres. The header's 56 dp hit target starts `pagePadding` (10) + `itemPadding` (30)
- * before the panel's right edge, so the body has to keep its own 10 dp page padding plus 80 clear —
- * 86 dp in total, measured from the body's edge.
- *
- * The keypad does not show the button at all, but the space stays reserved — the same trade Sidekit
- * makes for every title, so the screen never reflows when the pointer wakes the button up.
- */
-private val HeaderOptionsSpace = 86.dp
 
 /**
  * An episode on Now Playing.
@@ -123,8 +108,10 @@ internal fun EpisodeNowPlayingBody(
 private fun EpisodeHeader(episode: Episode, onOpenShow: () -> Unit) {
     Row(
         // The card sits under the shared header, so its top line shares the row with the touch
-        // Options button: keep that corner clear (see [HeaderOptionsSpace]).
-        Modifier.fillMaxWidth().padding(end = HeaderOptionsSpace),
+        // Options button. Now Playing publishes no title, so the space the button takes is not
+        // reserved for it: Sidekit publishes that reservation and the card takes it here. It is
+        // zero on the keypad, which has no button to avoid, so the card gets the width back.
+        Modifier.fillMaxWidth().padding(end = LocalHeaderOptionsInset.current),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
