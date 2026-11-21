@@ -41,7 +41,7 @@ fun SettingsScreen(
     onUndoClearHistory: () -> Unit,
     onSignOut: () -> Unit,
     onDismissNotice: () -> Unit,
-    onAppearance: (() -> Unit)? = null,
+    onAppearance: () -> Unit,
     onKeyboard: (() -> Unit)? = null,
     onAbout: () -> Unit = {}
 ) {
@@ -52,7 +52,6 @@ fun SettingsScreen(
     // burning the window in the background.
     val undoWindow = rememberUndoWindow { historyCleared = false }
     UndoWindowLifecycle(undoWindow) { historyCleared = false }
-    val backdrop = rememberArtworkBackdropSetting()
     val context = LocalContext.current
     val back = remember { sidetrackBack("Back", onBack).first() }
     val baseActions = remember(back) { listOf(back, SideAction.forward("about", "About", onClick = onAbout)) }
@@ -88,8 +87,8 @@ fun SettingsScreen(
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
         SidekitList(padding, state = listState) {
             // listFade keys off the row's real index in the list. Conditional rows (quality,
-            // normalization, gapless, appearance, keyboard) shift every index after them, so
-            // advance a counter as each row is registered instead of hard-coding slots.
+            // normalization, gapless, keyboard) shift every index after them, so advance a counter
+            // as each row is registered instead of hard-coding slots.
             var rowIndex = 0
             fun LazyListScope.row(key: String, content: @Composable (Modifier) -> Unit) {
                 val index = rowIndex++
@@ -184,26 +183,14 @@ fun SettingsScreen(
                     }
                 )
             }
-            row("artworkBackdrop") { modifier ->
+            row("appearance") { modifier ->
                 SidetrackItem(
-                    "Art backdrop",
+                    "Appearance",
                     modifier,
-                    secondary = if (backdrop.enabled) "On" else "Off",
-                    secondaryToEnd = true,
-                    toggleable = backdrop.enabled,
-                    onClick = backdrop::toggle
+                    showLinkArrow = true,
+                    showLinkArrowWithSecondary = true,
+                    onClick = onAppearance
                 )
-            }
-            if (onAppearance != null) {
-                row("appearance") { modifier ->
-                    SidetrackItem(
-                        "Appearance",
-                        modifier,
-                        showLinkArrow = true,
-                        showLinkArrowWithSecondary = true,
-                        onClick = onAppearance
-                    )
-                }
             }
             if (onKeyboard != null) {
                 row("keyboard") { modifier ->

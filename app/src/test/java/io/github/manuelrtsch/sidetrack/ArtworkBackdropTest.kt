@@ -33,7 +33,7 @@ class ArtworkBackdropTest {
 
     @After
     fun resetSetting() {
-        settings.artworkBackdrop = false
+        settings.nowPlayingBackdrop = false
     }
 
     private fun showNowPlaying(chrome: ChromeState) {
@@ -50,12 +50,12 @@ class ArtworkBackdropTest {
 
     @Test
     fun theSettingSwitchesTheSongLayout() {
-        settings.artworkBackdrop = false
+        settings.nowPlayingBackdrop = false
         showNowPlaying(ChromeState())
         // The old layout: the cover is a tile and a focus target.
         compose.onNodeWithContentDescription(cover).assertExists()
 
-        compose.runOnIdle { settings.artworkBackdrop = true }
+        compose.runOnIdle { settings.nowPlayingBackdrop = true }
         compose.waitForIdle()
 
         // The tiled cover is gone; the title now sits on the artwork itself.
@@ -65,7 +65,7 @@ class ArtworkBackdropTest {
 
     @Test
     fun theNormalOptionsBarKeepsThreeButtons() {
-        settings.artworkBackdrop = false
+        settings.nowPlayingBackdrop = false
         val chrome = ChromeState()
         showNowPlaying(chrome)
 
@@ -76,13 +76,13 @@ class ArtworkBackdropTest {
         compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
         // The backdrop toggle lives in Settings; a third square would crowd the bar.
-        compose.onNodeWithContentDescription("Art backdrop off").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Backdrop off").assertDoesNotExist()
         compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
     }
 
     @Test
     fun theBackdropOptionsKeepSongRadio() {
-        settings.artworkBackdrop = true
+        settings.nowPlayingBackdrop = true
         val chrome = ChromeState()
         showNowPlaying(chrome)
 
@@ -95,6 +95,6 @@ class ArtworkBackdropTest {
         compose.onNodeWithContentDescription("Song radio").assertExists()
         compose.onNodeWithContentDescription("Sleep timer").assertExists()
         compose.onNodeWithContentDescription("Open album").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Art backdrop on").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Backdrop on").assertDoesNotExist()
     }
 }

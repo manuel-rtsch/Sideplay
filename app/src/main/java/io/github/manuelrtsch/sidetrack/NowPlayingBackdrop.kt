@@ -73,13 +73,13 @@ import kotlinx.coroutines.flow.StateFlow
 private val BackdropBlur = 11.dp
 
 /**
- * The backdrop setting, shared by the screen and Settings. It persists in
+ * The Now Playing backdrop setting, shared by the screen and Appearance. It persists in
  * [SidetrackLocalSettings]; the listener keeps a second screen (or a second Now Playing instance)
  * in step when the pref changes elsewhere.
  */
 @Stable
-internal class ArtworkBackdropSetting internal constructor(private val settings: SidetrackLocalSettings) {
-    var enabled by mutableStateOf(settings.artworkBackdrop)
+internal class NowPlayingBackdropSetting internal constructor(private val settings: SidetrackLocalSettings) {
+    var enabled by mutableStateOf(settings.nowPlayingBackdrop)
         private set
 
     fun toggle() = set(!enabled)
@@ -87,18 +87,18 @@ internal class ArtworkBackdropSetting internal constructor(private val settings:
     fun set(value: Boolean) {
         if (value == enabled) return
         enabled = value
-        settings.artworkBackdrop = value
+        settings.nowPlayingBackdrop = value
     }
 
-    internal fun observe(): () -> Unit = settings.observeArtworkBackdrop {
-        enabled = settings.artworkBackdrop
+    internal fun observe(): () -> Unit = settings.observeNowPlayingBackdrop {
+        enabled = settings.nowPlayingBackdrop
     }
 }
 
 @Composable
-internal fun rememberArtworkBackdropSetting(): ArtworkBackdropSetting {
+internal fun rememberNowPlayingBackdropSetting(): NowPlayingBackdropSetting {
     val context = LocalContext.current.applicationContext
-    val setting = remember(context) { ArtworkBackdropSetting(SidetrackLocalSettings(context)) }
+    val setting = remember(context) { NowPlayingBackdropSetting(SidetrackLocalSettings(context)) }
     DisposableEffect(setting) {
         val stop = setting.observe()
         onDispose(stop)

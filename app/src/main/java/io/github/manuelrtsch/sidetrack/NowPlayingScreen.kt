@@ -84,7 +84,7 @@ fun NowPlayingScreen(
 ) {
     val current = playback.current
     val savedCurrent = current?.let { it.key.encode() in saved.savedTrackIds } ?: false
-    val backdrop = rememberArtworkBackdropSetting()
+    val backdrop = rememberNowPlayingBackdropSetting()
     val backdropped = current is Track && backdrop.enabled
     val timer by sleepTimer.collectAsStateWithLifecycle()
     // Episodes have no saved-track endpoint, so Save is a track-only action.

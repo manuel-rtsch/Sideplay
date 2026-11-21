@@ -12,30 +12,48 @@ import hrln.interactive.sidekit.sdk.theme.caseColourChoices
 import hrln.interactive.sidekit.sdk.theme.rememberSidekitThemeConfig
 
 /**
- * Sidetrack's own theme settings. With a compatible Sidekit host, Sidekit still owns the appearance
- * used by the host; this screen keeps Sidetrack's local fallback settings editable.
+ * Sidetrack's appearance, in both of the shapes it can take.
+ *
+ * With no compatible Sidekit host installed it is the whole screen: the case colour, the compact
+ * layout and Sidetrack's own rows. With a host installed Sidekit owns the theme — it reads
+ * `sidekit_settings` and a host-backed theme store ignores writes — so those rows disappear and
+ * what remains is what no host can hold: the media-row density and the Now Playing backdrop.
+ *
+ * The two variants are one screen on purpose. They differ only in which rows exist, and the shell
+ * they share (the scaffold, the back action, the list and its focus) is the part a second screen
+ * would duplicate and then let drift. It is a duplicated screen, not a shared one, that made a
+ * Sidetrack-only setting vanish behind the host in the first place: the row was bundled with rows
+ * the host really does own.
  */
 @Composable
-fun SidetrackAppearanceScreen(onBack: () -> Unit) {
+fun SidetrackAppearanceScreen(hostBacked: Boolean, onBack: () -> Unit) {
     val context = LocalContext.current.applicationContext
-    val store = remember(context) {
-        SidetrackLocalSettings(context).applyStandaloneThemeDefaults()
+    val compactRows = rememberCompactRows()
+    val backdrop = rememberNowPlayingBackdropSetting()
+    val list = rememberLazyListState()
+    // The store is Sidetrack's local copy either way; only a standalone install edits it, and only
+    // a standalone install seeds it with the compact-layout default. A host-backed install must
+    // not write that seed, or a later uninstall would look like a choice the user never made.
+    val store = remember(context, hostBacked) {
+        if (!hostBacked) SidetrackLocalSettings(context).applyStandaloneThemeDefaults()
         SharedPreferencesSidekitThemeStore(context, SidetrackLocalSettings.FILE)
     }
+    // An idle reader when hosted: the rows that would show the theme are not composed, and this
+    // keeps the write path (`store.writeCompact`) off the screen entirely in that case.
     val theme = rememberSidekitThemeConfig(store)
-    val compactRows = rememberCompactRows()
-    val list = rememberLazyListState()
 
     SidekitScaffold("Appearance", actions = listOf(SideAction.back("back", "Settings", onBack))) { padding ->
         SidekitList(padding, state = list) {
-            item {
-                SidetrackItem(
-                    "Compact layout",
-                    secondary = if (theme.compact) "On" else "Off",
-                    secondaryToEnd = true,
-                    toggleable = theme.compact,
-                    onClick = { store.writeCompact(!theme.compact) }
-                )
+            if (!hostBacked) {
+                item {
+                    SidetrackItem(
+                        "Compact layout",
+                        secondary = if (theme.compact) "On" else "Off",
+                        secondaryToEnd = true,
+                        toggleable = theme.compact,
+                        onClick = { store.writeCompact(!theme.compact) }
+                    )
+                }
             }
             item {
                 SidetrackItem(
@@ -46,7 +64,20 @@ fun SidetrackAppearanceScreen(onBack: () -> Unit) {
                     onClick = { SidetrackLocalSettings(context).compactRows = !compactRows }
                 )
             }
-            caseColourChoices(theme.caseColour) { store.writeCaseColour(it) }
+            item {
+                SidetrackItem(
+                    // Short on purpose: the Sidephone's row has room for a label and its On/Off,
+                    // and "Now Playing backdrop" pushed the value off the edge.
+                    "Backdrop",
+                    secondary = if (backdrop.enabled) "On" else "Off",
+                    secondaryToEnd = true,
+                    toggleable = backdrop.enabled,
+                    onClick = backdrop::toggle
+                )
+            }
+            if (!hostBacked) {
+                caseColourChoices(theme.caseColour) { store.writeCaseColour(it) }
+            }
         }
     }
 }
