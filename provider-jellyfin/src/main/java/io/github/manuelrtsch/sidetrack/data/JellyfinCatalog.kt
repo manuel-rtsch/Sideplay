@@ -169,9 +169,9 @@ class JellyfinCatalog(
         client().removeFromPlaylist(playlist.id, item.id, index)
     }
 
-    override suspend fun createPlaylist(name: String): Playlist? {
+    override suspend fun createPlaylist(name: String, seed: List<MediaKey>): Playlist? {
         val client = client()
-        val id = client.createPlaylist(name) ?: return null
+        val id = client.createPlaylist(name, seed.map { it.id }) ?: return null
         return client.item(id)?.toPlaylist(client)
     }
 

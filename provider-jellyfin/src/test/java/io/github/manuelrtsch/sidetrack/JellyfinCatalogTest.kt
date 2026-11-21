@@ -198,9 +198,14 @@ class JellyfinCatalogTest {
             childCount = 0
         )
 
-        val playlist = catalog.createPlaylist("Fresh")!!
+        val seed = listOf(
+            MediaKey(ServiceId.Jellyfin, MediaType.Track, "t1"),
+            MediaKey(ServiceId.Jellyfin, MediaType.Track, "t2")
+        )
+        val playlist = catalog.createPlaylist("Fresh", seed)!!
 
         assertEquals("Fresh", api.created.single())
+        assertEquals(listOf("t1", "t2"), api.createdIds)
         assertEquals("new-playlist", playlist.id)
         assertEquals("Fresh", playlist.name)
         assertEquals(ServiceId.Jellyfin, playlist.service)

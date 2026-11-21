@@ -268,12 +268,13 @@ class SdkJellyfinApi(
         Unit
     }
 
-    override suspend fun createPlaylist(name: String): String? = call {
-        // The server owns the id; the caller then resolves the playlist like any other.
+    override suspend fun createPlaylist(name: String, itemIds: List<String>): String? = call {
+        // The server owns the id; the caller then resolves the playlist like any other. The seed
+        // ids land in the playlist in the order given.
         val created = api.playlistApi.createPlaylist(
             CreatePlaylistDto(
                 name = name,
-                ids = emptyList(),
+                ids = itemIds.map(::uuid),
                 userId = userId,
                 mediaType = JellyfinMediaType.AUDIO,
                 users = emptyList(),

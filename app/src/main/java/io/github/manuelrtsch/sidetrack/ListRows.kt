@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import hrln.interactive.sidekit.design.components.SidekitText
 import hrln.interactive.sidekit.design.components.SidekitTile
@@ -42,6 +44,8 @@ fun MediaRow(
     secondary: String = item.creator,
     trailing: String? = formatDuration(item.durationMs),
     trailingContent: (@Composable () -> Unit)? = null,
+    /** Non-null turns the row into a checkbox with this checked state; [onClick] toggles it. */
+    checked: Boolean? = null,
     onClick: () -> Unit
 ) {
     val colors = SidekitTheme.colors
@@ -49,9 +53,16 @@ fun MediaRow(
     // A revealed side button is the thing being read: give its row the trailing space back.
     val actionRevealed = LocalSwipeActionRevealed.current
     SidekitTile(
-        modifier = modifier.fillMaxWidth().height(metrics.height),
+        modifier = modifier.fillMaxWidth().height(metrics.height)
+            .then(
+                if (checked != null) {
+                    Modifier.toggleable(value = checked, role = Role.Checkbox, onValueChange = { onClick() })
+                } else {
+                    Modifier
+                }
+            ),
         color = if (item.playable) colors.surfaceA3 else colors.surfaceA2,
-        onClick = onClick
+        onClick = if (checked == null) onClick else null
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = metrics.horizontalPadding),

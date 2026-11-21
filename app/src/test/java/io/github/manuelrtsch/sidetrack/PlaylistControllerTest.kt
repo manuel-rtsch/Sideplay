@@ -110,6 +110,17 @@ class PlaylistControllerTest {
     }
 
     @Test
+    fun `create forwards the trimmed name and the seed in order`() = runTest {
+        val writer = FakeWriter()
+        val controller = controller(FakeCatalog(), store(), this, writer = writer)
+
+        controller.create("  Trip  ", listOf(first.key, second.key))
+
+        assertEquals("Trip", writer.createdName)
+        assertEquals(listOf(first.key, second.key), writer.createdSeed)
+    }
+
+    @Test
     fun `read-only playlists are never written`() = runTest {
         val readOnly = playlist("readonly", PlaylistActions.None)
         val writer = FakeWriter()
@@ -223,6 +234,8 @@ class PlaylistControllerTest {
         var removedPlaylist: MediaKey? = null
         var removedItem: MediaItem? = null
         var removedIndex: Int? = null
+        var createdName: String? = null
+        var createdSeed: List<MediaKey>? = null
 
         override suspend fun isSaved(item: MediaKey): Boolean? = null
         override suspend fun isFollowed(artist: MediaKey): Boolean? = null
@@ -240,6 +253,20 @@ class PlaylistControllerTest {
             removedPlaylist = playlist
             removedItem = item
             removedIndex = index
+        }
+
+        override suspend fun createPlaylist(name: String, seed: List<MediaKey>): Playlist {
+            createdName = name
+            createdSeed = seed
+            return Playlist(
+                id = "created",
+                name = name,
+                owner = "You",
+                ownerId = null,
+                artRes = 0,
+                tracks = emptyList(),
+                actions = PlaylistActions.All
+            )
         }
     }
 }

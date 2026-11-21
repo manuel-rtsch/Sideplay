@@ -41,6 +41,7 @@ internal class FakeJellyfinApi : JellyfinApi {
     val removed = mutableListOf<Pair<String, String>>()
     var lastRemoveIndex: Int? = null
     val created = mutableListOf<String>()
+    var createdIds: List<String> = emptyList()
     val starts = mutableListOf<JellyfinPlaybackReport>()
     val progress = mutableListOf<JellyfinPlaybackReport>()
     val stopped = mutableListOf<Pair<JellyfinPlaybackReport, Boolean>>()
@@ -75,8 +76,9 @@ internal class FakeJellyfinApi : JellyfinApi {
         played += id
     }
 
-    override suspend fun createPlaylist(name: String): String? {
+    override suspend fun createPlaylist(name: String, itemIds: List<String>): String? {
         created += name
+        createdIds = itemIds
         return "new-playlist"
     }
 

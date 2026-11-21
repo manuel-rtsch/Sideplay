@@ -69,10 +69,11 @@ delete endpoint at all, only "remove from library" (unfollow), which is the exis
 from the UI on every service that supports editing. The row bar stays inside the shared option
 budget: two labelled actions, never a third square.
 
-- **Create** — *New playlist* in the Library → Playlists options menu opens a name-only form.
-  On success the new, empty playlist opens. `supportsPlaylistCreate` gates the entry point. A
-  refused or failed create stays on the form and reports the service message in the bar; it never
-  fails silently.
+- **Create** — *New playlist* in the Library → Playlists options menu opens a form with a name
+  and up to ten recently played tracks as an optional seed. Nothing is selected until tapped. On
+  success the new playlist opens, empty or seeded in the order shown. `supportsPlaylistCreate`
+  gates the entry point. A refused or failed create stays on the form and reports the service
+  message in the bar; it never fails silently.
 - **Add** — a track row outside a playlist (liked songs, search, artist, album, radio) offers
   `Add to queue | Add to playlist`. The picker lists only playlists whose `canAddItems` is true,
   so a read-only target never becomes a button that only ends in a server refusal. Adding appends;

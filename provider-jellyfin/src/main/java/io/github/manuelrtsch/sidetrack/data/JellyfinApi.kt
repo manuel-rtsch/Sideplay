@@ -29,7 +29,7 @@ interface JellyfinApi {
     suspend fun setFavorite(id: String, favorite: Boolean)
     suspend fun markPlayed(id: String)
 
-    suspend fun createPlaylist(name: String): String?
+    suspend fun createPlaylist(name: String, itemIds: List<String> = emptyList()): String?
     suspend fun addToPlaylist(playlistId: String, itemId: String): Int
     suspend fun removeFromPlaylist(playlistId: String, itemId: String, index: Int? = null)
 

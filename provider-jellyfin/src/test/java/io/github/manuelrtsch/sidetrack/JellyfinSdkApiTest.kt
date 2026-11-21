@@ -184,12 +184,14 @@ class JellyfinSdkApiTest : JellyfinSdkApiTestBase() {
                 FakeJellyfin.Res(404, "{}")
             }
         }
-        val created = api().createPlaylist("Road Trip")
+        val created = api().createPlaylist("Road Trip", listOf(ITEM_ID, "33333333-3333-3333-3333-333333333333"))
         assertEquals("new-playlist", created)
         val post = server.requests.last()
         assertEquals("POST", post.method)
         assertTrue(post.body.contains("Road Trip"))
         assertTrue(post.body.contains("Audio"))
+        assertTrue(post.body.contains(ITEM_ID))
+        assertTrue(post.body.contains("33333333-3333-3333-3333-333333333333"))
     }
 
     @Test fun `removal deletes by the entry id the scan found`() = runBlocking {

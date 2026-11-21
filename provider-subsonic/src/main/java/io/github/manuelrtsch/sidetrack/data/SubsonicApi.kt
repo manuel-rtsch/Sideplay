@@ -156,8 +156,9 @@ class SubsonicApi(
         else -> call("getSong", "id" to item.id).optJSONObject("song").starred()
     }
 
-    suspend fun createPlaylist(name: String): Playlist {
-        val playlist = call("createPlaylist", "name" to name).optJSONObject("playlist")
+    suspend fun createPlaylist(name: String, songIds: List<String> = emptyList()): Playlist {
+        val seed = songIds.map { "songId" to it }.toTypedArray()
+        val playlist = call("createPlaylist", "name" to name, *seed).optJSONObject("playlist")
             ?.toPlaylist(family.id, { coverUrl(it) }, credentials.username)
             ?: throw ServiceException(ServiceFailure.Unknown, "The server did not return the new playlist")
         // A playlist the account just created is always its own to edit.
@@ -416,8 +417,8 @@ class SubsonicCatalog(
         client().removeFromPlaylist(playlist.id, item.id, index)
     }
 
-    override suspend fun createPlaylist(name: String): Playlist? = runCatching {
-        client().createPlaylist(name)
+    override suspend fun createPlaylist(name: String, seed: List<MediaKey>): Playlist? = runCatching {
+        client().createPlaylist(name, seed.map { it.id })
     }.getOrNull()
 
     private companion object {

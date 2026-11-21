@@ -98,14 +98,16 @@ internal fun NavGraphBuilder.libraryGraph(nav: NavHostController) {
     }
     composable(CREATE_PLAYLIST) { entry ->
         val vm = entry.sidetrackViewModel(nav)
+        val playback by vm.playbackState.collectAsStateWithLifecycle()
         val chrome by vm.chromeState.collectAsStateWithLifecycle()
         val scope = rememberCoroutineScope()
         CreatePlaylistScreen(
             chrome,
+            recentTracks = playback.recent.filterIsInstance<Track>(),
             onBack = { nav.popBackStack() },
-            onSubmit = { name ->
+            onSubmit = { name, seed ->
                 scope.launch {
-                    val playlist = vm.createPlaylist(name)
+                    val playlist = vm.createPlaylist(name, seed)
                     if (playlist != null) {
                         nav.navigate(collectionRoute(playlist.key)) {
                             launchSingleTop = true

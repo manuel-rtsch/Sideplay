@@ -167,7 +167,7 @@ class PlexCatalog(
         client.removeFromPlaylist(playlist.id, playlistItemId)
     }
 
-    override suspend fun createPlaylist(name: String): Playlist? = null
+    override suspend fun createPlaylist(name: String, seed: List<MediaKey>): Playlist? = null
 
     private fun <R> PlexPage.mapEntries(transform: (PlexItem) -> R): Page<R> = Page(
         items = items.map(transform),

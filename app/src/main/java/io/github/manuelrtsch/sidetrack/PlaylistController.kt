@@ -30,10 +30,10 @@ internal class PlaylistController(
     private var choicesOffset = 0
 
     /**
-     * Creates [name] on the active service. Returns null on failure so the caller can stay on the
-     * form; the reason is already in the bar.
+     * Creates a playlist named [name], seeded with [seed] in that order, on the active service.
+     * Returns null on failure so the caller can stay on the form; the reason is already in the bar.
      */
-    suspend fun create(name: String): Playlist? {
+    suspend fun create(name: String, seed: List<MediaKey> = emptyList()): Playlist? {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) {
             store.update { it.say("Enter a playlist name") }
@@ -44,7 +44,7 @@ internal class PlaylistController(
             return null
         }
         return try {
-            val playlist = writer.createPlaylist(trimmed)
+            val playlist = writer.createPlaylist(trimmed, seed)
             if (playlist == null) {
                 store.update { it.say("This service cannot create playlists") }
             } else {

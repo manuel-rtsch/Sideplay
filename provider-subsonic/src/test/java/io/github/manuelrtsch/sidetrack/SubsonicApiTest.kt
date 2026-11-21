@@ -205,13 +205,14 @@ class SubsonicApiTest {
         val transport = FakeTransport { ok("""{"status":"ok","playlist":{"id":"p-new","name":"Road Trip"}}""") }
         val api = SubsonicApi(SubsonicCredentials("http://nas.local", "joe", "sesame"), transport = transport, salt = { "salt" })
 
-        val playlist = api.createPlaylist("Road Trip")
+        val playlist = api.createPlaylist("Road Trip", listOf("t1", "t2"))
 
         assertEquals("p-new", playlist.id)
         assertEquals("Road Trip", playlist.name)
         assertEquals(ServiceId.Navidrome, playlist.service)
         assertTrue(transport.urls.single().contains("createPlaylist"))
         assertTrue(transport.urls.single().contains("name=Road+Trip"))
+        assertTrue(transport.urls.single().contains("songId=t1&songId=t2"))
         assertEquals(PlaylistActions.All, playlist.actions)
     }
 

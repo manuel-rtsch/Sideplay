@@ -318,11 +318,11 @@ class SidetrackViewModel(
     fun dismissNowPlayingNotice() = effects.dismissNowPlayingNotice()
 
     /**
-     * Creates a new empty playlist named [name] on the active service and reloads the Playlists
-     * category so it is visible. Returns the created [Playlist] for the caller to open, or null
-     * when the service cannot create playlists.
+     * Creates a playlist named [name], optionally seeded with [seed], on the active service and
+     * reloads the Playlists category so it is visible. Returns the created [Playlist] for the
+     * caller to open, or null when the service cannot create playlists.
      */
-    suspend fun createPlaylist(name: String): Playlist? = playlists.create(name)
+    suspend fun createPlaylist(name: String, seed: List<MediaKey> = emptyList()): Playlist? = playlists.create(name, seed)
 
     fun ensurePlaylistChoices() = playlists.ensureChoices()
 
