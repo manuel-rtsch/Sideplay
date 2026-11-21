@@ -23,7 +23,11 @@ internal fun JSONObject?.objects(name: String): List<JSONObject> {
     return (0 until array.length()).mapNotNull { array.optJSONObject(it) }
 }
 
-internal fun JSONObject.toTrack(cover: (String?) -> String?): Track {
+// The family member is passed in rather than assumed: two entries share this mapper, and a track
+// must keep the identity of the service it was fetched through, or a queue saved under one entry
+// would resolve as another entry's item after a switch.
+
+internal fun JSONObject.toTrack(service: ServiceId, cover: (String?) -> String?): Track {
     val id = optString("id")
     val albumId = optString("albumId").ifEmpty { optString("parent").ifEmpty { optString("album") } }
     return Track(
@@ -36,12 +40,12 @@ internal fun JSONObject.toTrack(cover: (String?) -> String?): Track {
         durationMs = optLong("duration", 0L) * 1_000L,
         uri = null,
         artUrl = cover(optString("coverArt").mediaTextOrNull()),
-        service = ServiceId.Navidrome
+        service = service
     )
 }
 
-internal fun JSONObject.toAlbum(cover: (String?) -> String?): Album {
-    val songs = objects("song").map { it.toTrack(cover) }
+internal fun JSONObject.toAlbum(service: ServiceId, cover: (String?) -> String?): Album {
+    val songs = objects("song").map { it.toTrack(service, cover) }
     return Album(
         id = optString("id"),
         title = optString("name").ifEmpty { optString("title") },
@@ -52,11 +56,11 @@ internal fun JSONObject.toAlbum(cover: (String?) -> String?): Album {
         tracks = songs,
         artUrl = cover(optString("coverArt").mediaTextOrNull()),
         trackCount = optInt("songCount", songs.size),
-        service = ServiceId.Navidrome
+        service = service
     )
 }
 
-internal fun JSONObject.toArtist(cover: (String?) -> String?): Artist {
+internal fun JSONObject.toArtist(service: ServiceId, cover: (String?) -> String?): Artist {
     val albums = objects("album")
     // OpenSubsonic's artistImageUrl is already absolute; coverArt is an id this client wraps.
     val image = optString("artistImageUrl").takeIf { it.startsWith("http") }
@@ -67,12 +71,12 @@ internal fun JSONObject.toArtist(cover: (String?) -> String?): Artist {
         albumIds = albums.map { it.optString("id") },
         artUrl = image ?: cover(optString("coverArt").mediaTextOrNull()),
         albumCount = optInt("albumCount", albums.size),
-        service = ServiceId.Navidrome
+        service = service
     )
 }
 
-internal fun JSONObject.toPlaylist(cover: (String?) -> String?, currentUser: String): Playlist {
-    val entries = objects("entry").map { it.toTrack(cover) }
+internal fun JSONObject.toPlaylist(service: ServiceId, cover: (String?) -> String?, currentUser: String): Playlist {
+    val entries = objects("entry").map { it.toTrack(service, cover) }
     val owner = optString("owner").ifEmpty { optString("username") }
     // Subsonic has no per-playlist permission flag. A playlist without an owner is one the server
     // did not describe; offer editing and let the server refuse, rather than muting a playlist
@@ -94,6 +98,6 @@ internal fun JSONObject.toPlaylist(cover: (String?) -> String?, currentUser: Str
         artUrl = cover(optString("coverArt").mediaTextOrNull()),
         trackCount = optInt("songCount", entries.size),
         actions = actions,
-        service = ServiceId.Navidrome
+        service = service
     )
 }

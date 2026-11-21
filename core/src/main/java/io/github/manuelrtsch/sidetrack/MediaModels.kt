@@ -7,8 +7,17 @@ package io.github.manuelrtsch.sidetrack
 value class ServiceId(val value: String) {
     companion object {
         val Spotify = ServiceId("spotify")
-        val Navidrome = ServiceId("navidrome")
         val Jellyfin = ServiceId("jellyfin")
+
+        /**
+         * The Subsonic family: one wire protocol, several server products. Each product keeps its
+         * own id so its credentials, library identity and local queue/history stores stay apart.
+         */
+        val Navidrome = ServiceId("navidrome")
+        val Airsonic = ServiceId("airsonic")
+        val Gonic = ServiceId("gonic")
+        val NextcloudMusic = ServiceId("nextcloud-music")
+        val Subsonic = ServiceId("subsonic")
 
         /** A context-free fixture, used by previews and unit tests that have no signed-in service. */
         val Local = ServiceId("local")
@@ -129,8 +138,13 @@ data class ServiceCapabilities(
             supportsScrobbling = true
         )
 
-        /** Navidrome has albums, playlists and artists, but no shows, radio or DSP settings. */
-        val Navidrome = ServiceCapabilities(
+        /**
+         * The Subsonic family — Navidrome, Airsonic, Gonic, Nextcloud Music and Subsonic itself —
+         * has albums, playlists, artists and similar-song radio. Podcast endpoints are 501 stubs
+         * on Navidrome and absent elsewhere, loudness maps onto ReplayGain, and gapless is
+         * engine-level, so no member of the family turns it on.
+         */
+        val Subsonic = ServiceCapabilities(
             librarySections = setOf(
                 LibrarySection.Liked,
                 LibrarySection.Playlists,
@@ -155,7 +169,7 @@ data class ServiceCapabilities(
         /**
          * Jellyfin has albums, playlists, artists and instant mixes. Music libraries carry no
          * podcast type, the API has no loudness parameter, and gapless is engine-level — the same
-         * reason Navidrome leaves it off. Follow maps onto the favorite-artist flag, because that
+         * reason the Subsonic family leaves it off. Follow maps onto the favorite-artist flag, because that
          * is the only artist-level "keep this" state the server has (decision D2).
          */
         val Jellyfin = ServiceCapabilities(

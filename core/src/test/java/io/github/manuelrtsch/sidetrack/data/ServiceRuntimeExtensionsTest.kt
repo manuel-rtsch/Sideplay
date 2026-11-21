@@ -99,7 +99,7 @@ class ServiceRuntimeExtensionsTest {
     /** A runtime with no optional interfaces, as a Jellyfin or Navidrome install sees it. */
     private open class FakeRuntime : ServiceRuntime {
         override val service: ServiceId = ServiceId.Local
-        override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
+        override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic
         override val catalog: MediaCatalog = EmptyCatalog()
         override val writer: MediaLibraryWriter? = null
         override val queue = QueueRepository()
@@ -174,7 +174,7 @@ class ServiceRuntimeExtensionsTest {
     }
 
     private class EmptyCatalog : MediaCatalog {
-        override val capabilities: ServiceCapabilities = ServiceCapabilities.Navidrome
+        override val capabilities: ServiceCapabilities = ServiceCapabilities.Subsonic
 
         override suspend fun library(section: LibrarySection, offset: Int, limit: Int): Page<LibraryEntry> = Page()
 

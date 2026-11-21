@@ -13,7 +13,7 @@ val runIntegrationTests = providers.gradleProperty("sidetrackIntegration").isPre
 android {
     // Unique per module; :app owns io.github.manuelrtsch.sidetrack. Sources keep their
     // io.github.manuelrtsch.sidetrack.* packages; this namespace only drives generated code.
-    namespace = "io.github.manuelrtsch.sidetrack.navidrome"
+    namespace = "io.github.manuelrtsch.sidetrack.subsonic"
     compileSdk {
         version = release(37)
     }

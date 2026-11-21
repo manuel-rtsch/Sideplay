@@ -26,7 +26,7 @@ The provider contracts already exist and are used consistently:
   `ExoPlayerMedia3Player.kt` (already takes per-request headers) serve every non-Spotify service.
 - Isolated persistence — per-provider store names (`sidetracks_settings_navidrome`,
   `sidetracks-jellyfin-queue.bin`, …), one encrypted store per provider.
-- No shared file imports a provider internal: `SpotifySession`, `NavidromeApi`,
+- No shared file imports a provider internal: `SpotifySession`, `SubsonicApi`,
   `LibrespotPlaybackEngine`, `NativeBridge` are referenced only from `data/AppSession.kt` and their
   own adapters.
 
@@ -66,7 +66,7 @@ comment, or the About screen's licence list.
 :app                  UI, navigation, ViewModel, picker, AppSession registry
  ├── :core            domain model, provider contracts, shared repositories, playback engines
  ├── :provider-spotify   ─┐
- ├── :provider-navidrome ─┼─► :core   (never the reverse)
+ ├── :provider-subsonic ─┼─► :core   (never the reverse)
  └── :provider-jellyfin  ─┘
 ```
 
@@ -88,12 +88,12 @@ Rules to enforce:
 | --- | --- |
 | `:core` | `MediaModels.kt`, `MediaItems.kt`, `DesignCompat.kt` (if UI-free), `data/{MusicService, ServiceRuntime, QueueRepository, HistoryRepository, PlaybackSettings, StateStores, ConflatedSaver, HaltStopGuard, NetworkMonitor, ArtworkAccess, EpisodeMeta, EpisodeProgress}.kt`, `storage/`, `playback/{PlaybackController, PlaybackEngine, Media3PlaybackEngine, ExoPlayerMedia3Player, MediaFormat, DrainPolicy, SleepTimer}.kt`, `auth/CredentialPersistenceException.kt`, `ui/` helpers that core types need |
 | `:provider-spotify` | `data/{SpotifySession, SpotifyCatalog, SpotifyWebApi, SpotifyWebCatalog, NativeSpotifyCatalog, NativeSpotifyGateway, SpotifyGateway, SpotifyAdapters, DemoContent}.kt`, `auth/{SpotifyAuth, SpotifyCredentials, SpotifyPkce, SpotifyTokenClient, EncryptedSpotifyCredentialStore}.kt`, `playback/{LibrespotPlaybackEngine, SpotifyAudioSink}.kt`, `bridge/` |
-| `:provider-navidrome` | `data/{NavidromeApi, NavidromeRuntime, NavidromeDemo}.kt`, `auth/NavidromeAuth.kt` |
+| `:provider-subsonic` | `data/{SubsonicApi, SubsonicRuntime, NavidromeDemo}.kt`, `auth/SubsonicAuth.kt` |
 | `:provider-jellyfin` | `auth/JellyfinAuth.kt`, then `data/{JellyfinApi, JellyfinCatalog, JellyfinPlaybackReporter, JellyfinRuntime}.kt` (the adapter landed after the split) |
 | `:app` (stays) | every `Sidetrack*.kt` screen/activity/viewmodel, `data/AppSession.kt`, `Components.kt`, `TrackRow.kt`, `LibraryScreens.kt`, `NowPlaying*.kt`, `SearchScreen.kt`, `SettingsScreens.kt`, `Podcast*.kt`, `SidetrackViewModel.kt`, `MediaSessions.kt`/`PlaybackService.kt`/`AudioFocus.kt` if they need app-level Android components |
 
-Tests move with their subject: `NavidromeApiTest`, `NavidromeIntegrationTest` →
-`:provider-navidrome`; `Spotify*Test`, `NativeSpotify*Test`, `MockSpotifyDataSource` →
+Tests move with their subject: `SubsonicApiTest`, `SubsonicIntegrationTest` →
+`:provider-subsonic`; `Spotify*Test`, `NativeSpotify*Test`, `MockSpotifyDataSource` →
 `:provider-spotify`; `JellyfinAuthTest` → `:provider-jellyfin`; shared/core tests stay in `:app`
 until `:core` has its own test source, whichever is less churn per file.
 
@@ -121,7 +121,7 @@ data class PasswordDefaults(val serverUrl: String, val username: String, val pas
 
 - `MusicServiceProvider` gains `val signInKind: SignInKind`.
 - `SpotifyProvider` → `SignInKind.Browser`.
-- `NavidromeProvider` → `SignInKind.Password(PasswordDefaults(NavidromeDemo.SERVER_URL, …))`, so the
+- `SubsonicProvider` → `SignInKind.Password(PasswordDefaults(NavidromeDemo.SERVER_URL, …))`, so the
   demo constants leave the UI.
 - `SidetrackGraph` asks `appSession.provider?.signInKind` and passes `passwordAuth`/`defaults` from
   it; no provider id remains in the screen.
@@ -143,7 +143,7 @@ Each stage ends with a green `./gradlew :app:testDebugUnitTest :app:assembleDebu
 | --- | --- |
 | A | Sign-in capability (§4). Commit. |
 | B | Create `:core` (`build.gradle.kts`, `settings.gradle.kts`, AGP library plugin), move shared files, make the core's public surface explicit (fix `internal` visibility across the new boundary), `:app` depends on `:core`. Commit. |
-| C | Create `:provider-navidrome`, move its files and tests. Commit. |
+| C | Create `:provider-subsonic`, move its files and tests. Commit. |
 | D | Create `:provider-jellyfin`, move `JellyfinAuth` and its test. Commit. |
 | E | Create `:provider-spotify`, move its files/tests plus `bridge/`. Commit. |
 | F | Boundary check and docs: `rg "Spotify\|Navidrome\|Jellyfin" core/src/main` must show only `ServiceId`/capability references; update the paths in `docs/provider-capabilities.md` and `docs/jellyfin-integration.md` §5; final build. Commit. |
@@ -164,7 +164,7 @@ Notes for each stage:
 
 ## 6. Acceptance criteria
 
-1. `settings.gradle.kts` includes `:app`, `:core`, `:provider-spotify`, `:provider-navidrome`,
+1. `settings.gradle.kts` includes `:app`, `:core`, `:provider-spotify`, `:provider-subsonic`,
    `:provider-jellyfin`; the provider graph is `app → providers → core`.
 2. `:core` has no dependency on a provider module and no provider implementation reference in
    source, only `ServiceId`/`ServiceCapabilities`/`SignInKind`.
@@ -193,7 +193,7 @@ Notes for each stage:
 
 ## 8. What actually landed
 
-Graph is now `:app → :core`, `:provider-spotify`, `:provider-navidrome`, `:provider-jellyfin`, with
+Graph is now `:app → :core`, `:provider-spotify`, `:provider-subsonic`, `:provider-jellyfin`, with
 every provider depending only on `:core`.
 
 Commits: `6032e03` (sign-in capability), `f00f5bd` (`:core`), `f18665a` (Navidrome),
@@ -216,7 +216,7 @@ does not "fix" them back:
 - Native packaging (`buildSpotifyNative`, `jniLibs`, `src/demo` fixtures) never moved, as planned.
 
 Verification at the time of the split: `:app:testDebugUnitTest` (231), `:provider-spotify` (107),
-`:provider-navidrome` (18), `:provider-jellyfin` (12) — 368 total, 0 failures;
+`:provider-subsonic` (18), `:provider-jellyfin` (12) — 368 total, 0 failures;
 `:app:assembleDebug`, `:app:assembleDemo` and `spotlessCheck` green.
 
 The Jellyfin adapter was completed after this split: catalog, writer, runtime, playback reporting

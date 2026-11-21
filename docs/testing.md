@@ -30,7 +30,7 @@ is passed.
 | `:app` | Compose screens, view model, navigation, service glue | `SidetrackViewModel` suites, row/screen semantics, `Media3PlaybackEngineTest`, `SidetrackScreenshotTest` |
 | `:provider-spotify` | Spotify auth, Web API mapping, native catalog/gateway, librespot engine and the controller it builds | `NativeSpotifyCatalogTest`, `SpotifyAuthTest`, `LibrespotPlaybackEngineTest`, `PlaybackControllerTest` |
 | `:provider-jellyfin` | Jellyfin auth, API mapping, catalog, playback reporting | `JellyfinCatalogTest`, `JellyfinAuthTest` |
-| `:provider-navidrome` | Navidrome auth, API mapping | `NavidromeApiTest` |
+| `:provider-subsonic` | Subsonic auth, API mapping, family entries | `SubsonicApiTest`, `SubsonicRuntimeTest` |
 
 Pure logic lives in `:core` and is tested there: no Compose rule, no Robolectric where avoidable, so
 those tests run in seconds instead of minutes.

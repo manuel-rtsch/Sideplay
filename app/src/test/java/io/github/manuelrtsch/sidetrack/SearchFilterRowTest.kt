@@ -28,7 +28,7 @@ class SearchFilterRowTest {
     @get:Rule val compose = createComposeRule()
 
     /** What Navidrome can answer: no Shows, because the Subsonic podcast endpoints are stubs. */
-    private val navidromeScopes: Set<SearchScope> = ServiceCapabilities.Navidrome.availableSearchScopes
+    private val navidromeScopes: Set<SearchScope> = ServiceCapabilities.Subsonic.availableSearchScopes
 
     private fun show(
         query: String = "night",

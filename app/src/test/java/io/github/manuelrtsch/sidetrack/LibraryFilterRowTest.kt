@@ -32,7 +32,7 @@ class LibraryFilterRowTest {
     @get:Rule val compose = createComposeRule()
 
     /** What Navidrome can fill: no Shows, because the Subsonic podcast endpoints are stubs. */
-    private val navidromeFilters: Set<LibraryFilter> = ServiceCapabilities.Navidrome.availableLibraryFilters
+    private val navidromeFilters: Set<LibraryFilter> = ServiceCapabilities.Subsonic.availableLibraryFilters
 
     private fun show(
         filter: LibraryFilter,

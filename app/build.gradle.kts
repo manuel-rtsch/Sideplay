@@ -292,7 +292,7 @@ tasks.matching {
 
 dependencies {
     implementation(project(":core"))
-    implementation(project(":provider-navidrome"))
+    implementation(project(":provider-subsonic"))
     implementation(project(":provider-jellyfin"))
     implementation(project(":provider-spotify"))
     implementation(libs.sidekit.design)
@@ -340,7 +340,7 @@ dependencies {
     kover(project(":core"))
     kover(project(":provider-spotify"))
     kover(project(":provider-jellyfin"))
-    kover(project(":provider-navidrome"))
+    kover(project(":provider-subsonic"))
 }
 
 kover {

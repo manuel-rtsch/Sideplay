@@ -1,8 +1,8 @@
 package io.github.manuelrtsch.sidetrack
 
-import io.github.manuelrtsch.sidetrack.data.NavidromeApi
-import io.github.manuelrtsch.sidetrack.data.NavidromeCatalog
-import io.github.manuelrtsch.sidetrack.data.NavidromeCredentials
+import io.github.manuelrtsch.sidetrack.data.SubsonicApi
+import io.github.manuelrtsch.sidetrack.data.SubsonicCatalog
+import io.github.manuelrtsch.sidetrack.data.SubsonicCredentials
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,12 +23,12 @@ import org.robolectric.RobolectricTestRunner
  * It skips when those variables are absent so CI and normal local runs stay offline.
  */
 @RunWith(RobolectricTestRunner::class)
-class NavidromeIntegrationTest {
+class SubsonicIntegrationTest {
     private val baseUrl = System.getenv("NAVIDROME_TEST_URL").orEmpty()
     private val username = System.getenv("NAVIDROME_TEST_USER").orEmpty()
     private val password = System.getenv("NAVIDROME_TEST_PASSWORD").orEmpty()
 
-    private fun api() = NavidromeApi(NavidromeCredentials(baseUrl, username, password))
+    private fun api() = SubsonicApi(SubsonicCredentials(baseUrl, username, password))
 
     private fun requireServer() {
         assumeTrue(
@@ -80,7 +80,7 @@ class NavidromeIntegrationTest {
     @Test fun `catalog pages the library and writes stars`() = runTest {
         requireServer()
         val api = api()
-        val catalog = NavidromeCatalog(api = { api })
+        val catalog = SubsonicCatalog(api = { api })
 
         val artists = catalog.library(LibrarySection.Artists, 0, 5)
         assertTrue(artists.items.isNotEmpty())
@@ -105,7 +105,7 @@ class NavidromeIntegrationTest {
         assertFalse(source.uri.contains(password))
     }
 
-    private suspend fun playlistUnderTest(catalog: NavidromeCatalog): Playlist {
+    private suspend fun playlistUnderTest(catalog: SubsonicCatalog): Playlist {
         val playlists = catalog.library(LibrarySection.Playlists, 0, 20).items.filterIsInstance<Playlist>()
         val playlist = playlists.firstOrNull { it.name.startsWith("Sidetrack Test") }
         assumeTrue("Create a playlist named 'Sidetrack Test…' first", playlist != null)
@@ -113,10 +113,10 @@ class NavidromeIntegrationTest {
     }
 
     /** The playlist's tracks, in order — the assertion unit. A size alone hides a rotation. */
-    private suspend fun tracksOf(catalog: NavidromeCatalog, playlist: Playlist): List<Track> = catalog.collection(playlist.key, 0, 200)!!.items.filterIsInstance<Track>()
+    private suspend fun tracksOf(catalog: SubsonicCatalog, playlist: Playlist): List<Track> = catalog.collection(playlist.key, 0, 200)!!.items.filterIsInstance<Track>()
 
     /** Tracks the playlist does not already hold, so an edit appends a distinct id. */
-    private suspend fun tracksNotIn(api: NavidromeApi, playlist: List<Track>, count: Int): List<Track> {
+    private suspend fun tracksNotIn(api: SubsonicApi, playlist: List<Track>, count: Int): List<Track> {
         val ids = playlist.map { it.id }.toSet()
         val found = LinkedHashMap<String, Track>()
         for (album in api.albumList(0, 10).items) {
@@ -128,12 +128,12 @@ class NavidromeIntegrationTest {
         return found.values.toList()
     }
 
-    private suspend fun trackNotIn(api: NavidromeApi, playlist: List<Track>): Track? = tracksNotIn(api, playlist, count = 1).firstOrNull()
+    private suspend fun trackNotIn(api: SubsonicApi, playlist: List<Track>): Track? = tracksNotIn(api, playlist, count = 1).firstOrNull()
 
     @Test fun `catalog reads and edits a playlist`() = runTest {
         requireServer()
         val api = api()
-        val catalog = NavidromeCatalog(api = { api })
+        val catalog = SubsonicCatalog(api = { api })
 
         val playlist = playlistUnderTest(catalog)
         val before = tracksOf(catalog, playlist)
@@ -157,12 +157,12 @@ class NavidromeIntegrationTest {
      * the row with `indexOfFirst { it.id == songId }`, so with `[A, B, C, A]` removing the last `A`
      * deleted index 0. Size is preserved, contents rotate — which is why the test above asserts
      * contents. `removeFromPlaylist` now takes the last match when no row is named, so this passes;
-     * the case with a named row is pinned offline in `NavidromeApiTest`.
+     * the case with a named row is pinned offline in `SubsonicApiTest`.
      */
     @Test fun `removing a duplicated track leaves the other entries in place`() = runTest {
         requireServer()
         val api = api()
-        val catalog = NavidromeCatalog(api = { api })
+        val catalog = SubsonicCatalog(api = { api })
 
         val playlist = playlistUnderTest(catalog)
         val before = tracksOf(catalog, playlist)

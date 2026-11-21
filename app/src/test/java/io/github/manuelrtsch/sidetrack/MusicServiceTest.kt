@@ -16,18 +16,30 @@ import org.junit.Test
 class MusicServiceTest {
     @Test fun `the picker offers every service this build can provision`() {
         assertEquals(
-            listOf(ServiceId.Spotify, ServiceId.Navidrome, ServiceId.Jellyfin),
+            listOf(
+                ServiceId.Spotify,
+                ServiceId.Navidrome,
+                ServiceId.Airsonic,
+                ServiceId.Gonic,
+                ServiceId.NextcloudMusic,
+                ServiceId.Subsonic,
+                ServiceId.Jellyfin
+            ),
             KnownServices.map { it.id }
         )
         // The label comes from the provider's own constant, so the picker cannot drift from it.
         assertEquals("Spotify", KnownServices.first { it.id == ServiceId.Spotify }.displayName)
         assertEquals("Navidrome", KnownServices.first { it.id == ServiceId.Navidrome }.displayName)
+        assertEquals("Airsonic", KnownServices.first { it.id == ServiceId.Airsonic }.displayName)
+        assertEquals("Gonic", KnownServices.first { it.id == ServiceId.Gonic }.displayName)
+        assertEquals("Nextcloud Music", KnownServices.first { it.id == ServiceId.NextcloudMusic }.displayName)
+        assertEquals("Subsonic", KnownServices.first { it.id == ServiceId.Subsonic }.displayName)
         assertEquals("Jellyfin", KnownServices.first { it.id == ServiceId.Jellyfin }.displayName)
         assertNull(serviceChoice(ServiceId("unknown")))
     }
 
-    @Test fun `Navidrome advertises the parity capabilities it can deliver`() {
-        val caps = ServiceCapabilities.Navidrome
+    @Test fun `the Subsonic family advertises the parity capabilities it can deliver`() {
+        val caps = ServiceCapabilities.Subsonic
         assertTrue(caps.supportsRadio)
         assertTrue(caps.supportsQualitySelection)
         assertTrue(caps.supportsNormalization)
@@ -35,14 +47,14 @@ class MusicServiceTest {
         assertTrue(caps.supportsPlaylistCreate)
         assertTrue(caps.supportsProgressReporting)
         assertTrue(caps.supportsScrobbling)
-        // Not yet available for Navidrome: podcasts, artist-follow and gapless.
+        // Not yet available for the Subsonic family: podcasts, artist-follow and gapless.
         assertTrue(!caps.supportsPodcasts)
         assertTrue(!caps.supportsFollowArtist)
         assertTrue(!caps.supportsGapless)
     }
 
-    @Test fun `Navidrome mutes the categories its API cannot answer`() {
-        val navidrome = ServiceCapabilities.Navidrome
+    @Test fun `the Subsonic family mutes the categories its API cannot answer`() {
+        val navidrome = ServiceCapabilities.Subsonic
         // Shows are missing because Navidrome answers every Subsonic podcast endpoint with 501.
         assertEquals(
             listOf(
