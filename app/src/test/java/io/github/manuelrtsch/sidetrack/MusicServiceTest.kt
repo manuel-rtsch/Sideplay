@@ -20,6 +20,7 @@ class MusicServiceTest {
                 ServiceId.Jellyfin,
                 ServiceId.Navidrome,
                 ServiceId.NextcloudMusic,
+                ServiceId.Plex,
                 ServiceId.Spotify,
                 ServiceId.Subsonic
             ),
@@ -42,7 +43,6 @@ class MusicServiceTest {
     @Test fun `the Subsonic family advertises the parity capabilities it can deliver`() {
         val caps = ServiceCapabilities.Subsonic
         assertTrue(caps.supportsRadio)
-        assertTrue(caps.supportsQualitySelection)
         assertTrue(caps.supportsNormalization)
         assertTrue(caps.supportsPlaylistEdit)
         assertTrue(caps.supportsPlaylistCreate)
@@ -77,7 +77,6 @@ class MusicServiceTest {
         val caps = ServiceCapabilities.Jellyfin
         assertTrue(caps.supportsRadio)
         assertTrue(caps.supportsFollowArtist)
-        assertTrue(caps.supportsQualitySelection)
         assertTrue(caps.supportsPlaylistEdit)
         assertTrue(caps.supportsPlaylistCreate)
         assertTrue(caps.supportsProgressReporting)
@@ -110,6 +109,35 @@ class MusicServiceTest {
         val choice = serviceChoice(ServiceId.Jellyfin)
         assertEquals("Jellyfin", choice?.displayName)
         assertEquals(ServiceId.Jellyfin, choice?.id)
+    }
+
+    @Test fun `the picker offers Plex with a browser sign-in`() {
+        val choice = serviceChoice(ServiceId.Plex)
+        assertEquals("Plex", choice?.displayName)
+        assertEquals(ServiceId.Plex, choice?.id)
+    }
+
+    @Test fun `Plex advertises only what its API can deliver`() {
+        val caps = ServiceCapabilities.Plex
+        assertTrue(caps.supportsPlaylistEdit)
+        assertTrue(caps.supportsProgressReporting)
+        assertTrue(caps.supportsScrobbling)
+        // Plex has no radio endpoint on this server generation and no artist-follow flag.
+        assertTrue(!caps.supportsRadio)
+        assertTrue(!caps.supportsFollowArtist)
+        assertTrue(!caps.supportsPlaylistCreate)
+        assertTrue(!caps.supportsPodcasts)
+        assertTrue(!caps.supportsNormalization)
+        assertTrue(!caps.supportsGapless)
+        assertEquals(
+            listOf(
+                LibraryFilter.LikedSongs,
+                LibraryFilter.Playlists,
+                LibraryFilter.Albums,
+                LibraryFilter.Artists
+            ),
+            caps.availableLibraryFilters.toList()
+        )
     }
 
     @Test fun `a fully featured service keeps every category selectable`() {

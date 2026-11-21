@@ -10,17 +10,20 @@ Sources of truth:
 - Capability flags: `core/src/main/java/io/github/manuelrtsch/sidetrack/MediaModels.kt`
   (`ServiceCapabilities`, `ServiceId`), `provider-spotify/…/data/SpotifySession.kt` /
   `SpotifyAdapters.kt` (`ServiceCapabilities.All`), `provider-subsonic/…/data/SubsonicRuntime.kt`
-  (`ServiceCapabilities.Subsonic`), and the Jellyfin set in `MediaModels.kt`.
+  (`ServiceCapabilities.Subsonic`), and the Jellyfin and Plex sets in `MediaModels.kt`.
 - Which categories the UI offers: `ServiceCapabilities.availableLibraryFilters` and
   `availableSearchScopes` in the same file, fed to the Library row and the search screens.
 - What the user may change on one playlist: `PlaylistActions` in the same file, carried by
   `Playlist.actions` and `Collection.playlistActions`. `ServiceCapabilities.playlistActions(...)`
   combines the service-level flag with the row's own answer.
 - Tests: each module's own `src/test` (`app`, `core`, `provider-spotify`,
-  `provider-subsonic`, `provider-jellyfin`).
+  `provider-subsonic`, `provider-jellyfin`, `provider-plex`).
 - Jellyfin is implemented through the official Kotlin SDK (music libraries only, no pre-12.x
   servers). It has auth, catalog, writer, runtime and a picker entry — see
   [jellyfin-integration.md](jellyfin-integration.md) for the decisions and the build order.
+- Plex is implemented against the Plex Media Server HTTP API with a PIN sign-in on plex.tv. It
+  has auth, catalog, writer, runtime, progress reporting and a picker entry — see
+  [plex-integration.md](plex-integration.md) for the endpoint decisions.
 
 Legend: ✅ supported & surfaced · ⚠️ implemented in the catalog but not surfaced (capability flag
 off / returned as unsupported) · ❌ not supported.
@@ -50,14 +53,15 @@ the page cannot disagree.
 Deleting a playlist is **not** modelled. No provider has a delete transport; Spotify has no
 delete endpoint at all, only "remove from library" (unfollow), which is the existing Save toggle.
 
-| | Spotify | Subsonic family | Jellyfin |
-| --- | --- | --- | --- |
-| Source of truth | playlist capabilities + owner | playlist `owner` vs signed-in username | no reliable server answer |
-| Owned playlist | add + remove | add + remove | offered unconfirmed |
-| Collaborative / foreign | `can_edit_items` grants add + remove | read-only | offered unconfirmed |
-| Followed, non-collaborative | read-only | read-only | offered unconfirmed |
-| Cannot report | read-only (`editable=false`) | offered unconfirmed | offered unconfirmed |
-| Read-only fallback | Web API transport → `supportsPlaylistEdit=false` | — | — |
+| | Spotify | Subsonic family | Jellyfin | Plex |
+| --- | --- | --- | --- | --- |
+| Source of truth | playlist capabilities + owner | playlist `owner` vs signed-in username | no reliable server answer | `smart` flag |
+| Owned playlist | add + remove | add + remove | offered unconfirmed | add + remove |
+| Collaborative / foreign | `can_edit_items` grants add + remove | read-only | offered unconfirmed | add + remove |
+| Followed, non-collaborative | read-only | read-only | offered unconfirmed | — |
+| Smart / generated | — | — | — | read-only |
+| Cannot report | read-only (`editable=false`) | offered unconfirmed | offered unconfirmed | — |
+| Read-only fallback | Web API transport → `supportsPlaylistEdit=false` | — | — | `PlaylistActions.None` |
 
 ### Playlist item edits
 
@@ -92,22 +96,22 @@ append. That is why remove confirms instead of offering Undo.
 
 ## Overview
 
-| Capability | Spotify | Subsonic family | Jellyfin |
-| --- | :---: | :---: | :---: |
-| Library sections | Liked, Playlists, Albums, Artists, Shows | Liked, Playlists, Albums, Artists | Liked, Playlists, Albums, Artists |
-| Search scopes | Tracks, Artists, Albums, Playlists, Shows | Tracks, Artists, Albums, Playlists | Tracks, Artists, Albums, Playlists |
-| Podcasts / shows | ✅ | ❌ | ❌ (music libraries carry none) |
-| Song radio | ✅ | ✅ | ✅ (InstantMix) |
-| Follow artist | ✅ | ❌ | ✅ (favorite artist) |
-| Playlist editing (add/remove items) | ✅ per playlist | ✅ owned playlists | ✅ offered unconfirmed |
-| Playlist creation | ❌ (pending transport) | ✅ | ✅ |
-| Playlist deletion | ❌ (unfollow only) | ❌ | ❌ |
-| Loudness normalization | ✅ | ✅ | ❌ (no ReplayGain parameter) |
-| Gapless playback | ✅ | ❌ | ❌ (engine-level) |
-| Quality selection | ✅ | ✅ | ✅ (`maxStreamingBitrate`) |
-| Progress reporting (resume) | ✅ | ✅ | ✅ (`reportPlaybackStart/Progress/Stopped`) |
-| Scrobbling | ✅ | ✅ | ✅ (`markPlayedItem` on a real end, D12) |
-| Sign-in | OAuth (PKCE) via browser | Username/password against a `ping` | Username/password against the SDK; Quick Connect deferred |
+| Capability | Spotify | Subsonic family | Jellyfin | Plex |
+| --- | :---: | :---: | :---: | :---: |
+| Library sections | Liked, Playlists, Albums, Artists, Shows | Liked, Playlists, Albums, Artists | Liked, Playlists, Albums, Artists | Liked, Playlists, Albums, Artists |
+| Search scopes | Tracks, Artists, Albums, Playlists, Shows | Tracks, Artists, Albums, Playlists | Tracks, Artists, Albums, Playlists | Tracks, Artists, Albums, Playlists |
+| Podcasts / shows | ✅ | ❌ | ❌ (music libraries carry none) | ❌ (music sections only) |
+| Song radio | ✅ | ✅ | ✅ (InstantMix) | ❌ (no mix on this server generation) |
+| Follow artist | ✅ | ❌ | ✅ (favorite artist) | ❌ (no follow flag) |
+| Playlist editing (add/remove items) | ✅ per playlist | ✅ owned playlists | ✅ offered unconfirmed | ✅ writable playlists |
+| Playlist creation | ❌ (pending transport) | ✅ | ✅ | ❌ (not wired yet) |
+| Playlist deletion | ❌ (unfollow only) | ❌ | ❌ | ❌ |
+| Loudness normalization | ✅ | ✅ | ❌ (no ReplayGain parameter) | ❌ (no ReplayGain parameter) |
+| Gapless playback | ✅ | ❌ | ❌ (engine-level) | ❌ (engine-level) |
+| Quality selection | ✅ | ✅ | ✅ (`maxStreamingBitrate`) | ❌ (direct part URL) |
+| Progress reporting (resume) | ✅ | ✅ | ✅ (`reportPlaybackStart/Progress/Stopped`) | ✅ (`/:/timeline`) |
+| Scrobbling | ✅ | ✅ | ✅ (`markPlayedItem` on a real end, D12) | ✅ (`/:/scrobble` on a real end) |
+| Sign-in | OAuth (PKCE) via browser | Username/password against a `ping` | Username/password against the SDK; Quick Connect deferred | PIN via plex.tv in the browser |
 
 ---
 
@@ -329,3 +333,70 @@ adapter covers the music library only.
   The dev-container checks named in D14 were run on `jellyfin/jellyfin:12.4`: empty-id
   `createPlaylist` and direct FLAC hold; `editable` derived from `openAccess`/`shares` does not
   (see [release-readiness-jellyfin-navidrome.md](release-readiness-jellyfin-navidrome.md) §2.1).
+
+
+---
+
+## Plex (Plex Media Server HTTP API)
+
+Plex is implemented against the server's own HTTP API; the account sign-in uses a PIN on
+plex.tv, so Sidetrack never sees the Plex password. Only `artist` library sections are music, and
+the adapter reads the first one. See [plex-integration.md](plex-integration.md) for the wire
+decisions (liked filter, rating, playlist URI, artwork, progress).
+
+### Implemented
+
+- **Auth** (`PlexAuth`): `POST /api/v2/pins`, open
+  `https://app.plex.tv/auth#?clientID=…&code=…`, poll the pin for the account token, then
+  discover the first reachable claimed server from `/api/v2/resources`. A stored session is a
+  server URL, a server token, the client identifier and the machine identifier in
+  `PlexCredentialStore`. A revoked token becomes `AuthenticationExpired` on the first request.
+- **API seam**: `PlexApi` reduces JSON `MediaContainer`s to provider records; `HttpPlexApi` is the
+  only class that speaks the wire format. A fake implements `PlexApi` for catalog tests.
+- **Library** (`PlexCatalog`): liked tracks (`userRating>=8`), playlists, albums and artists; album
+  and playlist collections with pagination; artist detail, artist albums and all tracks.
+- **Search**: `/hubs/search` hubs split into tracks, artists, albums and playlists.
+- **Playback**: the direct part URL (`/library/parts/…`) with the token header, through the shared
+  `PlaybackController` over Media3/ExoPlayer. Artwork is fetched from the owning item's thumb with
+  the same token through `ArtworkAccess`.
+- **Library editing** (`MediaLibraryWriter`): favourite/unfavourite tracks, albums and artists by
+  setting Plex's five-star rating; add to and remove from writable playlists. Removal resolves the
+  `playlistItemID` for the named row, not a track id, so a duplicate removes the right copy.
+- **Playlist permissions**: a smart playlist is generated and reports `PlaylistActions.None`;
+  every other playlist accepts item edits. Creation requires a non-empty `uri`, which needs a
+  seed track, so the create entry point stays off.
+- **Progress reporting** (`PlexPlaybackReporter`): `/:/timeline` on start, pause, resume and every
+  10 seconds while playing, `/:/scrobble` only when the engine emits its end-of-track signal.
+  Skipping reports a stop but never a scrobble.
+- **Isolation**: separate queue, history, resume and settings stores per service.
+
+### Not supported
+
+- **Podcasts / shows** ❌: the adapter reads music sections only, so `Shows` is neither a library
+  filter nor a search scope.
+- **Song radio** ❌: `/library/metadata/{id}/similar` and `/mix` returned empty/404 on the tested
+  server generation; no station is offered.
+- **Follow artist** ❌: Plex has no follow flag for music artists; `isFollowed` returns null.
+- **Playlist creation** ❌: the create endpoint requires a non-empty `uri` seed; a name-only form
+  would only end in a 400, so the capability stays off until the UI can pick a seed.
+- **Loudness normalization / gapless** ❌: no ReplayGain parameter on the part URL; gapless is
+  engine-level.
+- **Quality selection** ❌: v1 plays the original part; a transcode ceiling is not wired.
+
+### Coverage
+
+- `PlexApiTest.kt` — URL normalization, music-section filtering, track/playlist/ search mapping,
+  the liked filter, rating and playlist-edit endpoints, artwork fallbacks.
+- `PlexCatalogTest.kt` — four library sections and empty-section handling, album/playlist
+  collections, smart-playlist permissions, stream headers, saved ratings, duplicate removal by
+  row, unsupported features and search-scope filtering.
+- `PlexAuthTest.kt` — PIN flow and auth URL, local HTTP discovery, stored session restore and
+  sign-out, the no-server and timeout paths, and the unclaimed-server skip.
+- `PlexPlaybackReporterTest.kt` — start/pause/resume/progress/end ordering, 10-second throttling,
+  a single scrobble on a real end, and a skip stopping without a scrobble.
+- `MusicServiceTest.kt` — the picker now includes `Plex`, and the Plex capability/category pins.
+- `PlexIntegrationTest.kt` — opt-in smoke tests against a real server
+  (`PLEX_TEST_URL` / `PLEX_TEST_TOKEN`; skipped when absent): sections/artists/albums/tracks/
+  search reads, a resolved stream URL that returns audio bytes with the token, artwork and
+  playlist reads, and the machine identifier. Run with
+  `-PsidetrackIntegration --tests '*PlexIntegrationTest'`.

@@ -10,9 +10,9 @@ environment-dependent suites are explicit opt-ins.
 |---|---|---|
 | `./gradlew testDebugUnitTest` | the default gate: every unit test except screenshots and live-server integration | nothing |
 | `./gradlew coverage` | the default gate plus every coverage floor | nothing |
-| `./gradlew testDebugUnitTest -PsidetrackScreenshots` | adds the 26 Roborazzi baseline **verifications** | nothing |
+| `./gradlew testDebugUnitTest -PsidetrackScreenshots` | adds the 27 Roborazzi baseline **verifications** | nothing |
 | `./gradlew testDebugUnitTest -PsidetrackScreenshotsRecord` | rewrites the baseline PNGs instead of verifying | nothing |
-| `./gradlew testDebugUnitTest -PsidetrackIntegration` | adds the live-server tests (`*IntegrationTest`) | reachable Navidrome/Jellyfin |
+| `./gradlew testDebugUnitTest -PsidetrackIntegration` | adds the live-server tests (`*IntegrationTest`) | reachable Navidrome/Jellyfin/Plex |
 
 Screenshot tests verify by default. Recording is opt-in (`-PsidetrackScreenshotsRecord`) because a
 suite that records on every run can never fail, which is how `*ScreenshotTest` behaved before this
@@ -31,6 +31,7 @@ is passed.
 | `:provider-spotify` | Spotify auth, Web API mapping, native catalog/gateway, librespot engine and the controller it builds | `NativeSpotifyCatalogTest`, `SpotifyAuthTest`, `LibrespotPlaybackEngineTest`, `PlaybackControllerTest` |
 | `:provider-jellyfin` | Jellyfin auth, API mapping, catalog, playback reporting | `JellyfinCatalogTest`, `JellyfinAuthTest` |
 | `:provider-subsonic` | Subsonic auth, API mapping, family entries | `SubsonicApiTest`, `SubsonicRuntimeTest` |
+| `:provider-plex` | Plex PIN auth, API mapping, catalog, playback reporting | `PlexAuthTest`, `PlexApiTest`, `PlexCatalogTest`, `PlexPlaybackReporterTest` |
 
 Pure logic lives in `:core` and is tested there: no Compose rule, no Robolectric where avoidable, so
 those tests run in seconds instead of minutes.

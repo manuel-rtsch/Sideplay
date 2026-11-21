@@ -8,6 +8,7 @@ value class ServiceId(val value: String) {
     companion object {
         val Spotify = ServiceId("spotify")
         val Jellyfin = ServiceId("jellyfin")
+        val Plex = ServiceId("plex")
 
         /**
          * The Subsonic family: one wire protocol, several server products. Each listed product
@@ -189,6 +190,31 @@ data class ServiceCapabilities(
             supportsPlaylistEdit = true,
             supportsPlaylistCreate = true,
             supportsQualitySelection = true,
+            supportsProgressReporting = true,
+            supportsScrobbling = true
+        )
+
+        /**
+         * Plex exposes music libraries, playlists, artists and albums. It has no real radio
+         * endpoint, no loudness parameter and no gapless handoff; playlist creation needs a
+         * non-empty item URI, so the create form is left out. Liked/saved state is Plex's rating
+         * convention (`userRating == 10`), and playback progress is reported through
+         * `/:/timeline` and `/:/scrobble`.
+         */
+        val Plex = ServiceCapabilities(
+            librarySections = setOf(
+                LibrarySection.Liked,
+                LibrarySection.Playlists,
+                LibrarySection.Albums,
+                LibrarySection.Artists
+            ),
+            searchScopes = setOf(
+                SearchScope.Tracks,
+                SearchScope.Artists,
+                SearchScope.Albums,
+                SearchScope.Playlists
+            ),
+            supportsPlaylistEdit = true,
             supportsProgressReporting = true,
             supportsScrobbling = true
         )

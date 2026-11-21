@@ -41,32 +41,33 @@ Sidetrack connects to one service at a time. The choice is remembered until you 
 Capabilities vary by service: the interface shows only what the selected service supports, so
 podcasts, artist following, gapless playback or playlist creation appear only where they work.
 
-The self-hosted side is one adapter for the whole Subsonic family. **Navidrome**, **Nextcloud
+The self-hosted side includes the whole Subsonic family and Plex. **Navidrome**, **Nextcloud
 Music** and **Subsonic** itself are listed separately on the welcome screen because that is the
 product you run, but they all speak the same Subsonic/OpenSubsonic API and run the same code —
 any other Subsonic-compatible server works through the **Subsonic** entry. Picking one keeps its
 own credentials, queue and history, so two servers never mix.
 
-| | Spotify | Subsonic family | Jellyfin |
-| --- | --- | --- | --- |
-| Sign-in | Browser | Username and password over Subsonic | Username and password |
-| Library | Liked songs, playlists, albums, artists, shows | Starred tracks, playlists, albums, artists | Favourite tracks, playlists, albums, artists |
-| Search | Tracks, artists, albums, playlists, shows | Tracks, artists, albums, playlists | Tracks, artists, albums, playlists |
-| Radio | Song radio from any seed | Similar songs, with a random-song fallback | Instant Mix from any item |
+| | Spotify | Subsonic family | Jellyfin | Plex |
+| --- | --- | --- | --- | --- |
+| Sign-in | Browser | Username and password over Subsonic | Username and password | Browser PIN on plex.tv |
+| Library | Liked songs, playlists, albums, artists, shows | Starred tracks, playlists, albums, artists | Favourite tracks, playlists, albums, artists | Liked tracks, playlists, albums, artists |
+| Search | Tracks, artists, albums, playlists, shows | Tracks, artists, albums, playlists | Tracks, artists, albums, playlists | Tracks, artists, albums, playlists |
+| Radio | Song radio from any seed | Similar songs, with a random-song fallback | Instant Mix from any item | — |
 
-| Capability | Spotify | Subsonic family | Jellyfin |
-| --- | :---: | :---: | :---: |
-| Podcasts | ✅ | ❌ | ❌ |
-| Follow artists | ✅ | ❌ | ✅ |
-| Create playlists | ❌ | ✅ | ✅ |
-| Edit playlists | ✅ | ✅ | ✅ |
-| Loudness normalization | ✅ | ✅ | ❌ |
-| Gapless playback | ✅ | ❌ | ❌ |
-| Quality selection | ✅ | ✅ | ✅ |
+| Capability | Spotify | Subsonic family | Jellyfin | Plex |
+| --- | :---: | :---: | :---: | :---: |
+| Podcasts | ✅ | ❌ | ❌ | ❌ |
+| Follow artists | ✅ | ❌ | ✅ | ❌ |
+| Create playlists | ❌ | ✅ | ✅ | ❌ |
+| Edit playlists | ✅ | ✅ | ✅ | ✅ |
+| Loudness normalization | ✅ | ✅ | ❌ | ❌ |
+| Gapless playback | ✅ | ❌ | ❌ | ❌ |
+| Quality selection | ✅ | ✅ | ✅ | ❌ |
 
 Spotify needs a Premium account for playback. Jellyfin needs a 12.x server with a music library.
-On Spotify, podcasts include show notes, episode numbers, dates, per-episode resume and
-±30-second controls. Jellyfin follows artists through its favourite-artist flag.
+Plex needs a claimed Plex Media Server on the same network. On Spotify, podcasts include show
+notes, episode numbers, dates, per-episode resume and ±30-second controls. Jellyfin follows
+artists through its favourite-artist flag.
 
 ## What you can do
 
@@ -110,9 +111,10 @@ On Spotify, podcasts include show notes, episode numbers, dates, per-episode res
    Sidetrack alongside the launcher and pick up its theme, accent and key mappings. Sidetrack
    runs without it.
 2. Install the Sidetrack APK.
-3. Open Sidetrack and choose a service. Spotify opens a browser sign-in; Navidrome, Nextcloud
-   Music, Subsonic and Jellyfin ask for a server address, username and password. Any Subsonic
-   entry connects to any Subsonic server; Jellyfin needs a 12.x server with a music library.
+3. Open Sidetrack and choose a service. Spotify and Plex open a browser sign-in; Navidrome,
+   Nextcloud Music, Subsonic and Jellyfin ask for a server address, username and password. Any
+   Subsonic entry connects to any Subsonic server; Jellyfin needs a 12.x server with a music
+   library. Plex finds your claimed server from the account, so there is no address to type.
 4. To try the app without an account or a server, choose **Navidrome** and submit the blank
    sign-in form: it signs into the shared demo at
    [demo.navidrome.org](https://demo.navidrome.org) (`demo` / `demo`).
@@ -121,7 +123,7 @@ On Spotify, podcasts include show notes, episode numbers, dates, per-episode res
 
 ## Building from source
 
-You need JDK 21 and the Android SDK. The Subsonic family and Jellyfin need nothing else. Spotify
+You need JDK 21 and the Android SDK. The Subsonic family, Jellyfin and Plex need nothing else. Spotify
 playback through librespot also needs the Android NDK and a Rust toolchain.
 
 ```sh
@@ -130,7 +132,7 @@ playback through librespot also needs the Android NDK and a Rust toolchain.
 
 The native bridge is required for Spotify library and search; without it Spotify falls back to
 the public Spotify Web API, which currently rate-limits the desktop client ID. Builds without
-`-PsidetrackNative=true` still support the Subsonic family and Jellyfin, but a release build
+`-PsidetrackNative=true` still support the Subsonic family, Jellyfin and Plex, but a release build
 refuses to package without the bridge — see [docs/releasing.md](docs/releasing.md).
 
 ## License

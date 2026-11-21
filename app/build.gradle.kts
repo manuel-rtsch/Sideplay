@@ -417,6 +417,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":provider-subsonic"))
     implementation(project(":provider-jellyfin"))
+    implementation(project(":provider-plex"))
     implementation(project(":provider-spotify"))
     implementation(libs.sidekit.design)
     implementation(libs.sidekit.sdk)
@@ -463,6 +464,7 @@ dependencies {
     kover(project(":core"))
     kover(project(":provider-spotify"))
     kover(project(":provider-jellyfin"))
+    kover(project(":provider-plex"))
     kover(project(":provider-subsonic"))
 }
 

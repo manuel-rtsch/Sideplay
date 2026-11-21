@@ -45,6 +45,7 @@ include(":app")
 include(":core")
 include(":provider-subsonic")
 include(":provider-jellyfin")
+include(":provider-plex")
 include(":provider-spotify")
 // The Spotify provider module is added in its own stage.
 

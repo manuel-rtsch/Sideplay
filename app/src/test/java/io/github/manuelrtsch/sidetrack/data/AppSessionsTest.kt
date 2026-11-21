@@ -46,6 +46,7 @@ class AppSessionsTest {
                 ServiceId.Jellyfin,
                 ServiceId.Navidrome,
                 ServiceId.NextcloudMusic,
+                ServiceId.Plex,
                 ServiceId.Spotify,
                 ServiceId.Subsonic
             ),

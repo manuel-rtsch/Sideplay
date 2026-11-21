@@ -25,6 +25,7 @@ val KnownServices: List<ServiceChoice> = buildList {
     add(ServiceChoice(SpotifyService.id, SpotifyService.DISPLAY_NAME))
     SubsonicFamily.entries.forEach { add(ServiceChoice(it.id, it.displayName)) }
     add(ServiceChoice(JellyfinService.id, JellyfinService.DISPLAY_NAME))
+    add(ServiceChoice(PlexService.id, PlexService.DISPLAY_NAME))
 }.sortedBy { it.displayName.lowercase() }
 
 /** The picker's view of [id], or null when this build does not know the service. */
@@ -202,6 +203,11 @@ object AppSessions {
             .onFailure { Log.w("SidetrackSession", "Could not build the Jellyfin session", it) }
             .getOrNull()
             ?.let { Selection(JellyfinProvider(it), it) }
+
+        ServiceId.Plex -> runCatching { PlexRuntime(context) }
+            .onFailure { Log.w("SidetrackSession", "Could not build the Plex session", it) }
+            .getOrNull()
+            ?.let { Selection(PlexProvider(it), it) }
 
         // Every remaining service is a member of the Subsonic family: one adapter, one runtime
         // class, and only the entry's identity, label and store names differ.
